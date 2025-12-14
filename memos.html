@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memos - RELIA🐂LIMO™</title>
+    <link rel="stylesheet" href="memos.css">
+    <link rel="stylesheet" href="tag-selector.css">
+    
+    <!-- Include both tag selector modals inline -->
+    <style>
+        .tag-selector-modal { display: none; }
+        .tag-selector-modal.active { display: flex; }
+    </style>
+</head>
+<body>
+    <div class="memos-container">
+        <div class="memos-layout">
+            <!-- Left Panel: Add New Memo -->
+            <div class="left-panel">
+                <h2 class="panel-title">Company Memos</h2>
+                <h3 class="section-subtitle">Add New Memo</h3>
+                
+                <form class="add-memo-form">
+                    <!-- Memo Text Area -->
+                    <div style="position: relative;">
+                        <textarea id="memo-text" placeholder="Enter memo text..." maxlength="200"></textarea>
+                        <div style="position: absolute; top: 8px; right: 8px; display: flex; gap: 5px;">
+                            <button type="button" class="insert-tag-btn" id="memoInsertTripTagBtn" title="Insert Trip Tags" style="background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%); color: #000; font-weight: 600; border: none; font-size: 16px; padding: 4px 8px;">📋</button>
+                            <button type="button" class="insert-tag-btn" id="memoInsertRateTagBtn" title="Insert Rate Tags" style="background: linear-gradient(135deg, #0066cc 0%, #0088ff 100%); color: #fff; font-weight: 600; border: none; font-size: 16px; padding: 4px 8px;">💰</button>
+                        </div>
+                    </div>
+                    <div class="char-counter">
+                        <span>Characters Entered: <span id="char-count">0</span></span>
+                        <span>Characters Left: <span id="char-left">200</span></span>
+                    </div>
+
+                    <!-- Memo To -->
+                    <div class="form-group">
+                        <label>Memo To</label>
+                        <input type="text" id="memo-to" placeholder="">
+                    </div>
+
+                    <!-- Due Date -->
+                    <div class="form-group">
+                        <label>Due Date</label>
+                        <div class="date-input-wrapper">
+                            <input type="text" id="due-date" placeholder="">
+                            <button type="button" class="calendar-btn">📅</button>
+                        </div>
+                    </div>
+
+                    <!-- Color of Memo -->
+                    <div class="form-group">
+                        <label>Color of Memo</label>
+                        <select id="memo-color">
+                            <option value="red">Red</option>
+                            <option value="yellow">Yellow</option>
+                            <option value="green">Green</option>
+                            <option value="blue">Blue</option>
+                            <option value="orange">Orange</option>
+                            <option value="purple">Purple</option>
+                        </select>
+                    </div>
+
+                    <!-- Notify Users -->
+                    <div class="form-group">
+                        <label>Notify Users</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="notify-location" value="login" checked> Login Page
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="notify-location" value="dispatch-res"> Dispatch Grid / Reservation Form
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Show On Checkboxes -->
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-dispatch"> Dispatch Grid
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-reservation"> Reservation Form
+                        </label>
+                    </div>
+
+                    <!-- Date Range -->
+                    <div class="form-group">
+                        <label>Date From</label>
+                        <input type="text" id="date-from" placeholder="" class="date-input">
+                    </div>
+                    <div class="form-group">
+                        <label>Date To</label>
+                        <input type="text" id="date-to" placeholder="" class="date-input">
+                    </div>
+
+                    <!-- Add Button -->
+                    <button type="submit" class="add-memo-btn">Add Memo</button>
+                </form>
+            </div>
+
+            <!-- Right Panel: Company Memos List -->
+            <div class="right-panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Company Memos</h2>
+                    <label class="checkbox-label show-hide">
+                        <input type="checkbox" id="show-store-memos" checked> Show/Hide Store Memos
+                    </label>
+                </div>
+
+                <!-- Memos List -->
+                <div class="memos-list">
+                    <div class="memo-item" style="background-color: #ff3333;">
+                        <div class="memo-header">
+                            <span class="memo-date">1/27/2024</span>
+                            <span class="memo-audience">For Everyone</span>
+                            <span class="memo-author">Friday 1/26/24/ Utah</span>
+                            <label class="memo-checkbox">
+                                <input type="checkbox">
+                            </label>
+                            <a href="#" class="delete-link">delete</a>
+                        </div>
+                        <div class="memo-body">
+                            Your doing a great job !
+                        </div>
+                    </div>
+
+                    <div class="memo-item" style="background-color: #ffd700;">
+                        <div class="memo-header">
+                            <span class="memo-date">1/15/2024</span>
+                            <span class="memo-audience">For Drivers</span>
+                            <span class="memo-author">admin</span>
+                            <label class="memo-checkbox">
+                                <input type="checkbox">
+                            </label>
+                            <a href="#" class="delete-link">delete</a>
+                        </div>
+                        <div class="memo-body">
+                            Please ensure all vehicles are cleaned and fueled at the end of each shift. Thank you for your cooperation.
+                        </div>
+                    </div>
+
+                    <div class="memo-item" style="background-color: #90ee90;">
+                        <div class="memo-header">
+                            <span class="memo-date">1/10/2024</span>
+                            <span class="memo-audience">For Dispatch</span>
+                            <span class="memo-author">admin</span>
+                            <label class="memo-checkbox">
+                                <input type="checkbox">
+                            </label>
+                            <a href="#" class="delete-link">delete</a>
+                        </div>
+                        <div class="memo-body">
+                            New dispatch protocol: All airport pickups require 15-minute early arrival confirmation.
+                        </div>
+                    </div>
+
+                    <div class="memo-item" style="background-color: #87ceeb;">
+                        <div class="memo-header">
+                            <span class="memo-date">12/28/2023</span>
+                            <span class="memo-audience">For Everyone</span>
+                            <span class="memo-author">admin</span>
+                            <label class="memo-checkbox">
+                                <input type="checkbox">
+                            </label>
+                            <a href="#" class="delete-link">delete</a>
+                        </div>
+                        <div class="memo-body">
+                            Holiday hours: Office will close at 3 PM on New Year's Eve. Emergency dispatch available 24/7.
+                        </div>
+                    </div>
+
+                    <div class="memo-item" style="background-color: #ffb366;">
+                        <div class="memo-header">
+                            <span class="memo-date">12/20/2023</span>
+                            <span class="memo-audience">For Management</span>
+                            <span class="memo-author">admin</span>
+                            <label class="memo-checkbox">
+                                <input type="checkbox">
+                            </label>
+                            <a href="#" class="delete-link">delete</a>
+                        </div>
+                        <div class="memo-body">
+                            Q4 financial review meeting scheduled for January 5th at 10 AM. Please review reports before meeting.
+                        </div>
+                    </div>
+
+                    <div class="memo-item" style="background-color: #dda0dd;">
+                        <div class="memo-header">
+                            <span class="memo-date">12/15/2023</span>
+                            <span class="memo-audience">For Drivers</span>
+                            <span class="memo-author">admin</span>
+                            <label class="memo-checkbox">
+                                <input type="checkbox">
+                            </label>
+                            <a href="#" class="delete-link">delete</a>
+                        </div>
+                        <div class="memo-body">
+                            Reminder: All drivers must complete safety training by end of December. Contact HR to schedule.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trip Tag Selector Modal -->
+    <div class="tag-selector-modal" id="tripTagSelectorModal">
+        <div class="tag-selector-content">
+            <div class="tag-selector-header" style="background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);">
+                <h2 style="color: #000;">📋 Trip Tags</h2>
+                <button class="close-btn" onclick="closeTripTagSelector()" style="color: #000;">&times;</button>
+            </div>
+            
+            <div class="tag-selector-body">
+                <div class="tag-search">
+                    <input type="text" id="tripTagSearch" placeholder="Search trip tags..." oninput="filterTripTags()" />
+                </div>
+                
+                <div class="tag-categories">
+                    <button class="trip-category-btn category-btn active" onclick="filterByTripCategory('all')">All Tags</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('company')">Company</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('trip-info')">Trip Info</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('time-labels')">Time Labels</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('billing-contact')">Billing Contact</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('booked-contact')">Booked Contact</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('passenger')">Passenger</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('vehicle')">Vehicle</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('driver')">Driver</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('notes')">Notes</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('rates-summary')">Rates Summary</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('payment')">Payment</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('routing')">Routing</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('agreement')">Agreement</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('affiliate')">Affiliate</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('agents')">Agents</button>
+                    <button class="trip-category-btn category-btn" onclick="filterByTripCategory('system')">System/URLs</button>
+                </div>
+                
+                <div class="tag-list-container">
+                    <table class="trip-tag-table tag-table" id="tripTagTable">
+                        <thead>
+                            <tr>
+                                <th>Tag</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tripTagTableBody">
+                            <!-- Trip tags will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="tag-selector-footer">
+                <button class="btn-cancel" onclick="closeTripTagSelector()">Cancel</button>
+                <button class="btn-insert" onclick="insertSelectedTripTag()" style="background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%); color: #000;">Insert Trip Tag</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rate Tag Selector Modal -->
+    <div class="tag-selector-modal" id="rateTagSelectorModal">
+        <div class="tag-selector-content">
+            <div class="tag-selector-header" style="background: linear-gradient(135deg, #0066cc 0%, #0088ff 100%);">
+                <h2 style="color: white;">💰 Rate Tags</h2>
+                <button class="close-btn" onclick="closeRateTagSelector()" style="color: white;">&times;</button>
+            </div>
+            
+            <div class="tag-selector-body">
+                <div class="tag-search">
+                    <input type="text" id="rateTagSearch" placeholder="Search rate tags..." oninput="filterRateTags()" />
+                </div>
+                
+                <div class="tag-categories">
+                    <button class="rate-category-btn category-btn active" onclick="filterByRateCategory('all')">All Rates</button>
+                    <button class="rate-category-btn category-btn" onclick="filterByRateCategory('rates')">Rate Summary</button>
+                    <button class="rate-category-btn category-btn" onclick="filterByRateCategory('base-rate')">Base Rates</button>
+                    <button class="rate-category-btn category-btn" onclick="filterByRateCategory('miscellaneous')">Miscellaneous</button>
+                    <button class="rate-category-btn category-btn" onclick="filterByRateCategory('gratuities')">Gratuities</button>
+                    <button class="rate-category-btn category-btn" onclick="filterByRateCategory('taxes')">Taxes</button>
+                    <button class="rate-category-btn category-btn" onclick="filterByRateCategory('surcharges')">Surcharges</button>
+                    <button class="rate-category-btn category-btn" onclick="filterByRateCategory('discounts')">Discounts</button>
+                </div>
+                
+                <div class="tag-list-container">
+                    <table class="rate-tag-table tag-table" id="rateTagTable">
+                        <thead>
+                            <tr>
+                                <th>Tag</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rateTagTableBody">
+                            <!-- Rate tags will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="tag-selector-footer">
+                <button class="btn-cancel" onclick="closeRateTagSelector()">Cancel</button>
+                <button class="btn-insert" onclick="insertSelectedRateTag()" style="background: linear-gradient(135deg, #0066cc 0%, #0088ff 100%);">Insert Rate Tag</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="triptag-selector.js"></script>
+    <script src="ratetag-selector.js"></script>
+    <script src="drag-drop-handler.js"></script>
+    <script src="memos.js"></script>
+</body>
+</html>

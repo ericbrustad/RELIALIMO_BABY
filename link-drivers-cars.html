@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Link Drivers and Cars</title>
+  <link rel="stylesheet" href="link-drivers-cars.css">
+</head>
+<body>
+  <div class="modal-overlay">
+    <div class="modal-container">
+      <!-- Modal Header -->
+      <div class="modal-header">
+        <h2 class="modal-title">Link Drivers and Cars</h2>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="modal-body">
+        <!-- Assignment Form -->
+        <div class="assignment-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Drivers:</label>
+              <select class="form-control" id="driverSelect">
+                <option value="">Select Driver</option>
+                <option value="lt-premier" selected>LT Premier</option>
+                <option value="eric-brostski">Brostski, Eric</option>
+                <option value="tony-arroyo">Arroyo, Tony</option>
+                <option value="steve-c">Steve C</option>
+                <option value="gules">Gules</option>
+                <option value="test-driver">Test Driver</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Cars:</label>
+              <select class="form-control" id="carSelect">
+                <option value="">Select Car</option>
+                <option value="suv-vip-one">SUV VIP_ONE (SUBURBAN)</option>
+                <option value="cad-suv">_Cad_Suv (Cadilac Escalade)</option>
+                <option value="lincoln-town">Lincoln Town Car</option>
+                <option value="mercedes-s">Mercedes S-Class</option>
+                <option value="bmw-7">BMW 7 Series</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Date:</label>
+              <input type="date" class="form-control" id="linkDate" value="2021-08-28">
+            </div>
+
+            <div class="form-actions">
+              <button class="btn btn-primary" onclick="addLink()">Add</button>
+              <button class="btn btn-secondary" onclick="cancelAdd()">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Linked Cars Table -->
+        <div class="linked-cars-section">
+          <table class="linked-cars-table">
+            <tbody id="linkedCarsBody">
+              <tr>
+                <td class="driver-cell">Brostski, Eric</td>
+                <td class="car-cell">SUV VIP_ONE (SUBURBAN)</td>
+                <td class="date-cell">08/28/2021</td>
+                <td class="actions-cell">
+                  <a href="#" class="action-link edit-link" onclick="editLink(event, 1)">Edit</a>
+                  <a href="#" class="action-link remove-link" onclick="removeLink(event, 1)">Remove</a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Divider -->
+        <div class="section-divider"></div>
+
+        <!-- Cars Selected by Driver Section -->
+        <div class="selected-cars-section">
+          <h3 class="section-title">Cars selected by driver</h3>
+          
+          <table class="selected-cars-table">
+            <tbody id="selectedCarsBody">
+              <tr>
+                <td class="driver-cell">Brostski, Eric</td>
+                <td class="car-cell">_Cad_Suv (Cadilac Escalade)</td>
+                <td class="actions-cell">
+                  <a href="#" class="action-link remove-link" onclick="removeSelected(event, 1)">Remove</a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="selected-cars-actions">
+            <button class="btn btn-danger" onclick="removeSelectedCars()">Remove Selected</button>
+            <button class="btn btn-secondary" onclick="selectAllCars()">Select All</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="modal-footer">
+        <button class="btn btn-primary btn-large" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="link-drivers-cars.js"></script>
+</body>
+</html>
