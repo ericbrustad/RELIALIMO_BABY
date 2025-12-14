@@ -96,8 +96,8 @@ Click sign out → Clear session, redirect to auth.html
 On `auth.html`, click demo buttons to test different roles:
 
 ### Admin Account
-- **Email**: admin@relialimo.demo
-- **Password**: G0dD@mnNutj08!
+- **Email**: eric@relialimo.com
+- **Password**: Newhouse2025!
 - **Role**: admin
 - **Access**: Full system access
 
@@ -159,8 +159,8 @@ Edit `/auth.js`:
 ```javascript
 const DEMO_ACCOUNTS = {
   admin: {
-    email: 'admin@relialimo.demo',
-    password: 'G0dD@mnNutj08!'
+    email: 'eric@relialimo.com',
+    password: 'Newhouse2025!'
   },
   // ... modify as needed
 };
