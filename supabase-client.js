@@ -218,6 +218,7 @@ export async function signInWithEmail(email, password) {
       method: 'POST',
       headers: {
         'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
