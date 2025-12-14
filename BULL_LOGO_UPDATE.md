@@ -6,10 +6,11 @@ All bull emoji references have been replaced with a professional red bull logo i
 
 ### Logo Asset
 
-- **Name:** `red-bull-logo.webp`
-- **URL:** `https://rosebud.ai/assets/red-bull-logo.webp?5r88`
-- **Format:** WebP with transparency (png-compatible)
-- **Size:** 622×525 pixels
+- **Name:** `bull head`
+- **URL:** `<img width="622" height="525" alt="image" src="https://github.com/user-attachments/assets/d7d111cc-186d-4a88-bac3-7b39c313b25c" />
+`
+- **Format:** png with transparency (png-compatible)
+- **Size:** 127×115 pixels
 - **Style:** Professional red bull head icon with prominent horns and white eye highlights
 
 ### Where the Logo Appears
@@ -28,13 +29,16 @@ LIMO™` in header
 LIMO™ - CALENDAR`
 
 4. **Reservations Dashboard** - `/index-reservations.html`
-   - `RELIA🐂LIMO™` header
+   - `RELIA<img width="622" height="525" alt="image" src="https://github.com/user-attachments/assets/066df8ee-f9a8-4bc6-bd79-6a6ddde45e63" />
+LIMO™` header
 
 5. **Reservations List** - `/reservations-list.html`
-   - `RELIA🐂LIMO™ - RESERVATIONS`
+   - `RELIA<img width="622" height="525" alt="image" src="https://github.com/user-attachments/assets/4b2fe334-bc58-4498-bc9e-f190d5caee31" />
+LIMO™ - RESERVATIONS`
 
 6. **Dispatch Grid** - `/dispatch-grid.html`
-   - `RELIA🐂LIMO™ - DISPATCH`
+   - `RELIA<img width="622" height="525" alt="image" src="https://github.com/user-attachments/assets/81481a7b-47b1-4edb-91ab-e8ceb1b84b40" />
+LIMO™ - DISPATCH`
 
 ### HTML Implementation
 
