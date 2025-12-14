@@ -4137,6 +4137,120 @@ body {
   border-bottom: 1px solid #e0e0e0;
 }
 
+/* Magic Link section */
+.section-subtext {
+  color: #4a5568;
+  font-size: 14px;
+  margin-top: 6px;
+}
+
+.magic-link-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: start;
+}
+
+.magic-link-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.magic-link-card h3 {
+  margin: 0 0 10px 0;
+  font-size: 18px;
+}
+
+.magic-link-card p {
+  margin: 0 0 12px 0;
+  color: #4a5568;
+}
+
+.magic-link-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.magic-link-list .label {
+  font-weight: 600;
+  color: #2d3748;
+  display: block;
+  font-size: 13px;
+}
+
+.magic-link-list span + span {
+  color: #4a5568;
+  display: block;
+  margin-top: 2px;
+}
+
+.magic-link-pill {
+  display: inline-block;
+  background: #e6fffa;
+  color: #0b7c70;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
+.magic-link-steps {
+  padding-left: 18px;
+  margin: 0 0 12px 0;
+  color: #4a5568;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.magic-link-note {
+  background: #f7fafc;
+  border: 1px dashed #cbd5e0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #2d3748;
+  font-size: 13px;
+}
+
+.magic-link-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px 0 12px 0;
+}
+
+.magic-link-copy-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  margin-bottom: 10px;
+}
+
+.magic-link-copy-label {
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.magic-link-copy-value {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 13px;
+  color: #1a202c;
+  word-break: break-all;
+}
+
 @media (max-width: 768px) {
   .office-layout {
     grid-template-columns: 1fr;

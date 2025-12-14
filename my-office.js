@@ -14,6 +14,7 @@ class MyOffice {
     this.setupEventListeners();
     this.setupCustomFormsInteraction();
     this.setupListManagementSidebar();
+    this.setupMagicLinkHelpers();
     this.setupDriversForm();
     this.checkURLParameters();
     // Initialize API
@@ -1337,6 +1338,37 @@ class MyOffice {
         customFormTypeSelect.value = '';
       }
     }
+  }
+
+  setupMagicLinkHelpers() {
+    const copyButtons = document.querySelectorAll('[data-copy-target]');
+    copyButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.dataset.copyTarget;
+        const source = targetId ? document.getElementById(targetId) : null;
+
+        if (!source) {
+          return;
+        }
+
+        const text = source.textContent.trim();
+
+        if (!navigator.clipboard) {
+          alert('Clipboard is unavailable in this browser.');
+          return;
+        }
+
+        navigator.clipboard.writeText(text).then(() => {
+          const original = btn.textContent;
+          btn.textContent = 'Copied!';
+          setTimeout(() => {
+            btn.textContent = original;
+          }, 1200);
+        }).catch(() => {
+          alert('Unable to copy. Please copy the text manually.');
+        });
+      });
+    });
   }
 
   setupListManagementSidebar() {

@@ -1,100 +1,37 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sign In - RELIARELIA bullLIMO™</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>🐂</text></svg>" />
-  <link rel="stylesheet" href="auth.css" />
-  <script src="env.js"></script>
-</head>
-<body class="auth-body">
-  <div class="auth-container">
-    <div class="auth-card">
-      <!-- Logo -->
-      <div class="auth-header">
-        <h1 class="auth-logo">
-          RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" class="auth-logo-bull">LIMO™
-        </h1>
-        <p class="auth-subtitle">Management System</p>
-      </div>
+  <head>
+    <meta charset="utf-8" />
+    <title>Sign in</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="auth.css" />
+    <script src="env.js"></script>
+  </head>
+  <body>
+    <main class="auth-shell">
+      <header>
+        <h1>Sign in</h1>
+        <p class="auth-lede">Enter your Supabase email and password or request a magic link.</p>
+      </header>
 
-      <!-- Sign In Form -->
-      <form id="signInForm" class="auth-form">
-        <div class="form-group">
-          <label for="email">Email Address</label>
-          <input 
-            type="email" 
-            id="email" 
-            name="email" 
-            placeholder="your.email@company.com" 
-            required
-            autocomplete="email"
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input 
-            type="password" 
-            id="password" 
-            name="password" 
-            placeholder="Enter your password" 
-            required
-            autocomplete="current-password"
-          />
-        </div>
-
-        <div class="form-options">
-          <label class="checkbox">
-            <input type="checkbox" name="remember" />
-            <span>Remember me</span>
-          </label>
-          <a href="#" class="forgot-password">Forgot password?</a>
-        </div>
-
-        <button type="submit" class="btn-sign-in">Sign In</button>
-
-        <div id="errorMessage" class="error-message" style="display: none;"></div>
-        <div id="successMessage" class="success-message" style="display: none;"></div>
+      <form id="login-form" class="auth-form">
+        <label class="auth-label" for="login-email">Email</label>
+        <input id="login-email" name="email" type="email" placeholder="Email" required />
+        <label class="auth-label" for="login-password">Password</label>
+        <input id="login-password" name="password" type="password" placeholder="Password" required />
+        <button type="submit">Sign in</button>
       </form>
 
-      <!-- Sign In Divider -->
-      <div class="auth-divider">
-        <span>or</span>
-      </div>
+      <form id="magic-form" class="auth-form auth-form--secondary">
+        <label class="auth-label" for="magic-email">Email for magic link</label>
+        <input id="magic-email" name="email" type="email" placeholder="Email for magic link" required />
+        <button type="submit">Send magic link</button>
+        <small>We’ll email you a one-time link to sign in.</small>
+      </form>
 
-      <!-- Demo Accounts -->
-      <div class="demo-accounts">
-        <p class="demo-title">Demo Accounts</p>
-        <button type="button" class="demo-btn demo-admin" data-role="admin">
-          <span class="demo-icon">👨‍💼</span>
-          <span class="demo-text">Admin</span>
-        </button>
-        <button type="button" class="demo-btn demo-dispatcher" data-role="dispatcher">
-          <span class="demo-icon">📋</span>
-          <span class="demo-text">Dispatcher</span>
-        </button>
-        <button type="button" class="demo-btn demo-driver" data-role="driver">
-          <span class="demo-icon">🚗</span>
-          <span class="demo-text">Driver</span>
-        </button>
-      </div>
+      <p id="msg" role="status" aria-live="polite" class="auth-message"></p>
+    </main>
 
-      <!-- Footer -->
-      <div class="auth-footer">
-        <p>🔒 Secured with Supabase Authentication</p>
-        <p class="version">RELIA🐂LIMO™ v1.0</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Loading Overlay -->
-  <div id="loadingOverlay" class="loading-overlay" style="display: none;">
-    <div class="spinner"></div>
-    <p>Signing in...</p>
-  </div>
-
-  <script type="module" src="auth.js"></script>
-</body>
+    <script type="module" src="auth.js"></script>
+  </body>
 </html>

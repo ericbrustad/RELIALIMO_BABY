@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Signing you in…</title>
+  </head>
+  <body>
+    <p>Completing sign-in…</p>
+    <script src="../env.js"></script>
+    <script type="module">
+      import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+      const SUPABASE_URL =
+        (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_URL) ||
+        (typeof process !== 'undefined' && process.env?.SUPABASE_URL) ||
+        (typeof window !== 'undefined' && window.ENV?.SUPABASE_URL) ||
+        '<YOUR_SUPABASE_URL>';
+
+      const SUPABASE_ANON_KEY =
+        (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY) ||
+        (typeof process !== 'undefined' && process.env?.SUPABASE_ANON_KEY) ||
+        (typeof window !== 'undefined' && window.ENV?.SUPABASE_ANON_KEY) ||
+        '<YOUR_SUPABASE_ANON_KEY>';
+
+      const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+      setTimeout(async () => {
+        const {
+          data: { session }
+        } = await supabase.auth.getSession();
+        window.location.replace(session ? '/index.html' : '/auth.html');
+      }, 200);
+    </script>
+  </body>
+</html>

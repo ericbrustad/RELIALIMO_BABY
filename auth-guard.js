@@ -1,67 +1,50 @@
-// Authentication Guard
-// Protects pages that require authentication
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-import { supabase } from './supabase-client.js';
+const SUPABASE_URL =
+  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_URL) ||
+  (typeof process !== 'undefined' && process.env?.SUPABASE_URL) ||
+  (typeof window !== 'undefined' && window.ENV?.SUPABASE_URL) ||
+  '<YOUR_SUPABASE_URL>';
+
+const SUPABASE_ANON_KEY =
+  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY) ||
+  (typeof process !== 'undefined' && process.env?.SUPABASE_ANON_KEY) ||
+  (typeof window !== 'undefined' && window.ENV?.SUPABASE_ANON_KEY) ||
+  '<YOUR_SUPABASE_ANON_KEY>';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export class AuthGuard {
   static async checkAuth() {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        console.log('⚠️ No active session, redirecting to auth...');
-        window.location.href = 'auth.html';
-        return false;
-      }
-
-      console.log('✅ User authenticated:', session.user.email);
-      return true;
-
-    } catch (error) {
-      console.error('❌ Auth check error:', error);
-      window.location.href = 'auth.html';
-      return false;
-    }
+    const { data } = await supabase.auth.getSession();
+    return Boolean(data?.session);
   }
 
   static async protectPage() {
-    const isAuthenticated = await this.checkAuth();
-    if (!isAuthenticated) {
-      // Hide content while redirecting
-      document.body.style.opacity = '0';
-      document.body.style.pointerEvents = 'none';
+    const hasSession = await this.checkAuth();
+
+    if (!hasSession) {
+      window.location.href = '/auth.html';
+      return false;
     }
-    return isAuthenticated;
+
+    return true;
   }
 
-  static setupAuthListener(callback) {
-    supabase.auth.onAuthStateChange((event, session) => {
-      console.log('🔐 Auth state changed:', event);
-      
-      if (callback) {
-        callback(event, session);
+  static async setupAuthListener(callback) {
+    return supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        window.location.href = '/auth.html';
       }
-
-      // If session lost, redirect to auth
-      if (!session && event === 'SIGNED_OUT') {
-        console.log('⚠️ Session lost, redirecting...');
-        setTimeout(() => {
-          window.location.href = 'auth.html';
-        }, 500);
+      if (typeof callback === 'function') {
+        callback(_event, session);
       }
     });
   }
 }
 
-// Call on page load
-document.addEventListener('DOMContentLoaded', async () => {
-  console.log('🔐 Auth guard enabled - protecting page');
-  try {
-    await AuthGuard.protectPage();
-    AuthGuard.setupAuthListener();
-  } catch (error) {
-    console.error('❌ Failed to initialize auth guard:', error);
-  }
+document.addEventListener('DOMContentLoaded', () => {
+  AuthGuard.protectPage().catch((error) => console.error('Failed to enforce auth guard', error));
 });
 
 export default AuthGuard;

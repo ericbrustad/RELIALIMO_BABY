@@ -43,6 +43,7 @@
               <button class="sidebar-btn" data-section="policies">Policies</button>
               <button class="sidebar-btn" data-section="readback">ReadBack Script Templates</button>
               <button class="sidebar-btn" data-section="messaging">Messaging & Template Settings</button>
+              <button class="sidebar-btn" data-section="magic-link">Magic Link</button>
               <button class="sidebar-btn" data-section="online-res">Online Reservations</button>
               <button class="sidebar-btn" data-section="payment">Payment Gateway</button>
               <button class="sidebar-btn" data-section="plugins">Third-party Plug-ins</button>
@@ -3263,6 +3264,58 @@ Bloomington MN 55431
                         </div>
                       </div>
                     </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Magic Link Section -->
+            <section id="magic-link-section" class="office-section">
+              <div class="section-header">
+                <h2>Magic Link</h2>
+                <p class="section-subtext">Control Supabase email OTP sign-in access and keep operators aligned.</p>
+              </div>
+
+              <div class="magic-link-grid">
+                <div class="magic-link-card">
+                  <h3>How it works</h3>
+                  <p>Magic links let riders, affiliates, and staff sign in without remembering a password.</p>
+                  <ul class="magic-link-list">
+                    <li><span class="label">Provider</span><span>Email magic link (Supabase)</span></li>
+                    <li><span class="label">Sign-in page</span><span><code>auth.html</code> (email + password + magic link)</span></li>
+                    <li><span class="label">Callback</span><span><code>/auth/callback.html</code> finalizes the session</span></li>
+                  </ul>
+                  <div class="magic-link-pill" id="magicLinkStatusBadge">Magic link ready</div>
+                </div>
+
+                <div class="magic-link-card">
+                  <h3>Change the setting</h3>
+                  <ol class="magic-link-steps">
+                    <li>Store <code>SUPABASE_SERVICE_ROLE_KEY</code> and <code>ADMIN_TOKEN</code> as Vercel secrets.</li>
+                    <li>Call <code>/auth-controls</code> with <code>Authorization: Bearer &lt;service role key&gt;</code> and <code>X-Admin-Token</code> headers.</li>
+                    <li>PATCH with <code>{ "magic_link_enabled": true|false }</code>, then GET to confirm <code>EMAIL_SIGNIN_ENABLED</code>.</li>
+                  </ol>
+                  <div class="magic-link-note">Edge calls must use the service role key—anon keys are insufficient for auth config.</div>
+                </div>
+
+                <div class="magic-link-card">
+                  <h3>Quick links</h3>
+                  <p>Share the sign-in experience or copy the Edge endpoint for administrators.</p>
+                  <div class="magic-link-actions">
+                    <a class="btn btn-primary" href="auth.html">Open auth page</a>
+                    <a class="btn btn-secondary" href="auth/callback.html">Preview callback</a>
+                  </div>
+
+                  <div class="magic-link-copy-row">
+                    <div class="magic-link-copy-label">Edge function endpoint</div>
+                    <div class="magic-link-copy-value" id="magicLinkEndpoint">/functions/v1/auth-controls</div>
+                    <button class="btn btn-secondary btn-small" data-copy-target="magicLinkEndpoint">Copy</button>
+                  </div>
+
+                  <div class="magic-link-copy-row">
+                    <div class="magic-link-copy-label">Required headers</div>
+                    <div class="magic-link-copy-value" id="magicLinkHeaders">Authorization: Bearer &lt;service role key&gt;\nX-Admin-Token: &lt;admin token&gt;</div>
+                    <button class="btn btn-secondary btn-small" data-copy-target="magicLinkHeaders">Copy</button>
                   </div>
                 </div>
               </div>
