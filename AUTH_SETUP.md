@@ -1,4 +1,4 @@
-# RELIA🐂LIMO™ - Authentication Setup Guide
+# RELIA🐂LIMO™ - Authentication Setup Guide (Login Removed)
 
 ## Overview
 This environment now uses Supabase email/password authentication with optional magic links. The login page (`/auth.html`) talks directly to Supabase using your public project URL and anon key.

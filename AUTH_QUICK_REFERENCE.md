@@ -1,4 +1,4 @@
-# 🔐 Authentication Quick Reference Card
+# 🔓 Authentication Quick Reference Card
 
 ## Access
 - **Auth page:** `/auth.html` shows email/password and magic-link forms backed by Supabase.
