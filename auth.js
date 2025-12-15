@@ -3,8 +3,8 @@ import { getSupabaseCredentials } from './supabase-config.js';
 
 const msg = document.getElementById('msg');
 const roleParam = new URLSearchParams(window.location.search).get('role');
-const userRole = roleParam || 'Super Admin';
-const isSuperAdmin = userRole === 'Super Admin';
+const userRole = roleParam || 'Admin';
+const isAdmin = userRole === 'Admin';
 
 const magicForm = document.getElementById('magic-form');
 const magicLinkDescription = document.getElementById('magic-link-description');
@@ -26,7 +26,7 @@ function magicLinkEnabledInSettings() {
 
 function updateMagicLinkAvailability() {
   const enabled = magicLinkEnabledInSettings();
-  const showMagicLink = enabled && isSuperAdmin;
+  const showMagicLink = enabled && isAdmin;
 
   if (magicForm) {
     magicForm.hidden = !showMagicLink;
@@ -46,22 +46,22 @@ function updateMagicLinkAvailability() {
     magicLinkBadge.textContent = 'Magic link disabled';
     magicLinkBadge.className = 'status-chip disabled';
     magicLinkDescription.textContent =
-      'Magic link sign-in is turned off in System Settings. Contact a Super Admin to enable it again.';
+      'Magic link sign-in is turned off in System Settings. Contact an Admin to enable it again.';
     return;
   }
 
-  if (!isSuperAdmin) {
+  if (!isAdmin) {
     magicLinkBadge.textContent = 'Restricted';
     magicLinkBadge.className = 'status-chip restricted';
     magicLinkDescription.textContent =
-      'Magic link sign-in is available only to Super Admins. Please sign in with your password or ask an admin for help.';
+      'Magic link sign-in is available only to Admins. Please sign in with your password or ask an admin for help.';
     return;
   }
 
   magicLinkBadge.textContent = 'Magic link available';
   magicLinkBadge.className = 'status-chip enabled';
   magicLinkDescription.textContent =
-    'Magic link sign-in is enabled for Super Admins. Use your Supabase email to request a link.';
+    'Magic link sign-in is enabled for Admins. Use your Supabase email to request a link.';
 }
 
 let supabase;
