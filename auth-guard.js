@@ -1,17 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getSupabaseCredentials } from './supabase-config.js';
 
-const SUPABASE_URL =
-  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_URL) ||
-  (typeof process !== 'undefined' && process.env?.SUPABASE_URL) ||
-  (typeof window !== 'undefined' && window.ENV?.SUPABASE_URL) ||
-  '<YOUR_SUPABASE_URL>';
-
-const SUPABASE_ANON_KEY =
-  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY) ||
-  (typeof process !== 'undefined' && process.env?.SUPABASE_ANON_KEY) ||
-  (typeof window !== 'undefined' && window.ENV?.SUPABASE_ANON_KEY) ||
-  '<YOUR_SUPABASE_ANON_KEY>';
-
+const { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY } = getSupabaseCredentials();
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export class AuthGuard {
