@@ -29,7 +29,7 @@ Use this markup for headings that include the logo:
 
 ```html
 <h1 class="logo">
-  RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" class="logo-bull">LIMO™
+  RELIA<img src="https://github.com/user-attachments/assets/d7d111cc-186d-4a88-bac3-7b39c313b25c" alt="RELIA bull" class="logo-bull">LIMO™
 </h1>
 ```
 
