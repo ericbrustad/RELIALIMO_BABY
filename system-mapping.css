@@ -15,6 +15,10 @@
   flex-shrink: 0;
 }
 
+.embedded .settings-sidebar {
+  display: none;
+}
+
 .settings-nav {
   padding: 0;
 }

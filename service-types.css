@@ -25,6 +25,10 @@ body {
   flex-shrink: 0;
 }
 
+.embedded .settings-sidebar {
+  display: none;
+}
+
 .settings-nav {
   padding: 15px 0;
 }
@@ -85,6 +89,14 @@ body {
   background: #ffffff;
   overflow-y: auto;
   padding: 20px 30px;
+}
+
+.embedded .service-types-container {
+  height: 100%;
+}
+
+.embedded .service-types-main {
+  width: 100%;
 }
 
 .service-types-header {

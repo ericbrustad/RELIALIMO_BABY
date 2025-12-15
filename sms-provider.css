@@ -25,6 +25,10 @@ body {
   flex-shrink: 0;
 }
 
+.embedded .settings-sidebar {
+  display: none;
+}
+
 .settings-nav {
   padding: 15px 0;
 }

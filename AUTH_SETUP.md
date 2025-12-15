@@ -1,281 +1,41 @@
 # RELIA🐂LIMO™ - Authentication Setup Guide
 
 ## Overview
+This environment now uses Supabase email/password authentication with optional magic links. The login page (`/auth.html`) talks directly to Supabase using your public project URL and anon key.
 
-Complete authentication system with:
-- ✅ Sign-in/Sign-out flows
-- ✅ Demo accounts for testing
-- ✅ User menu with profile options
-- ✅ Protected routes
-- ✅ Session management
-- ✅ Role-based access (admin, dispatcher, driver)
+## Supabase Configuration
+1. **Email provider** (Supabase Dashboard → Authentication → Providers → Email)
+   - Enable email provider.
+   - Disable email signups.
+   - Disable confirm email.
+2. **Environment variables**
+   - Set the following in each Vercel project:
+     - `NEXT_PUBLIC_SUPABASE_URL = https://YOUR-PROJECT-REF.supabase.co`
+     - `NEXT_PUBLIC_SUPABASE_ANON_KEY = YOUR-ANON-KEY`
+   - Add the server-only secret needed for auth config lookups:
+     - `SUPABASE_SERVICE_ROLE_KEY` (store as a Vercel secret; required so the auth-config Edge Function can send the Authorization header it needs)
+3. **Local/buildless previews**
+   - Update `env.js` with the same values so static previews work without a build step.
 
-## Files Created
+## Files to Deploy
+- `auth.html` – email/password login and magic-link form
+- `auth/callback.html` – completes magic-link sign-in and returns to the app
+- `auth.js` – Supabase client setup and form handlers
+- `auth.css` – styles for both forms
+- `auth-guard.js` – optional guard for protected pages
 
-### Authentication Files
-- **`/auth.html`** - Sign-in page
-- **`/auth.css`** - Sign-in styling
-- **`/auth.js`** - Authentication logic
-- **`/auth-guard.js`** - Route protection
-- **`/user-menu.js`** - User menu component
-- **`/user-menu.css`** - User menu styling
-
-## Setup Instructions
-
-### 1. Update index.html
-
-The main app page (index.html) now includes:
+## Protected Pages
+Add the guard script to any page that should require authentication:
 ```html
-<link rel="stylesheet" href="user-menu.css" />
-<script type="module" src="user-menu.js"></script>
-<script type="module" src="auth-guard.js"></script>
+<script type="module" src="/auth-guard.js"></script>
 ```
+The guard checks `supabase.auth.getSession()` and redirects to `/auth.html` when no session is present.
 
-### 2. Add Scripts to Your Main App
+## Redirect Targets
+Successful sign-ins navigate to `index.html`. Update the redirect targets in `auth.js` and `auth/callback.html` if your app uses a different landing page.
 
-Make sure your main app (index.html) includes these scripts at the end of body:
-
-```html
-<!-- User Menu (shows logged-in user info) -->
-<script type="module" src="user-menu.js"></script>
-
-<!-- Auth Guard (protects pages) -->
-<script type="module" src="auth-guard.js"></script>
-```
-
-### 3. Create Demo Users (One-time Setup)
-
-Run this in Supabase SQL Editor to create demo accounts:
-
-```sql
--- Insert demo users via Auth if they don't exist
--- You can also sign up through the app's demo buttons
-
--- Note: Supabase Auth handles user creation
--- Demo credentials are defined in auth.js
-```
-
-Or use the **Demo Account Buttons** on auth.html:
-- 👨‍💼 Admin
-- 📋 Dispatcher  
-- 🚗 Driver
-
-## Authentication Flow
-
-### 1. User Arrives at App
-```
-User visits relialimo.netlify.app
-    ↓
-auth-guard.js checks for session
-    ↓
-No session? → Redirect to auth.html
-Has session? → Show app, load user menu
-```
-
-### 2. Sign In Process
-```
-User enters email/password or clicks demo button
-    ↓
-auth.js calls supabase.auth.signInWithPassword()
-    ↓
-Success? → Store session, show user menu, redirect to app
-Error? → Show error message
-```
-
-### 3. User Session Active
-```
-User menu shows their email and role
-    ↓
-Click menu → See profile, settings, help, sign out
-    ↓
-Click sign out → Clear session, redirect to auth.html
-```
-
-## Using the Demo Accounts
-
-On `auth.html`, click demo buttons to test different roles:
-
-### Admin Account
-- **Email**: admin@relialimo.demo
-- **Password**: DemoAdmin123!
-- **Role**: admin
-- **Access**: Full system access
-
-### Dispatcher Account
-- **Email**: dispatcher@relialimo.demo
-- **Password**: DemoDispatcher123!
-- **Role**: dispatcher
-- **Access**: Manage reservations and assignments
-
-### Driver Account
-- **Email**: driver@relialimo.demo
-- **Password**: DemoDriver123!
-- **Role**: driver
-- **Access**: View and accept assignments
-
-## API Reference
-
-### auth.js
-
-```javascript
-// Get current session
-const session = await getSession();
-
-// Get current user
-const user = await getCurrentUser();
-
-// Sign out
-await signOut();
-```
-
-### auth-guard.js
-
-```javascript
-// Check if user is authenticated
-const isAuth = await AuthGuard.checkAuth();
-
-// Protect current page from unauthenticated users
-await AuthGuard.protectPage();
-
-// Listen to auth state changes
-AuthGuard.setupAuthListener((event, session) => {
-  console.log('Auth changed:', event);
-});
-```
-
-### user-menu.js
-
-```javascript
-// User menu auto-initializes
-// Shows logged-in user info and provides sign-out button
-```
-
-## Customizing Authentication
-
-### Change Demo Credentials
-
-Edit `/auth.js`:
-
-```javascript
-const DEMO_ACCOUNTS = {
-  admin: {
-    email: 'admin@relialimo.demo',
-    password: 'DemoAdmin123!'
-  },
-  // ... modify as needed
-};
-```
-
-### Add More Demo Roles
-
-1. Add to `DEMO_ACCOUNTS` in `auth.js`
-2. Add button in `auth.html`:
-
-```html
-<button type="button" class="demo-btn" data-role="newrole">
-  <span class="demo-icon">🎯</span>
-  <span class="demo-text">New Role</span>
-</button>
-```
-
-### Customize User Menu
-
-Edit `/user-menu.js` to add more menu items:
-
-```javascript
-<button class="menu-item" id="newBtn">
-  <span class="menu-icon">🎯</span>
-  <span>New Feature</span>
-</button>
-```
-
-Then add event listener:
-
-```javascript
-const newBtn = document.getElementById('newBtn');
-newBtn?.addEventListener('click', () => {
-  console.log('Custom action');
-});
-```
-
-## Security Best Practices
-
-✅ **Implemented:**
-- Session tokens stored in browser memory (not localStorage for sensitive token)
-- Protected routes with auth-guard.js
-- Sign-out clears all session data
-- CORS configured in Supabase
-- RLS policies protect database
-
-⚠️ **Remember:**
-- Never expose `SUPABASE_SERVICE_ROLE_KEY` in frontend
-- Always validate on backend before sensitive operations
-- Implement rate limiting on auth endpoints
-- Use HTTPS in production (automatic with Netlify)
-
-## Troubleshooting
-
-### "Invalid login credentials"
-- Check email/password are correct
-- Verify user exists in Supabase Auth
-- Check Supabase Auth email confirmation settings
-
-### "User already signed in but menu doesn't show"
-- Make sure `user-menu.js` script is loaded
-- Check browser console for errors
-- Clear localStorage and reload
-
-### "Demo buttons don't work"
-- Demo accounts might not exist yet
-- Click a demo button to create the account
-- Or manually create in Supabase Auth
-
-### User gets redirected to auth.html
-- auth-guard.js detected no active session
-- Sign in again or check session storage
-- Browser might have cleared cookies
-
-## Testing Checklist
-
-- [ ] Sign in with demo Admin account
-- [ ] User menu appears in header
-- [ ] Click menu to see profile options
-- [ ] Click sign out → redirects to auth.html
-- [ ] Try signing in again
-- [ ] Test with Dispatcher account
-- [ ] Test with Driver account
-- [ ] Test with invalid credentials
-- [ ] Test on mobile (responsive design)
-
-## Next Steps
-
-1. ✅ Set up authentication page (auth.html)
-2. ✅ Create demo accounts
-3. ✅ Test sign-in/sign-out flow
-4. ✅ Implement role-based features
-5. ✅ Add more user menu options
-6. ⏭️ Connect to reservation system
-7. ⏭️ Implement real-time updates
-
-## Files Checklist
-
-| File | Purpose | Status |
-|------|---------|--------|
-| auth.html | Sign-in page | ✅ Created |
-| auth.css | Sign-in styles | ✅ Created |
-| auth.js | Auth logic | ✅ Created |
-| auth-guard.js | Route protection | ✅ Created |
-| user-menu.js | User menu component | ✅ Created |
-| user-menu.css | User menu styles | ✅ Created |
-| env.js | Environment vars | ✅ Exists |
-| config.js | Config | ✅ Exists |
-| supabase-client.js | Supabase client | ✅ Exists |
-
-## Support
-
-For issues:
-1. Check browser console for error messages
-2. Verify Supabase credentials in env.js
-3. Check network tab for failed requests
-4. Review Supabase Auth logs in dashboard
-5. Ensure RLS policies allow your user role
+## Testing
+- Submit the password form with a valid Supabase user to ensure session creation and redirect.
+- Use the magic link form and confirm the email delivers a working link back to `/auth/callback.html`.
+- Visit a protected page with and without an active session to confirm the guard behavior.
+- Call the auth-config Edge Function from a server environment to verify it receives the `Authorization: Bearer <service_role_key>` header and returns your configured settings.

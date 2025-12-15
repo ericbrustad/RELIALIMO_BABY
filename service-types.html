@@ -7,6 +7,13 @@
     <link rel="stylesheet" href="service-types.css" />
   </head>
   <body>
+    <script>
+      // Adjust layout cues when embedded inside the My Office System Settings iframe
+      if (window.self !== window.top) {
+        document.documentElement.classList.add('embedded');
+        document.body.classList.add('embedded');
+      }
+    </script>
     <div class="service-types-container">
       <!-- Left Sidebar -->
       <aside class="settings-sidebar">
@@ -32,6 +39,7 @@
             <a href="sms-provider.html" class="settings-nav-subitem">Sms Provider</a>
             <a href="#" class="settings-nav-subitem">LimoAnywhere Pay</a>
             <a href="#" class="settings-nav-subitem">Digital Marketing</a>
+            <a href="appearance.html" class="settings-nav-subitem">Appearance</a>
           </div>
         </nav>
       </aside>

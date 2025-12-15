@@ -7,6 +7,12 @@
     <link rel="stylesheet" href="system-mapping.css" />
   </head>
   <body>
+    <script>
+      if (window.self !== window.top) {
+        document.documentElement.classList.add('embedded');
+        document.body.classList.add('embedded');
+      }
+    </script>
     <div class="system-mapping-container">
       <!-- Left Sidebar -->
       <aside class="settings-sidebar">

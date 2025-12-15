@@ -43,10 +43,22 @@
               <button class="sidebar-btn" data-section="policies">Policies</button>
               <button class="sidebar-btn" data-section="readback">ReadBack Script Templates</button>
               <button class="sidebar-btn" data-section="messaging">Messaging & Template Settings</button>
+              <button class="sidebar-btn" data-section="magic-link">Magic Link</button>
               <button class="sidebar-btn" data-section="online-res">Online Reservations</button>
               <button class="sidebar-btn" data-section="payment">Payment Gateway</button>
               <button class="sidebar-btn" data-section="plugins">Third-party Plug-ins</button>
               <button class="sidebar-btn" data-section="system-settings">System Settings</button>
+              <div class="sidebar-subgroup" id="systemSettingsSubnav" style="display: none;">
+                <button class="sidebar-subbtn active" data-system-setting="service-types">Service Types</button>
+                <button class="sidebar-subbtn" data-system-setting="partner-settings">Partner Settings</button>
+                <button class="sidebar-subbtn" data-system-setting="system-mapping">System Mapping</button>
+                <button class="sidebar-subbtn" data-system-setting="data-reduction">Data Reduction</button>
+                <button class="sidebar-subbtn" data-system-setting="electronic-fax">Electronic Fax</button>
+                <button class="sidebar-subbtn" data-system-setting="sms-provider">Sms Provider</button>
+                <button class="sidebar-subbtn" data-system-setting="limoanywhere-pay">LimoAnywhere Pay</button>
+                <button class="sidebar-subbtn" data-system-setting="digital-marketing">Digital Marketing</button>
+                <button class="sidebar-subbtn" data-system-setting="appearance">Appearance</button>
+              </div>
             </div>
 
             <!-- Company Resources Tab Items (hidden by default) -->
@@ -1585,9 +1597,9 @@
                       <div class="user-item-role">support (mod/analyst/support)</div>
                     </div>
                   </div>
-                  <button class="btn btn-secondary btn-small" style="margin: 10px;">Show All</button>
+                  <button class="btn btn-secondary btn-small" id="showAllUsersBtn" style="margin: 10px;">Show All</button>
                   <div class="users-actions">
-                    <button class="btn btn-secondary btn-small">ADD USER</button>
+                    <button class="btn btn-secondary btn-small" id="addUserFooterBtn">ADD USER</button>
                   </div>
                 </div>
 
@@ -1596,7 +1608,7 @@
                   <div class="user-details-content">
                     <div class="user-details-header">
                       <h3>Edit User</h3>
-                      <button class="btn btn-danger btn-small">Delete User</button>
+                      <button class="btn btn-danger btn-small" id="deleteUserBtn">Delete User</button>
                     </div>
 
                     <!-- User Information -->
@@ -1605,11 +1617,11 @@
                       <div class="form-row-2">
                         <div class="form-group">
                           <label>Username</label>
-                          <input type="text" class="form-control" value="amanda.brustad" />
+                          <input type="text" class="form-control" id="userUsername" value="amanda.brustad" />
                         </div>
                         <div class="form-group">
                           <label>Status</label>
-                          <select class="form-control">
+                          <select class="form-control" id="userStatus">
                             <option value="active" selected>Active</option>
                             <option value="inactive">Inactive</option>
                             <option value="suspended">Suspended</option>
@@ -1620,29 +1632,29 @@
                       <div class="form-row-2">
                         <div class="form-group">
                           <label>First Name</label>
-                          <input type="text" class="form-control" value="Amanda" />
+                          <input type="text" class="form-control" id="userFirstName" value="Amanda" />
                         </div>
                         <div class="form-group">
                           <label>Last Name</label>
-                          <input type="text" class="form-control" value="Brustad" />
+                          <input type="text" class="form-control" id="userLastName" value="Brustad" />
                         </div>
                       </div>
 
                       <div class="form-row">
                         <div class="form-group">
                           <label>Email</label>
-                          <input type="email" class="form-control" value="amanda@erixmm.com" />
+                          <input type="email" class="form-control" id="userEmail" value="amanda@erixmm.com" />
                         </div>
                       </div>
 
                       <div class="form-row-2">
                         <div class="form-group">
                           <label>Phone</label>
-                          <input type="tel" class="form-control" value="(763) 226-8230" />
+                          <input type="tel" class="form-control" id="userPhone" value="(763) 226-8230" />
                         </div>
                         <div class="form-group">
                           <label>Login</label>
-                          <select class="form-control">
+                          <select class="form-control" id="userLogin">
                             <option value="admin" selected>admin</option>
                             <option value="user">user</option>
                             <option value="manager">manager</option>
@@ -1653,14 +1665,14 @@
                       <div class="form-row">
                         <div class="form-group">
                           <label>Password</label>
-                          <input type="password" class="form-control" value="••••••••••" />
+                          <input type="password" class="form-control" id="userPassword" value="••••••••••" />
                         </div>
                       </div>
 
                       <div class="form-row">
                         <div class="form-group">
                           <label>SMS Access</label>
-                          <input type="text" class="form-control" placeholder="SMS phone number" />
+                          <input type="text" class="form-control" id="userSms" placeholder="SMS phone number" />
                         </div>
                       </div>
                     </div>
@@ -1975,8 +1987,8 @@
 
                     <!-- Save Button -->
                     <div class="form-actions">
-                      <button class="btn btn-primary btn-large">Update User</button>
-                      <button class="btn btn-secondary" style="margin-left: 10px;">Cancel</button>
+                      <button class="btn btn-primary btn-large" id="saveUserBtn">Update User</button>
+                      <button class="btn btn-secondary" id="cancelUserBtn" style="margin-left: 10px;">Cancel</button>
                     </div>
                   </div>
 
@@ -3263,6 +3275,58 @@ Bloomington MN 55431
                         </div>
                       </div>
                     </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Magic Link Section -->
+            <section id="magic-link-section" class="office-section">
+              <div class="section-header">
+                <h2>Magic Link</h2>
+                <p class="section-subtext">Control Supabase email OTP sign-in access and keep operators aligned.</p>
+              </div>
+
+              <div class="magic-link-grid">
+                <div class="magic-link-card">
+                  <h3>How it works</h3>
+                  <p>Magic links let riders, affiliates, and staff sign in without remembering a password.</p>
+                  <ul class="magic-link-list">
+                    <li><span class="label">Provider</span><span>Email magic link (Supabase)</span></li>
+                    <li><span class="label">Sign-in page</span><span><code>auth.html</code> (email + password + magic link)</span></li>
+                    <li><span class="label">Callback</span><span><code>/auth/callback.html</code> finalizes the session</span></li>
+                  </ul>
+                  <div class="magic-link-pill" id="magicLinkStatusBadge">Magic link ready</div>
+                </div>
+
+                <div class="magic-link-card">
+                  <h3>Change the setting</h3>
+                  <ol class="magic-link-steps">
+                    <li>Store <code>SUPABASE_SERVICE_ROLE_KEY</code> and <code>ADMIN_TOKEN</code> as Vercel secrets.</li>
+                    <li>Call <code>/auth-controls</code> with <code>Authorization: Bearer &lt;service role key&gt;</code> and <code>X-Admin-Token</code> headers.</li>
+                    <li>PATCH with <code>{ "magic_link_enabled": true|false }</code>, then GET to confirm <code>EMAIL_SIGNIN_ENABLED</code>.</li>
+                  </ol>
+                  <div class="magic-link-note">Edge calls must use the service role key—anon keys are insufficient for auth config.</div>
+                </div>
+
+                <div class="magic-link-card">
+                  <h3>Quick links</h3>
+                  <p>Share the sign-in experience or copy the Edge endpoint for administrators.</p>
+                  <div class="magic-link-actions">
+                    <a class="btn btn-primary" href="auth.html">Open auth page</a>
+                    <a class="btn btn-secondary" href="auth/callback.html">Preview callback</a>
+                  </div>
+
+                  <div class="magic-link-copy-row">
+                    <div class="magic-link-copy-label">Edge function endpoint</div>
+                    <div class="magic-link-copy-value" id="magicLinkEndpoint">/functions/v1/auth-controls</div>
+                    <button class="btn btn-secondary btn-small" data-copy-target="magicLinkEndpoint">Copy</button>
+                  </div>
+
+                  <div class="magic-link-copy-row">
+                    <div class="magic-link-copy-label">Required headers</div>
+                    <div class="magic-link-copy-value" id="magicLinkHeaders">Authorization: Bearer &lt;service role key&gt;\nX-Admin-Token: &lt;admin token&gt;</div>
+                    <button class="btn btn-secondary btn-small" data-copy-target="magicLinkHeaders">Copy</button>
                   </div>
                 </div>
               </div>

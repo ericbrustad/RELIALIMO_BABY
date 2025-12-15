@@ -6,7 +6,40 @@ class MyOffice {
     this.currentSection = 'contact-info';
     this.currentPrefTab = 'general';
     this.currentDriver = null;
+    this.currentSystemSettingsPage = 'service-types';
     this.drivers = [];
+    this.users = [
+      {
+        id: '1',
+        displayName: 'Amanda Brustad (amanda)',
+        roleLabel: 'admin (site-admin)',
+        username: 'amanda.brustad',
+        status: 'active',
+        firstName: 'Amanda',
+        lastName: 'Brustad',
+        email: 'amanda@erixmm.com',
+        phone: '(763) 226-8230',
+        login: 'admin',
+        password: '••••••••••',
+        sms: '',
+      },
+      {
+        id: '2',
+        displayName: 'Tom Smith (tsmith)',
+        roleLabel: 'support (mod/analyst/support)',
+        username: 'tsmith',
+        status: 'active',
+        firstName: 'Tom',
+        lastName: 'Smith',
+        email: 'tom@relialimo.demo',
+        phone: '(555) 100-2000',
+        login: 'user',
+        password: '••••••••••',
+        sms: '',
+      }
+    ];
+    this.selectedUserId = this.users[0]?.id || null;
+    this.userInputs = {};
     this.init();
   }
 
@@ -14,7 +47,9 @@ class MyOffice {
     this.setupEventListeners();
     this.setupCustomFormsInteraction();
     this.setupListManagementSidebar();
+    this.setupMagicLinkHelpers();
     this.setupDriversForm();
+    this.setupSystemUsers();
     this.checkURLParameters();
     // Initialize API
     this.initializeAPI();
@@ -103,6 +138,17 @@ class MyOffice {
         this.navigateToSection(section);
       });
     });
+
+    // System Settings sub-navigation
+    const systemSettingsSubnav = document.getElementById('systemSettingsSubnav');
+    if (systemSettingsSubnav) {
+      systemSettingsSubnav.addEventListener('click', (e) => {
+        const btn = e.target.closest('.sidebar-subbtn');
+        if (!btn || !btn.dataset.systemSetting) return;
+        this.navigateToSection('system-settings');
+        this.navigateToSystemSettingsPage(btn.dataset.systemSetting);
+      });
+    }
 
     // Top tabs navigation
     document.querySelectorAll('.window-tab').forEach(tab => {
@@ -211,13 +257,6 @@ class MyOffice {
     }
 
     // System Users - User selection
-    document.querySelectorAll('.user-item').forEach(item => {
-      item.addEventListener('click', (e) => {
-        const userId = e.currentTarget.dataset.userId;
-        this.selectUser(userId);
-      });
-    });
-
     // System Users - Permission tree toggle
     document.querySelectorAll('.permission-parent').forEach(parent => {
       parent.addEventListener('click', (e) => {
@@ -467,6 +506,112 @@ class MyOffice {
     });
   }
 
+  setupSystemUsers() {
+    this.cacheUserInputs();
+    this.renderUserList();
+    this.bindUserButtons();
+    if (this.selectedUserId) {
+      this.selectUser(this.selectedUserId);
+    }
+  }
+
+  cacheUserInputs() {
+    this.userInputs = {
+      username: document.getElementById('userUsername'),
+      status: document.getElementById('userStatus'),
+      firstName: document.getElementById('userFirstName'),
+      lastName: document.getElementById('userLastName'),
+      email: document.getElementById('userEmail'),
+      phone: document.getElementById('userPhone'),
+      login: document.getElementById('userLogin'),
+      password: document.getElementById('userPassword'),
+      sms: document.getElementById('userSms'),
+    };
+  }
+
+  bindUserButtons() {
+    const addUserBtn = document.getElementById('addUserBtn');
+    const addUserFooterBtn = document.getElementById('addUserFooterBtn');
+    const showAllUsersBtn = document.getElementById('showAllUsersBtn');
+    const deleteUserBtn = document.getElementById('deleteUserBtn');
+    const saveUserBtn = document.getElementById('saveUserBtn');
+    const cancelUserBtn = document.getElementById('cancelUserBtn');
+
+    [addUserBtn, addUserFooterBtn].forEach(btn => {
+      if (btn) {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.createUser();
+        });
+      }
+    });
+
+    if (showAllUsersBtn) {
+      showAllUsersBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.renderUserList();
+        if (this.selectedUserId) {
+          this.selectUser(this.selectedUserId);
+        }
+      });
+    }
+
+    if (deleteUserBtn) {
+      deleteUserBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.deleteSelectedUser();
+      });
+    }
+
+    if (saveUserBtn) {
+      saveUserBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.saveSelectedUser();
+      });
+    }
+
+    if (cancelUserBtn) {
+      cancelUserBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (this.selectedUserId) {
+          this.populateUserDetails(this.selectedUserId);
+        }
+      });
+    }
+  }
+
+  renderUserList() {
+    const list = document.querySelector('.users-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+    this.users.forEach(user => {
+      const item = document.createElement('div');
+      item.className = 'user-item';
+      item.dataset.userId = user.id;
+      if (user.id === this.selectedUserId) {
+        item.classList.add('active');
+      }
+
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'user-item-name';
+      nameDiv.textContent = user.displayName;
+
+      const roleDiv = document.createElement('div');
+      roleDiv.className = 'user-item-role';
+      roleDiv.textContent = user.roleLabel;
+
+      item.appendChild(nameDiv);
+      item.appendChild(roleDiv);
+      item.addEventListener('click', () => this.selectUser(user.id));
+      list.appendChild(item);
+    });
+
+    if (this.users.length === 0) {
+      this.showUserEmptyState();
+    }
+  }
+
   navigateToSection(section) {
     // Update sidebar active state (only within Company Settings group)
     document.querySelectorAll('#companySettingsGroup .sidebar-btn').forEach(btn => {
@@ -475,6 +620,12 @@ class MyOffice {
         btn.classList.add('active');
       }
     });
+
+    // Toggle System Settings sub-navigation visibility
+    const systemSettingsSubnav = document.getElementById('systemSettingsSubnav');
+    if (systemSettingsSubnav) {
+      systemSettingsSubnav.style.display = section === 'system-settings' ? 'block' : 'none';
+    }
 
     // Update content sections - hide all first
     document.querySelectorAll('.office-section').forEach(sec => {
@@ -494,15 +645,61 @@ class MyOffice {
       if (window.reinitializeDragDrop) {
         window.reinitializeDragDrop();
       }
-      
+
       // Reinitialize editor view switchers
       if (window.reinitializeEditorViewSwitchers) {
         window.reinitializeEditorViewSwitchers();
+      }
+
+      if (section === 'system-settings') {
+        this.navigateToSystemSettingsPage(this.currentSystemSettingsPage || 'service-types');
       }
     } else {
       // If section doesn't exist yet, show placeholder
       console.error('Section not found:', `${section}-section`);
       alert(`${section} section is under construction`);
+    }
+  }
+
+  navigateToSystemSettingsPage(page) {
+    const pageMap = {
+      'service-types': 'service-types.html',
+      'partner-settings': null,
+      'system-mapping': 'system-mapping.html',
+      'data-reduction': null,
+      'electronic-fax': null,
+      'sms-provider': 'sms-provider.html',
+      'limoanywhere-pay': null,
+      'digital-marketing': null,
+      'appearance': 'appearance.html',
+    };
+
+    const subnav = document.getElementById('systemSettingsSubnav');
+    if (subnav) {
+      subnav.querySelectorAll('.sidebar-subbtn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.systemSetting === page);
+      });
+    }
+
+    let target = pageMap[page];
+    if (!target) {
+      const friendlyName = (page || 'System Setting').replace(/-/g, ' ');
+      alert(`${friendlyName} page is under construction`);
+      page = 'service-types';
+      target = pageMap[page];
+
+      if (subnav) {
+        subnav.querySelectorAll('.sidebar-subbtn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.systemSetting === page);
+        });
+      }
+    }
+
+    this.currentSystemSettingsPage = page;
+
+    const iframe = document.querySelector('#system-settings-section iframe');
+    if (iframe && target) {
+      iframe.src = target;
     }
   }
 
@@ -630,6 +827,14 @@ class MyOffice {
   }
 
   selectUser(userId) {
+    const user = this.users.find(u => u.id === userId);
+    this.selectedUserId = userId;
+
+    if (!user) {
+      this.showUserEmptyState();
+      return;
+    }
+
     // Update user list active state
     document.querySelectorAll('.user-item').forEach(item => {
       item.classList.remove('active');
@@ -638,17 +843,108 @@ class MyOffice {
       }
     });
 
-    // Show user details panel
+    this.populateUserDetails(userId);
+  }
+
+  populateUserDetails(userId) {
+    const user = this.users.find(u => u.id === userId);
     const detailsContent = document.querySelector('.user-details-content');
     const emptyState = document.getElementById('userEmptyState');
-    
-    if (detailsContent && emptyState) {
-      detailsContent.style.display = 'block';
-      emptyState.style.display = 'none';
+
+    if (!user || !detailsContent || !emptyState) return;
+
+    detailsContent.style.display = 'block';
+    emptyState.style.display = 'none';
+
+    const { username, status, firstName, lastName, email, phone, login, password, sms } = this.userInputs;
+
+    if (username) username.value = user.username;
+    if (status) status.value = user.status;
+    if (firstName) firstName.value = user.firstName;
+    if (lastName) lastName.value = user.lastName;
+    if (email) email.value = user.email;
+    if (phone) phone.value = user.phone;
+    if (login) login.value = user.login;
+    if (password) password.value = user.password;
+    if (sms) sms.value = user.sms || '';
+  }
+
+  createUser() {
+    const newId = `${Date.now()}`;
+    const newUser = {
+      id: newId,
+      displayName: 'New User',
+      roleLabel: 'role pending',
+      username: '',
+      status: 'active',
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      login: 'user',
+      password: '',
+      sms: '',
+    };
+
+    this.users.push(newUser);
+    this.selectedUserId = newId;
+    this.renderUserList();
+    this.populateUserDetails(newId);
+  }
+
+  saveSelectedUser() {
+    if (!this.selectedUserId) return;
+    const user = this.users.find(u => u.id === this.selectedUserId);
+    if (!user) return;
+
+    const { username, status, firstName, lastName, email, phone, login, password, sms } = this.userInputs;
+
+    user.username = username?.value || '';
+    user.status = status?.value || 'active';
+    user.firstName = firstName?.value || '';
+    user.lastName = lastName?.value || '';
+    user.email = email?.value || '';
+    user.phone = phone?.value || '';
+    user.login = login?.value || 'user';
+    user.password = password?.value || '';
+    user.sms = sms?.value || '';
+    user.displayName = user.firstName || user.lastName
+      ? `${user.firstName} ${user.lastName}`.trim()
+      : 'New User';
+    user.displayName += user.username ? ` (${user.username})` : '';
+    user.roleLabel = user.login === 'admin' ? 'admin' : user.login;
+
+    this.renderUserList();
+    this.selectUser(user.id);
+  }
+
+  deleteSelectedUser() {
+    if (!this.selectedUserId) return;
+
+    this.users = this.users.filter(u => u.id !== this.selectedUserId);
+    if (this.users.length === 0) {
+      this.selectedUserId = null;
+      this.showUserEmptyState();
+      this.renderUserList();
+      return;
     }
 
-    // In a real app, you would load the user's data here
-    console.log('Selected user:', userId);
+    this.selectedUserId = this.users[0].id;
+    this.renderUserList();
+    this.selectUser(this.selectedUserId);
+  }
+
+  showUserEmptyState() {
+    const detailsContent = document.querySelector('.user-details-content');
+    const emptyState = document.getElementById('userEmptyState');
+
+    if (detailsContent) {
+      detailsContent.style.display = 'none';
+    }
+
+    if (emptyState) {
+      emptyState.style.display = 'block';
+    }
   }
 
   selectPolicy(policyId) {
@@ -894,15 +1190,10 @@ class MyOffice {
         this.switchTab('company-settings');
         // Then navigate to system-settings section
         this.navigateToSection('system-settings');
-        
+
         // Update the iframe src if specific page is requested
         if (event.data.page) {
-          const iframe = document.querySelector('#system-settings-section iframe');
-          if (iframe && event.data.page === 'system-mapping') {
-            iframe.src = 'system-mapping.html';
-          } else if (iframe && event.data.page === 'service-types') {
-            iframe.src = 'service-types.html';
-          }
+          this.navigateToSystemSettingsPage(event.data.page);
         }
       }
     });
@@ -1337,6 +1628,37 @@ class MyOffice {
         customFormTypeSelect.value = '';
       }
     }
+  }
+
+  setupMagicLinkHelpers() {
+    const copyButtons = document.querySelectorAll('[data-copy-target]');
+    copyButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.dataset.copyTarget;
+        const source = targetId ? document.getElementById(targetId) : null;
+
+        if (!source) {
+          return;
+        }
+
+        const text = source.textContent.trim();
+
+        if (!navigator.clipboard) {
+          alert('Clipboard is unavailable in this browser.');
+          return;
+        }
+
+        navigator.clipboard.writeText(text).then(() => {
+          const original = btn.textContent;
+          btn.textContent = 'Copied!';
+          setTimeout(() => {
+            btn.textContent = original;
+          }, 1200);
+        }).catch(() => {
+          alert('Unable to copy. Please copy the text manually.');
+        });
+      });
+    });
   }
 
   setupListManagementSidebar() {

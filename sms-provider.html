@@ -7,6 +7,12 @@
     <link rel="stylesheet" href="sms-provider.css" />
   </head>
   <body>
+    <script>
+      if (window.self !== window.top) {
+        document.documentElement.classList.add('embedded');
+        document.body.classList.add('embedded');
+      }
+    </script>
     <div class="sms-provider-container">
       <!-- Left Sidebar -->
       <aside class="settings-sidebar">

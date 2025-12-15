@@ -2,15 +2,35 @@
 // Pure fetch-based REST API client - no SDK dependency
 
 // Get credentials from environment or window.ENV
-export const supabaseUrl = 
-  window.ENV?.SUPABASE_URL || 
+export const supabaseUrl =
+  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_URL) ||
+  (typeof process !== 'undefined' && process.env?.SUPABASE_URL) ||
+  window.ENV?.SUPABASE_URL ||
   import.meta?.env?.VITE_SUPABASE_URL ||
   'https://siumiadylwcrkaqsfwkj.supabase.co';
 
-export const supabaseAnonKey = 
-  window.ENV?.SUPABASE_ANON_KEY || 
+export const supabaseAnonKey =
+  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY) ||
+  (typeof process !== 'undefined' && process.env?.SUPABASE_ANON_KEY) ||
+  window.ENV?.SUPABASE_ANON_KEY ||
   import.meta?.env?.VITE_SUPABASE_ANON_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpdW1pYWR5bHdjcmthcXNmd2tqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU2NjMzMTMsImV4cCI6MjA4MTIzOTMxM30.sSZBsXyOOmIp2eve_SpiUGeIwx3BMoxvY4c7bvE2kKw';
+
+// Demo fallback credentials for offline auth
+const OFFLINE_DEMO_ACCOUNTS = {
+  'admin@relialimo.demo': {
+    password: 'G0dD@mnNutj08!',
+    role: 'admin'
+  },
+  'dispatcher@relialimo.demo': {
+    password: 'DemoDispatcher123!',
+    role: 'dispatcher'
+  },
+  'driver@relialimo.demo': {
+    password: 'DemoDriver123!',
+    role: 'driver'
+  }
+};
 
 // Validate credentials
 if (!supabaseUrl || !supabaseAnonKey) {
@@ -46,6 +66,40 @@ function persistSession(session) {
 function notifySessionChange() {
   const session = loadStoredSession();
   window.dispatchEvent(new CustomEvent('supabase-session-change', { detail: session }));
+}
+
+function isOffline() {
+  return typeof navigator !== 'undefined' && navigator?.onLine === false;
+}
+
+function isNetworkError(error) {
+  return (
+    error?.code === 'ENETUNREACH' ||
+    error?.message?.includes('ENETUNREACH') ||
+    error?.message?.includes('fetch failed') ||
+    error?.message?.includes('Failed to fetch')
+  );
+}
+
+function buildOfflineSession(email, role) {
+  const session = {
+    access_token: `offline-${Date.now()}`,
+    user: {
+      id: `offline-${role}-${Date.now()}`,
+      email,
+      role,
+      is_demo: true
+    }
+  };
+
+  persistSession(session);
+
+  return {
+    success: true,
+    user: session.user,
+    session,
+    access_token: session.access_token
+  };
 }
 
 // Mock Supabase client for buildless environment
@@ -168,6 +222,7 @@ export async function signInWithEmail(email, password) {
       method: 'POST',
       headers: {
         'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -185,17 +240,35 @@ export async function signInWithEmail(email, password) {
     
     // Store session
     persistSession(data);
-    
+
     console.log('✅ Signed in:', email);
-    return { 
-      success: true, 
-      user: data.user, 
+    return {
+      success: true,
+      user: data.user,
       session: data,
-      access_token: data.access_token 
+      access_token: data.access_token
     };
   } catch (error) {
     console.error('❌ Sign in exception:', error);
-    return { success: false, error: error.message };
+
+    const lowerEmail = email?.toLowerCase();
+    const offlineAccount = OFFLINE_DEMO_ACCOUNTS[lowerEmail];
+
+    const canUseOfflineDemo =
+      offlineAccount &&
+      offlineAccount.password === password &&
+      (isOffline() || isNetworkError(error));
+
+    if (canUseOfflineDemo) {
+      console.warn('⚠️ Network unavailable, using offline demo session');
+      return buildOfflineSession(lowerEmail, offlineAccount.role);
+    }
+
+    const errorMessage = isOffline() || isNetworkError(error)
+      ? 'Network unavailable. Please check your connection and try again.'
+      : error.message;
+
+    return { success: false, error: errorMessage };
   }
 }
 

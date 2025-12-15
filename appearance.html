@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Appearance - RELIA🐂LIMO™</title>
+    <link rel="stylesheet" href="appearance.css" />
+  </head>
+  <body>
+    <script>
+      // Adjust layout cues when embedded inside the My Office System Settings iframe
+      if (window.self !== window.top) {
+        document.documentElement.classList.add('embedded');
+        document.body.classList.add('embedded');
+      }
+    </script>
+
+    <div class="appearance-container">
+      <aside class="settings-sidebar">
+        <nav class="settings-nav">
+          <a href="#" class="settings-nav-item">Contact Information</a>
+          <a href="#" class="settings-nav-item">Company Preferences</a>
+          <a href="#" class="settings-nav-item">System Users</a>
+          <a href="#" class="settings-nav-item">Policies</a>
+          <a href="#" class="settings-nav-item">ReadBack Script Templates</a>
+          <a href="#" class="settings-nav-item">Messaging & Template Settings</a>
+          <a href="#" class="settings-nav-item">Calendar Settings</a>
+          <a href="#" class="settings-nav-item">Online Reservations</a>
+          <a href="#" class="settings-nav-item">Payment Gateway</a>
+          <a href="#" class="settings-nav-item">Third-party Plug-ins</a>
+
+          <div class="settings-nav-section">
+            <div class="settings-nav-item active-section">System Settings</div>
+            <a href="service-types.html" class="settings-nav-subitem">Service Types</a>
+            <a href="#" class="settings-nav-subitem">Partner Settings</a>
+            <a href="system-mapping.html" class="settings-nav-subitem">System Mapping</a>
+            <a href="#" class="settings-nav-subitem">Data Reduction</a>
+            <a href="#" class="settings-nav-subitem">Electronic Fax</a>
+            <a href="sms-provider.html" class="settings-nav-subitem">Sms Provider</a>
+            <a href="#" class="settings-nav-subitem">LimoAnywhere Pay</a>
+            <a href="#" class="settings-nav-subitem">Digital Marketing</a>
+            <a href="appearance.html" class="settings-nav-subitem active">Appearance</a>
+          </div>
+        </nav>
+      </aside>
+
+      <main class="appearance-main">
+        <header class="appearance-header">
+          <div>
+            <h1 class="appearance-title">Appearance</h1>
+            <p class="appearance-subtitle">
+              Manage the favicon shown in browser tabs and shortcuts. Preview your current icon and upload a new one before applying it.
+            </p>
+          </div>
+          <div class="appearance-actions">
+            <button class="btn btn-secondary" type="button" id="refresh-favicon">Refresh Current</button>
+            <button class="btn btn-primary" type="button" id="apply-favicon" disabled>Apply Favicon</button>
+          </div>
+        </header>
+
+        <div class="appearance-card-grid">
+          <div class="appearance-card">
+            <h3>Current favicon</h3>
+            <p>Check what users see right now across browser tabs, bookmarks, and pinned shortcuts.</p>
+            <div class="appearance-preview-row">
+              <div class="favicon-preview" id="current-favicon-wrapper">
+                <img id="current-favicon" src="/favicon.ico" alt="Current favicon" />
+                <div class="favicon-text">
+                  <strong>Live asset</strong>
+                  <span id="current-favicon-label">/favicon.ico</span>
+                </div>
+              </div>
+              <div class="appearance-meta">
+                <span>Format</span>
+                <span>.ico or .png (square)</span>
+                <span>Recommended</span>
+                <span>64×64 or larger</span>
+                <span>Usage</span>
+                <span>Browser tabs, PWAs, shortcuts</span>
+              </div>
+            </div>
+            <div id="current-status" class="status-banner" style="display: none;"></div>
+          </div>
+
+          <div class="appearance-card">
+            <h3>Upload a new favicon</h3>
+            <p>Select a square .ico or .png image to preview it before applying it to your account.</p>
+            <div class="upload-field">
+              <label for="favicon-file">New favicon</label>
+              <div class="upload-control">
+                <input type="file" id="favicon-file" accept="image/x-icon,image/png" />
+              </div>
+              <p class="helper-text">Tip: use a 64×64 or larger square file for the best results across browsers.</p>
+            </div>
+
+            <div class="favicon-previews">
+              <div class="preview-card">
+                <h4>New favicon preview</h4>
+                <div class="preview-box">
+                  <div id="new-favicon-placeholder" class="preview-placeholder">Select file</div>
+                  <img id="new-favicon" src="" alt="New favicon preview" style="display: none;" />
+                </div>
+                <p class="helper-text" id="new-favicon-label">No file selected.</p>
+              </div>
+              <div class="preview-card">
+                <h4>Current favicon (reference)</h4>
+                <div class="preview-box">
+                  <img id="current-favicon-preview" src="/favicon.ico" alt="Current favicon" />
+                  <p class="helper-text">This is the icon currently in use.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="apply-row" style="margin-top: 14px;">
+              <button class="btn btn-primary" type="button" id="upload-favicon" disabled>Upload</button>
+              <p class="notice">Upload enables once you select a file. Applying will replace the current favicon after deployment.</p>
+            </div>
+            <div id="upload-status" class="status-banner" style="display: none;"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      const faviconImg = document.getElementById('current-favicon');
+      const faviconPreviewImg = document.getElementById('current-favicon-preview');
+      const faviconLabel = document.getElementById('current-favicon-label');
+      const currentStatus = document.getElementById('current-status');
+      const refreshButton = document.getElementById('refresh-favicon');
+      const applyButton = document.getElementById('apply-favicon');
+      const uploadButton = document.getElementById('upload-favicon');
+      const fileInput = document.getElementById('favicon-file');
+      const newFavicon = document.getElementById('new-favicon');
+      const newPlaceholder = document.getElementById('new-favicon-placeholder');
+      const newLabel = document.getElementById('new-favicon-label');
+      const uploadStatus = document.getElementById('upload-status');
+
+      function setCurrentStatus(message) {
+        currentStatus.textContent = message;
+        currentStatus.style.display = 'block';
+      }
+
+      function setUploadStatus(message) {
+        uploadStatus.textContent = message;
+        uploadStatus.style.display = 'block';
+      }
+
+      function resetUploadStatus() {
+        uploadStatus.style.display = 'none';
+        uploadStatus.textContent = '';
+      }
+
+      function resetCurrentStatus() {
+        currentStatus.style.display = 'none';
+        currentStatus.textContent = '';
+      }
+
+      function refreshFavicon() {
+        resetCurrentStatus();
+        const timestamp = Date.now();
+        const newSrc = `/favicon.ico?cache=${timestamp}`;
+        faviconImg.src = newSrc;
+        faviconPreviewImg.src = newSrc;
+        faviconLabel.textContent = `/favicon.ico?cache=${timestamp}`;
+        setCurrentStatus('Current favicon reloaded. If you recently applied a new icon, confirm the change here.');
+      }
+
+      function resetNewPreview() {
+        newFavicon.style.display = 'none';
+        newFavicon.src = '';
+        newPlaceholder.style.display = 'inline-flex';
+        newLabel.textContent = 'No file selected.';
+        uploadButton.disabled = true;
+        applyButton.disabled = !fileInput.files?.length;
+      }
+
+      function enableApplyButtons() {
+        const hasFile = fileInput.files && fileInput.files.length > 0;
+        uploadButton.disabled = !hasFile;
+        applyButton.disabled = !hasFile;
+      }
+
+      fileInput.addEventListener('change', (event) => {
+        resetUploadStatus();
+        const file = event.target.files && event.target.files[0];
+        if (!file) {
+          resetNewPreview();
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          newFavicon.src = reader.result;
+          newFavicon.style.display = 'block';
+          newPlaceholder.style.display = 'none';
+          newLabel.textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+          enableApplyButtons();
+        };
+        reader.readAsDataURL(file);
+      });
+
+      uploadButton.addEventListener('click', () => {
+        if (!fileInput.files || !fileInput.files.length) return;
+        setUploadStatus('Upload ready: ship this favicon to your static assets to replace /favicon.ico.');
+      });
+
+      applyButton.addEventListener('click', () => {
+        if (!fileInput.files || !fileInput.files.length) return;
+        setUploadStatus('Apply queued: once deployed, your new favicon will appear in the Current favicon card.');
+      });
+
+      refreshButton.addEventListener('click', refreshFavicon);
+
+      faviconImg.addEventListener('error', () => {
+        setCurrentStatus('Unable to load /favicon.ico. Verify the file exists in your deployment.');
+        faviconLabel.textContent = 'Missing favicon at /favicon.ico';
+      });
+
+      resetNewPreview();
+    </script>
+  </body>
+</html>
