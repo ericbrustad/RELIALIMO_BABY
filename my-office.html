@@ -729,7 +729,7 @@
                           <option value="custom">Custom Format</option>
                         </select>
                         <span style="font-size: 11px; white-space: nowrap;">Starts with:</span>
-                        <input type="text" class="form-control" value="30000" style="flex: 1;" />
+                        <input type="text" id="accountNumberStart" class="form-control" value="30000" style="flex: 1;" />
                       </div>
                     </div>
                     <div class="form-group">
@@ -737,6 +737,28 @@
                       <select class="form-control">
                         <option value="yes">Yes</option>
                         <option value="no" selected>No</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label>Confirmation Numbers:</label>
+                      <div style="display: flex; gap: 10px; align-items: center;">
+                        <select class="form-control" style="flex: 1;">
+                          <option value="system-generated" selected>System Generated</option>
+                          <option value="manual">Manual Entry</option>
+                          <option value="custom">Custom Format</option>
+                        </select>
+                        <span style="font-size: 11px; white-space: nowrap;">Starts with:</span>
+                        <input type="text" id="confirmationNumberStart" class="form-control" value="100000" style="flex: 1;" />
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label>Auto-increment on save:</label>
+                      <select class="form-control">
+                        <option value="yes" selected>Yes</option>
+                        <option value="no">No</option>
                       </select>
                     </div>
                   </div>

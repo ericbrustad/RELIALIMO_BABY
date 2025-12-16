@@ -9,14 +9,77 @@ class Accounts {
     }
   }
 
-  init() {
+  async init() {
     console.log('🔧 Initializing Accounts...');
     try {
+      // Load database module
+      await this.loadDbModule();
+      
       this.setupEventListeners();
-      this.applyDraftIfPresent();
+      
+      // Check if we should load a specific account
+      const currentAccountId = localStorage.getItem('currentAccountId');
+      if (currentAccountId) {
+        this.loadAccount(currentAccountId);
+        localStorage.removeItem('currentAccountId'); // Clear after loading
+      } else {
+        this.applyDraftIfPresent();
+      }
+      
       console.log('✅ Accounts initialization complete');
     } catch (error) {
       console.error('❌ Error initializing Accounts:', error);
+    }
+  }
+  
+  async loadDbModule() {
+    try {
+      const module = await import('./assets/db.js');
+      this.db = module.db;
+      console.log('✅ Database module loaded');
+    } catch (error) {
+      console.error('❌ Failed to load database module:', error);
+    }
+  }
+  
+  loadAccount(accountId) {
+    if (!this.db) {
+      console.warn('⚠️ Database module not loaded yet');
+      return;
+    }
+    
+    try {
+      const account = this.db.getAccountById(accountId);
+      if (!account) {
+        console.warn('⚠️ Account not found:', accountId);
+        return;
+      }
+      
+      console.log('✅ Loading account:', account);
+      
+      // Populate form fields
+      const accountNumberEl = document.getElementById('accountNumber');
+      const firstNameEl = document.getElementById('acctFirstName');
+      const lastNameEl = document.getElementById('acctLastName');
+      const companyEl = document.getElementById('acctCompany');
+      const cellPhone1El = document.getElementById('acctCellPhone1');
+      const emailEl = document.getElementById('acctEmail2');
+      
+      if (accountNumberEl) {
+        accountNumberEl.value = account.account_number || account.id;
+        accountNumberEl.setAttribute('readonly', true);
+      }
+      if (firstNameEl) firstNameEl.value = account.first_name || '';
+      if (lastNameEl) lastNameEl.value = account.last_name || '';
+      if (companyEl) companyEl.value = account.company_name || '';
+      if (cellPhone1El) cellPhone1El.value = account.phone || '';
+      if (emailEl) emailEl.value = account.email || '';
+      
+      // Switch to accounts tab
+      this.switchAccountTab('info');
+      
+    } catch (error) {
+      console.error('❌ Error loading account:', error);
     }
   }
 

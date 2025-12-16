@@ -165,6 +165,54 @@ create table if not exists public.account_booking_contacts (
 alter table public.account_booking_contacts enable row level security;
 
 -- ===================================
+-- 6A. PASSENGERS TABLE
+-- ===================================
+
+create table if not exists public.passengers (
+  id uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  first_name text not null,
+  last_name text not null,
+  phone text,
+  email text,
+  alt_contact_name text,
+  alt_contact_phone text,
+  notes text,
+  created_by uuid references auth.users(id) on delete set null,
+  updated_by uuid references auth.users(id) on delete set null,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
+alter table public.passengers enable row level security;
+
+create index idx_passengers_name on public.passengers(first_name, last_name);
+create index idx_passengers_email on public.passengers(email);
+
+-- ===================================
+-- 6B. BOOKING AGENTS TABLE
+-- ===================================
+
+create table if not exists public.booking_agents (
+  id uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  first_name text not null,
+  last_name text not null,
+  phone text,
+  email text,
+  notes text,
+  created_by uuid references auth.users(id) on delete set null,
+  updated_by uuid references auth.users(id) on delete set null,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
+alter table public.booking_agents enable row level security;
+
+create index idx_booking_agents_name on public.booking_agents(first_name, last_name);
+create index idx_booking_agents_email on public.booking_agents(email);
+
+-- ===================================
 -- 7. DRIVERS TABLE
 -- ===================================
 
@@ -395,6 +443,22 @@ using (organization_id in (
 -- Account Booking Contacts: visible if user is in org
 create policy "account_booking_contacts_visible_in_org"
 on public.account_booking_contacts for select to authenticated
+using (organization_id in (
+  select organization_id from public.organization_members
+  where user_id = auth.uid()
+));
+
+-- Passengers: visible if user is in org
+create policy "passengers_visible_in_org"
+on public.passengers for select to authenticated
+using (organization_id in (
+  select organization_id from public.organization_members
+  where user_id = auth.uid()
+));
+
+-- Booking Agents: visible if user is in org
+create policy "booking_agents_visible_in_org"
+on public.booking_agents for select to authenticated
 using (organization_id in (
   select organization_id from public.organization_members
   where user_id = auth.uid()

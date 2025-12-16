@@ -5,7 +5,10 @@ const STORAGE_KEYS = {
   ACCOUNTS: 'relia_accounts',
   RESERVATIONS: 'relia_reservations',
   QUOTES: 'relia_quotes',
-  NEXT_ACCOUNT_NUMBER: 'nextAccountNumber'
+  PASSENGERS: 'relia_passengers',
+  BOOKING_AGENTS: 'relia_booking_agents',
+  NEXT_ACCOUNT_NUMBER: 'nextAccountNumber',
+  NEXT_CONFIRMATION_NUMBER: 'nextConfirmationNumber'
 };
 
 export const db = {
@@ -93,6 +96,15 @@ export const db = {
   
   setNextAccountNumber(num) {
     localStorage.setItem(STORAGE_KEYS.NEXT_ACCOUNT_NUMBER, num.toString());
+  },
+  
+  getNextConfirmationNumber() {
+    const nextNum = localStorage.getItem(STORAGE_KEYS.NEXT_CONFIRMATION_NUMBER);
+    return nextNum ? parseInt(nextNum) : 100000;
+  },
+  
+  setNextConfirmationNumber(num) {
+    localStorage.setItem(STORAGE_KEYS.NEXT_CONFIRMATION_NUMBER, num.toString());
   },
   
   // ===================================
@@ -254,6 +266,126 @@ export const db = {
       console.error('Error deleting account address:', error);
       return false;
     }
+  },
+  
+  // ===================================
+  // PASSENGERS
+  // ===================================
+  
+  savePassenger(passenger) {
+    try {
+      const passengers = this.getAllPassengers();
+      
+      // Check for duplicate by name and email
+      const existingIndex = passengers.findIndex(p => 
+        p.firstName?.toLowerCase() === passenger.firstName?.toLowerCase() &&
+        p.lastName?.toLowerCase() === passenger.lastName?.toLowerCase() &&
+        p.email?.toLowerCase() === passenger.email?.toLowerCase()
+      );
+      
+      if (existingIndex !== -1) {
+        // Update existing passenger
+        passengers[existingIndex] = {
+          ...passengers[existingIndex],
+          ...passenger,
+          updatedAt: new Date().toISOString()
+        };
+      } else {
+        // Add new passenger
+        passenger.id = passenger.id || Date.now().toString();
+        passenger.createdAt = new Date().toISOString();
+        passengers.push(passenger);
+      }
+      
+      localStorage.setItem(STORAGE_KEYS.PASSENGERS, JSON.stringify(passengers));
+      return passenger;
+    } catch (error) {
+      console.error('Error saving passenger:', error);
+      return null;
+    }
+  },
+  
+  getAllPassengers() {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.PASSENGERS);
+      return data ? JSON.parse(data) : [];
+    } catch (error) {
+      console.error('Error getting passengers:', error);
+      return [];
+    }
+  },
+  
+  searchPassengers(query) {
+    const passengers = this.getAllPassengers();
+    if (!query) return passengers;
+    
+    const q = query.toLowerCase();
+    return passengers.filter(p =>
+      p.firstName?.toLowerCase().includes(q) ||
+      p.lastName?.toLowerCase().includes(q) ||
+      p.email?.toLowerCase().includes(q) ||
+      p.phone?.includes(q)
+    );
+  },
+  
+  // ===================================
+  // BOOKING AGENTS
+  // ===================================
+  
+  saveBookingAgent(agent) {
+    try {
+      const agents = this.getAllBookingAgents();
+      
+      // Check for duplicate by name and email
+      const existingIndex = agents.findIndex(a => 
+        a.firstName?.toLowerCase() === agent.firstName?.toLowerCase() &&
+        a.lastName?.toLowerCase() === agent.lastName?.toLowerCase() &&
+        a.email?.toLowerCase() === agent.email?.toLowerCase()
+      );
+      
+      if (existingIndex !== -1) {
+        // Update existing agent
+        agents[existingIndex] = {
+          ...agents[existingIndex],
+          ...agent,
+          updatedAt: new Date().toISOString()
+        };
+      } else {
+        // Add new agent
+        agent.id = agent.id || Date.now().toString();
+        agent.createdAt = new Date().toISOString();
+        agents.push(agent);
+      }
+      
+      localStorage.setItem(STORAGE_KEYS.BOOKING_AGENTS, JSON.stringify(agents));
+      return agent;
+    } catch (error) {
+      console.error('Error saving booking agent:', error);
+      return null;
+    }
+  },
+  
+  getAllBookingAgents() {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.BOOKING_AGENTS);
+      return data ? JSON.parse(data) : [];
+    } catch (error) {
+      console.error('Error getting booking agents:', error);
+      return [];
+    }
+  },
+  
+  searchBookingAgents(query) {
+    const agents = this.getAllBookingAgents();
+    if (!query) return agents;
+    
+    const q = query.toLowerCase();
+    return agents.filter(a =>
+      a.firstName?.toLowerCase().includes(q) ||
+      a.lastName?.toLowerCase().includes(q) ||
+      a.email?.toLowerCase().includes(q) ||
+      a.phone?.includes(q)
+    );
   },
   
   // ===================================

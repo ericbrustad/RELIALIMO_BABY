@@ -182,6 +182,9 @@
       window.addEventListener('message', function(event) {
         if (event.data.action === 'switchSection') {
           switchMainSection(event.data.section);
+        } else if (event.data.action === 'navigate') {
+          // Navigate to a specific URL
+          window.location.href = event.data.url;
         } else if (event.data.action === 'switchToDashboard') {
           // Switch to dashboard first
           switchMainSection('dashboard');

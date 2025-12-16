@@ -32,6 +32,10 @@ class ReservationForm {
         console.log('  - Radio button:', rb.id, rb.value);
       });
       
+      // Initialize confirmation number
+      this.initializeConfirmationNumber();
+      console.log('✅ initializeConfirmationNumber complete');
+      
       this.setupEventListeners();
       console.log('✅ setupEventListeners complete');
       
@@ -47,6 +51,16 @@ class ReservationForm {
       console.log('✅ ReservationForm.init() finished successfully');
     } catch (error) {
       console.error('❌ Error during init:', error);
+    }
+  }
+
+  initializeConfirmationNumber() {
+    const confNumberField = document.getElementById('confNumber');
+    if (confNumberField) {
+      const nextConfNumber = db.getNextConfirmationNumber();
+      confNumberField.value = nextConfNumber;
+      confNumberField.setAttribute('readonly', 'true');
+      console.log('🔢 Confirmation number set to:', nextConfNumber);
     }
   }
 
@@ -272,6 +286,9 @@ class ReservationForm {
         }
       });
     }
+    
+    // Auto-detect when passenger/booking matches billing
+    this.setupMatchDetection();
 
     // Add Contact Modal
     document.getElementById('closeContactModal').addEventListener('click', () => {
@@ -926,12 +943,13 @@ class ReservationForm {
       return;
     }
 
-    // Get next account number from localStorage or start at 30000
-    let nextAccountNumber = parseInt(localStorage.getItem('nextAccountNumber') || '30000');
+    // Get next account number using db module
+    const nextAccountNumber = db.getNextAccountNumber();
     
     // Prepare account data for db module
     const accountData = {
       id: nextAccountNumber.toString(),
+      account_number: nextAccountNumber.toString(),
       first_name: firstName,
       last_name: lastName,
       company_name: company,
@@ -950,8 +968,8 @@ class ReservationForm {
       return;
     }
 
-    // Increment and save next account number
-    localStorage.setItem('nextAccountNumber', (nextAccountNumber + 1).toString());
+    // Increment account number for next account
+    db.setNextAccountNumber(nextAccountNumber + 1);
 
     // Update billing account search field with account number
     const billingAccountSearch = document.getElementById('billingAccountSearch');
@@ -962,8 +980,20 @@ class ReservationForm {
 
     this.closeModal();
 
-    // Show success message
-    alert(`New account created successfully!\nAccount Number: ${nextAccountNumber}`);
+    // Show success message and ask if user wants to open account page
+    if (confirm(`New account created successfully!\nAccount Number: ${nextAccountNumber}\n\nWould you like to open the account page to add more details?`)) {
+      // Store account ID for accounts page to load
+      localStorage.setItem('currentAccountId', nextAccountNumber.toString());
+      
+      // Open accounts page in parent window or new tab
+      if (window.parent && window.parent !== window) {
+        // If in iframe, tell parent to navigate
+        window.parent.postMessage({ action: 'navigate', url: 'accounts.html' }, '*');
+      } else {
+        // Otherwise open in new tab
+        window.open('accounts.html', '_blank');
+      }
+    }
   }
 
   closeModal() {
@@ -1121,6 +1151,52 @@ class ReservationForm {
     } catch (error) {
       console.error('❌ Error in copyPassengerToBilling:', error);
     }
+  }
+
+  setupMatchDetection() {
+    // Watch for changes in billing, passenger, and booking fields
+    const billingFields = ['billingFirstName', 'billingLastName', 'billingEmail'];
+    const passengerFields = ['passengerFirstName', 'passengerLastName', 'passengerEmail'];
+    const bookingFields = ['bookedByFirstName', 'bookedByLastName', 'bookedByEmail'];
+    
+    const checkMatches = () => {
+      // Check if passenger matches billing
+      const passengerMatches = billingFields.every((field, index) => {
+        const billingValue = document.getElementById(field)?.value?.toLowerCase().trim() || '';
+        const passengerField = passengerFields[index];
+        const passengerValue = document.getElementById(passengerField)?.value?.toLowerCase().trim() || '';
+        return billingValue && passengerValue && billingValue === passengerValue;
+      });
+      
+      // Check if booking agent matches billing
+      const bookingMatches = billingFields.every((field, index) => {
+        const billingValue = document.getElementById(field)?.value?.toLowerCase().trim() || '';
+        const bookingField = bookingFields[index];
+        const bookingValue = document.getElementById(bookingField)?.value?.toLowerCase().trim() || '';
+        return billingValue && bookingValue && billingValue === bookingValue;
+      });
+      
+      // Log matches for debugging
+      if (passengerMatches) {
+        console.log('✅ Passenger matches billing');
+      }
+      if (bookingMatches) {
+        console.log('✅ Booking agent matches billing');
+      }
+      
+      // Store match status for use during save
+      this.passengerMatchesBilling = passengerMatches;
+      this.bookingMatchesBilling = bookingMatches;
+    };
+    
+    // Add listeners to all relevant fields
+    [...billingFields, ...passengerFields, ...bookingFields].forEach(fieldId => {
+      const field = document.getElementById(fieldId);
+      if (field) {
+        field.addEventListener('blur', checkMatches);
+        field.addEventListener('change', checkMatches);
+      }
+    });
   }
 
   createAccountFromBilling() {
@@ -1742,12 +1818,16 @@ class ReservationForm {
         grandTotal: parseFloat(document.getElementById('grandTotal').textContent)
       };
 
+      // Get current confirmation number and increment for next reservation
+      const currentConfNumber = document.getElementById("confNumber")?.value || db.getNextConfirmationNumber();
+      db.setNextConfirmationNumber(parseInt(currentConfNumber) + 1);
+      
       // Save to LocalStorage via db module
       const saved = db.saveReservation({
         status: "confirmed",
         passenger_name: `${reservationData.passenger.firstName} ${reservationData.passenger.lastName}`,
         company_name: reservationData.billingAccount.company,
-        confirmation_number: document.getElementById("confNumber")?.value || null,
+        confirmation_number: currentConfNumber,
         service_type: document.getElementById("serviceType")?.value || "",
         vehicle_type: document.getElementById("vehicleTypeRes")?.value || "",
         pickup_at: document.getElementById("puDate")?.value || null,
@@ -1766,6 +1846,32 @@ class ReservationForm {
       });
 
       console.log('💾 Reservation saved to db:', saved);
+      
+      // Save passenger to passengers database
+      if (reservationData.passenger.firstName || reservationData.passenger.lastName) {
+        const passengerSaved = db.savePassenger({
+          firstName: reservationData.passenger.firstName,
+          lastName: reservationData.passenger.lastName,
+          phone: reservationData.passenger.phone,
+          email: reservationData.passenger.email,
+          altContactName: reservationData.passenger.altContactName,
+          altContactPhone: reservationData.passenger.altContactPhone,
+          notes: `From reservation ${currentConfNumber}`
+        });
+        console.log('👤 Passenger saved to db:', passengerSaved);
+      }
+      
+      // Save booking agent to booking agents database
+      if (reservationData.bookedBy.firstName || reservationData.bookedBy.lastName) {
+        const bookingAgentSaved = db.saveBookingAgent({
+          firstName: reservationData.bookedBy.firstName,
+          lastName: reservationData.bookedBy.lastName,
+          phone: reservationData.bookedBy.phone,
+          email: reservationData.bookedBy.email,
+          notes: `From reservation ${currentConfNumber}`
+        });
+        console.log('📞 Booking agent saved to db:', bookingAgentSaved);
+      }
 
       // Save route stops if available
       if (reservationData.routing.stops && reservationData.routing.stops.length > 0) {
@@ -1819,12 +1925,13 @@ class ReservationForm {
         saveBtn.textContent = '✓ Saved!';
         saveBtn.style.background = '#28a745';
         
-        // Wait and redirect
+        // Wait and redirect to reservations list
         setTimeout(() => {
-          if (confirm('Reservation saved! Return to dashboard?')) {
-            window.location.href = 'index.html';
+          if (confirm('Reservation saved! View reservations list?')) {
+            window.location.href = 'reservations-list.html';
           } else {
-            // Reset button
+            // Reset button and initialize new confirmation number for next reservation
+            this.initializeConfirmationNumber();
             saveBtn.disabled = false;
             saveBtn.textContent = originalText;
             saveBtn.style.background = '';

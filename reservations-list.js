@@ -3,9 +3,114 @@ class ReservationsList {
     this.init();
   }
 
-  init() {
+  async init() {
+    this.loadDbModule();
     this.setupEventListeners();
     this.setupTabSwitching();
+    await this.loadReservations();
+  }
+  
+  async loadDbModule() {
+    try {
+      const module = await import('./assets/db.js');
+      this.db = module.db;
+      console.log('✅ Database module loaded');
+    } catch (error) {
+      console.error('❌ Failed to load database module:', error);
+    }
+  }
+  
+  async loadReservations() {
+    if (!this.db) {
+      console.warn('⚠️ Database module not loaded yet');
+      return;
+    }
+    
+    try {
+      const reservations = this.db.getAllReservations();
+      console.log('📋 Loaded reservations:', reservations);
+      
+      if (reservations && reservations.length > 0) {
+        this.displayReservations(reservations);
+      } else {
+        console.log('📭 No reservations found');
+      }
+    } catch (error) {
+      console.error('❌ Error loading reservations:', error);
+    }
+  }
+  
+  displayReservations(reservations) {
+    // Find the table body in the new reservations tab
+    const tableBody = document.querySelector('#newReservationsTab tbody');
+    if (!tableBody) {
+      console.warn('⚠️ Could not find table body');
+      return;
+    }
+    
+    // Clear existing rows (except header)
+    const existingRows = tableBody.querySelectorAll('tr');
+    existingRows.forEach(row => {
+      // Only remove data rows, not template rows
+      if (!row.classList.contains('template')) {
+        row.remove();
+      }
+    });
+    
+    // Add new rows for each reservation
+    reservations.forEach(res => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td><input type="checkbox" class="row-checkbox" /></td>
+        <td><a href="#" class="conf-link" data-conf="${res.confirmation_number || ''}">${res.confirmation_number || 'N/A'}</a></td>
+        <td>${this.formatDate(res.pickup_at)}</td>
+        <td>${this.formatTime(res.pickup_at)}</td>
+        <td>${res.passenger_name || ''}</td>
+        <td>${res.company_name || ''}</td>
+        <td>${res.service_type || ''}</td>
+        <td>${res.vehicle_type || ''}</td>
+        <td>${res.status || 'confirmed'}</td>
+        <td>$${(res.grand_total || 0).toFixed(2)}</td>
+        <td><a href="#" class="select-link">Select</a></td>
+      `;
+      tableBody.appendChild(row);
+    });
+    
+    // Re-attach event listeners to new elements
+    this.attachRowListeners();
+  }
+  
+  attachRowListeners() {
+    // Conf # links
+    document.querySelectorAll('.conf-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const confNumber = e.target.dataset.conf;
+        window.location.href = `reservation-form.html?conf=${confNumber}`;
+      });
+    });
+
+    // Select links
+    document.querySelectorAll('.select-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const row = e.target.closest('tr');
+        const confNumber = row.querySelector('.conf-link').dataset.conf;
+        this.selectReservation(confNumber);
+      });
+    });
+  }
+  
+  formatDate(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+  }
+  
+  formatTime(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   }
 
   setupTabSwitching() {
