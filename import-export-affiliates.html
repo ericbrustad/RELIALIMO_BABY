@@ -267,14 +267,68 @@
 
 <script type="module">
 import { getSupabaseClient, setupAPI } from './api-service.js';
+import { signInWithEmail } from './supabase-client.js';
 
 let importData = null;
 let supabaseClient = null;
+
+// Force fresh authentication and get valid JWT
+async function ensureValidSession() {
+  const token = localStorage.getItem('supabase_access_token');
+  console.log('Current token:', token ? `${token.substring(0, 20)}... (${token.split('.').length} parts)` : 'none');
+  
+  // Check if token looks like a valid JWT (3 parts separated by dots)
+  const isValidJWT = token && !token.startsWith('offline-') && token.split('.').length === 3;
+  
+  if (!isValidJWT) {
+    console.warn('⚠️ Invalid or missing access token, forcing fresh authentication...');
+    
+    const email = window.ENV?.SUPABASE_EMAIL;
+    const password = window.ENV?.SUPABASE_PASSWORD;
+    
+    if (!email || !password) {
+      throw new Error('Missing credentials in env.js. Please set SUPABASE_EMAIL and SUPABASE_PASSWORD.');
+    }
+    
+    // Use direct signInWithEmail function for fresh auth
+    const result = await signInWithEmail(email, password);
+    
+    if (!result.success) {
+      throw new Error(`Authentication failed: ${result.error}`);
+    }
+    
+    // Verify token was stored correctly
+    const newToken = localStorage.getItem('supabase_access_token');
+    console.log('New token after auth:', newToken ? `${newToken.substring(0, 20)}... (${newToken.split('.').length} parts)` : 'none');
+    
+    if (!newToken || newToken.split('.').length !== 3) {
+      throw new Error('Failed to obtain valid JWT after authentication');
+    }
+    
+    console.log('✅ Fresh authentication successful');
+    return result.session;
+  }
+  
+  console.log('✅ Existing token is valid JWT');
+  return { access_token: token };
+}
 
 // Initialize
 async function init() {
   await setupAPI();
   supabaseClient = getSupabaseClient();
+  
+  // Verify we have valid authentication
+  try {
+    await ensureValidSession();
+    document.getElementById('importStatus').className = 'status success';
+    document.getElementById('importStatus').textContent = '✅ Connected to Supabase with valid JWT';
+  } catch (authError) {
+    console.error('Auth error:', authError);
+    document.getElementById('importStatus').className = 'status error';
+    document.getElementById('importStatus').textContent = `⚠️ ${authError.message}`;
+  }
+  
   loadCurrentAffiliates();
 }
 
@@ -594,6 +648,15 @@ async function importAffiliates() {
   if (!importData || importData.length === 0) {
     statusEl.className = 'status error';
     statusEl.textContent = 'No data to import';
+    return;
+  }
+
+  // Ensure we have a valid session before importing
+  try {
+    await ensureValidSession();
+  } catch (authError) {
+    statusEl.className = 'status error';
+    statusEl.textContent = `⚠️ ${authError.message}`;
     return;
   }
 
