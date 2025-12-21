@@ -428,7 +428,21 @@ class ReservationForm {
     }
 
     // Billing autofill (3+ chars) from Accounts DB for ANY billing field
-    ['billingCompany', 'billingFirstName', 'billingLastName', 'billingPhone', 'billingEmail'].forEach((id) => {
+    // Company field only searches company names
+    const billingCompanyEl = document.getElementById('billingCompany');
+    if (billingCompanyEl) {
+      billingCompanyEl.addEventListener('input', (e) => {
+        this.searchAccountsByCompany(e.target.value);
+      });
+      billingCompanyEl.addEventListener('blur', () => {
+        const suggestions = document.getElementById('accountSuggestions');
+        if (!suggestions) return;
+        setTimeout(() => suggestions.classList.remove('active'), 200);
+      });
+    }
+    
+    // Other billing fields search across all fields
+    ['billingFirstName', 'billingLastName', 'billingPhone', 'billingEmail'].forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
       el.addEventListener('input', (e) => {
@@ -520,11 +534,27 @@ class ReservationForm {
       });
     }
 
+    // Copy Billing to Passenger button
+    const copyBillingToPassengerBtn = document.getElementById('copyBillingToPassengerBtn');
+    if (copyBillingToPassengerBtn) {
+      copyBillingToPassengerBtn.addEventListener('click', () => {
+        this.copyBillingToPassenger();
+      });
+    }
+
     // Clear Booking Agent button
     const clearBookingAgentBtn = document.getElementById('clearBookingAgentBtn');
     if (clearBookingAgentBtn) {
       clearBookingAgentBtn.addEventListener('click', () => {
         this.clearBookingAgent();
+      });
+    }
+
+    // Copy Billing to Booking Agent button
+    const copyBillingToBookingBtn = document.getElementById('copyBillingToBookingBtn');
+    if (copyBillingToBookingBtn) {
+      copyBillingToBookingBtn.addEventListener('click', () => {
+        this.copyBillingToBooking();
       });
     }
     
@@ -1358,6 +1388,34 @@ class ReservationForm {
     }
   }
 
+  copyBillingToPassenger() {
+    const firstName = document.getElementById('billingFirstName')?.value || '';
+    const lastName = document.getElementById('billingLastName')?.value || '';
+    const phone = document.getElementById('billingPhone')?.value || '';
+    const email = document.getElementById('billingEmail')?.value || '';
+
+    document.getElementById('passengerFirstName').value = firstName;
+    document.getElementById('passengerLastName').value = lastName;
+    document.getElementById('passengerPhone').value = phone;
+    document.getElementById('passengerEmail').value = email;
+
+    console.log('📋 Copied billing info to passenger');
+  }
+
+  copyBillingToBooking() {
+    const firstName = document.getElementById('billingFirstName')?.value || '';
+    const lastName = document.getElementById('billingLastName')?.value || '';
+    const phone = document.getElementById('billingPhone')?.value || '';
+    const email = document.getElementById('billingEmail')?.value || '';
+
+    document.getElementById('bookedByFirstName').value = firstName;
+    document.getElementById('bookedByLastName').value = lastName;
+    document.getElementById('bookedByPhone').value = phone;
+    document.getElementById('bookedByEmail').value = email;
+
+    console.log('📋 Copied billing info to booking agent');
+  }
+
   // Add Contact Modal Methods
   openAddContactModal() {
     const modal = document.getElementById('addContactModal');
@@ -1763,6 +1821,42 @@ class ReservationForm {
     container.innerHTML = results.map(account => `
       <div class="suggestion-item" data-account-id="${account.id}">
         ${account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
+      </div>
+    `).join('');
+
+    container.classList.add('active');
+
+    // Add click listeners to suggestions
+    container.querySelectorAll('.suggestion-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const accountId = item.dataset.accountId;
+        const account = db.getAccountById(accountId);
+        if (account) {
+          this.useExistingAccount(account);
+          container.classList.remove('active');
+        }
+      });
+    });
+  }
+
+  searchAccountsByCompany(query) {
+    if (!query || query.length < 3) {
+      document.getElementById('accountSuggestions').classList.remove('active');
+      return;
+    }
+
+    // Search company names only
+    const results = db.searchAccountsByCompany(query);
+    const container = document.getElementById('accountSuggestions');
+    
+    if (results.length === 0) {
+      container.classList.remove('active');
+      return;
+    }
+
+    container.innerHTML = results.map(account => `
+      <div class="suggestion-item" data-account-id="${account.id}">
+        ${account.company_name} (${account.first_name || ''} ${account.last_name || ''})
       </div>
     `).join('');
 

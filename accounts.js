@@ -208,15 +208,36 @@ class Accounts {
     try {
       // Load from localStorage first
       const localAccounts = this.db?.getAllAccounts() || [];
+      console.log(`📂 Local accounts found: ${localAccounts.length}`);
       
       // Try to load from Supabase
       let supabaseAccounts = [];
       if (this.api && this.api.fetchAccounts) {
-        supabaseAccounts = await this.api.fetchAccounts() || [];
+        try {
+          supabaseAccounts = await this.api.fetchAccounts() || [];
+          console.log(`☁️ Supabase accounts found: ${supabaseAccounts.length}`);
+        } catch (e) {
+          console.warn('⚠️ Could not fetch from Supabase:', e.message);
+        }
       }
       
-      // Merge accounts (prefer Supabase if available)
-      const allAccounts = supabaseAccounts.length > 0 ? supabaseAccounts : localAccounts;
+      // Merge accounts - combine both sources, local takes precedence for duplicates
+      const accountMap = new Map();
+      
+      // Add Supabase accounts first
+      supabaseAccounts.forEach(acc => {
+        const key = acc.account_number || acc.id;
+        if (key) accountMap.set(key.toString(), acc);
+      });
+      
+      // Add/override with local accounts (local takes precedence)
+      localAccounts.forEach(acc => {
+        const key = acc.account_number || acc.id;
+        if (key) accountMap.set(key.toString(), acc);
+      });
+      
+      const allAccounts = Array.from(accountMap.values());
+      console.log(`✅ Total merged accounts: ${allAccounts.length}`);
       
       // Populate the listbox
       const listbox = document.getElementById('accountsListbox');

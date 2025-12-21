@@ -160,23 +160,43 @@ export const db = {
   },
   
   searchAccounts(query) {
-    if (!query || query.length < 2) return [];
+    if (!query || query.length < 3) return [];
     
     const accounts = this.getAllAccounts();
     const lowerQuery = query.toLowerCase();
     
     return accounts.filter(account => {
-      const fullName = `${account.first_name} ${account.last_name}`.toLowerCase();
+      const firstName = (account.first_name || '').toLowerCase();
+      const lastName = (account.last_name || '').toLowerCase();
+      const fullName = `${firstName} ${lastName}`;
       const company = (account.company_name || '').toLowerCase();
       const phone = (account.phone || '').replace(/\D/g, '');
       const email = (account.email || '').toLowerCase();
       const id = (account.id || '').toString();
+      const accountNumber = (account.account_number || '').toString();
       
-      return fullName.includes(lowerQuery) ||
-             company.includes(lowerQuery) ||
-             phone.includes(lowerQuery.replace(/\D/g, '')) ||
-             email.includes(lowerQuery) ||
-             id.includes(lowerQuery);
+      // Match if query starts with the beginning of any field (prefix match)
+      return firstName.startsWith(lowerQuery) ||
+             lastName.startsWith(lowerQuery) ||
+             fullName.startsWith(lowerQuery) ||
+             company.startsWith(lowerQuery) ||
+             phone.startsWith(lowerQuery.replace(/\D/g, '')) ||
+             email.startsWith(lowerQuery) ||
+             id.startsWith(lowerQuery) ||
+             accountNumber.startsWith(lowerQuery);
+    }).slice(0, 10); // Limit to 10 results
+  },
+
+  searchAccountsByCompany(query) {
+    if (!query || query.length < 3) return [];
+    
+    const accounts = this.getAllAccounts();
+    const lowerQuery = query.toLowerCase();
+    
+    return accounts.filter(account => {
+      const company = (account.company_name || '').toLowerCase();
+      // Only match if company name starts with query
+      return company && company.startsWith(lowerQuery);
     }).slice(0, 10); // Limit to 10 results
   },
   
