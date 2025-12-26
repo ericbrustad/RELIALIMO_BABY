@@ -4,6 +4,25 @@ import { getSupabaseConfig, initSupabase } from './config.js';
 let supabaseClient = null;
 let lastApiError = null;
 
+// Explicit dev-local switch: disabled by default to keep Supabase primary
+const DEV_LOCAL_FLAG_KEY = 'relia_use_local_dev_data';
+
+export function isLocalDevModeEnabled() {
+  const hostIsLocal = window?.location && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const flagEnabled = localStorage.getItem(DEV_LOCAL_FLAG_KEY) === 'true';
+  return Boolean(hostIsLocal && flagEnabled);
+}
+
+export function setLocalDevModeEnabled(enabled) {
+  if (enabled) {
+    localStorage.setItem(DEV_LOCAL_FLAG_KEY, 'true');
+  } else {
+    localStorage.removeItem(DEV_LOCAL_FLAG_KEY);
+  }
+  const state = enabled ? 'ON' : 'OFF';
+  console.warn(`🔧 Local dev data mode is now ${state}. Supabase remains primary when OFF.`);
+}
+
 export function getLastApiError() {
   return lastApiError;
 }
@@ -13,12 +32,6 @@ export function getLastApiError() {
  */
 async function ensureValidToken(client) {
   try {
-    // Development mode bypass
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      console.log('🔧 Development mode: Bypassing token validation');
-      return true;
-    }
-    
     const session = localStorage.getItem('supabase_session');
     if (!session) return true; // No session yet, allow to proceed
     
@@ -94,12 +107,6 @@ async function ensureValidToken(client) {
  */
 async function refreshAccessToken(client, refreshToken) {
   try {
-    // Development mode bypass
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      console.log('🔧 Development mode: Bypassing token refresh');
-      return { success: true, message: 'Development mode bypass' };
-    }
-    
     if (!refreshToken) {
       console.warn('⚠️ No refresh token available');
       return { success: false, error: 'No refresh token' };
@@ -152,21 +159,10 @@ async function refreshAccessToken(client, refreshToken) {
 // SDK storage key pattern
 const SDK_SESSION_KEY = 'sb-siumiadylwcrkaqsfwkj-auth-token';
 
-async function getOrgContextOrThrow(client) {
+export async function getOrgContextOrThrow(client) {
   console.log('🔐 getOrgContextOrThrow starting...');
   console.log('🔐 Client available:', !!client);
-  
-  // Development mode bypass
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    console.log('🔧 Development mode: Using development organization context');
-    const devUser = { 
-      id: 'dev-user-' + Date.now(), 
-      email: 'dev@localhost.local',
-      created_at: new Date().toISOString()
-    };
-    const devOrgId = 'dev-org-00000000-0000-0000-0000-000000000001';
-    return { user: devUser, organizationId: devOrgId, userId: devUser.id };
-  }
+  const useLocalDev = isLocalDevModeEnabled();
   
   // Development bypass for permission issues
   try {
@@ -221,14 +217,25 @@ async function getOrgContextOrThrow(client) {
     }
     
     console.log('👤 Getting user...');
-    const { data: { user }, error: userError } = await client.auth.getUser();
+    let user = null;
+    let userError = null;
+    
+    try {
+      const result = await client.auth.getUser();
+      user = result.data?.user;
+      userError = result.error;
+    } catch (authError) {
+      console.warn('⚠️ auth.getUser threw exception:', authError);
+      userError = authError;
+    }
+    
     console.log('👤 User result:', user?.id || 'null', 'error:', userError?.message || 'none');
     
     if (userError) {
+      const errorMsg = userError.message || String(userError);
       // Check if it's a permission error related to users table
-      if (userError.message && userError.message.includes('permission denied for table users')) {
-        console.warn('⚠️ Users table permission denied - using development fallback');
-        // Create a fake user for development
+      if (useLocalDev && (errorMsg.includes('permission denied') || errorMsg.includes('table users') || errorMsg.includes('42501'))) {
+        console.warn('⚠️ Users table permission denied - using development fallback (local dev mode enabled)');
         const devUser = { 
           id: 'dev-user-' + Date.now(), 
           email: 'dev@localhost.local',
@@ -242,14 +249,17 @@ async function getOrgContextOrThrow(client) {
     }
     
     if (!user) {
-      console.warn('⚠️ No user found - using development fallback');
-      const devUser = { 
-        id: 'dev-user-' + Date.now(), 
-        email: 'dev@localhost.local',
-        created_at: new Date().toISOString()
-      };
-      const devOrgId = 'dev-org-00000000-0000-0000-0000-000000000001';
-      return { user: devUser, organizationId: devOrgId, userId: devUser.id };
+      if (useLocalDev) {
+        console.warn('⚠️ No user found - using development fallback (local dev mode enabled)');
+        const devUser = { 
+          id: 'dev-user-' + Date.now(), 
+          email: 'dev@localhost.local',
+          created_at: new Date().toISOString()
+        };
+        const devOrgId = 'dev-org-00000000-0000-0000-0000-000000000001';
+        return { user: devUser, organizationId: devOrgId, userId: devUser.id };
+      }
+      throw new Error('No authenticated user found');
     }
 
     console.log('🏢 Getting organization membership...');
@@ -263,10 +273,12 @@ async function getOrgContextOrThrow(client) {
     
     // Development bypass: if no organization membership found, use a default org ID
     if (membershipError || !membership?.organization_id) {
-      console.warn('⚠️ No organization membership found - using development fallback');
-      // Use a UUID-like string for development
-      const fallbackOrgId = 'dev-org-00000000-0000-0000-0000-000000000001';
-      return { user, organizationId: fallbackOrgId, userId: user.id };
+      if (useLocalDev) {
+        console.warn('⚠️ No organization membership found - using development fallback (local dev mode enabled)');
+        const fallbackOrgId = 'dev-org-00000000-0000-0000-0000-000000000001';
+        return { user, organizationId: fallbackOrgId, userId: user.id };
+      }
+      throw membershipError || new Error('No organization membership found for user');
     }
 
     return { user, organizationId: membership.organization_id, userId: user.id };
@@ -275,12 +287,12 @@ async function getOrgContextOrThrow(client) {
     // Catch any other authentication errors and provide development fallback
     console.error('❌ Authentication failed:', error);
     
-    if (error.message && (
+    if (useLocalDev && error.message && (
         error.message.includes('permission denied') || 
         error.message.includes('RLS') ||
         error.message.includes('not authenticated')
     )) {
-      console.warn('⚠️ Database permission error - using development fallback');
+      console.warn('⚠️ Database permission error - using development fallback (local dev mode enabled)');
       const devUser = { 
         id: 'dev-user-' + Date.now(), 
         email: 'dev@localhost.local',
@@ -290,7 +302,7 @@ async function getOrgContextOrThrow(client) {
       return { user: devUser, organizationId: devOrgId, userId: devUser.id };
     }
     
-    // For other errors, still throw
+    // For other errors, still throw to avoid silent local fallback
     throw error;
   }
 }
@@ -929,14 +941,141 @@ export async function createReservation(reservationData) {
   const client = getSupabaseClient();
   if (!client) return null;
   
+  const useLocalDev = isLocalDevModeEnabled();
+  // Development mode: Skip Supabase entirely and use localStorage
+  if (useLocalDev) {
+    console.log('🔧 Local dev data mode: Saving reservation to localStorage only');
+    console.log('📋 Received reservation data:', JSON.stringify(reservationData, null, 2));
+    
+    // Generate confirmation number sequentially for local dev
+    let confirmationNumber = reservationData.confirmationNumber || reservationData.confirmation_number;
+    if (!confirmationNumber) {
+      try {
+        const { getNextConfirmationNumber } = await import('./supabase-db.js');
+        confirmationNumber = await getNextConfirmationNumber();
+      } catch (numberError) {
+        console.warn('⚠️ Could not generate next confirmation number locally, using timestamp fallback');
+        confirmationNumber = `DEV${Date.now()}`;
+      }
+    }
+    
+    // Parse pickup/dropoff from routing stops - handle both address1 and address formats
+    const stops = reservationData.routing?.stops || [];
+    const pickup = stops[0] || {};
+    const dropoff = stops.length > 1 ? stops[stops.length - 1] : stops[1] || {};
+    
+    // Extract passenger info from nested structure
+    const passenger = reservationData.passenger || {};
+    const passengerName = `${passenger.firstName || ''} ${passenger.lastName || ''}`.trim();
+    
+    // Extract billing info from nested structure
+    const billing = reservationData.billingAccount || {};
+    
+    // Extract details from nested structure
+    const details = reservationData.details || {};
+    
+    const reservationWithId = {
+      id: `local-${Date.now()}`,
+      organization_id: 'dev-org-00000000-0000-0000-0000-000000000001',
+      confirmation_number: confirmationNumber,
+      booked_by_user_id: 'dev-user',
+      account_id: reservationData.accountId || reservationData.account_id || null,
+      status: details.status || reservationData.status || 'pending',
+      trip_type: details.tripType || reservationData.tripType || reservationData.trip_type || null,
+      // Pickup - handle both address1 and address field names
+      pickup_address: pickup.address1 || pickup.address || pickup.fullAddress || reservationData.pickup_location || '',
+      pickup_location_name: pickup.locationName || pickup.location || '',
+      pickup_city: pickup.city || '',
+      pickup_state: pickup.state || '',
+      pickup_zip: pickup.zipCode || pickup.zip || '',
+      pickup_lat: pickup.lat || null,
+      pickup_lon: pickup.lng || pickup.lon || null,
+      pickup_datetime: reservationData.pickupDateTime || reservationData.pickup_datetime || (details.puDate && details.puTime ? `${details.puDate}T${details.puTime}` : details.puDate) || null,
+      // Dropoff - handle both address1 and address field names  
+      dropoff_address: dropoff.address1 || dropoff.address || dropoff.fullAddress || reservationData.dropoff_location || '',
+      dropoff_location_name: dropoff.locationName || dropoff.location || '',
+      dropoff_city: dropoff.city || '',
+      dropoff_state: dropoff.state || '',
+      dropoff_zip: dropoff.zipCode || dropoff.zip || '',
+      dropoff_lat: dropoff.lat || null,
+      dropoff_lon: dropoff.lng || dropoff.lon || null,
+      dropoff_datetime: reservationData.dropoffDateTime || reservationData.dropoff_datetime || null,
+      // Passenger info
+      passenger_name: passengerName,
+      passenger_first_name: passenger.firstName || '',
+      passenger_last_name: passenger.lastName || '',
+      passenger_phone: passenger.phone || '',
+      passenger_email: passenger.email || '',
+      passenger_count: reservationData.passengerCount || reservationData.passenger_count || 1,
+      // Billing info
+      billing_company: billing.company || '',
+      billing_first_name: billing.firstName || '',
+      billing_last_name: billing.lastName || '',
+      billing_phone: billing.cellPhone || '',
+      billing_email: billing.email || '',
+      // Notes
+      special_instructions: reservationData.routing?.tripNotes || reservationData.special_instructions || '',
+      notes: reservationData.routing?.dispatchNotes || reservationData.notes || '',
+      dispatch_notes: reservationData.routing?.dispatchNotes || '',
+      partner_notes: reservationData.routing?.partnerNotes || '',
+      // Rates
+      rate_type: reservationData.rateType || reservationData.rate_type || null,
+      rate_amount: reservationData.grandTotal || reservationData.rate_amount || 0,
+      grand_total: reservationData.grandTotal || 0,
+      currency: reservationData.currency || 'USD',
+      timezone: reservationData.timezone || null,
+      // Timestamps
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      // Store full routing data for reference
+      routing_stops: stops
+    };
+    
+    console.log('📤 Processed reservation to save:', reservationWithId);
+    
+    // Save to localStorage
+    const existingReservations = JSON.parse(localStorage.getItem('local_reservations') || '[]');
+    existingReservations.push(reservationWithId);
+    localStorage.setItem('local_reservations', JSON.stringify(existingReservations));
+    
+    console.log('✅ Reservation saved locally for development:', reservationWithId);
+    return [reservationWithId];
+  }
+  
   try {
     const { organizationId, userId } = await getOrgContextOrThrow(client);
     console.log('🆔 Using organization ID:', organizationId, 'User ID:', userId);
     
-    // Generate confirmation number
-    const confirmationNumber = reservationData.confirmationNumber || 
-                               reservationData.confirmation_number ||
-                               `${Date.now()}`;
+    // Generate confirmation number with duplicate checking
+    let confirmationNumber = reservationData.confirmationNumber || 
+                            reservationData.confirmation_number;
+    
+    if (!confirmationNumber) {
+      // Import the duplicate-safe function dynamically to avoid circular imports
+      try {
+        const { generateUniqueConfirmationNumber } = await import('./supabase-db.js');
+        confirmationNumber = await generateUniqueConfirmationNumber();
+        console.log('✅ Generated unique confirmation number:', confirmationNumber);
+      } catch (importError) {
+        console.warn('⚠️ Could not import generateUniqueConfirmationNumber, using fallback');
+        confirmationNumber = `${Date.now()}`;
+      }
+    } else {
+      // If confirmation number was provided, check for duplicates
+      try {
+        const { checkConfirmationNumberExists } = await import('./supabase-db.js');
+        const exists = await checkConfirmationNumberExists(confirmationNumber);
+        if (exists) {
+          const error = new Error(`Confirmation number ${confirmationNumber} already exists. Please use a different number.`);
+          error.code = 'DUPLICATE_CONFIRMATION_NUMBER';
+          throw error;
+        }
+      } catch (importError) {
+        console.warn('⚠️ Could not check for duplicate confirmation number:', importError.message);
+      }
+    }
+    
+    console.log('🔢 Final confirmation number to use:', confirmationNumber);
     
     // Parse pickup/dropoff from routing stops
     const stops = reservationData.routing?.stops || [];
@@ -980,24 +1119,22 @@ export async function createReservation(reservationData) {
       .select();
       
     // Check if RLS policy is blocking the insert
-    if (error && error.code === '42501') {
-      console.warn('⚠️ RLS policy blocking insert, using local storage fallback...');
+    if (error && error.code === '42501' && useLocalDev) {
+      console.warn('⚠️ RLS policy blocking insert, using local storage fallback (local dev data mode enabled)...');
       
-      // Development fallback: Store in localStorage for development
       const reservationWithId = {
         ...insertData,
-        id: `local-${Date.now()}`, // Generate local ID
+        id: `local-${Date.now()}`,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
       
-      // Get existing local reservations
       const existingReservations = JSON.parse(localStorage.getItem('local_reservations') || '[]');
       existingReservations.push(reservationWithId);
       localStorage.setItem('local_reservations', JSON.stringify(existingReservations));
       
       console.log('✅ Reservation saved locally for development:', reservationWithId);
-      return [reservationWithId]; // Return as array to match Supabase format
+      return [reservationWithId];
     }
 
     if (error) throw error;
@@ -1014,7 +1151,15 @@ export async function createReservation(reservationData) {
     
     // Store the error for retrieval
     lastApiError = error;
-    return null;
+    
+    // Always return structured response with error details
+    return [{
+      success: false,
+      error: error.message || 'Failed to create reservation',
+      errorCode: error.code,
+      errorDetails: error.details,
+      timestamp: new Date().toISOString()
+    }];
   }
 }
 
@@ -1078,6 +1223,13 @@ export async function fetchReservations() {
   const client = getSupabaseClient();
   if (!client) return null;
   
+  const useLocalDev = isLocalDevModeEnabled();
+  if (useLocalDev) {
+    const localReservations = JSON.parse(localStorage.getItem('local_reservations') || '[]');
+    console.log(`📊 Local dev mode: Loaded ${localReservations.length} local reservations`);
+    return localReservations;
+  }
+  
   try {
     const { organizationId } = await getOrgContextOrThrow(client);
     const { data, error } = await client
@@ -1087,23 +1239,10 @@ export async function fetchReservations() {
       .order('created_at', { ascending: false });
     
     if (error) throw error;
-    
-    // Include local reservations for development
-    const localReservations = JSON.parse(localStorage.getItem('local_reservations') || '[]');
-    const allReservations = [...(data || []), ...localReservations];
-    
-    console.log(`📊 Loaded ${(data || []).length} Supabase + ${localReservations.length} local reservations`);
-    return allReservations;
+    console.log(`📊 Loaded ${(data || []).length} reservations from Supabase`);
+    return data;
   } catch (error) {
     console.error('Error fetching reservations:', error);
-    
-    // Fallback to local reservations only
-    const localReservations = JSON.parse(localStorage.getItem('local_reservations') || '[]');
-    if (localReservations.length > 0) {
-      console.log(`📊 Using ${localReservations.length} local reservations only`);
-      return localReservations;
-    }
-    
     return null;
   }
 }
@@ -1308,6 +1447,38 @@ export async function saveAccountToSupabase(accountData) {
     return null;
   }
   
+  const useLocalDev = isLocalDevModeEnabled();
+  // Development mode: Skip Supabase entirely and use localStorage
+  if (useLocalDev) {
+    console.log('🔧 Local dev data mode: Saving account to localStorage only');
+    
+    const accountWithId = {
+      ...accountData,
+      id: accountData.id || `local-account-${Date.now()}`,
+      organization_id: '00000000-0000-0000-0000-000000000001',
+      account_number: accountData.account_number || accountData.id || `ACC${Date.now()}`,
+      created_at: accountData.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    const existingAccounts = JSON.parse(localStorage.getItem('local_accounts') || '[]');
+    const existingIndex = existingAccounts.findIndex(a => 
+      a.id === accountWithId.id || 
+      a.account_number === accountWithId.account_number
+    );
+    
+    if (existingIndex >= 0) {
+      existingAccounts[existingIndex] = accountWithId;
+      console.log('✅ Account updated locally for development:', accountWithId);
+    } else {
+      existingAccounts.push(accountWithId);
+      console.log('✅ Account saved locally for development:', accountWithId);
+    }
+    
+    localStorage.setItem('local_accounts', JSON.stringify(existingAccounts));
+    return accountWithId;
+  }
+  
   try {
     lastApiError = null;
     console.log('🔍 Getting org context...');
@@ -1414,10 +1585,9 @@ export async function saveAccountToSupabase(accountData) {
         .select();
       
       // Check if RLS policy is blocking the update
-      if (error && error.code === '42501') {
-        console.warn('⚠️ RLS policy blocking account update, using local storage fallback...');
+      if (error && error.code === '42501' && useLocalDev) {
+        console.warn('⚠️ RLS policy blocking account update, using local storage fallback (local dev data mode enabled)...');
         
-        // Development fallback: Update in localStorage
         const accountWithId = {
           ...supabaseAccount,
           id: existing.id,
@@ -1448,10 +1618,9 @@ export async function saveAccountToSupabase(accountData) {
         .select();
       
       // Check if RLS policy is blocking the insert
-      if (error && error.code === '42501') {
-        console.warn('⚠️ RLS policy blocking account insert, using local storage fallback...');
+      if (error && error.code === '42501' && useLocalDev) {
+        console.warn('⚠️ RLS policy blocking account insert, using local storage fallback (local dev data mode enabled)...');
         
-        // Development fallback: Store in localStorage for development
         const accountWithId = {
           ...supabaseAccount,
           id: `local-account-${Date.now()}`,
@@ -1459,7 +1628,6 @@ export async function saveAccountToSupabase(accountData) {
           updated_at: new Date().toISOString()
         };
         
-        // Get existing local accounts
         const existingAccounts = JSON.parse(localStorage.getItem('local_accounts') || '[]');
         existingAccounts.push(accountWithId);
         localStorage.setItem('local_accounts', JSON.stringify(existingAccounts));
@@ -1475,16 +1643,14 @@ export async function saveAccountToSupabase(accountData) {
   } catch (error) {
     console.error('❌ Error saving account to Supabase:', error);
     
-    // Handle JWT expiration and permission errors with local storage fallback
-    if (error.message && (
+    if (useLocalDev && error.message && (
         error.message.includes('JWT expired') || 
         error.message.includes('permission denied') ||
         error.message.includes('User not authenticated') ||
         error.message.includes('not authenticated')
     )) {
-      console.warn('⚠️ Authentication error - using local storage fallback for account');
+      console.warn('⚠️ Authentication error - using local storage fallback for account (local dev data mode enabled)');
       
-      // Create local account
       const localAccount = {
         ...accountData,
         id: `local-account-${Date.now()}`,
@@ -1492,7 +1658,6 @@ export async function saveAccountToSupabase(accountData) {
         updated_at: new Date().toISOString()
       };
       
-      // Save to local storage
       const existingAccounts = JSON.parse(localStorage.getItem('local_accounts') || '[]');
       existingAccounts.push(localAccount);
       localStorage.setItem('local_accounts', JSON.stringify(existingAccounts));
@@ -1502,7 +1667,16 @@ export async function saveAccountToSupabase(accountData) {
     }
     
     lastApiError = error;
-    return null;
+    
+    // Always return structured response with error details
+    return {
+      success: false,
+      error: error.message || 'Failed to save account',
+      errorCode: error.code,
+      errorDetails: error.details,
+      timestamp: new Date().toISOString(),
+      accountData: accountData  // Include original data for reference
+    };
   }
 }
 
@@ -1512,6 +1686,16 @@ export async function saveAccountToSupabase(accountData) {
 export async function fetchAccounts() {
   const client = getSupabaseClient();
   if (!client) return null;
+  const useLocalDev = isLocalDevModeEnabled();
+  if (useLocalDev) {
+    const localAccounts = JSON.parse(localStorage.getItem('local_accounts') || '[]');
+    console.log(`✅ Local dev mode: Loaded ${localAccounts.length} local accounts`);
+    // If local dev mode is on but there's nothing stored locally, fall back to Supabase
+    if (localAccounts.length > 0) {
+      return localAccounts;
+    }
+    console.warn('⚠️ Local dev mode enabled but no local accounts found; attempting Supabase fetch instead');
+  }
   
   try {
     lastApiError = null;
@@ -1525,22 +1709,10 @@ export async function fetchAccounts() {
     
     if (error) throw error;
     
-    // Include local accounts for development
-    const localAccounts = JSON.parse(localStorage.getItem('local_accounts') || '[]');
-    const allAccounts = [...(data || []), ...localAccounts];
-    
-    console.log(`✅ Fetched ${(data || []).length} Supabase + ${localAccounts.length} local accounts`);
-    return allAccounts;
+    console.log(`✅ Fetched ${(data || []).length} accounts from Supabase`);
+    return data;
   } catch (error) {
     console.error('❌ Error fetching accounts:', error);
-    
-    // Fallback to local accounts only
-    const localAccounts = JSON.parse(localStorage.getItem('local_accounts') || '[]');
-    if (localAccounts.length > 0) {
-      console.log(`✅ Using ${localAccounts.length} local accounts only`);
-      return localAccounts;
-    }
-    
     lastApiError = error;
     return null;
   }
@@ -1663,5 +1835,150 @@ export async function saveBookingAgentToSupabase(agentData) {
     console.error('❌ Error saving booking agent to Supabase:', error);
     lastApiError = error;
     return null;
+  }
+}
+
+// ============================================================================
+// DELETE ALL FUNCTIONS (for utilities/system settings)
+// ============================================================================
+
+/**
+ * Delete all accounts from Supabase
+ */
+export async function deleteAllAccountsSupabase() {
+  const client = getSupabaseClient();
+  
+  const useLocalDev = isLocalDevModeEnabled();
+  if (useLocalDev) {
+    const existing = JSON.parse(localStorage.getItem('local_accounts') || '[]');
+    const count = existing.length;
+    localStorage.removeItem('local_accounts');
+    console.log(`🔧 Local dev mode: Cleared ${count} accounts from localStorage`);
+    return { success: true, deleted: count, message: `Deleted ${count} local accounts` };
+  }
+  
+  if (!client) {
+    return { success: false, error: 'Client not initialized', deleted: 0 };
+  }
+  
+  try {
+    lastApiError = null;
+    
+    // Delete all accounts (using neq to match all ids)
+    const { data, error } = await client
+      .from('accounts')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000')
+      .select();
+    
+    if (error) throw error;
+    
+    const count = data?.length || 0;
+    console.log(`✅ Deleted ${count} accounts from Supabase`);
+    return { success: true, deleted: count, message: `Deleted ${count} accounts` };
+  } catch (error) {
+    console.error('❌ Error deleting accounts:', error);
+    lastApiError = error;
+    return { success: false, error: error.message, deleted: 0 };
+  }
+}
+
+/**
+ * Delete all reservations from Supabase
+ */
+export async function deleteAllReservationsSupabase() {
+  const client = getSupabaseClient();
+  
+  const useLocalDev = isLocalDevModeEnabled();
+  if (useLocalDev) {
+    const existing = JSON.parse(localStorage.getItem('local_reservations') || '[]');
+    const count = existing.length;
+    localStorage.removeItem('local_reservations');
+    console.log(`🔧 Local dev mode: Cleared ${count} reservations from localStorage`);
+    return { success: true, deleted: count, message: `Deleted ${count} local reservations` };
+  }
+  
+  if (!client) {
+    return { success: false, error: 'Client not initialized', deleted: 0 };
+  }
+  
+  try {
+    lastApiError = null;
+    
+    const { data, error } = await client
+      .from('reservations')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000')
+      .select();
+    
+    if (error) throw error;
+    
+    const count = data?.length || 0;
+    console.log(`✅ Deleted ${count} reservations from Supabase`);
+    return { success: true, deleted: count, message: `Deleted ${count} reservations` };
+  } catch (error) {
+    console.error('❌ Error deleting reservations:', error);
+    lastApiError = error;
+    return { success: false, error: error.message, deleted: 0 };
+  }
+}
+
+/**
+ * Delete all drivers from Supabase
+ */
+export async function deleteAllDriversSupabase() {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: false, error: 'Client not initialized', deleted: 0 };
+  }
+  
+  try {
+    lastApiError = null;
+    
+    const { data, error } = await client
+      .from('drivers')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000')
+      .select();
+    
+    if (error) throw error;
+    
+    const count = data?.length || 0;
+    console.log(`✅ Deleted ${count} drivers from Supabase`);
+    return { success: true, deleted: count, message: `Deleted ${count} drivers` };
+  } catch (error) {
+    console.error('❌ Error deleting drivers:', error);
+    lastApiError = error;
+    return { success: false, error: error.message, deleted: 0 };
+  }
+}
+
+/**
+ * Delete all rates from Supabase
+ */
+export async function deleteAllRatesSupabase() {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: false, error: 'Client not initialized', deleted: 0 };
+  }
+  
+  try {
+    lastApiError = null;
+    
+    const { data, error } = await client
+      .from('rates')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000')
+      .select();
+    
+    if (error) throw error;
+    
+    const count = data?.length || 0;
+    console.log(`✅ Deleted ${count} rates from Supabase`);
+    return { success: true, deleted: count, message: `Deleted ${count} rates` };
+  } catch (error) {
+    console.error('❌ Error deleting rates:', error);
+    lastApiError = error;
+    return { success: false, error: error.message, deleted: 0 };
   }
 }

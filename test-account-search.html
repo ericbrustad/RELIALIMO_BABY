@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Account Search Functionality</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        input {
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            width: 300px;
+            font-size: 14px;
+        }
+        .suggestions-container {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+            max-width: 320px;
+        }
+        .suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ced4da;
+            border-radius: 0 0 4px 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+        .suggestions.active {
+            display: block;
+        }
+        .suggestion-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+        .suggestion-item:hover {
+            background: #f8f9fa;
+        }
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+        .result {
+            background: #e7f3ff;
+            border: 1px solid #bee5eb;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .log {
+            background: #1e1e1e;
+            color: #ffffff;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 10px 0;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Test Account Search Functionality</h1>
+    
+    <div class="test-section">
+        <h3>Billing Account Search</h3>
+        <div class="suggestions-container">
+            <input type="text" id="billingAccountSearch" placeholder="Type name, company, phone, or email..." />
+            <div id="accountSuggestions" class="suggestions"></div>
+        </div>
+        <div id="billing-result" class="result" style="display: none;"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Passenger Search</h3>
+        <div class="suggestions-container">
+            <input type="text" id="passengerFirstName" placeholder="Type passenger name, phone, or email..." />
+            <div id="passengerSuggestions" class="suggestions"></div>
+        </div>
+        <div id="passenger-result" class="result" style="display: none;"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Booking Agent Search</h3>
+        <div class="suggestions-container">
+            <input type="text" id="bookedByFirstName" placeholder="Type booking agent name, phone, or email..." />
+            <div id="bookingAgentSuggestions" class="suggestions"></div>
+        </div>
+        <div id="booking-result" class="result" style="display: none;"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test Log</h3>
+        <button onclick="clearLog()">Clear Log</button>
+        <div id="testLog" class="log"></div>
+    </div>
+
+    <script type="module">
+        // Import the database functions
+        import supabaseDb from './supabase-db.js';
+        
+        window.log = function(message) {
+            const logDiv = document.getElementById('testLog');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        };
+
+        window.clearLog = function() {
+            document.getElementById('testLog').innerHTML = '';
+        };
+        
+        // Test billing account search
+        const billingInput = document.getElementById('billingAccountSearch');
+        const accountSuggestions = document.getElementById('accountSuggestions');
+        let billingTimeout;
+        
+        billingInput.addEventListener('input', async (e) => {
+            clearTimeout(billingTimeout);
+            const query = e.target.value.trim();
+            
+            if (query.length < 3) {
+                accountSuggestions.classList.remove('active');
+                return;
+            }
+            
+            billingTimeout = setTimeout(async () => {
+                log(`🔍 Searching billing accounts for: "${query}"`);
+                try {
+                    const results = await supabaseDb.searchAccounts(query);
+                    log(`✅ Found ${results.length} billing account results`);
+                    
+                    if (results.length === 0) {
+                        accountSuggestions.classList.remove('active');
+                        return;
+                    }
+                    
+                    accountSuggestions.innerHTML = results.map(account => `
+                        <div class="suggestion-item" data-account-id="${account.id}">
+                            ${account.account_number || account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
+                        </div>
+                    `).join('');
+                    
+                    accountSuggestions.classList.add('active');
+                    
+                    // Add click listeners
+                    accountSuggestions.querySelectorAll('.suggestion-item').forEach(item => {
+                        item.addEventListener('click', async () => {
+                            const accountId = item.dataset.accountId;
+                            const account = await supabaseDb.getAccountById(accountId);
+                            if (account) {
+                                billingInput.value = `${account.account_number || account.id} - ${account.first_name} ${account.last_name}`;
+                                document.getElementById('billing-result').innerHTML = `
+                                    Selected: ${account.first_name} ${account.last_name}<br>
+                                    Company: ${account.company_name || 'N/A'}<br>
+                                    Phone: ${account.phone || 'N/A'}<br>
+                                    Email: ${account.email || 'N/A'}
+                                `;
+                                document.getElementById('billing-result').style.display = 'block';
+                                accountSuggestions.classList.remove('active');
+                                log(`✅ Selected billing account: ${account.first_name} ${account.last_name}`);
+                            }
+                        });
+                    });
+                } catch (error) {
+                    log(`❌ Error searching billing accounts: ${error.message}`);
+                    accountSuggestions.classList.remove('active');
+                }
+            }, 300);
+        });
+        
+        billingInput.addEventListener('blur', () => {
+            setTimeout(() => accountSuggestions.classList.remove('active'), 200);
+        });
+        
+        // Test passenger search
+        const passengerInput = document.getElementById('passengerFirstName');
+        const passengerSuggestions = document.getElementById('passengerSuggestions');
+        let passengerTimeout;
+        
+        passengerInput.addEventListener('input', async (e) => {
+            clearTimeout(passengerTimeout);
+            const query = e.target.value.trim();
+            
+            if (query.length < 3) {
+                passengerSuggestions.classList.remove('active');
+                return;
+            }
+            
+            passengerTimeout = setTimeout(async () => {
+                log(`🔍 Searching passengers for: "${query}"`);
+                try {
+                    const results = await supabaseDb.searchPassengers(query);
+                    log(`✅ Found ${results.length} passenger results`);
+                    
+                    if (results.length === 0) {
+                        passengerSuggestions.classList.remove('active');
+                        return;
+                    }
+                    
+                    passengerSuggestions.innerHTML = results.map(passenger => `
+                        <div class="suggestion-item" data-account-id="${passenger.id}">
+                            ${passenger.first_name} ${passenger.last_name} - ${passenger.phone || passenger.email || 'No contact'}
+                        </div>
+                    `).join('');
+                    
+                    passengerSuggestions.classList.add('active');
+                    
+                    // Add click listeners
+                    passengerSuggestions.querySelectorAll('.suggestion-item').forEach(item => {
+                        item.addEventListener('click', async () => {
+                            const accountId = item.dataset.accountId;
+                            const passenger = await supabaseDb.getAccountById(accountId);
+                            if (passenger) {
+                                passengerInput.value = `${passenger.first_name} ${passenger.last_name}`;
+                                document.getElementById('passenger-result').innerHTML = `
+                                    Selected: ${passenger.first_name} ${passenger.last_name}<br>
+                                    Phone: ${passenger.phone || 'N/A'}<br>
+                                    Email: ${passenger.email || 'N/A'}
+                                `;
+                                document.getElementById('passenger-result').style.display = 'block';
+                                passengerSuggestions.classList.remove('active');
+                                log(`✅ Selected passenger: ${passenger.first_name} ${passenger.last_name}`);
+                            }
+                        });
+                    });
+                } catch (error) {
+                    log(`❌ Error searching passengers: ${error.message}`);
+                    passengerSuggestions.classList.remove('active');
+                }
+            }, 300);
+        });
+        
+        passengerInput.addEventListener('blur', () => {
+            setTimeout(() => passengerSuggestions.classList.remove('active'), 200);
+        });
+        
+        // Test booking agent search
+        const bookingInput = document.getElementById('bookedByFirstName');
+        const bookingSuggestions = document.getElementById('bookingAgentSuggestions');
+        let bookingTimeout;
+        
+        bookingInput.addEventListener('input', async (e) => {
+            clearTimeout(bookingTimeout);
+            const query = e.target.value.trim();
+            
+            if (query.length < 3) {
+                bookingSuggestions.classList.remove('active');
+                return;
+            }
+            
+            bookingTimeout = setTimeout(async () => {
+                log(`🔍 Searching booking agents for: "${query}"`);
+                try {
+                    const results = await supabaseDb.searchBookingAgents(query);
+                    log(`✅ Found ${results.length} booking agent results`);
+                    
+                    if (results.length === 0) {
+                        bookingSuggestions.classList.remove('active');
+                        return;
+                    }
+                    
+                    bookingSuggestions.innerHTML = results.map(agent => `
+                        <div class="suggestion-item" data-account-id="${agent.id}">
+                            ${agent.first_name} ${agent.last_name} - ${agent.phone || agent.email || 'No contact'}
+                        </div>
+                    `).join('');
+                    
+                    bookingSuggestions.classList.add('active');
+                    
+                    // Add click listeners
+                    bookingSuggestions.querySelectorAll('.suggestion-item').forEach(item => {
+                        item.addEventListener('click', async () => {
+                            const accountId = item.dataset.accountId;
+                            const agent = await supabaseDb.getAccountById(accountId);
+                            if (agent) {
+                                bookingInput.value = `${agent.first_name} ${agent.last_name}`;
+                                document.getElementById('booking-result').innerHTML = `
+                                    Selected: ${agent.first_name} ${agent.last_name}<br>
+                                    Phone: ${agent.phone || 'N/A'}<br>
+                                    Email: ${agent.email || 'N/A'}
+                                `;
+                                document.getElementById('booking-result').style.display = 'block';
+                                bookingSuggestions.classList.remove('active');
+                                log(`✅ Selected booking agent: ${agent.first_name} ${agent.last_name}`);
+                            }
+                        });
+                    });
+                } catch (error) {
+                    log(`❌ Error searching booking agents: ${error.message}`);
+                    bookingSuggestions.classList.remove('active');
+                }
+            }, 300);
+        });
+        
+        bookingInput.addEventListener('blur', () => {
+            setTimeout(() => bookingSuggestions.classList.remove('active'), 200);
+        });
+        
+        // Initialize log
+        log('🧪 Account Search Test Suite Loaded');
+        log('📋 Available Tests:');
+        log('  1. Billing Account Search - Type 3+ characters in billing field');
+        log('  2. Passenger Search - Type 3+ characters in passenger field');
+        log('  3. Booking Agent Search - Type 3+ characters in booking field');
+        log('');
+        log('🔧 Development Mode: ' + (window.location.hostname === 'localhost' ? 'ENABLED (using sample data)' : 'DISABLED (using live database)'));
+    </script>
+</body>
+</html>

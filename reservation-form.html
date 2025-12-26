@@ -31,9 +31,9 @@
           <div style="display: flex; gap: 10px;">
             <button onclick="createNewReservation()" style="padding: 8px 16px; background: rgba(255,255,255,0.3); color: white; border: 1px solid rgba(255,255,255,0.5); border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">➕ New Reservation</button>
             <button onclick="goBackToReservations()" id="closeFormBtn" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px; display: none;">❌ Close</button>
-            <button onclick="window.location.href='reservations-list.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">📋 Reservations</button>
-            <button onclick="window.location.href='index.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">🏠 Home</button>
-            <button onclick="window.location.href='accounts.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">👤 Accounts</button>
+            <button onclick="goBackToReservations()" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">📋 Reservations</button>
+            <button onclick="navigateToSection('dashboard', 'index.html')" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">🏠 Home</button>
+            <button onclick="navigateToSection('accounts', 'accounts.html')" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">👤 Accounts</button>
           </div>
         </div>
       </header>
@@ -2553,6 +2553,10 @@
     </script>
     <script src="env.js"></script>
     <script type="module" src="auth-guard.js"></script>
+    <script type="module">
+      import { initDevModeBanner } from './dev-mode-banner.js';
+      initDevModeBanner();
+    </script>
     <script type="module" src="reservation-form.js"></script>
     <script src="https://storage.googleapis.com/rosebud_staticfiles/ChatManager.js"></script>
     <script src="https://storage.googleapis.com/rosebud_staticfiles/ImageGenerator.js"></script>

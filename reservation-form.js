@@ -138,8 +138,31 @@ function createNewReservation() {
   }, '*');
 }
 
+// Global function to go back to reservations list
+function goBackToReservations() {
+  // Use parent messaging if in iframe, otherwise direct navigation
+  if (window.self !== window.top && window.parent) {
+    console.log('📤 Sending switchSection message to parent: reservations');
+    window.parent.postMessage({ action: 'switchSection', section: 'reservations' }, '*');
+  } else {
+    window.location.href = 'reservations-list.html';
+  }
+}
+
+// Global navigation helper for iframe-aware navigation
+function navigateToSection(section, fallbackUrl) {
+  if (window.self !== window.top && window.parent) {
+    console.log('📤 Sending switchSection message to parent:', section);
+    window.parent.postMessage({ action: 'switchSection', section: section }, '*');
+  } else {
+    window.location.href = fallbackUrl;
+  }
+}
+
 // Expose for inline onclick handlers
 window.createNewReservation = createNewReservation;
+window.goBackToReservations = goBackToReservations;
+window.navigateToSection = navigateToSection;
 
 class ReservationForm {
   constructor() {
@@ -166,6 +189,20 @@ class ReservationForm {
 
   detectViewMode() {
     try {
+      // Skip view mode for admin/dispatch users - they should always have full edit access
+      const userRole = localStorage.getItem('user_role') || window.RELIA_USER_ROLE || '';
+      const isAdminOrDispatch = ['admin', 'dispatch', 'administrator', 'dispatcher', 'super_admin'].includes(userRole.toLowerCase());
+      if (isAdminOrDispatch) {
+        console.log('👤 [ReservationForm] User is admin/dispatch - view mode disabled');
+        return false;
+      }
+      
+      // Development mode: never use view mode on localhost
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        console.log('🔧 [ReservationForm] Development mode - view mode disabled');
+        return false;
+      }
+      
       if (window.RELIA_VIEW_MODE === true || window.RELIA_VIEW_MODE === 'true') {
         return true;
       }
@@ -447,7 +484,7 @@ class ReservationForm {
     this.setBillingAccountNumberDisplay(accountNumber);
   }
 
-  tryResolveBillingAccountAndUpdateDisplay() {
+  async tryResolveBillingAccountAndUpdateDisplay() {
     const input = document.getElementById('billingAccountSearch');
     if (!input) return;
     const raw = (input.value || '').toString().trim();
@@ -460,7 +497,9 @@ class ReservationForm {
     const candidate = raw.split('-')[0]?.trim() || raw;
 
     try {
-      const account = db.getAllAccounts()?.find(a => {
+      // Use async database call
+      const accounts = await db.getAllAccounts();
+      const account = accounts?.find(a => {
         const id = (a?.id ?? '').toString();
         const acct = (a?.account_number ?? '').toString();
         return id === candidate || acct === candidate;
@@ -469,11 +508,11 @@ class ReservationForm {
         this.updateBillingAccountNumberDisplay(account);
         return;
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      console.error('Error resolving billing account:', error);
     }
 
-    // If we can't resolve the account, show the candidate (still useful when user manually typed it)
+    // If not found as account number, try other display formats
     this.setBillingAccountNumberDisplay(candidate);
   }
   
@@ -522,24 +561,34 @@ class ReservationForm {
       confNumberField.setAttribute('readonly', 'true');
       confNumberField.style.color = '#999';
       
-      // Try to get the next confirmation number from database with retry
+      // Try to get a unique confirmation number from database with retry
       let nextConfNumber;
       const maxRetries = 3;
       let retryCount = 0;
       
       while (retryCount < maxRetries && !nextConfNumber) {
         try {
-          console.log(`🔢 Attempting to get confirmation number (try ${retryCount + 1})`);
-          nextConfNumber = await SupabaseDB.getNextConfirmationNumber();
-          console.log('🔢 Next confirmation number loaded:', nextConfNumber);
+          console.log(`🔢 Attempting to generate unique confirmation number (try ${retryCount + 1})`);
+          // Use the new duplicate-safe function
+          nextConfNumber = await SupabaseDB.generateUniqueConfirmationNumber();
+          console.log('🔢 Unique confirmation number generated:', nextConfNumber);
           break;
         } catch (error) {
           retryCount++;
-          console.error(`🔢 Error getting confirmation number (try ${retryCount}):`, error);
+          console.error(`🔢 Error generating confirmation number (try ${retryCount}):`, error);
           
           if (retryCount < maxRetries) {
             // Wait a bit before retrying (authentication might still be initializing)
             await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          } else {
+            // Fallback to the original method on final retry
+            try {
+              console.log('🔢 Falling back to getNextConfirmationNumber...');
+              nextConfNumber = await SupabaseDB.getNextConfirmationNumber();
+              console.log('🔢 Fallback confirmation number loaded:', nextConfNumber);
+            } catch (fallbackError) {
+              console.error('🔢 Fallback also failed:', fallbackError);
+            }
           }
         }
       }
@@ -555,6 +604,108 @@ class ReservationForm {
         confNumberField.style.color = '#333';
         console.log('🔢 Using fallback confirmation number:', fallbackNumber);
       }
+      
+      // Store the generated number to know it's system-generated
+      this.lastGeneratedConfNumber = nextConfNumber || 100000;
+    }
+  }
+
+  async validateConfirmationNumber(confirmationNumber) {
+    console.log('🔍 Validating confirmation number:', confirmationNumber);
+    
+    const confNumberField = document.getElementById('confirmationNumber');
+    if (!confNumberField) return;
+
+    try {
+      // Import the validation function
+      const SupabaseDB = await import('./supabase-db.js');
+      const exists = await SupabaseDB.checkConfirmationNumberExists(confirmationNumber);
+      
+      // Remove any existing validation message
+      const existingMsg = document.getElementById('confirmationValidationMsg');
+      if (existingMsg) {
+        existingMsg.remove();
+      }
+      
+      if (exists) {
+        // Show error - number already exists
+        confNumberField.style.borderColor = '#dc3545';
+        confNumberField.style.backgroundColor = '#fff5f5';
+        
+        const validationMsg = document.createElement('div');
+        validationMsg.id = 'confirmationValidationMsg';
+        validationMsg.style.cssText = `
+          color: #dc3545;
+          font-size: 12px;
+          margin-top: 4px;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        `;
+        validationMsg.innerHTML = `
+          <span>⚠️</span>
+          <span>This confirmation number already exists. Please use a different number or leave blank to auto-generate.</span>
+        `;
+        
+        confNumberField.parentNode.appendChild(validationMsg);
+        
+        console.warn('❌ Confirmation number already exists:', confirmationNumber);
+        return false;
+      } else {
+        // Number is available
+        confNumberField.style.borderColor = '#28a745';
+        confNumberField.style.backgroundColor = '#f8fff8';
+        
+        const validationMsg = document.createElement('div');
+        validationMsg.id = 'confirmationValidationMsg';
+        validationMsg.style.cssText = `
+          color: #28a745;
+          font-size: 12px;
+          margin-top: 4px;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        `;
+        validationMsg.innerHTML = `
+          <span>✅</span>
+          <span>Confirmation number is available.</span>
+        `;
+        
+        confNumberField.parentNode.appendChild(validationMsg);
+        
+        // Auto-hide success message after 3 seconds
+        setTimeout(() => {
+          if (validationMsg && validationMsg.parentNode) {
+            validationMsg.parentNode.removeChild(validationMsg);
+            confNumberField.style.borderColor = '';
+            confNumberField.style.backgroundColor = '';
+          }
+        }, 3000);
+        
+        console.log('✅ Confirmation number is available:', confirmationNumber);
+        return true;
+      }
+    } catch (error) {
+      console.error('❌ Error validating confirmation number:', error);
+      
+      // Show warning message
+      const validationMsg = document.createElement('div');
+      validationMsg.id = 'confirmationValidationMsg';
+      validationMsg.style.cssText = `
+        color: #856404;
+        font-size: 12px;
+        margin-top: 4px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      `;
+      validationMsg.innerHTML = `
+        <span>⚠️</span>
+        <span>Could not verify confirmation number. Please check your connection.</span>
+      `;
+      
+      confNumberField.parentNode.appendChild(validationMsg);
+      return true; // Allow to proceed on validation error
     }
   }
 
@@ -722,7 +873,15 @@ class ReservationForm {
   }
 
   setupEventListeners() {
-    console.log('🔧 Setting up event listeners...');
+    console.log('🔧 [SETUP] Setting up event listeners...');
+    
+    // Verify billing suggestions container exists
+    const accountSuggestions = document.getElementById('accountSuggestions');
+    if (accountSuggestions) {
+      console.log('✅ [SETUP] Found accountSuggestions container');
+    } else {
+      console.error('❌ [SETUP] accountSuggestions container NOT FOUND!');
+    }
     
     // Back button (removed from UI but keeping check)
     const backBtn = document.getElementById('backBtn');
@@ -757,16 +916,26 @@ class ReservationForm {
       btn.addEventListener('click', (e) => {
         const action = e.target.dataset.action;
         
+        // Helper function to navigate (uses parent messaging if in iframe)
+        const navigateTo = (section, fallbackUrl) => {
+          if (window.self !== window.top && window.parent) {
+            console.log('📤 Sending switchSection message to parent:', section);
+            window.parent.postMessage({ action: 'switchSection', section: section }, '*');
+          } else {
+            window.location.href = fallbackUrl;
+          }
+        };
+        
         if (action === 'user-view') {
-          window.location.href = 'index.html?view=user';
+          navigateTo('dashboard', 'index.html?view=user');
         } else if (action === 'driver-view') {
-          window.location.href = 'index.html?view=driver';
+          navigateTo('dashboard', 'index.html?view=driver');
         } else if (action === 'reservations') {
-          window.location.href = 'reservations-list.html';
+          navigateTo('reservations', 'reservations-list.html');
         } else if (action === 'farm-out') {
-          window.location.href = 'index.html?view=reservations';
+          navigateTo('dashboard', 'index.html?view=reservations');
         } else if (action === 'new-reservation') {
-          window.location.href = 'reservation-form.html';
+          navigateTo('new-reservation', 'reservation-form.html');
         }
       });
     });
@@ -885,125 +1054,108 @@ class ReservationForm {
     // Account search - Billing Accounts section
     const billingAccountInput = document.getElementById('billingAccountSearch');
     if (billingAccountInput) {
-      billingAccountInput.addEventListener('input', (e) => {
-        this.searchAccounts(e.target.value);
+      console.log('✅ [SETUP] Found billingAccountSearch input, attaching listeners');
+      
+      billingAccountInput.addEventListener('input', async (e) => {
+        console.log('⌨️ [INPUT] Billing account input event:', e.target.value);
+        await this.searchAccounts(e.target.value);
       });
 
-      billingAccountInput.addEventListener('focus', () => {
-        this.tryResolveBillingAccountAndUpdateDisplay();
+      billingAccountInput.addEventListener('focus', async () => {
+        console.log('🔍 [FOCUS] Billing account focus event');
+        await this.tryResolveBillingAccountAndUpdateDisplay();
       });
 
       // Auto-fill other billing fields when account is selected
-      billingAccountInput.addEventListener('blur', () => {
-        this.tryResolveBillingAccountAndUpdateDisplay();
+      billingAccountInput.addEventListener('blur', async () => {
+        console.log('🔍 [BLUR] Billing account blur event');
+        await this.tryResolveBillingAccountAndUpdateDisplay();
         const suggestions = document.getElementById('accountSuggestions');
         if (suggestions) {
+          // Delay to allow click on suggestion to complete
           setTimeout(() => {
             suggestions.classList.remove('active');
-          }, 200);
+          }, 300);
         }
       });
+    } else {
+      console.error('❌ [SETUP] billingAccountSearch input NOT FOUND!');
     }
 
-    // Passenger account search - Multiple fields
-    const passengerFirstNameEl = document.getElementById('passengerFirstName');
-    if (passengerFirstNameEl) {
-      passengerFirstNameEl.addEventListener('input', (e) => {
-        this.searchAccountsForPassenger(e.target.value);
-      });
-      
-      passengerFirstNameEl.addEventListener('blur', () => {
-        const suggestions = document.getElementById('passengerSuggestions');
-        if (suggestions) {
-          setTimeout(() => {
-            suggestions.classList.remove('active');
-          }, 200);
-        }
-      });
-    }
+    // Passenger search - similar to billing but searches passengers
+    ['passengerFirstName', 'passengerLastName', 'passengerPhone', 'passengerEmail'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        console.log(`✅ [SETUP] Found ${id} input, attaching listeners`);
+        el.addEventListener('input', async (e) => {
+          console.log(`⌨️ [INPUT] ${id} input event:`, e.target.value);
+          await this.searchPassengers(e.target.value);
+        });
+        el.addEventListener('blur', () => {
+          const suggestions = document.getElementById('passengerSuggestions');
+          if (!suggestions) return;
+          setTimeout(() => suggestions.classList.remove('active'), 300);
+        });
+      } else {
+        console.warn(`⚠️ [SETUP] ${id} input NOT FOUND!`);
+      }
+    });
 
-    // Also add search to passenger last name field
-    const passengerLastNameEl = document.getElementById('passengerLastName');
-    if (passengerLastNameEl) {
-      passengerLastNameEl.addEventListener('input', (e) => {
-        this.searchAccountsForPassenger(e.target.value);
-      });
-      
-      passengerLastNameEl.addEventListener('blur', () => {
-        const suggestions = document.getElementById('passengerSuggestions');
-        if (suggestions) {
-          setTimeout(() => {
-            suggestions.classList.remove('active');
-          }, 200);
-        }
-      });
-    }
-
-    // Also add search to passenger phone field
-    const passengerPhoneEl = document.getElementById('passengerPhone');
-    if (passengerPhoneEl) {
-      passengerPhoneEl.addEventListener('input', (e) => {
-        this.searchAccountsForPassenger(e.target.value);
-      });
-      
-      passengerPhoneEl.addEventListener('blur', () => {
-        const suggestions = document.getElementById('passengerSuggestions');
-        if (suggestions) {
-          setTimeout(() => {
-            suggestions.classList.remove('active');
-          }, 200);
-        }
-      });
-    }
-
-    // Booking Agent account search - First Name field
-    const bookingFirstNameEl = document.getElementById('bookedByFirstName');
-    if (bookingFirstNameEl) {
-      bookingFirstNameEl.addEventListener('input', (e) => {
-        this.searchAccountsForBookingAgent(e.target.value);
-      });
-      
-      bookingFirstNameEl.addEventListener('blur', () => {
-        const suggestions = document.getElementById('bookingAgentSuggestions');
-        if (suggestions) {
-          setTimeout(() => {
-            suggestions.classList.remove('active');
-          }, 200);
-        }
-      });
-    }
+    // Booking Agent search - similar to billing but searches booking agents
+    ['bookedByFirstName', 'bookedByLastName', 'bookedByPhone', 'bookedByEmail'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        console.log(`✅ [SETUP] Found ${id} input, attaching listeners`);
+        el.addEventListener('input', async (e) => {
+          console.log(`⌨️ [INPUT] ${id} input event:`, e.target.value);
+          await this.searchBookingAgents(e.target.value);
+        });
+        el.addEventListener('blur', () => {
+          const suggestions = document.getElementById('bookingAgentSuggestions');
+          if (!suggestions) return;
+          setTimeout(() => suggestions.classList.remove('active'), 300);
+        });
+      } else {
+        console.warn(`⚠️ [SETUP] ${id} input NOT FOUND!`);
+      }
+    });
 
     // Billing autofill (3+ chars) from Accounts DB for ANY billing field
     // Company field only searches company names
     const billingCompanyEl = document.getElementById('billingCompany');
     if (billingCompanyEl) {
-      billingCompanyEl.addEventListener('input', (e) => {
-        this.searchAccountsByCompany(e.target.value);
+      console.log('✅ [SETUP] Found billingCompany input, attaching listeners');
+      billingCompanyEl.addEventListener('input', async (e) => {
+        console.log('⌨️ [INPUT] Billing company input event:', e.target.value);
+        await this.searchAccountsByCompany(e.target.value);
       });
       billingCompanyEl.addEventListener('blur', () => {
         const suggestions = document.getElementById('accountSuggestions');
         if (!suggestions) return;
-        setTimeout(() => suggestions.classList.remove('active'), 200);
+        setTimeout(() => suggestions.classList.remove('active'), 300);
       });
+    } else {
+      console.error('❌ [SETUP] billingCompany input NOT FOUND!');
     }
     
     // Other billing fields search across all fields
     ['billingFirstName', 'billingLastName', 'billingPhone', 'billingEmail'].forEach((id) => {
       const el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener('input', (e) => {
-        this.searchAccounts(e.target.value);
-      });
-      el.addEventListener('blur', () => {
-        const suggestions = document.getElementById('accountSuggestions');
-        if (!suggestions) return;
-        setTimeout(() => suggestions.classList.remove('active'), 200);
-      });
+      if (el) {
+        console.log(`✅ [SETUP] Found ${id} input, attaching listeners`);
+        el.addEventListener('input', async (e) => {
+          console.log(`⌨️ [INPUT] ${id} input event:`, e.target.value);
+          await this.searchAccounts(e.target.value);
+        });
+        el.addEventListener('blur', () => {
+          const suggestions = document.getElementById('accountSuggestions');
+          if (!suggestions) return;
+          setTimeout(() => suggestions.classList.remove('active'), 200);
+        });
+      } else {
+        console.error(`❌ [SETUP] ${id} input NOT FOUND!`);
+      }
     });
-
-    // Passenger + Booking Agent autofill (3+ chars)
-    this.setupPassengerDbAutocomplete();
-    this.setupBookingAgentDbAutocomplete();
 
     // Setup address autocomplete for initial stops
     try {
@@ -1101,6 +1253,32 @@ class ReservationForm {
     if (copyBillingToBookingBtn) {
       copyBillingToBookingBtn.addEventListener('click', () => {
         this.copyBillingToBooking();
+      });
+    }
+    
+    // Confirmation number validation
+    const confNumberField = document.getElementById('confirmationNumber');
+    if (confNumberField) {
+      let validationTimeout;
+      confNumberField.addEventListener('blur', async () => {
+        const confNumber = confNumberField.value.trim();
+        if (confNumber && confNumber !== this.lastGeneratedConfNumber) {
+          // User manually entered a confirmation number - validate it
+          clearTimeout(validationTimeout);
+          validationTimeout = setTimeout(async () => {
+            await this.validateConfirmationNumber(confNumber);
+          }, 300);
+        }
+      });
+      
+      confNumberField.addEventListener('input', () => {
+        // Clear validation styling when user is typing
+        confNumberField.style.borderColor = '';
+        confNumberField.style.backgroundColor = '';
+        const validationMsg = document.getElementById('confirmationValidationMsg');
+        if (validationMsg) {
+          validationMsg.remove();
+        }
       });
     }
     
@@ -1975,11 +2153,21 @@ class ReservationForm {
   }
 
   useAccountForPassenger(account) {
+    console.log('👤 useAccountForPassenger called with:', account);
+    
+    // Handle both snake_case (from DB) and camelCase field names
+    const firstName = account.first_name || account.firstName || '';
+    const lastName = account.last_name || account.lastName || '';
+    const phone = account.phone || account.cellPhone || account.cell_phone || '';
+    const email = account.email || '';
+    
     // Populate Passenger section with selected account
-    document.getElementById('passengerFirstName').value = account.first_name || '';
-    document.getElementById('passengerLastName').value = account.last_name || '';
-    document.getElementById('passengerPhone').value = account.phone || account.cell_phone || '';
-    document.getElementById('passengerEmail').value = account.email || '';
+    document.getElementById('passengerFirstName').value = firstName;
+    document.getElementById('passengerLastName').value = lastName;
+    document.getElementById('passengerPhone').value = phone;
+    document.getElementById('passengerEmail').value = email;
+    
+    console.log('✅ Passenger fields populated:', { firstName, lastName, phone, email });
 
     // Cross-fill billing fields ONLY if account is marked as billing client
     if (account.is_billing_client) {
@@ -2713,120 +2901,317 @@ class ReservationForm {
     }
   }
 
-  searchAccounts(query) {
-    if (!query || query.length < 3) {
-      document.getElementById('accountSuggestions').classList.remove('active');
+  async searchPassengers(query) {
+    console.log('🔍 [PASSENGER] searchPassengers called with query:', query);
+    
+    const container = document.getElementById('passengerSuggestions');
+    if (!container) {
+      console.error('❌ [PASSENGER] passengerSuggestions container not found!');
       return;
     }
-
-    // Search using db instead of accountManager
-    const results = db.searchAccounts(query);
-    const container = document.getElementById('accountSuggestions');
     
-    if (results.length === 0) {
+    if (!query || query.length < 3) {
+      console.log('🔧 [PASSENGER] Query too short, hiding suggestions');
       container.classList.remove('active');
       return;
     }
 
-    container.innerHTML = results.map(account => `
-      <div class="suggestion-item" data-account-id="${account.id}">
-        ${account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
-      </div>
-    `).join('');
+    console.log('🔍 [PASSENGER] Searching passengers for:', query);
+    
+    try {
+      // Search using supabase db - use searchAccounts like billing does
+      const results = await db.searchAccounts(query);
+      console.log('✅ [PASSENGER] Search results:', results);
+      
+      if (!results || results.length === 0) {
+        console.log('⚠️ [PASSENGER] No results found, hiding suggestions');
+        container.classList.remove('active');
+        return;
+      }
 
-    container.classList.add('active');
+      console.log('✅ [PASSENGER] Displaying', results.length, 'suggestions');
+      container.innerHTML = results.map(account => {
+        const firstName = account.first_name || account.firstName || '';
+        const lastName = account.last_name || account.lastName || '';
+        const email = account.email || '';
+        const phone = account.phone || account.cell_phone || account.cellPhone || '';
+        return `
+          <div class="suggestion-item" data-account-id="${account.id}">
+            ${firstName} ${lastName} ${phone ? `(${phone})` : ''} ${email ? `(${email})` : ''}
+          </div>
+        `;
+      }).join('');
 
-    // Add click listeners to suggestions
-    container.querySelectorAll('.suggestion-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const accountId = item.dataset.accountId;
-        const account = db.getAccountById(accountId);
-        if (account) {
-          this.useExistingAccount(account);
-          container.classList.remove('active');
-        }
+      container.classList.add('active');
+      console.log('✅ [PASSENGER] Suggestions container activated');
+
+      // Add mousedown to prevent blur from hiding dropdown before click completes
+      container.querySelectorAll('.suggestion-item').forEach(item => {
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault(); // Prevent blur from firing
+        });
+        
+        item.addEventListener('click', async () => {
+          const accountId = item.dataset.accountId;
+          console.log('👆 [PASSENGER] Account clicked:', accountId);
+          const account = await db.getAccountById(accountId);
+          if (account) {
+            console.log('✅ [PASSENGER] Using account:', account.first_name, account.last_name);
+            this.useAccountForPassenger(account);
+            container.classList.remove('active');
+          } else {
+            console.error('❌ [PASSENGER] Failed to get account by ID:', accountId);
+          }
+        });
       });
-    });
+    } catch (error) {
+      console.error('❌ [PASSENGER] Error searching passengers:', error);
+      container.classList.remove('active');
+    }
   }
 
-  searchAccountsForPassenger(query, sourceField = null) {
+  async searchBookingAgents(query) {
+    console.log('🔍 [BOOKING AGENT] searchBookingAgents called with query:', query);
+    
+    const container = document.getElementById('bookingAgentSuggestions');
+    if (!container) {
+      console.error('❌ [BOOKING AGENT] bookingAgentSuggestions container not found!');
+      return;
+    }
+    
+    if (!query || query.length < 3) {
+      console.log('🔧 [BOOKING AGENT] Query too short, hiding suggestions');
+      container.classList.remove('active');
+      return;
+    }
+
+    console.log('🔍 [BOOKING AGENT] Searching booking agents for:', query);
+    
+    try {
+      // Search using supabase db - use searchAccounts like billing does
+      const results = await db.searchAccounts(query);
+      console.log('✅ [BOOKING AGENT] Search results:', results);
+      
+      if (!results || results.length === 0) {
+        console.log('⚠️ [BOOKING AGENT] No results found, hiding suggestions');
+        container.classList.remove('active');
+        return;
+      }
+
+      console.log('✅ [BOOKING AGENT] Displaying', results.length, 'suggestions');
+      container.innerHTML = results.map(account => {
+        const firstName = account.first_name || account.firstName || '';
+        const lastName = account.last_name || account.lastName || '';
+        const email = account.email || '';
+        const phone = account.phone || account.cell_phone || account.cellPhone || '';
+        return `
+          <div class="suggestion-item" data-account-id="${account.id}">
+            ${firstName} ${lastName} ${phone ? `(${phone})` : ''} ${email ? `(${email})` : ''}
+          </div>
+        `;
+      }).join('');
+
+      container.classList.add('active');
+      console.log('✅ [BOOKING AGENT] Suggestions container activated');
+
+      // Add mousedown to prevent blur from hiding dropdown before click completes
+      container.querySelectorAll('.suggestion-item').forEach(item => {
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault(); // Prevent blur from firing
+        });
+        
+        item.addEventListener('click', async () => {
+          const accountId = item.dataset.accountId;
+          console.log('👆 [BOOKING AGENT] Account clicked:', accountId);
+          const account = await db.getAccountById(accountId);
+          if (account) {
+            console.log('✅ [BOOKING AGENT] Using account:', account.first_name, account.last_name);
+            this.useAccountForBookingAgent(account);
+            container.classList.remove('active');
+          } else {
+            console.error('❌ [BOOKING AGENT] Failed to get account by ID:', accountId);
+          }
+        });
+      });
+    } catch (error) {
+      console.error('❌ [BOOKING AGENT] Error searching booking agents:', error);
+      container.classList.remove('active');
+    }
+  }
+
+  async searchAccounts(query) {
+    console.log('🔍 [BILLING] searchAccounts called with query:', query);
+    
+    const container = document.getElementById('accountSuggestions');
+    if (!container) {
+      console.error('❌ [BILLING] accountSuggestions container not found!');
+      return;
+    }
+    
+    if (!query || query.length < 3) {
+      console.log('🔧 [BILLING] Query too short, hiding suggestions');
+      container.classList.remove('active');
+      return;
+    }
+
+    console.log('🔍 [BILLING] Searching accounts for:', query);
+    
+    try {
+      // Search using supabase db
+      const results = await db.searchAccounts(query);
+      console.log('✅ [BILLING] Search results:', results);
+      
+      if (!results || results.length === 0) {
+        console.log('⚠️ [BILLING] No results found, hiding suggestions');
+        container.classList.remove('active');
+        return;
+      }
+
+      console.log('✅ [BILLING] Displaying', results.length, 'suggestions');
+      container.innerHTML = results.map(account => `
+        <div class="suggestion-item" data-account-id="${account.id}">
+          ${account.account_number || account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
+        </div>
+      `).join('');
+
+      container.classList.add('active');
+      console.log('✅ [BILLING] Suggestions container activated');
+
+      // Add mousedown to prevent blur from hiding dropdown before click completes
+      container.querySelectorAll('.suggestion-item').forEach(item => {
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault(); // Prevent blur from firing
+        });
+        
+        item.addEventListener('click', async () => {
+          const accountId = item.dataset.accountId;
+          console.log('👆 [BILLING] Account clicked:', accountId);
+          const account = await db.getAccountById(accountId);
+          if (account) {
+            console.log('✅ [BILLING] Using account:', account.first_name, account.last_name);
+            this.useExistingAccount(account);
+            container.classList.remove('active');
+          } else {
+            console.error('❌ [BILLING] Failed to get account by ID:', accountId);
+          }
+        });
+      });
+    } catch (error) {
+      console.error('❌ [BILLING] Error searching accounts:', error);
+      container.classList.remove('active');
+    }
+  }
+
+  async searchAccountsForPassenger(query, sourceField = null) {
     if (!query || query.length < 3) {
       document.getElementById('passengerSuggestions').classList.remove('active');
       return;
     }
 
-    // Search using db for passengers
-    const results = db.searchAccounts(query);
-    const container = document.getElementById('passengerSuggestions');
+    console.log('🔍 Searching passenger accounts for:', query);
     
-    if (results.length === 0) {
-      container.classList.remove('active');
-      return;
-    }
+    try {
+      // Search using db for passengers
+      const results = await db.searchPassengers(query);
+      const container = document.getElementById('passengerSuggestions');
+      
+      if (!results || results.length === 0) {
+        container.classList.remove('active');
+        return;
+      }
 
-    container.innerHTML = results.map(account => `
-      <div class="suggestion-item" data-account-id="${account.id}">
-        ${account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
-      </div>
-    `).join('');
+      container.innerHTML = results.map(account => `
+        <div class="suggestion-item" data-account-id="${account.id}">
+          ${account.account_number || account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
+        </div>
+      `).join('');
 
-    container.classList.add('active');
+      container.classList.add('active');
 
-    // Add click listeners to suggestions
-    container.querySelectorAll('.suggestion-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const accountId = item.dataset.accountId;
-        const account = db.getAccountById(accountId);
-        if (account) {
-          this.useAccountForPassenger(account);
-          container.classList.remove('active');
-        }
+      // Add mousedown to prevent blur from hiding dropdown before click completes
+      container.querySelectorAll('.suggestion-item').forEach(item => {
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault(); // Prevent blur from firing
+        });
+        
+        item.addEventListener('click', async () => {
+          const accountId = item.dataset.accountId;
+          const account = await db.getAccountById(accountId);
+          if (account) {
+            this.useAccountForPassenger(account);
+            container.classList.remove('active');
+          }
+        });
       });
-    });
+    } catch (error) {
+      console.error('❌ Error searching passenger accounts:', error);
+      document.getElementById('passengerSuggestions').classList.remove('active');
+    }
   }
 
-  searchAccountsForBookingAgent(query, sourceField = null) {
+  async searchAccountsForBookingAgent(query, sourceField = null) {
     if (!query || query.length < 3) {
       document.getElementById('bookingAgentSuggestions').classList.remove('active');
       return;
     }
 
-    // Search using db for booking agents
-    const results = db.searchAccounts(query);
-    const container = document.getElementById('bookingAgentSuggestions');
+    console.log('🔍 Searching booking agent accounts for:', query);
     
-    if (results.length === 0) {
-      container.classList.remove('active');
-      return;
-    }
+    try {
+      // Search using db for booking agents
+      const results = await db.searchBookingAgents(query);
+      const container = document.getElementById('bookingAgentSuggestions');
+      
+      if (!results || results.length === 0) {
+        container.classList.remove('active');
+        return;
+      }
 
-    container.innerHTML = results.map(account => `
-      <div class="suggestion-item" data-account-id="${account.id}">
-        ${account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
-      </div>
-    `).join('');
+      container.innerHTML = results.map(account => `
+        <div class="suggestion-item" data-account-id="${account.id}">
+          ${account.account_number || account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
+        </div>
+      `).join('');
 
-    container.classList.add('active');
+      container.classList.add('active');
 
-    // Add click listeners to suggestions
-    container.querySelectorAll('.suggestion-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const accountId = item.dataset.accountId;
-        const account = db.getAccountById(accountId);
-        if (account) {
-          this.useAccountForBookingAgent(account);
-          container.classList.remove('active');
-        }
+      // Add mousedown to prevent blur from hiding dropdown before click completes
+      container.querySelectorAll('.suggestion-item').forEach(item => {
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault(); // Prevent blur from firing
+        });
+        
+        item.addEventListener('click', async () => {
+          const accountId = item.dataset.accountId;
+          const account = await db.getAccountById(accountId);
+          if (account) {
+            this.useAccountForBookingAgent(account);
+            container.classList.remove('active');
+          }
+        });
       });
-    });
+    } catch (error) {
+      console.error('❌ Error searching booking agent accounts:', error);
+      document.getElementById('bookingAgentSuggestions').classList.remove('active');
+    }
   }
 
   useAccountForBookingAgent(account) {
+    console.log('👤 useAccountForBookingAgent called with:', account);
+    
+    // Handle both snake_case (from DB) and camelCase field names
+    const firstName = account.first_name || account.firstName || '';
+    const lastName = account.last_name || account.lastName || '';
+    const phone = account.phone || account.cellPhone || account.cell_phone || '';
+    const email = account.email || '';
+    
     // Populate Booking Agent section with selected account
-    document.getElementById('bookedByFirstName').value = account.first_name || '';
-    document.getElementById('bookedByLastName').value = account.last_name || '';
-    document.getElementById('bookedByPhone').value = account.phone || account.cell_phone || '';
-    document.getElementById('bookedByEmail').value = account.email || '';
+    document.getElementById('bookedByFirstName').value = firstName;
+    document.getElementById('bookedByLastName').value = lastName;
+    document.getElementById('bookedByPhone').value = phone;
+    document.getElementById('bookedByEmail').value = email;
+    
+    console.log('✅ Booking agent fields populated:', { firstName, lastName, phone, email });
 
     // Cross-fill billing fields ONLY if account is marked as billing client
     if (account.is_billing_client) {
@@ -2909,86 +3294,103 @@ class ReservationForm {
     }
   }
 
-  searchAccountsByCompany(query) {
+  async searchAccountsByCompany(query) {
     if (!query || query.length < 3) {
       document.getElementById('accountSuggestions').classList.remove('active');
       return;
     }
 
-    // Search company names only
-    const results = db.searchAccountsByCompany(query);
-    const container = document.getElementById('accountSuggestions');
+    console.log('🔍 Searching company accounts for:', query);
     
-    if (results.length === 0) {
-      container.classList.remove('active');
-      return;
-    }
+    try {
+      // Search company names only
+      const results = await db.searchAccountsByCompany(query);
+      const container = document.getElementById('accountSuggestions');
+      
+      if (!results || results.length === 0) {
+        container.classList.remove('active');
+        return;
+      }
 
-    container.innerHTML = results.map(account => `
-      <div class="suggestion-item" data-account-id="${account.id}">
-        ${account.company_name} (${account.first_name || ''} ${account.last_name || ''})
-      </div>
-    `).join('');
+      container.innerHTML = results.map(account => `
+        <div class="suggestion-item" data-account-id="${account.id}">
+          ${account.company_name} (${account.first_name || ''} ${account.last_name || ''})
+        </div>
+      `).join('');
 
-    container.classList.add('active');
+      container.classList.add('active');
 
-    // Add click listeners to suggestions
-    container.querySelectorAll('.suggestion-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const accountId = item.dataset.accountId;
-        const account = db.getAccountById(accountId);
-        if (account) {
-          this.useExistingAccount(account);
-          container.classList.remove('active');
-        }
+      // Add click listeners to suggestions
+      container.querySelectorAll('.suggestion-item').forEach(item => {
+        item.addEventListener('click', async () => {
+          const accountId = item.dataset.accountId;
+          const account = await db.getAccountById(accountId);
+          if (account) {
+            this.useExistingAccount(account);
+            container.classList.remove('active');
+          }
+        });
       });
-    });
+    } catch (error) {
+      console.error('❌ Error searching company accounts:', error);
+      document.getElementById('accountSuggestions').classList.remove('active');
+    }
   }
 
   setupPassengerDbAutocomplete() {
+    console.log('🔍 Setting up passenger autocomplete...');
     this.setupDbAutocomplete({
       fieldIds: ['passengerFirstName', 'passengerLastName', 'passengerPhone', 'passengerEmail'],
       containerId: 'passengerSuggestions',
       minChars: 3,
-      searchFn: (query) => (db.searchPassengers(query) || []).slice(0, 10),
+      searchFn: async (query) => {
+        console.log('🔍 Passenger search triggered with query:', query);
+        const results = await db.searchPassengers(query);
+        console.log('📋 Passenger search results count:', results?.length || 0);
+        return (results || []).slice(0, 10);
+      },
       renderItem: (p) => {
         const firstName = p.firstName || p.first_name || '';
         const lastName = p.lastName || p.last_name || '';
         const email = p.email || '';
-        const phone = p.phone || '';
+        const phone = p.phone || p.cell_phone || p.cellPhone || '';
         const label = `${firstName} ${lastName}`.trim() || '(Unnamed)';
         const meta = [email, phone].filter(Boolean).join(' • ');
         return `${label}${meta ? ` <span style="color:#666;font-size:12px;">${meta}</span>` : ''}`;
       },
       onSelect: (p) => {
-        document.getElementById('passengerFirstName').value = p.firstName || p.first_name || '';
-        document.getElementById('passengerLastName').value = p.lastName || p.last_name || '';
-        document.getElementById('passengerPhone').value = p.phone || '';
-        document.getElementById('passengerEmail').value = p.email || '';
+        console.log('✅ Passenger selected:', p);
+        // Use the full method that includes cross-fill logic for billing/booking
+        this.useAccountForPassenger(p);
       }
     });
   }
 
   setupBookingAgentDbAutocomplete() {
+    console.log('🔍 Setting up booking agent autocomplete...');
     this.setupDbAutocomplete({
       fieldIds: ['bookedByFirstName', 'bookedByLastName', 'bookedByPhone', 'bookedByEmail'],
       containerId: 'bookingAgentSuggestions',
       minChars: 3,
-      searchFn: (query) => (db.searchBookingAgents(query) || []).slice(0, 10),
+      searchFn: async (query) => {
+        console.log('🔍 Booking agent search triggered with query:', query);
+        const results = await db.searchBookingAgents(query);
+        console.log('📋 Booking agent search results count:', results?.length || 0);
+        return (results || []).slice(0, 10);
+      },
       renderItem: (a) => {
         const firstName = a.firstName || a.first_name || '';
         const lastName = a.lastName || a.last_name || '';
         const email = a.email || '';
-        const phone = a.phone || '';
+        const phone = a.phone || a.cell_phone || a.cellPhone || '';
         const label = `${firstName} ${lastName}`.trim() || '(Unnamed)';
         const meta = [email, phone].filter(Boolean).join(' • ');
         return `${label}${meta ? ` <span style="color:#666;font-size:12px;">${meta}</span>` : ''}`;
       },
       onSelect: (a) => {
-        document.getElementById('bookedByFirstName').value = a.firstName || a.first_name || '';
-        document.getElementById('bookedByLastName').value = a.lastName || a.last_name || '';
-        document.getElementById('bookedByPhone').value = a.phone || '';
-        document.getElementById('bookedByEmail').value = a.email || '';
+        console.log('✅ Booking agent selected:', a);
+        // Use the full method that includes cross-fill logic for billing/passenger
+        this.useAccountForBookingAgent(a);
       }
     });
   }
@@ -3016,6 +3418,11 @@ class ReservationForm {
       container.classList.add('active');
 
       container.querySelectorAll('.suggestion-item').forEach(el => {
+        // Add mousedown to prevent blur from hiding dropdown before click completes
+        el.addEventListener('mousedown', (e) => {
+          e.preventDefault(); // Prevent blur from firing
+        });
+        
         el.addEventListener('click', () => {
           const idx = parseInt(el.dataset.index, 10);
           const picked = results[idx];
@@ -3026,7 +3433,7 @@ class ReservationForm {
       });
     };
 
-    const handleInput = (value) => {
+    const handleInput = async (value) => {
       const query = (value || '').toString().trim();
       if (query.length < minChars) {
         hide();
@@ -3034,9 +3441,10 @@ class ReservationForm {
       }
 
       clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
+      debounceTimer = setTimeout(async () => {
         try {
-          showResults(searchFn(query));
+          const results = await searchFn(query);
+          showResults(results);
         } catch (e) {
           console.warn('⚠️ Autocomplete search failed:', e);
           hide();
@@ -3048,7 +3456,7 @@ class ReservationForm {
       const el = document.getElementById(id);
       if (!el) return;
       el.addEventListener('input', (e) => handleInput(e.target.value));
-      el.addEventListener('blur', () => setTimeout(hide, 200));
+      el.addEventListener('blur', () => setTimeout(hide, 300)); // Increased delay to allow click
       el.addEventListener('focus', (e) => handleInput(e.target.value));
     });
   }
@@ -3473,6 +3881,17 @@ class ReservationForm {
       return;
     }
 
+    // Validate confirmation number for duplicates
+    const confirmationNumber = document.getElementById('confirmationNumber')?.value?.trim();
+    if (confirmationNumber && confirmationNumber !== this.lastGeneratedConfNumber) {
+      console.log('🔍 Validating confirmation number before save:', confirmationNumber);
+      const isValid = await this.validateConfirmationNumber(confirmationNumber);
+      if (!isValid) {
+        alert('⚠️ DUPLICATE CONFIRMATION NUMBER\n\nThe confirmation number you entered already exists. Please use a different number or leave it blank to auto-generate a unique number.');
+        return;
+      }
+    }
+
     const getValue = (id) => document.getElementById(id)?.value ?? '';
     const getText = (id) => document.getElementById(id)?.textContent ?? '';
 
@@ -3810,7 +4229,15 @@ class ReservationForm {
       // Wait and redirect to reservations list
       setTimeout(() => {
         if (confirm('Reservation saved! View reservations list?')) {
-          window.location.href = 'reservations-list.html';
+          // Use parent messaging if in iframe, otherwise direct navigation
+          if (window.self !== window.top && window.parent) {
+            // In an iframe - tell parent to switch sections
+            console.log('📤 Sending switchSection message to parent');
+            window.parent.postMessage({ action: 'switchSection', section: 'reservations' }, '*');
+          } else {
+            // Not in iframe - direct navigation
+            window.location.href = 'reservations-list.html';
+          }
         } else {
           // Reset button and initialize new confirmation number for next reservation
           if (!this.isEditMode) {

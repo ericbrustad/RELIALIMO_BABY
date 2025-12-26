@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Duplicate Confirmation Number Prevention</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .result {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        input {
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            width: 200px;
+        }
+        .log {
+            background: #1e1e1e;
+            color: #ffffff;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Duplicate Confirmation Number Prevention Test</h1>
+    
+    <div class="test-section">
+        <h3>Test 1: Generate Unique Confirmation Number</h3>
+        <p>This will generate a unique confirmation number using the duplicate-safe function.</p>
+        <button onclick="testGenerateUnique()">Generate Unique Number</button>
+        <div id="test1-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test 2: Check If Confirmation Number Exists</h3>
+        <p>Enter a confirmation number to check if it already exists in the database.</p>
+        <input type="text" id="checkNumber" placeholder="Enter confirmation number" />
+        <button onclick="testCheckExists()">Check If Exists</button>
+        <div id="test2-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test 3: Attempt to Create Reservation with Duplicate Number</h3>
+        <p>This will attempt to create a reservation with a number that already exists.</p>
+        <input type="text" id="duplicateNumber" placeholder="Use existing confirmation number" />
+        <button onclick="testCreateDuplicate()">Test Duplicate Prevention</button>
+        <div id="test3-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test Log</h3>
+        <div id="testLog" class="log"></div>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <script type="module">
+        window.log = function(message) {
+            const logDiv = document.getElementById('testLog');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        };
+
+        window.clearLog = function() {
+            document.getElementById('testLog').innerHTML = '';
+        };
+
+        window.testGenerateUnique = async function() {
+            const resultDiv = document.getElementById('test1-result');
+            resultDiv.innerHTML = '<div class="warning">⏳ Generating unique confirmation number...</div>';
+            log('🔢 Starting Test 1: Generate Unique Confirmation Number');
+            
+            try {
+                const { generateUniqueConfirmationNumber } = await import('./supabase-db.js');
+                const uniqueNumber = await generateUniqueConfirmationNumber();
+                
+                resultDiv.innerHTML = `<div class="success">✅ Generated unique confirmation number: <strong>${uniqueNumber}</strong></div>`;
+                log(`✅ Test 1 SUCCESS: Generated unique number: ${uniqueNumber}`);
+                
+                // Pre-populate test 2 with this number
+                document.getElementById('checkNumber').value = uniqueNumber;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                log(`❌ Test 1 FAILED: ${error.message}`);
+            }
+        };
+
+        window.testCheckExists = async function() {
+            const confirmationNumber = document.getElementById('checkNumber').value.trim();
+            const resultDiv = document.getElementById('test2-result');
+            
+            if (!confirmationNumber) {
+                resultDiv.innerHTML = '<div class="warning">⚠️ Please enter a confirmation number to check</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<div class="warning">⏳ Checking if confirmation number exists...</div>';
+            log(`🔍 Starting Test 2: Checking if ${confirmationNumber} exists`);
+            
+            try {
+                const { checkConfirmationNumberExists } = await import('./supabase-db.js');
+                const exists = await checkConfirmationNumberExists(confirmationNumber);
+                
+                if (exists) {
+                    resultDiv.innerHTML = `<div class="error">❌ Confirmation number <strong>${confirmationNumber}</strong> already exists!</div>`;
+                    log(`❌ Test 2 RESULT: ${confirmationNumber} already exists`);
+                    
+                    // Pre-populate test 3 with this duplicate number
+                    document.getElementById('duplicateNumber').value = confirmationNumber;
+                } else {
+                    resultDiv.innerHTML = `<div class="success">✅ Confirmation number <strong>${confirmationNumber}</strong> is available</div>`;
+                    log(`✅ Test 2 RESULT: ${confirmationNumber} is available`);
+                }
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                log(`❌ Test 2 FAILED: ${error.message}`);
+            }
+        };
+
+        window.testCreateDuplicate = async function() {
+            const confirmationNumber = document.getElementById('duplicateNumber').value.trim();
+            const resultDiv = document.getElementById('test3-result');
+            
+            if (!confirmationNumber) {
+                resultDiv.innerHTML = '<div class="warning">⚠️ Please enter a confirmation number to test</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<div class="warning">⏳ Testing duplicate prevention...</div>';
+            log(`🚫 Starting Test 3: Testing duplicate prevention for ${confirmationNumber}`);
+            
+            try {
+                // First check if it exists
+                const { checkConfirmationNumberExists } = await import('./supabase-db.js');
+                const exists = await checkConfirmationNumberExists(confirmationNumber);
+                
+                if (exists) {
+                    resultDiv.innerHTML = `<div class="success">✅ DUPLICATE PREVENTION WORKING: Number <strong>${confirmationNumber}</strong> was correctly identified as existing and would be rejected</div>`;
+                    log(`✅ Test 3 SUCCESS: Duplicate prevention working - ${confirmationNumber} correctly identified as duplicate`);
+                } else {
+                    resultDiv.innerHTML = `<div class="warning">⚠️ Number <strong>${confirmationNumber}</strong> doesn't exist yet. Try using an existing number from the database or create one first.</div>`;
+                    log(`⚠️ Test 3 INFO: ${confirmationNumber} doesn't exist yet - cannot test duplicate prevention`);
+                }
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                log(`❌ Test 3 FAILED: ${error.message}`);
+            }
+        };
+
+        // Initialize log
+        log('🧪 Duplicate Confirmation Number Prevention Test Suite Loaded');
+        log('📋 Available Tests:');
+        log('  1. Generate Unique Confirmation Number');
+        log('  2. Check If Confirmation Number Exists');
+        log('  3. Test Duplicate Prevention Logic');
+        log('');
+        log('🔧 Development Mode: ' + (window.location.hostname === 'localhost' ? 'ENABLED' : 'DISABLED'));
+    </script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 <script type="module">
-import { getSupabaseClient, setupAPI } from './api-service.js';
+import { getSupabaseClient, setupAPI, deleteAllAccountsSupabase, deleteAllReservationsSupabase, deleteAllDriversSupabase, deleteAllRatesSupabase } from './api-service.js';
 async function fetchUserPermissions() {
   await setupAPI();
   const client = getSupabaseClient();
@@ -162,7 +162,7 @@ enforceSectionAccess();
 <script type="module">
 console.log('=== UTILITIES MODULE LOADING ===');
 
-import { removeDuplicateAffiliates, removeDuplicateDrivers, setupAPI, getSupabaseClient } from './api-service.js';
+import { removeDuplicateAffiliates, removeDuplicateDrivers, setupAPI, getSupabaseClient, deleteAllAccountsSupabase, deleteAllReservationsSupabase, deleteAllDriversSupabase, deleteAllRatesSupabase } from './api-service.js';
 import * as driverFieldConfig from './driver-field-config.js';
 // Show login/profile info in top right
 async function showProfileBox() {
@@ -233,28 +233,33 @@ function setupDeleteButton(btnId, fn, label) {
   if (btn) {
     btn.onclick = async function() {
       await ensureSupabaseReady();
-      if (confirm(`Are you sure you want to permanently delete ALL ${label} from Supabase? This cannot be undone.`)) {
+      if (confirm(`Are you sure you want to permanently delete ALL ${label}? This cannot be undone.`)) {
         btn.disabled = true;
         btn.textContent = 'Deleting...';
-        const result = await fn();
-        if (result) {
-          alert(`All ${label} deleted from Supabase.`);
-        } else {
-          alert(`Failed to delete ${label}. Check console for details.`);
+        try {
+          const result = await fn();
+          console.log(`Delete ${label} result:`, result);
+          if (result && result.success) {
+            alert(`Deleted ${result.deleted || 0} ${label}.`);
+          } else {
+            alert(`Failed to delete ${label}: ${result?.error || 'Unknown error'}. Check console for details.`);
+          }
+        } catch (err) {
+          console.error(`Error deleting ${label}:`, err);
+          alert(`Error deleting ${label}: ${err.message}`);
         }
         btn.disabled = false;
-        btn.textContent = `Delete ALL ${label} (Supabase)`;
+        btn.textContent = `Delete ALL ${label}`;
       }
     };
   }
 }
 
-// Note: These delete functions don't exist yet in api-service.js
-// Uncomment when available:
-// setupDeleteButton('deleteAllReservationsSupabaseBtn', deleteAllReservationsSupabase, 'Reservations');
-// setupDeleteButton('deleteAllAccountsSupabaseBtn', deleteAllAccountsSupabase, 'Accounts');
-// setupDeleteButton('deleteAllDriversSupabaseBtn', deleteAllDriversSupabase, 'Drivers');
-// setupDeleteButton('deleteAllRatesSupabaseBtn', deleteAllRatesSupabase, 'Rate Data');
+// Note: These delete functions are now available in api-service.js
+setupDeleteButton('deleteAllReservationsSupabaseBtn', deleteAllReservationsSupabase, 'Reservations');
+setupDeleteButton('deleteAllAccountsSupabaseBtn', deleteAllAccountsSupabase, 'Accounts');
+setupDeleteButton('deleteAllDriversSupabaseBtn', deleteAllDriversSupabase, 'Drivers');
+setupDeleteButton('deleteAllRatesSupabaseBtn', deleteAllRatesSupabase, 'Rate Data');
 
 // Remove Duplicate Affiliates button
 const removeDupBtn = document.getElementById('removeDuplicateAffiliatesBtn');
