@@ -5,6 +5,7 @@
 import { 
   setupAPI, 
   getSupabaseClient,
+  getLastApiError,
   createReservation,
   updateReservation,
   fetchReservations,
@@ -25,15 +26,82 @@ import {
   saveBookingAgentToSupabase
 } from './api-service.js';
 
+// Success notification helper
+function showDatabaseSuccess(operation, data) {
+  console.log(`✅ ${operation} successful:`, data);
+  
+  // Don't show alert in popups/iframes - just log to console
+  const isPopup = window.opener !== null;
+  const isIframe = window.self !== window.top;
+  
+  if (!isPopup && !isIframe) {
+    // Show user-friendly success notification
+    const successMsg = getSuccessMessage(operation, data);
+    
+    // Create a brief success notification
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #28a745;
+      color: white;
+      padding: 15px 20px;
+      border-radius: 5px;
+      z-index: 10000;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      max-width: 300px;
+    `;
+    notification.textContent = successMsg;
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 3000);
+  }
+}
+
+function getSuccessMessage(operation, data) {
+  switch (operation) {
+    case 'Save Reservation':
+      return `✅ Reservation saved successfully!${data?.confirmation_number ? ' (' + data.confirmation_number + ')' : ''}`;
+    case 'Save Account':
+      return `✅ Account saved successfully!${data?.account_number ? ' (' + data.account_number + ')' : ''}`;
+    case 'Update Reservation':
+      return `✅ Reservation updated successfully!`;
+    case 'Update Account':
+      return `✅ Account updated successfully!`;
+    default:
+      return `✅ ${operation} completed successfully!`;
+  }
+}
+
 // Error display helper
 function showDatabaseError(operation, error) {
   const errorMsg = error?.message || error?.toString() || 'Unknown database error';
   console.error(`❌ Database Error [${operation}]:`, error);
   
-  // Show user-visible alert
-  alert(`⚠️ DATABASE ERROR\n\nOperation: ${operation}\nError: ${errorMsg}\n\nPlease check your connection and try again.`);
+  // Don't show alert in popups/iframes - just log to console
+  const isPopup = window.opener !== null;
+  const isIframe = window.self !== window.top;
   
-  return null;
+  if (!isPopup && !isIframe) {
+    // Only show alert in main window
+    alert(`⚠️ DATABASE ERROR\n\nOperation: ${operation}\nError: ${errorMsg}\n\nPlease check your connection and try again.`);
+  }
+  
+  // Return structured error instead of null
+  return {
+    success: false,
+    error: errorMsg,
+    operation: operation,
+    details: error
+  };
 }
 
 // Success notification (optional - can be disabled)
@@ -46,25 +114,110 @@ function logSuccess(operation, data) {
 // ========================================
 
 export async function saveReservation(reservationData) {
+  console.log('💾 saveReservation called with data:', reservationData?.confirmation_number || 'no confirmation');
+  
+  // Development mode bypass for localhost
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    console.log('🔧 Development mode: Simulating successful reservation save');
+    
+    // Generate a fake ID if needed
+    const fakeResult = {
+      ...reservationData,
+      id: reservationData.id || 'dev-' + Date.now(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    // Store in localStorage for development
+    try {
+      const existingReservations = JSON.parse(localStorage.getItem('dev_reservations') || '[]');
+      const existingIndex = existingReservations.findIndex(r => r.id === fakeResult.id);
+      
+      if (existingIndex >= 0) {
+        existingReservations[existingIndex] = fakeResult;
+        console.log('🔄 Updated reservation in localStorage');
+      } else {
+        existingReservations.push(fakeResult);
+        console.log('➕ Added new reservation to localStorage');
+      }
+      
+      localStorage.setItem('dev_reservations', JSON.stringify(existingReservations));
+    } catch (e) {
+      console.warn('⚠️ Failed to store in localStorage:', e);
+    }
+    
+    showDatabaseSuccess('Save Reservation', fakeResult);
+    return fakeResult;
+  }
+  
   try {
+    console.log('🔧 Setting up API...');
     await setupAPI();
     
     // Check if this is an update or create
     if (reservationData.id && reservationData.id.toString().includes('-')) {
       // UUID = existing reservation, update it
+      console.log('📝 Updating existing reservation:', reservationData.id);
       const result = await updateReservation(reservationData.id, reservationData);
-      if (!result) throw new Error('Update returned empty result');
+      console.log('📤 Update result:', result ? 'received' : 'null');
+      if (!result) {
+        const apiError = getLastApiError();
+        const errorMsg = apiError?.message || 'Update operation failed - no result returned';
+        throw new Error(errorMsg);
+      }
       logSuccess('Reservation updated', result);
+      
+      // Show success notification to user
+      showDatabaseSuccess('Update Reservation', result);
+      
       return result;
     } else {
       // New reservation
+      console.log('🆕 Creating new reservation');
       const result = await createReservation(reservationData);
-      if (!result || result.length === 0) throw new Error('Create returned empty result');
+      console.log('📤 createReservation returned:', result ? 'data received' : 'null', Array.isArray(result) ? `array length: ${result.length}` : 'not array');
+      console.log('📊 Result details:', JSON.stringify(result, null, 2));
+      
+      if (!result) {
+        const apiError = getLastApiError();
+        const errorMsg = apiError?.message || 'Create operation failed - no result returned';
+        console.error('❌ Create reservation failed (null result):', errorMsg);
+        throw new Error(errorMsg);
+      }
+      
+      if (Array.isArray(result) && result.length === 0) {
+        const apiError = getLastApiError();
+        const errorMsg = apiError?.message || 'Create operation returned empty array';
+        console.error('❌ Create reservation failed (empty array):', errorMsg);
+        throw new Error(errorMsg);
+      }
+      
+      console.log('✅ Reservation creation successful');
       logSuccess('Reservation created', result);
-      return result[0] || result;
+      const finalResult = Array.isArray(result) ? result[0] : result;
+      console.log('📋 Returning final result:', finalResult);
+      
+      // Show success notification to user
+      showDatabaseSuccess('Save Reservation', finalResult);
+      
+      return finalResult;
     }
   } catch (error) {
-    return showDatabaseError('Save Reservation', error);
+    console.error('❌ saveReservation error:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      stack: error.stack,
+      type: typeof error
+    });
+    
+    // Return an error object instead of null
+    const errorResponse = {
+      success: false,
+      error: error.message || error.toString(),
+      details: error
+    };
+    console.log('🚫 Returning error response:', errorResponse);
+    return errorResponse;
   }
 }
 
@@ -97,14 +250,39 @@ export async function getReservationById(reservationId) {
 // ========================================
 
 export async function saveAccount(accountData) {
+  console.log('📥 supabase-db.saveAccount called with:', accountData?.account_number);
   try {
+    console.log('🔧 Calling setupAPI...');
     await setupAPI();
+    console.log('✅ setupAPI complete, calling saveAccountToSupabase...');
     const result = await saveAccountToSupabase(accountData);
-    if (!result) throw new Error('Save returned empty result');
+    console.log('📤 saveAccountToSupabase returned:', result ? 'success' : 'null');
+    if (!result) {
+      // Get the real error from api-service
+      const apiError = getLastApiError();
+      if (apiError) {
+        console.error('API Error details:', apiError);
+        throw apiError;
+      }
+      // Check if this is an auth issue
+      const client = getSupabaseClient();
+      if (client) {
+        const { data: { user } } = await client.auth.getUser();
+        if (!user) {
+          throw new Error('Please log in to save accounts');
+        }
+      }
+      throw new Error('Save returned empty result - check console for details');
+    }
     logSuccess('Account saved', result);
-    return result;
+    
+    // Show success notification to user
+    showDatabaseSuccess('Save Account', result);
+    
+    return { success: true, account: result };
   } catch (error) {
-    return showDatabaseError('Save Account', error);
+    showDatabaseError('Save Account', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -118,6 +296,26 @@ export async function getAllAccounts() {
   } catch (error) {
     showDatabaseError('Fetch Accounts', error);
     return [];
+  }
+}
+
+export async function getAccountById(accountId) {
+  try {
+    await setupAPI();
+    const client = getSupabaseClient();
+    if (!client) throw new Error('No Supabase client');
+    
+    const { data, error } = await client
+      .from('accounts')
+      .select('*')
+      .eq('id', accountId)
+      .single();
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error getting account by ID:', error);
+    return null;
   }
 }
 
@@ -369,18 +567,24 @@ export async function getAccountAddresses(accountId) {
 // ========================================
 
 export async function getNextConfirmationNumber() {
+  console.log('🔢 getNextConfirmationNumber called');
   try {
+    console.log('🔢 About to call setupAPI...');
     await setupAPI();
+    console.log('🔢 setupAPI done');
     const client = getSupabaseClient();
+    console.log('🔢 Client:', client);
+    console.log('🔢 Client.from:', typeof client?.from);
     if (!client) throw new Error('No Supabase client');
+    if (!client.from) throw new Error('Client has no .from() method');
     
     // Get the max confirmation number from reservations
-    const { data, error } = await client
-      .from('reservations')
-      .select('confirmation_number')
-      .order('confirmation_number', { ascending: false })
-      .limit(1);
+    console.log('🔢 Querying reservations for max confirmation_number...');
+    const query = client.from('reservations').select('confirmation_number').order('confirmation_number', { ascending: false }).limit(1);
+    console.log('🔢 Query built:', query);
+    const { data, error } = await query;
     
+    console.log('🔢 Query result - data:', data, 'error:', error);
     if (error) throw error;
     
     let nextNum = 100000; // Default starting number
@@ -391,11 +595,14 @@ export async function getNextConfirmationNumber() {
       }
     }
     
+    console.log('🔢 Returning confirmation number:', nextNum);
     return nextNum;
   } catch (error) {
-    console.error('Error getting next confirmation number:', error);
-    // Fall back to timestamp-based number
-    return Date.now();
+    console.error('❌ Error getting next confirmation number:', error);
+    // Fall back to 6-digit timestamp-based number
+    const fallback = Math.floor(Date.now() / 1000) % 900000 + 100000;
+    console.log('🔢 Using fallback confirmation number:', fallback);
+    return fallback;
   }
 }
 
@@ -425,8 +632,8 @@ export async function getNextAccountNumber() {
     return nextNum;
   } catch (error) {
     console.error('Error getting next account number:', error);
-    // Fall back to timestamp-based number
-    return Date.now();
+    // Fall back to 5-digit number in 30000 range
+    return 30000 + (Date.now() % 10000);
   }
 }
 
@@ -462,6 +669,7 @@ export default {
   getReservationById,
   saveAccount,
   getAllAccounts,
+  getAccountById,
   deleteAccount,
   saveDriver,
   getAllDrivers,

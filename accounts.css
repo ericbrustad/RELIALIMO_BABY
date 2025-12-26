@@ -388,15 +388,29 @@ body {
   font-size: 12px;
   background: white;
   overflow-y: auto;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.accounts-listbox:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  outline: none;
 }
 
 .accounts-listbox option {
   padding: 5px;
   cursor: pointer;
+  transition: background-color 0.2s ease;
 }
 
 .accounts-listbox option:hover {
   background: #f0f7ff;
+}
+
+.accounts-listbox option:checked,
+.accounts-listbox option:selected {
+  background: #007bff !important;
+  color: white !important;
 }
 
 .sidebar-buttons {
@@ -434,6 +448,42 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.accounts-main::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: transparent;
+  border-radius: 6px;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.accounts-main.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.accounts-main.loading::after {
+  content: 'Loading account details...';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #666;
+  border: 1px solid #ddd;
+  z-index: 10;
 }
 
 /* Account Tabs */

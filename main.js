@@ -5,9 +5,111 @@ import { MapboxService } from './MapboxService.js';
 import { DriverTracker } from './DriverTracker.js';
 import { FarmoutAutomationService } from './FarmoutAutomationService.js';
 import supabaseDb from './supabase-db.js';
+import { createReservation as createReservationAPI } from './api-service.js';
 
 // Use Supabase-only database (no localStorage)
 const db = supabaseDb;
+
+// Migration utility - run once to copy localStorage to Supabase
+window.migrateLocalStorageToSupabase = async function() {
+  console.log('🔄 Starting localStorage to Supabase migration...');
+  
+  try {
+    // Get reservations from localStorage
+    const localReservations = JSON.parse(localStorage.getItem('relia_reservations') || '[]');
+    console.log(`📂 Found ${localReservations.length} reservations in localStorage`);
+    
+    if (localReservations.length === 0) {
+      console.log('⚠️ No reservations found in localStorage');
+      alert('No reservations found in localStorage to migrate.');
+      return;
+    }
+    
+    let migrated = 0;
+    let failed = 0;
+    
+    for (const res of localReservations) {
+      try {
+        // Prepare reservation for Supabase
+        const supabaseRes = {
+          confirmation_number: res.confirmation_number || res.confirmationNumber || res.id,
+          status: res.status || 'confirmed',
+          pickup_at: res.pickup_at || res.pickupAt || res.puDate,
+          pickup_time: res.pickup_time || res.pickupTime || res.puTime,
+          dropoff_time: res.dropoff_time || res.dropoffTime || res.doTime,
+          service_type: res.service_type || res.serviceType,
+          vehicle_type: res.vehicle_type || res.vehicleType,
+          company_name: res.company_name || res.companyName || res.form_snapshot?.billing?.company,
+          passenger_first_name: res.passenger_first_name || res.form_snapshot?.passenger?.firstName,
+          passenger_last_name: res.passenger_last_name || res.form_snapshot?.passenger?.lastName,
+          passenger_phone: res.passenger_phone || res.form_snapshot?.passenger?.phone,
+          passenger_email: res.passenger_email || res.form_snapshot?.passenger?.email,
+          notes: res.notes || res.form_snapshot?.notes?.tripNotes,
+          farm_option: res.farmOption || res.farm_option,
+          farmout_status: res.efarm_status || res.farmoutStatus || res.farmout_status,
+          form_snapshot: res.form_snapshot
+        };
+        
+        const result = await createReservationAPI(supabaseRes);
+        if (result) {
+          migrated++;
+          console.log(`✅ Migrated reservation ${supabaseRes.confirmation_number}`);
+        } else {
+          failed++;
+          console.error(`❌ Failed to migrate reservation ${supabaseRes.confirmation_number}`);
+        }
+      } catch (err) {
+        failed++;
+        console.error(`❌ Error migrating reservation:`, err);
+      }
+    }
+    
+    console.log(`🎉 Migration complete: ${migrated} migrated, ${failed} failed`);
+    alert(`Migration complete!\n\n✅ Migrated: ${migrated}\n❌ Failed: ${failed}\n\nRefresh the page to see migrated data.`);
+  } catch (error) {
+    console.error('❌ Migration error:', error);
+    alert('Migration failed: ' + error.message);
+  }
+};
+
+// Also expose for accounts
+window.migrateAccountsToSupabase = async function() {
+  console.log('🔄 Starting accounts migration...');
+  
+  try {
+    const localAccounts = JSON.parse(localStorage.getItem('relia_accounts') || '[]');
+    console.log(`📂 Found ${localAccounts.length} accounts in localStorage`);
+    
+    if (localAccounts.length === 0) {
+      alert('No accounts found in localStorage to migrate.');
+      return;
+    }
+    
+    let migrated = 0;
+    let failed = 0;
+    
+    for (const acc of localAccounts) {
+      try {
+        const result = await db.saveAccount(acc);
+        if (result && result.success) {
+          migrated++;
+          console.log(`✅ Migrated account ${acc.account_number || acc.id}`);
+        } else {
+          failed++;
+        }
+      } catch (err) {
+        failed++;
+        console.error(`❌ Error migrating account:`, err);
+      }
+    }
+    
+    console.log(`🎉 Accounts migration complete: ${migrated} migrated, ${failed} failed`);
+    alert(`Accounts migration complete!\n\n✅ Migrated: ${migrated}\n❌ Failed: ${failed}`);
+  } catch (error) {
+    console.error('❌ Accounts migration error:', error);
+    alert('Migration failed: ' + error.message);
+  }
+};
 
 const FARMOUT_STATUS_ALIASES = {
   '': '',

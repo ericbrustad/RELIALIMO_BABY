@@ -75,6 +75,10 @@ function getCurrentFileName() {
   const params = new URLSearchParams(window.location.search);
   const allowStandalone = params.get('standalone') === '1';
   if (allowStandalone) return;
+  
+  // If opened from reservation form (popup mode), don't redirect
+  const fromReservation = params.get('from') === 'reservation';
+  if (fromReservation) return;
 
   const file = getCurrentFileName().toLowerCase();
   if (file === '' || file === 'index.html') return;

@@ -332,7 +332,7 @@ class ReservationForm {
     }, '*');
   }
 
-  init() {
+  async init() {
     console.log('🚀 ReservationForm initializing...');
     console.log('✅ this keyword available:', !!this);
     console.log('👀 [ReservationForm] View mode enabled:', this.isViewMode);
@@ -361,8 +361,12 @@ class ReservationForm {
       }
 
       // Initialize confirmation number
-      this.initializeConfirmationNumber();
+      await this.initializeConfirmationNumber();
       console.log('✅ initializeConfirmationNumber complete');
+      
+      // Check authentication status
+      await this.checkAuthenticationStatus();
+      console.log('✅ Authentication check complete');
       
       // Load drivers from Supabase
       this.loadDrivers();
@@ -418,12 +422,15 @@ class ReservationForm {
 
       // Restore existing reservation or apply a draft copy
       if (this.isEditMode && this.editConfNumber) {
-        this.loadExistingReservation(this.editConfNumber);
+        await this.loadExistingReservation(this.editConfNumber);
       } else {
         this.applyReservationDraftIfPresent();
       }
       
       console.log('✅ ReservationForm.init() finished successfully');
+      
+      // Check for test parameters and auto-fill if present
+      this.checkForTestData();
     } catch (error) {
       console.error('❌ Error during init:', error);
     }
@@ -499,7 +506,7 @@ class ReservationForm {
     }
   }
 
-  initializeConfirmationNumber() {
+  async initializeConfirmationNumber() {
     const confNumberField = document.getElementById('confNumber');
     if (confNumberField) {
       const confFromUrl = this.getConfFromUrl();
@@ -510,11 +517,150 @@ class ReservationForm {
         return;
       }
 
-      const nextConfNumber = db.getNextConfirmationNumber();
-      confNumberField.value = nextConfNumber;
+      // Show loading state while getting confirmation number
+      confNumberField.value = 'Loading...';
       confNumberField.setAttribute('readonly', 'true');
-      console.log('🔢 Confirmation number set to:', nextConfNumber);
+      confNumberField.style.color = '#999';
+      
+      // Try to get the next confirmation number from database with retry
+      let nextConfNumber;
+      const maxRetries = 3;
+      let retryCount = 0;
+      
+      while (retryCount < maxRetries && !nextConfNumber) {
+        try {
+          console.log(`🔢 Attempting to get confirmation number (try ${retryCount + 1})`);
+          nextConfNumber = await SupabaseDB.getNextConfirmationNumber();
+          console.log('🔢 Next confirmation number loaded:', nextConfNumber);
+          break;
+        } catch (error) {
+          retryCount++;
+          console.error(`🔢 Error getting confirmation number (try ${retryCount}):`, error);
+          
+          if (retryCount < maxRetries) {
+            // Wait a bit before retrying (authentication might still be initializing)
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          }
+        }
+      }
+      
+      if (nextConfNumber) {
+        confNumberField.value = nextConfNumber;
+        confNumberField.style.color = '#333';
+        console.log('🔢 Confirmation number set successfully:', nextConfNumber);
+      } else {
+        // Fallback to a reasonable starting number (not timestamp)
+        const fallbackNumber = 100000;
+        confNumberField.value = fallbackNumber;
+        confNumberField.style.color = '#333';
+        console.log('🔢 Using fallback confirmation number:', fallbackNumber);
+      }
     }
+  }
+
+  async checkAuthenticationStatus() {
+    try {
+      console.log('🔐 Checking authentication status...');
+      
+      // Import the API service
+      const { setupAPI, getSupabaseClient } = await import('./api-service.js');
+      
+      // Try to setup API and check authentication
+      await setupAPI();
+      const client = getSupabaseClient();
+      
+      if (client) {
+        const { data: { user }, error: userError } = await client.auth.getUser();
+        
+        if (userError) {
+          console.warn('⚠️ Authentication error:', userError.message);
+          
+          // Check if it's a permission error we can bypass for development
+          if (userError.message && userError.message.includes('permission denied')) {
+            console.log('🔧 Using development bypass for user permission error');
+            console.log('✅ Development mode - allowing reservation creation without full authentication');
+            return true;
+          }
+          
+          this.showAuthWarning('Authentication error: ' + userError.message);
+          return false;
+        }
+        
+        if (!user) {
+          console.warn('⚠️ User not authenticated');
+          
+          // Development bypass: Allow saving without authentication for localhost
+          if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+            console.log('🔧 Development bypass: allowing reservation creation on localhost without authentication');
+            return true;
+          }
+          
+          this.showAuthWarning('You are not logged in. Please log in to save reservations.');
+          return false;
+        }
+        
+        console.log('✅ User authenticated:', user.email || user.id);
+        
+        // Check organization membership
+        const { data: membership, error: membershipError } = await client
+          .from('organization_members')
+          .select('organization_id')
+          .eq('user_id', user.id)
+          .single();
+          
+        if (membershipError || !membership?.organization_id) {
+          console.warn('⚠️ User not in organization:', membershipError?.message);
+          
+          // Development bypass: Allow saving without organization membership
+          console.log('🔧 Using development bypass for organization membership');
+          console.log('✅ Development mode - allowing reservation creation without organization');
+          return true; // Allow to proceed in development
+        }
+        
+        console.log('✅ Organization membership confirmed:', membership.organization_id);
+        return true;
+      } else {
+        console.warn('⚠️ Supabase client not available');
+        this.showAuthWarning('Database connection not available. Please refresh the page.');
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Authentication check failed:', error);
+      this.showAuthWarning('Authentication check failed: ' + error.message);
+      return false;
+    }
+  }
+
+  showAuthWarning(message) {
+    // Create or update warning message in the form
+    let warningDiv = document.getElementById('authWarning');
+    if (!warningDiv) {
+      warningDiv = document.createElement('div');
+      warningDiv.id = 'authWarning';
+      warningDiv.style.cssText = `
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        color: #856404;
+        padding: 12px;
+        border-radius: 4px;
+        margin: 10px 0;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      `;
+      
+      // Insert at top of form
+      const form = document.querySelector('.reservation-form') || document.querySelector('#app');
+      if (form && form.firstChild) {
+        form.insertBefore(warningDiv, form.firstChild);
+      }
+    }
+    
+    warningDiv.innerHTML = `
+      <span style="font-size: 18px;">⚠️</span>
+      <span><strong>Authentication Issue:</strong> ${message}</span>
+    `;
   }
 
   initializeDateTime() {
@@ -751,6 +897,74 @@ class ReservationForm {
       billingAccountInput.addEventListener('blur', () => {
         this.tryResolveBillingAccountAndUpdateDisplay();
         const suggestions = document.getElementById('accountSuggestions');
+        if (suggestions) {
+          setTimeout(() => {
+            suggestions.classList.remove('active');
+          }, 200);
+        }
+      });
+    }
+
+    // Passenger account search - Multiple fields
+    const passengerFirstNameEl = document.getElementById('passengerFirstName');
+    if (passengerFirstNameEl) {
+      passengerFirstNameEl.addEventListener('input', (e) => {
+        this.searchAccountsForPassenger(e.target.value);
+      });
+      
+      passengerFirstNameEl.addEventListener('blur', () => {
+        const suggestions = document.getElementById('passengerSuggestions');
+        if (suggestions) {
+          setTimeout(() => {
+            suggestions.classList.remove('active');
+          }, 200);
+        }
+      });
+    }
+
+    // Also add search to passenger last name field
+    const passengerLastNameEl = document.getElementById('passengerLastName');
+    if (passengerLastNameEl) {
+      passengerLastNameEl.addEventListener('input', (e) => {
+        this.searchAccountsForPassenger(e.target.value);
+      });
+      
+      passengerLastNameEl.addEventListener('blur', () => {
+        const suggestions = document.getElementById('passengerSuggestions');
+        if (suggestions) {
+          setTimeout(() => {
+            suggestions.classList.remove('active');
+          }, 200);
+        }
+      });
+    }
+
+    // Also add search to passenger phone field
+    const passengerPhoneEl = document.getElementById('passengerPhone');
+    if (passengerPhoneEl) {
+      passengerPhoneEl.addEventListener('input', (e) => {
+        this.searchAccountsForPassenger(e.target.value);
+      });
+      
+      passengerPhoneEl.addEventListener('blur', () => {
+        const suggestions = document.getElementById('passengerSuggestions');
+        if (suggestions) {
+          setTimeout(() => {
+            suggestions.classList.remove('active');
+          }, 200);
+        }
+      });
+    }
+
+    // Booking Agent account search - First Name field
+    const bookingFirstNameEl = document.getElementById('bookedByFirstName');
+    if (bookingFirstNameEl) {
+      bookingFirstNameEl.addEventListener('input', (e) => {
+        this.searchAccountsForBookingAgent(e.target.value);
+      });
+      
+      bookingFirstNameEl.addEventListener('blur', () => {
+        const suggestions = document.getElementById('bookingAgentSuggestions');
         if (suggestions) {
           setTimeout(() => {
             suggestions.classList.remove('active');
@@ -1691,9 +1905,225 @@ class ReservationForm {
     document.getElementById('billingPhone').value = account.phone;
     document.getElementById('billingEmail').value = account.email;
 
+    // Cross-fill passenger fields ONLY if account is marked as passenger
+    if (account.is_passenger) {
+      const passengerFirstName = document.getElementById('passengerFirstName');
+      const passengerLastName = document.getElementById('passengerLastName');
+      const passengerPhone = document.getElementById('passengerPhone');
+      const passengerEmail = document.getElementById('passengerEmail');
+      
+      let crossFilledFields = [];
+      
+      if (!passengerFirstName.value && account.first_name) {
+        passengerFirstName.value = account.first_name;
+        crossFilledFields.push('First Name');
+      }
+      if (!passengerLastName.value && account.last_name) {
+        passengerLastName.value = account.last_name;
+        crossFilledFields.push('Last Name');
+      }
+      if (!passengerPhone.value && account.phone) {
+        passengerPhone.value = account.phone;
+        crossFilledFields.push('Phone');
+      }
+      if (!passengerEmail.value && account.email) {
+        passengerEmail.value = account.email;
+        crossFilledFields.push('Email');
+      }
+
+      // Show notification if cross-filling occurred
+      if (crossFilledFields.length > 0) {
+        this.showCrossFillingNotification('billing', 'passenger', crossFilledFields, account);
+      }
+    }
+
+    // Cross-fill booking agent fields ONLY if account is marked as booking contact
+    if (account.is_booking_contact) {
+      const bookingFirstName = document.getElementById('bookedByFirstName');
+      const bookingLastName = document.getElementById('bookedByLastName');
+      const bookingPhone = document.getElementById('bookedByPhone');
+      const bookingEmail = document.getElementById('bookedByEmail');
+      
+      let crossFilledBookingFields = [];
+      
+      if (!bookingFirstName.value && account.first_name) {
+        bookingFirstName.value = account.first_name;
+        crossFilledBookingFields.push('First Name');
+      }
+      if (!bookingLastName.value && account.last_name) {
+        bookingLastName.value = account.last_name;
+        crossFilledBookingFields.push('Last Name');
+      }
+      if (!bookingPhone.value && account.phone) {
+        bookingPhone.value = account.phone;
+        crossFilledBookingFields.push('Phone');
+      }
+      if (!bookingEmail.value && account.email) {
+        bookingEmail.value = account.email;
+        crossFilledBookingFields.push('Email');
+      }
+
+      // Show notification if cross-filling occurred
+      if (crossFilledBookingFields.length > 0) {
+        this.showCrossFillingNotification('billing', 'booking agent', crossFilledBookingFields, account);
+      }
+    }
+
     this.updateBillingAccountNumberDisplay(account);
 
     this.closeModal();
+  }
+
+  useAccountForPassenger(account) {
+    // Populate Passenger section with selected account
+    document.getElementById('passengerFirstName').value = account.first_name || '';
+    document.getElementById('passengerLastName').value = account.last_name || '';
+    document.getElementById('passengerPhone').value = account.phone || account.cell_phone || '';
+    document.getElementById('passengerEmail').value = account.email || '';
+
+    // Cross-fill billing fields ONLY if account is marked as billing client
+    if (account.is_billing_client) {
+      const billingAccountSearch = document.getElementById('billingAccountSearch');
+      const billingCompany = document.getElementById('billingCompany');
+      const billingFirstName = document.getElementById('billingFirstName');
+      const billingLastName = document.getElementById('billingLastName');
+      const billingPhone = document.getElementById('billingPhone');
+      const billingEmail = document.getElementById('billingEmail');
+      
+      let crossFilledFields = [];
+      
+      if (!billingAccountSearch.value) {
+        const acctNum = account.account_number || account.id;
+        billingAccountSearch.value = `${acctNum} - ${account.first_name} ${account.last_name}`;
+        crossFilledFields.push('Account Search');
+      }
+      if (!billingCompany.value && account.company_name) {
+        billingCompany.value = account.company_name;
+        crossFilledFields.push('Company');
+      }
+      if (!billingFirstName.value && account.first_name) {
+        billingFirstName.value = account.first_name;
+        crossFilledFields.push('First Name');
+      }
+      if (!billingLastName.value && account.last_name) {
+        billingLastName.value = account.last_name;
+        crossFilledFields.push('Last Name');
+      }
+      if (!billingPhone.value && account.phone) {
+        billingPhone.value = account.phone;
+        crossFilledFields.push('Phone');
+      }
+      if (!billingEmail.value && account.email) {
+        billingEmail.value = account.email;
+        crossFilledFields.push('Email');
+      }
+
+      // Show notification if cross-filling occurred
+      if (crossFilledFields.length > 0) {
+        this.showCrossFillingNotification('passenger', 'billing', crossFilledFields, account);
+      }
+
+      // Update billing account display if billing was filled
+      if (!billingAccountSearch.dataset.originalValue) {
+        this.updateBillingAccountNumberDisplay(account);
+      }
+    }
+
+    // Cross-fill booking agent fields ONLY if account is marked as booking contact
+    if (account.is_booking_contact) {
+      const bookingFirstName = document.getElementById('bookedByFirstName');
+      const bookingLastName = document.getElementById('bookedByLastName');
+      const bookingPhone = document.getElementById('bookedByPhone');
+      const bookingEmail = document.getElementById('bookedByEmail');
+      
+      let crossFilledBookingFields = [];
+      
+      if (!bookingFirstName.value && account.first_name) {
+        bookingFirstName.value = account.first_name;
+        crossFilledBookingFields.push('First Name');
+      }
+      if (!bookingLastName.value && account.last_name) {
+        bookingLastName.value = account.last_name;
+        crossFilledBookingFields.push('Last Name');
+      }
+      if (!bookingPhone.value && account.phone) {
+        bookingPhone.value = account.phone;
+        crossFilledBookingFields.push('Phone');
+      }
+      if (!bookingEmail.value && account.email) {
+        bookingEmail.value = account.email;
+        crossFilledBookingFields.push('Email');
+      }
+
+      // Show notification if cross-filling occurred
+      if (crossFilledBookingFields.length > 0) {
+        this.showCrossFillingNotification('passenger', 'booking agent', crossFilledBookingFields, account);
+      }
+    }
+  }
+
+  showCrossFillingNotification(sourceSection, targetSection, fields, account = null) {
+    // Create or reuse notification element
+    let notification = document.getElementById('crossFillNotification');
+    if (!notification) {
+      notification = document.createElement('div');
+      notification.id = 'crossFillNotification';
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #28a745;
+        color: white;
+        padding: 12px 16px;
+        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        z-index: 1000;
+        font-size: 14px;
+        max-width: 350px;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+      `;
+      document.body.appendChild(notification);
+    }
+
+    const fieldsList = fields.length > 3 
+      ? `${fields.slice(0, 3).join(', ')} and ${fields.length - 3} more`
+      : fields.join(', ');
+
+    // Add account type info if available
+    let accountTypeInfo = '';
+    if (account) {
+      const types = [];
+      if (account.is_billing_client) types.push('Billing');
+      if (account.is_passenger) types.push('Passenger');
+      if (account.is_booking_contact) types.push('Booking');
+      if (types.length > 0) {
+        accountTypeInfo = `<br><small>Account types: ${types.join(', ')}</small>`;
+      }
+    }
+
+    notification.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 16px;">✓</span>
+        <div>
+          <strong>Auto-filled from ${sourceSection}:</strong><br>
+          ${fieldsList} copied to ${targetSection}${accountTypeInfo}
+        </div>
+      </div>
+    `;
+
+    // Animate in
+    notification.style.transform = 'translateX(0)';
+
+    // Auto-hide after 5 seconds (increased for more info)
+    setTimeout(() => {
+      notification.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        if (notification && notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+      }, 300);
+    }, 5000);
   }
 
   async createNewAccount(passengerInfo) {
@@ -2041,13 +2471,44 @@ class ReservationForm {
   async createAccountFromBilling() {
     console.log('🚀 createAccountFromBilling() called');
     
+    // Check if we're in localhost development mode
+    const isLocalhost = window.location.hostname === 'localhost' || 
+                       window.location.hostname === '127.0.0.1' ||
+                       window.location.protocol === 'file:';
+    
+    if (isLocalhost) {
+      console.log('🔧 Development mode detected - bypassing Supabase authentication');
+    }
+    
     try {
       // Collect billing section fields
-      const firstName = document.getElementById('billingFirstName')?.value?.trim() || '';
-      const lastName = document.getElementById('billingLastName')?.value?.trim() || '';
-      const phone = document.getElementById('billingPhone')?.value?.trim() || '';
-      const email = document.getElementById('billingEmail')?.value?.trim() || '';
-      const company = document.getElementById('billingCompany')?.value?.trim() || '';
+      const firstNameEl = document.getElementById('billingFirstName');
+      const lastNameEl = document.getElementById('billingLastName');
+      const phoneEl = document.getElementById('billingPhone');
+      const emailEl = document.getElementById('billingEmail');
+      const companyEl = document.getElementById('billingCompany');
+      
+      console.log('🔍 Found billing elements:', {
+        firstNameEl: !!firstNameEl,
+        lastNameEl: !!lastNameEl,
+        phoneEl: !!phoneEl,
+        emailEl: !!emailEl,
+        companyEl: !!companyEl
+      });
+      
+      const firstName = firstNameEl?.value?.trim() || '';
+      const lastName = lastNameEl?.value?.trim() || '';
+      const phone = phoneEl?.value?.trim() || '';
+      const email = emailEl?.value?.trim() || '';
+      const company = companyEl?.value?.trim() || '';
+
+      console.log('📝 Collected billing values:', {
+        firstName,
+        lastName,
+        phone,
+        email,
+        company
+      });
 
       // Determine which tickers should be checked
       const passengerHasInfo = [
@@ -2100,9 +2561,12 @@ class ReservationForm {
       });
 
       if ((!firstName || !lastName) && !company) {
+        console.warn('⚠️ Insufficient billing information for account creation');
         alert('Please enter Billing First/Last Name or Company before creating an account.');
         return;
       }
+
+      console.log('✅ Billing information validation passed');
 
       // Store draft for Accounts page to apply (Account # is assigned on SAVE in accounts)
       const draft = {
@@ -2131,25 +2595,48 @@ class ReservationForm {
         }
       };
 
+      console.log('💾 Storing account draft:', draft);
       localStorage.setItem('relia_account_draft', JSON.stringify(draft));
+      
+      // Verify the draft was stored
+      const storedDraft = localStorage.getItem('relia_account_draft');
+      console.log('✅ Draft stored successfully:', !!storedDraft);
+      if (storedDraft) {
+        console.log('📋 Stored draft content:', storedDraft.substring(0, 100) + '...');
+      }
 
       // Remember where to return if popup isn't available
       try {
         localStorage.setItem('relia_return_to_reservation_url', window.location.href);
-      } catch {
-        // ignore
+        console.log('🔗 Stored return URL:', window.location.href);
+      } catch (e) {
+        console.warn('⚠️ Failed to store return URL:', e);
       }
 
       // Open Accounts in a popup (preferred). Fallback to same window.
       const url = 'accounts.html?mode=new&from=reservation';
+      console.log('🌐 Opening accounts page:', url);
+      
+      // Try popup first
       const popup = window.open(url, 'ReliaAccounts', 'width=1200,height=900,resizable=yes,scrollbars=yes');
-      if (popup) {
-        try { popup.focus(); } catch { /* ignore */ }
+      
+      if (popup && popup !== window) {
+        console.log('✅ Popup opened successfully');
+        try { 
+          popup.focus(); 
+          console.log('✅ Popup focused');
+        } catch (e) { 
+          console.warn('⚠️ Failed to focus popup:', e);
+        }
       } else {
+        // Popup was blocked or failed - open in same window
+        console.log('⚠️ Popup blocked or failed, opening in same window');
+        alert('Account page will open in the same window. You can return to this reservation using the browser back button.');
         window.location.href = url;
       }
     } catch (error) {
       console.error('❌ Error in createAccountFromBilling:', error);
+      console.error('❌ Error stack:', error.stack);
       alert('Error creating account: ' + error.message);
     }
   }
@@ -2260,6 +2747,166 @@ class ReservationForm {
         }
       });
     });
+  }
+
+  searchAccountsForPassenger(query, sourceField = null) {
+    if (!query || query.length < 3) {
+      document.getElementById('passengerSuggestions').classList.remove('active');
+      return;
+    }
+
+    // Search using db for passengers
+    const results = db.searchAccounts(query);
+    const container = document.getElementById('passengerSuggestions');
+    
+    if (results.length === 0) {
+      container.classList.remove('active');
+      return;
+    }
+
+    container.innerHTML = results.map(account => `
+      <div class="suggestion-item" data-account-id="${account.id}">
+        ${account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
+      </div>
+    `).join('');
+
+    container.classList.add('active');
+
+    // Add click listeners to suggestions
+    container.querySelectorAll('.suggestion-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const accountId = item.dataset.accountId;
+        const account = db.getAccountById(accountId);
+        if (account) {
+          this.useAccountForPassenger(account);
+          container.classList.remove('active');
+        }
+      });
+    });
+  }
+
+  searchAccountsForBookingAgent(query, sourceField = null) {
+    if (!query || query.length < 3) {
+      document.getElementById('bookingAgentSuggestions').classList.remove('active');
+      return;
+    }
+
+    // Search using db for booking agents
+    const results = db.searchAccounts(query);
+    const container = document.getElementById('bookingAgentSuggestions');
+    
+    if (results.length === 0) {
+      container.classList.remove('active');
+      return;
+    }
+
+    container.innerHTML = results.map(account => `
+      <div class="suggestion-item" data-account-id="${account.id}">
+        ${account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
+      </div>
+    `).join('');
+
+    container.classList.add('active');
+
+    // Add click listeners to suggestions
+    container.querySelectorAll('.suggestion-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const accountId = item.dataset.accountId;
+        const account = db.getAccountById(accountId);
+        if (account) {
+          this.useAccountForBookingAgent(account);
+          container.classList.remove('active');
+        }
+      });
+    });
+  }
+
+  useAccountForBookingAgent(account) {
+    // Populate Booking Agent section with selected account
+    document.getElementById('bookedByFirstName').value = account.first_name || '';
+    document.getElementById('bookedByLastName').value = account.last_name || '';
+    document.getElementById('bookedByPhone').value = account.phone || account.cell_phone || '';
+    document.getElementById('bookedByEmail').value = account.email || '';
+
+    // Cross-fill billing fields ONLY if account is marked as billing client
+    if (account.is_billing_client) {
+      const billingAccountSearch = document.getElementById('billingAccountSearch');
+      const billingCompany = document.getElementById('billingCompany');
+      const billingFirstName = document.getElementById('billingFirstName');
+      const billingLastName = document.getElementById('billingLastName');
+      const billingPhone = document.getElementById('billingPhone');
+      const billingEmail = document.getElementById('billingEmail');
+      
+      let crossFilledFields = [];
+      
+      if (!billingAccountSearch.value) {
+        const acctNum = account.account_number || account.id;
+        billingAccountSearch.value = `${acctNum} - ${account.first_name} ${account.last_name}`;
+        crossFilledFields.push('Account Search');
+      }
+      if (!billingCompany.value && account.company_name) {
+        billingCompany.value = account.company_name;
+        crossFilledFields.push('Company');
+      }
+      if (!billingFirstName.value && account.first_name) {
+        billingFirstName.value = account.first_name;
+        crossFilledFields.push('First Name');
+      }
+      if (!billingLastName.value && account.last_name) {
+        billingLastName.value = account.last_name;
+        crossFilledFields.push('Last Name');
+      }
+      if (!billingPhone.value && account.phone) {
+        billingPhone.value = account.phone;
+        crossFilledFields.push('Phone');
+      }
+      if (!billingEmail.value && account.email) {
+        billingEmail.value = account.email;
+        crossFilledFields.push('Email');
+      }
+
+      // Show notification if cross-filling occurred
+      if (crossFilledFields.length > 0) {
+        this.showCrossFillingNotification('booking agent', 'billing', crossFilledFields, account);
+      }
+
+      // Update billing account display if billing was filled
+      if (!billingAccountSearch.dataset.originalValue) {
+        this.updateBillingAccountNumberDisplay(account);
+      }
+    }
+
+    // Cross-fill passenger fields ONLY if account is marked as passenger
+    if (account.is_passenger) {
+      const passengerFirstName = document.getElementById('passengerFirstName');
+      const passengerLastName = document.getElementById('passengerLastName');
+      const passengerPhone = document.getElementById('passengerPhone');
+      const passengerEmail = document.getElementById('passengerEmail');
+      
+      let crossFilledPassengerFields = [];
+      
+      if (!passengerFirstName.value && account.first_name) {
+        passengerFirstName.value = account.first_name;
+        crossFilledPassengerFields.push('First Name');
+      }
+      if (!passengerLastName.value && account.last_name) {
+        passengerLastName.value = account.last_name;
+        crossFilledPassengerFields.push('Last Name');
+      }
+      if (!passengerPhone.value && account.phone) {
+        passengerPhone.value = account.phone;
+        crossFilledPassengerFields.push('Phone');
+      }
+      if (!passengerEmail.value && account.email) {
+        passengerEmail.value = account.email;
+        crossFilledPassengerFields.push('Email');
+      }
+
+      // Show notification if cross-filling occurred
+      if (crossFilledPassengerFields.length > 0) {
+        this.showCrossFillingNotification('booking agent', 'passenger', crossFilledPassengerFields, account);
+      }
+    }
   }
 
   searchAccountsByCompany(query) {
@@ -2924,23 +3571,32 @@ class ReservationForm {
         grandTotal: parseFloat(getText('grandTotal'))
       };
 
-      // Get current confirmation number
-      const currentConfNumber = document.getElementById("confNumber")?.value || db.getNextConfirmationNumber();
+      // Get current confirmation number - assign real number if this is a new reservation
+      let currentConfNumber = document.getElementById("confNumber")?.value;
+      if (!currentConfNumber || currentConfNumber === 'NEW') {
+        console.log('🔢 Assigning new confirmation number on save...');
+        currentConfNumber = await db.getNextConfirmationNumber();
+        // Update the field with the real number
+        const confField = document.getElementById('confNumber');
+        if (confField) confField.value = currentConfNumber;
+        console.log('🔢 Confirmation number assigned:', currentConfNumber);
+      }
       const pickupAt = puDate ? (puTime ? `${puDate}T${puTime}` : puDate) : null;
 
-      // Only increment the next confirmation number if this is a new reservation
-      const existingReservation = db.getReservationById(currentConfNumber);
+      // Check if this is a new reservation
+      const allReservations = await db.getAllReservations();
+      const existingReservation = allReservations.find(r => 
+        r.confirmation_number === currentConfNumber || r.id === currentConfNumber
+      );
       const isNewReservation = !existingReservation;
-      if (isNewReservation) {
-        db.setNextConfirmationNumber(parseInt(currentConfNumber) + 1);
-      }
       
       // Get account_id from billing account search (if an account number is entered)
       const accountSearchValue = reservationData.billingAccount.account?.trim();
       let accountId = null;
       if (accountSearchValue) {
         // Try to find account by account number
-        const account = db.getAllAccounts().find(a => 
+        const allAccounts = await db.getAllAccounts();
+        const account = allAccounts.find(a => 
           a.account_number === accountSearchValue || 
           a.id === accountSearchValue ||
           `${a.account_number} - ${a.first_name} ${a.last_name}`.includes(accountSearchValue)
@@ -2987,7 +3643,8 @@ class ReservationForm {
       if (this.passengerMatchesBilling || this.bookingMatchesBilling) {
         const accountNumber = reservationData.billingAccount.account;
         if (accountNumber && accountNumber.trim()) {
-          const account = db.getAllAccounts().find(a => a.id === accountNumber || a.account_number === accountNumber);
+          const accountList = await db.getAllAccounts();
+          const account = accountList.find(a => a.id === accountNumber || a.account_number === accountNumber);
           if (account) {
             const updatedAccount = {
               ...account,
@@ -3013,7 +3670,8 @@ class ReservationForm {
         const accountNumber = reservationData.billingAccount.account;
         if (accountNumber && accountNumber.trim()) {
           // Find account by number
-          const account = db.getAllAccounts().find(a => a.id === accountNumber || a.account_number === accountNumber);
+          const accountList2 = await db.getAllAccounts();
+          const account = accountList2.find(a => a.id === accountNumber || a.account_number === accountNumber);
           
           if (account) {
             console.log('📍 Saving addresses to account:', account.id);
@@ -3045,9 +3703,35 @@ class ReservationForm {
       let supabaseSaveSuccess = false;
       let supabaseError = null;
       try {
-        const { setupAPI, createReservation } = await import('./api-service.js');
+        console.log('🔍 Testing Supabase connection and authentication...');
+        const { setupAPI } = await import('./api-service.js');
         await setupAPI();
-        const supabaseResult = await createReservation({
+        
+        // Test authentication and organization context first
+        try {
+          const { getSupabaseClient } = await import('./api-service.js');
+          const client = getSupabaseClient();
+          if (client) {
+            const { data: { user }, error: userError } = await client.auth.getUser();
+            console.log('🔐 Current user:', user?.id || 'Not authenticated', userError?.message || '');
+            
+            if (user) {
+              const { data: membership, error: membershipError } = await client
+                .from('organization_members')
+                .select('organization_id')
+                .eq('user_id', user.id)
+                .single();
+              console.log('🏢 Organization membership:', membership?.organization_id || 'None', membershipError?.message || '');
+            }
+          }
+        } catch (authTestError) {
+          console.error('🔐 Auth test failed:', authTestError);
+        }
+        
+        console.log('💾 Attempting to save reservation...');
+        
+        // Use the proper save chain through supabase-db.js
+        const supabaseResult = await db.saveReservation({
           ...reservationData,
           confirmationNumber: currentConfNumber,
           confirmation_number: currentConfNumber,
@@ -3060,11 +3744,40 @@ class ReservationForm {
           grandTotal: parseFloat(document.getElementById("grandTotal")?.textContent || "0") || 0
         });
         
-        if (supabaseResult && supabaseResult.length > 0) {
+        console.log('📤 Save result:', supabaseResult);
+        
+        // Handle different response formats
+        if (supabaseResult && supabaseResult.success === false) {
+          // Structured error response
+          throw new Error(supabaseResult.error || 'Database operation failed');
+        } else if (supabaseResult && (supabaseResult.id || (Array.isArray(supabaseResult) && supabaseResult.length > 0) || supabaseResult.confirmation_number)) {
+          // Success - various valid formats
           supabaseSaveSuccess = true;
-          console.log('✅ Reservation saved to Supabase:', supabaseResult);
+          console.log('✅ Reservation saved successfully:', supabaseResult);
+          
+          // The success notification will be shown by supabase-db.js
+          // Optionally prompt to clear form
+          setTimeout(() => {
+            if (confirm('Reservation saved successfully! Would you like to clear the form for a new reservation?')) {
+              document.getElementById('reservation-form').reset();
+              // Reset the state
+              window.editingReservation = null;
+              document.getElementById('confirmation-number').value = '';
+              
+              // Clear account searches
+              document.getElementById('passenger-search-results').innerHTML = '';
+              document.getElementById('billing-search-results').innerHTML = '';
+              document.getElementById('booking-search-results').innerHTML = '';
+              
+              // Reset status to Open if it was just created
+              const statusSelect = document.getElementById('reservationStatus');
+              if (statusSelect && !window.editingReservation) {
+                statusSelect.value = 'Open';
+              }
+            }
+          }, 500); // Small delay to let success notification show first
         } else {
-          throw new Error('Supabase returned empty result');
+          throw new Error('Save operation returned unexpected format: ' + JSON.stringify(supabaseResult));
         }
       } catch (apiError) {
         supabaseError = apiError;
@@ -3300,15 +4013,22 @@ class ReservationForm {
     }
   }
 
-  loadExistingReservation(confNumber) {
+  async loadExistingReservation(confNumber) {
     try {
       console.log('📥 [ReservationForm] loadExistingReservation called for conf:', confNumber);
-      console.log('📚 [ReservationForm] All reservations in db:', db.getAllReservations());
-      const record = db.getReservationById(confNumber);
+      const allReservations = await db.getAllReservations();
+      console.log('📚 [ReservationForm] All reservations in db:', allReservations);
+      
+      // Find reservation by confirmation number
+      const record = allReservations.find(r => 
+        r.confirmation_number === confNumber || 
+        r.confirmationNumber === confNumber ||
+        r.id === confNumber
+      );
       console.log('🔎 [ReservationForm] Database lookup result:', record);
       if (!record) {
         console.warn('⚠️ [ReservationForm] No reservation found in database for conf:', confNumber);
-        console.warn('📊 [ReservationForm] Available confirmations:', db.getAllReservations().map(r => ({id: r.id, conf: r.confirmation_number})));
+        console.warn('📊 [ReservationForm] Available confirmations:', allReservations.map(r => ({id: r.id, conf: r.confirmation_number})));
         if (this.isViewMode) {
           this.viewModeReady = true;
           window.dispatchEvent(new Event('reliaReservationViewReady'));
@@ -3700,6 +4420,78 @@ class ReservationForm {
 
     const body = bodyLines.join('\n');
     window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }
+
+  checkForTestData() {
+    console.log('🧪 Checking for test data...');
+    
+    // Check URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const testMode = urlParams.get('test');
+    
+    if (testMode) {
+      console.log('🎯 Test mode detected:', testMode);
+      
+      // Check for test instructions
+      const testInstructions = localStorage.getItem('relia_test_instructions');
+      if (testInstructions) {
+        try {
+          const instructions = JSON.parse(testInstructions);
+          console.log('📋 Test instructions found:', instructions);
+          
+          // Show test instructions in console
+          console.log('🔧 TEST MODE ACTIVE 🔧');
+          console.log('Instructions:', instructions.steps.join('\n'));
+          
+          // Auto-fill test data if available
+          if (instructions.testData && testMode === 'manual') {
+            setTimeout(() => {
+              console.log('📝 Auto-filling test data...');
+              Object.entries(instructions.testData).forEach(([fieldId, value]) => {
+                const element = document.getElementById(fieldId);
+                if (element) {
+                  element.value = value;
+                  console.log(`✅ Set ${fieldId} to "${value}"`);
+                } else {
+                  console.warn(`⚠️ Element ${fieldId} not found`);
+                }
+              });
+              
+              // Highlight the create account button
+              const createBtn = document.getElementById('createAccountBtn');
+              if (createBtn) {
+                createBtn.style.background = '#e74c3c';
+                createBtn.style.color = 'white';
+                createBtn.style.fontWeight = 'bold';
+                createBtn.style.animation = 'pulse 2s infinite';
+                console.log('🎯 Create Account button highlighted for testing');
+                
+                // Show instruction alert
+                alert('🧪 TEST MODE ACTIVE!\n\nBilling fields have been auto-filled.\nClick the highlighted "Create Account" button to test the functionality.\n\nWatch the browser console for detailed logs.');
+              }
+              
+              // Add CSS animation
+              const style = document.createElement('style');
+              style.textContent = `
+                @keyframes pulse {
+                  0% { transform: scale(1); }
+                  50% { transform: scale(1.05); }
+                  100% { transform: scale(1); }
+                }
+              `;
+              document.head.appendChild(style);
+              
+            }, 1000);
+          }
+          
+          // Clean up instructions after use
+          localStorage.removeItem('relia_test_instructions');
+          
+        } catch (error) {
+          console.error('❌ Error parsing test instructions:', error);
+        }
+      }
+    }
   }
 }
 

@@ -3,8 +3,31 @@
 
 import { getSupabaseCredentials } from './supabase-config.js';
 
-// Get credentials from environment or window.ENV
-export const { url: supabaseUrl, anonKey: supabaseAnonKey } = getSupabaseCredentials();
+// Lazy-loaded credentials (resolved on first use, after env.js loads)
+let _supabaseUrl = null;
+let _supabaseAnonKey = null;
+
+function ensureCredentials() {
+  if (!_supabaseUrl || !_supabaseAnonKey) {
+    const creds = getSupabaseCredentials();
+    _supabaseUrl = creds.url;
+    _supabaseAnonKey = creds.anonKey;
+  }
+  return { url: _supabaseUrl, anonKey: _supabaseAnonKey };
+}
+
+// Export getters for lazy access
+export function getSupabaseUrl() {
+  return ensureCredentials().url;
+}
+
+export function getSupabaseAnonKey() {
+  return ensureCredentials().anonKey;
+}
+
+// Legacy exports for compatibility (use getters internally)
+export const supabaseUrl = null; // Deprecated - use getSupabaseUrl()
+export const supabaseAnonKey = null; // Deprecated - use getSupabaseAnonKey()
 
 // Demo fallback credentials for offline auth
 const OFFLINE_DEMO_ACCOUNTS = {
@@ -22,20 +45,41 @@ const OFFLINE_DEMO_ACCOUNTS = {
   }
 };
 
-// Validate credentials
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('❌ Missing Supabase credentials');
-  throw new Error('Supabase configuration missing');
-}
+// Note: Credentials are validated lazily when first used, not at module load time
+// This allows env.js to load first
 
-console.log('✅ Supabase REST API client initialized');
+console.log('✅ Supabase REST API client module loaded (credentials resolved on first use)');
 
 const SESSION_STORAGE_KEY = 'supabase_session';
 
+// The official SDK uses this pattern: sb-<project-ref>-auth-token
+const SDK_SESSION_KEY = 'sb-siumiadylwcrkaqsfwkj-auth-token';
+
 function loadStoredSession() {
   try {
-    const session = localStorage.getItem(SESSION_STORAGE_KEY);
-    return session ? JSON.parse(session) : null;
+    // First check our custom key
+    let session = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (session) {
+      return JSON.parse(session);
+    }
+    
+    // Fall back to official SDK storage key
+    session = localStorage.getItem(SDK_SESSION_KEY);
+    if (session) {
+      console.log('ℹ️ Found session in SDK storage, migrating...');
+      const parsed = JSON.parse(session);
+      // SDK stores session nested: { currentSession: {...}, expiresAt: ... }
+      // OR directly as the session object
+      const actualSession = parsed.currentSession || parsed;
+      // Persist to our key for future use
+      if (actualSession?.access_token) {
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(actualSession));
+        return actualSession;
+      }
+      return parsed;
+    }
+    
+    return null;
   } catch (error) {
     console.error('❌ Failed to parse stored session:', error);
     return null;
@@ -151,11 +195,11 @@ async function performTokenRefresh(currentSession) {
   }
 
   try {
-    const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+    const response = await fetch(`${getSupabaseUrl()}/auth/v1/token?grant_type=refresh_token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': supabaseAnonKey
+        'apikey': getSupabaseAnonKey()
       },
       body: JSON.stringify({ refresh_token: refreshToken })
     });
@@ -245,12 +289,31 @@ function buildOfflineSession(email, role) {
 // Mock Supabase client for buildless environment
 // This is a minimal mock that allows imports to work without throwing errors
 export const supabase = {
-  url: supabaseUrl,
-  key: supabaseAnonKey,
+  get url() { return getSupabaseUrl(); },
+  get key() { return getSupabaseAnonKey(); },
   auth: {
     getUser: async () => {
       const session = loadStoredSession();
-      return { data: { user: session?.user || null }, error: null };
+      let user = session?.user || null;
+      
+      // If no user in session but we have an access token, try to decode it
+      if (!user && session?.access_token && !session.access_token.startsWith('offline-')) {
+        try {
+          const decoded = decodeJwt(session.access_token);
+          if (decoded && decoded.sub) {
+            user = {
+              id: decoded.sub,
+              email: decoded.email,
+              role: decoded.role || 'authenticated'
+            };
+            console.log('ℹ️ User extracted from JWT:', user.email);
+          }
+        } catch (e) {
+          console.warn('⚠️ Could not decode user from JWT:', e);
+        }
+      }
+      
+      return { data: { user }, error: null };
     },
     getSession: async () => {
       const session = loadStoredSession();
@@ -368,7 +431,7 @@ class PostgrestQuery {
   }
 
   async execute() {
-    const url = new URL(`${supabaseUrl}/rest/v1/${this.table}`);
+    const url = new URL(`${getSupabaseUrl()}/rest/v1/${this.table}`);
 
     if (this.selectColumns) {
       url.searchParams.set('select', this.selectColumns);
@@ -402,10 +465,10 @@ class PostgrestQuery {
         }
       }
 
-      const token = localStorage.getItem('supabase_access_token') || supabaseAnonKey;
+      const token = localStorage.getItem('supabase_access_token') || getSupabaseAnonKey();
 
       const headers = {
-        apikey: supabaseAnonKey,
+        apikey: getSupabaseAnonKey(),
         Authorization: `Bearer ${token}`
       };
 
@@ -475,11 +538,11 @@ class PostgrestQuery {
 // Test connection via simple REST request
 export async function testSupabaseConnection() {
   try {
-    const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+    const response = await fetch(`${getSupabaseUrl()}/rest/v1/`, {
       method: 'GET',
       headers: {
-        'apikey': supabaseAnonKey,
-        'Authorization': `Bearer ${supabaseAnonKey}`
+        'apikey': getSupabaseAnonKey(),
+        'Authorization': `Bearer ${getSupabaseAnonKey()}`
       }
     });
     
@@ -520,11 +583,11 @@ export async function getCurrentSession() {
 // Sign in with email/password via REST API
 export async function signInWithEmail(email, password) {
   try {
-    const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+    const response = await fetch(`${getSupabaseUrl()}/auth/v1/token?grant_type=password`, {
       method: 'POST',
       headers: {
-        'apikey': supabaseAnonKey,
-        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'apikey': getSupabaseAnonKey(),
+        'Authorization': `Bearer ${getSupabaseAnonKey()}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Account Creation Test</title>
+    <link rel="stylesheet" href="global.css">
+    <style>
+        .test-container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .btn {
+            padding: 12px 24px;
+            margin: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+        .log-area {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 Simple Account Creation Test</h1>
+        <p>Test account creation functionality without Supabase dependencies</p>
+
+        <div class="form-group">
+            <label for="firstName">First Name</label>
+            <input type="text" id="firstName" class="form-control" value="John">
+        </div>
+
+        <div class="form-group">
+            <label for="lastName">Last Name</label>
+            <input type="text" id="lastName" class="form-control" value="Doe">
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" class="form-control" value="john@test.com">
+        </div>
+
+        <div class="form-group">
+            <label for="phone">Phone</label>
+            <input type="tel" id="phone" class="form-control" value="555-1234">
+        </div>
+
+        <div class="form-group">
+            <label for="company">Company</label>
+            <input type="text" id="company" class="form-control" value="Test Company">
+        </div>
+
+        <button class="btn btn-primary" onclick="testAccountDraftCreation()">
+            📝 Create Account Draft
+        </button>
+
+        <button class="btn btn-success" onclick="openAccountsPage()">
+            🌐 Open Accounts Page
+        </button>
+
+        <div id="logArea" class="log-area">Ready to test...\n</div>
+    </div>
+
+    <script>
+        function log(message) {
+            const logArea = document.getElementById('logArea');
+            const timestamp = new Date().toLocaleTimeString();
+            logArea.textContent += `[${timestamp}] ${message}\n`;
+            logArea.scrollTop = logArea.scrollHeight;
+            console.log(message);
+        }
+
+        function testAccountDraftCreation() {
+            log('🚀 Starting account draft creation test...');
+            
+            const firstName = document.getElementById('firstName').value;
+            const lastName = document.getElementById('lastName').value;
+            const email = document.getElementById('email').value;
+            const phone = document.getElementById('phone').value;
+            const company = document.getElementById('company').value;
+
+            if (!firstName || !lastName || !email) {
+                log('❌ Missing required fields: First Name, Last Name, and Email are required');
+                return;
+            }
+
+            const draft = {
+                first_name: firstName,
+                last_name: lastName,
+                company_name: company,
+                phone: phone,
+                cell_phone: phone,
+                email: email,
+                type: 'individual',
+                status: 'active',
+                types: {
+                    billing: true,
+                    passenger: false,
+                    booking: false
+                },
+                address: {
+                    address_type: 'billing',
+                    address_name: 'Billing',
+                    address_line1: '123 Test Street',
+                    address_line2: 'Suite 100',
+                    city: 'Test City',
+                    state: 'CA',
+                    zip: '12345',
+                    country: 'US'
+                },
+                created_at: new Date().toISOString(),
+                source: 'simple-test'
+            };
+
+            try {
+                localStorage.setItem('relia_account_draft', JSON.stringify(draft));
+                log('✅ Account draft created successfully');
+                log('📋 Draft contents:');
+                log(JSON.stringify(draft, null, 2));
+
+                // Verify storage
+                const stored = localStorage.getItem('relia_account_draft');
+                if (stored) {
+                    log('✅ Draft verified in localStorage');
+                    const parsed = JSON.parse(stored);
+                    log(`📊 Stored ${Object.keys(parsed).length} properties`);
+                } else {
+                    log('❌ Draft not found after storage attempt');
+                }
+
+            } catch (error) {
+                log('❌ Error creating draft: ' + error.message);
+            }
+        }
+
+        function openAccountsPage() {
+            log('🌐 Opening accounts page...');
+            
+            // Check if draft exists
+            const draft = localStorage.getItem('relia_account_draft');
+            if (!draft) {
+                log('⚠️ No draft found - creating one first...');
+                testAccountDraftCreation();
+                setTimeout(() => openAccountsPage(), 1000);
+                return;
+            }
+
+            log('✅ Draft found, opening accounts page');
+            
+            const url = 'accounts.html?mode=new&from=simple-test';
+            log('🔗 Opening: ' + url);
+
+            // Try popup first, fallback to same window
+            const popup = window.open(url, 'AccountsPage', 'width=1200,height=900,resizable=yes,scrollbars=yes');
+            
+            if (popup) {
+                log('✅ Opened in popup window');
+                try {
+                    popup.focus();
+                    log('✅ Popup focused');
+                } catch (e) {
+                    log('⚠️ Could not focus popup: ' + e.message);
+                }
+            } else {
+                log('⚠️ Popup blocked, redirecting same window');
+                window.location.href = url;
+            }
+        }
+
+        function clearDraft() {
+            try {
+                localStorage.removeItem('relia_account_draft');
+                log('✅ Draft cleared');
+            } catch (error) {
+                log('❌ Error clearing draft: ' + error.message);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            log('🔧 Simple Account Creation Test loaded');
+            
+            // Check for existing draft
+            const existingDraft = localStorage.getItem('relia_account_draft');
+            if (existingDraft) {
+                log('📋 Found existing draft in localStorage');
+                try {
+                    const parsed = JSON.parse(existingDraft);
+                    log('📊 Draft contains: ' + Object.keys(parsed).join(', '));
+                } catch (e) {
+                    log('⚠️ Draft exists but could not be parsed');
+                }
+            } else {
+                log('📭 No existing draft found');
+            }
+        });
+
+        // Add clear button functionality
+        window.clearDraft = clearDraft;
+    </script>
+
+    <!-- Add clear button -->
+    <div style="text-align: center; margin-top: 20px;">
+        <button class="btn" onclick="clearDraft()" style="background: #e74c3c; color: white;">
+            🗑️ Clear Draft
+        </button>
+    </div>
+</body>
+</html>

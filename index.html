@@ -1,6 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="visibility:hidden">
   <head>
+    <script>
+      // INSTANT startup page redirect - must be first script
+      (function() {
+        try {
+          var s = localStorage.getItem('company_settings');
+          if (s) {
+            var p = JSON.parse(s).defaultStartPage;
+            var r = {'new-reservation':'reservation-form.html','farmout-dashboard':'dashboard.html','office':'my-office.html','accounts':'accounts.html','calendar':'calendar.html','quotes':'quotes.html','dispatch':'dispatch-grid.html','network':'network.html','settle':'settle.html','receivables':'receivables.html','payables':'payables.html','memos':'memos.html','files':'files.html','tools':'tools.html','reports':'reports.html'};
+            if (r[p]) { window.location.replace(r[p]); return; }
+          }
+        } catch(e) {}
+        document.documentElement.style.visibility = 'visible';
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RELIA LIMO™</title>

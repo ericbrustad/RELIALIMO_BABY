@@ -36,6 +36,93 @@ class Accounts {
     return company || person || 'this account';
   }
 
+  showAccountDetails() {
+    // Make sure the accounts main area is visible and highlighted
+    const accountsMain = document.querySelector('.accounts-main');
+    if (accountsMain) {
+      accountsMain.style.display = 'block';
+      accountsMain.style.border = '2px solid #007bff';
+      accountsMain.style.borderRadius = '8px';
+      accountsMain.style.backgroundColor = '#f8f9fa';
+      accountsMain.style.transition = 'all 0.3s ease';
+      
+      // Remove highlight after a brief moment
+      setTimeout(() => {
+        if (accountsMain.style.border === '2px solid #007bff') {
+          accountsMain.style.border = '';
+          accountsMain.style.backgroundColor = '';
+        }
+      }, 2000);
+    }
+
+    // Add "Currently Selected" indicator to the sidebar
+    const sidebar = document.querySelector('.accounts-sidebar');
+    let indicator = sidebar?.querySelector('.selected-account-indicator');
+    if (sidebar && !indicator) {
+      indicator = document.createElement('div');
+      indicator.className = 'selected-account-indicator';
+      indicator.innerHTML = `
+        <div style="background: #28a745; color: white; padding: 5px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-align: center; margin: 5px 0;">
+          ✓ Account Selected - View Details →
+        </div>
+      `;
+      // Insert after the search section
+      const searchSection = sidebar.querySelector('.sidebar-section');
+      if (searchSection) {
+        searchSection.parentNode.insertBefore(indicator, searchSection.nextSibling);
+      }
+      
+      // Auto-remove indicator after a few seconds
+      setTimeout(() => {
+        if (indicator && indicator.parentNode) {
+          indicator.parentNode.removeChild(indicator);
+        }
+      }, 4000);
+    }
+
+    // Scroll to account details if needed
+    const accountInfoTab = document.getElementById('accountInfoTab');
+    if (accountInfoTab) {
+      accountInfoTab.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start' 
+      });
+    }
+  }
+
+  activateAccountTab(tabName) {
+    // Remove active class from all tabs and tab contents
+    document.querySelectorAll('.account-tab').forEach(tab => {
+      tab.classList.remove('active');
+    });
+    document.querySelectorAll('.account-tab-content').forEach(content => {
+      content.classList.remove('active');
+    });
+
+    // Activate the specified tab
+    const targetTab = document.querySelector(`[data-account-tab="${tabName}"]`);
+    if (targetTab) {
+      targetTab.classList.add('active');
+    }
+
+    // Show the corresponding tab content
+    const tabContentMap = {
+      'info': 'accountInfoTab',
+      'financial': 'financialDataTab', 
+      'addresses': 'addressesTab',
+      'booking': 'bookingTab',
+      'misc': 'miscTab'
+    };
+
+    const contentId = tabContentMap[tabName];
+    if (contentId) {
+      const content = document.getElementById(contentId);
+      if (content) {
+        content.classList.add('active');
+      }
+    }
+  }
+
   isAccountLinkedToReservations(accountId) {
     if (!this.db) return false;
 
@@ -61,7 +148,7 @@ class Accounts {
   async makeAccountInactive(accountId) {
     if (!this.db) return false;
     try {
-      const existing = this.db.getAccountById?.(accountId);
+      const existing = await this.db.getAccountById?.(accountId);
       if (!existing) return false;
 
       const updated = {
@@ -116,7 +203,7 @@ class Accounts {
       return;
     }
 
-    const deleted = this.db.deleteAccount(accountId);
+    const deleted = await this.db.deleteAccount(accountId);
     if (!deleted) {
       alert('Failed to delete account.');
       return;
@@ -178,7 +265,10 @@ class Accounts {
         this.addNewAccount();
         
         // Apply draft if present (used by Reservation "Create Account" and similar flows)
-        this.applyDraftIfPresent();
+        // Add a small delay to ensure DOM elements are ready
+        setTimeout(() => {
+          this.applyDraftIfPresent();
+        }, 100);
       }
 
       // Never prefill DRES4 / Passenger App login credentials (even if browser tries)
@@ -206,38 +296,16 @@ class Accounts {
   
   async loadAccountsList() {
     try {
-      // Load from localStorage first
-      const localAccounts = this.db?.getAllAccounts() || [];
-      console.log(`📂 Local accounts found: ${localAccounts.length}`);
-      
-      // Try to load from Supabase
-      let supabaseAccounts = [];
-      if (this.api && this.api.fetchAccounts) {
+      // Load from Supabase (primary source)
+      let allAccounts = [];
+      if (this.db) {
         try {
-          supabaseAccounts = await this.api.fetchAccounts() || [];
-          console.log(`☁️ Supabase accounts found: ${supabaseAccounts.length}`);
+          allAccounts = await this.db.getAllAccounts() || [];
+          console.log(`☁️ Supabase accounts found: ${allAccounts.length}`);
         } catch (e) {
-          console.warn('⚠️ Could not fetch from Supabase:', e.message);
+          console.warn('⚠️ Could not fetch accounts from Supabase:', e.message);
         }
       }
-      
-      // Merge accounts - combine both sources, local takes precedence for duplicates
-      const accountMap = new Map();
-      
-      // Add Supabase accounts first
-      supabaseAccounts.forEach(acc => {
-        const key = acc.account_number || acc.id;
-        if (key) accountMap.set(key.toString(), acc);
-      });
-      
-      // Add/override with local accounts (local takes precedence)
-      localAccounts.forEach(acc => {
-        const key = acc.account_number || acc.id;
-        if (key) accountMap.set(key.toString(), acc);
-      });
-      
-      const allAccounts = Array.from(accountMap.values());
-      console.log(`✅ Total merged accounts: ${allAccounts.length}`);
       
       // Populate the listbox
       const listbox = document.getElementById('accountsListbox');
@@ -245,7 +313,7 @@ class Accounts {
         listbox.innerHTML = allAccounts.map(acc => {
           const inactiveLabel = (acc.status || '').toString().toLowerCase() === 'inactive' ? ' (INACTIVE)' : '';
           const displayName = `${acc.account_number || acc.id}${inactiveLabel} - ${acc.first_name || ''} ${acc.last_name || ''} ${acc.company_name ? '- ' + acc.company_name : ''}`.trim();
-          return `<option value="${acc.account_number || acc.id}">${displayName}</option>`;
+          return `<option value="${acc.id}">${displayName}</option>`; // Use acc.id for consistency
         }).join('');
       }
       
@@ -274,13 +342,20 @@ class Accounts {
     
     try {
       const accounts = await this.db.getAllAccounts();
-      const account = accounts.find(a => a.id === accountId);
+      // Look for account by both id and account_number to handle both cases
+      const account = accounts.find(a => a.id === accountId || a.account_number === accountId);
       if (!account) {
-        console.warn('⚠️ Account not found:', accountId);
+        console.warn('⚠️ Account not found:', accountId, 'in', accounts.length, 'accounts');
+        // Debug: Show what we're looking for vs what's available
+        console.log('Available account IDs:', accounts.map(a => ({ id: a.id, account_number: a.account_number })).slice(0, 5));
         return;
       }
       
       console.log('✅ Loading account:', account);
+      
+      // Activate the Account Info tab and show account details
+      this.showAccountDetails();
+      this.switchAccountTab('info');
       
       // Populate form fields with proper mapping
       const accountNumberEl = document.getElementById('accountNumber');
@@ -517,108 +592,158 @@ class Accounts {
   }
 
   applyDraftIfPresent() {
+    console.log('🔍 applyDraftIfPresent() called');
+    
     // Check if there's a draft account from the reservation form
     const raw = localStorage.getItem('relia_account_draft');
-    if (!raw) return;
+    if (!raw) {
+      console.log('❌ No draft found in localStorage');
+      return;
+    }
 
     try {
       const draft = JSON.parse(raw);
       console.log('✅ Draft account found, prefilling fields:', draft);
 
-      const setIfEmpty = (el, value) => {
-        if (!el) return;
-        const current = (el.value ?? '').toString().trim();
-        const next = (value ?? '').toString();
-        if (!next) return;
-        if (!current) el.value = next;
-      };
-
-      // Switch to Accounts tab (in case we're not already there)
+      // Switch to Accounts tab first (in case we're not already there)
+      console.log('🔄 Switching to accounts tab...');
       this.switchTab('accounts');
-
-      // Use the IDs we just added to accounts.html
-      const firstNameEl = document.getElementById('acctFirstName');
-      const lastNameEl = document.getElementById('acctLastName');
-      const companyEl = document.getElementById('acctCompany');
-      const cellPhone1El = document.getElementById('acctCellPhone1');
-      const cellularPhone1El = document.getElementById('acctCellularPhone1');
-      const emailEl = document.getElementById('acctEmail2');
-      const phoneEl = document.getElementById('acctPhone');
-
-      // Fill basic info (do not overwrite existing values)
-      setIfEmpty(firstNameEl, draft.first_name);
-      setIfEmpty(lastNameEl, draft.last_name);
-      setIfEmpty(companyEl, draft.company_name);
-
-      // Auto-fill phone fields
-      // Reservation/Billing "phone" should be treated as CELL and go into Cellular Phone 1.
-      // Do not auto-fill Office Phone from the draft.
-      const draftCell = draft.cell_phone || draft.phone;
-      setIfEmpty(cellPhone1El, draftCell);
-      setIfEmpty(cellularPhone1El, draftCell);
-
-      // If Office Phone is empty, keep it empty (never fill from draft)
-      if (phoneEl && !(phoneEl.value ?? '').toString().trim()) {
-        // no-op
-      }
-
-      // Auto-fill email fields
-      setIfEmpty(emailEl, draft.email);
-
-      // Also fill the Contact Info email section (if it exists)
-      const acctEmailContactEl = document.getElementById('acctEmail');
-      setIfEmpty(acctEmailContactEl, draft.email);
-
-      // Prefill account type tickers
-      const types = draft.types || {};
-      const billingTicker = document.getElementById('acctTypeBilling');
-      const passengerTicker = document.getElementById('acctTypePassenger');
-      const bookingTicker = document.getElementById('acctTypeBooking');
-
-      if (billingTicker && types.billing) billingTicker.checked = true;
-      if (passengerTicker && types.passenger) passengerTicker.checked = true;
-      if (bookingTicker && types.booking) bookingTicker.checked = true;
-
-      // Prefill address tab fields if present
-      const addr = draft.address || {};
-      const addressTypeEl = document.getElementById('addressType');
-      const addressNameEl = document.getElementById('addressName');
-      const primaryAddressEl = document.getElementById('primaryAddress');
-      const addressCityEl = document.getElementById('addressCity');
-      const addressStateEl = document.getElementById('addressState');
-      const addressZipEl = document.getElementById('addressZip');
-      const addressAptEl = document.getElementById('addressApt');
-      const addressCountryEl = document.getElementById('addressCountry');
-
-      if (addr && typeof addr === 'object') {
-        // For selects, only set if empty/current default
-        if (addressTypeEl && (addressTypeEl.value ?? '').toString().trim() === '') {
-          addressTypeEl.value = addr.address_type || addressTypeEl.value;
-        }
-        setIfEmpty(addressNameEl, addr.address_name);
-        setIfEmpty(primaryAddressEl, addr.address_line1);
-        setIfEmpty(addressAptEl, addr.address_line2);
-        setIfEmpty(addressCityEl, addr.city);
-        if (addressStateEl && (addressStateEl.value ?? '').toString().trim() === '') {
-          addressStateEl.value = addr.state || addressStateEl.value;
-        }
-        setIfEmpty(addressZipEl, addr.zip);
-        if (addressCountryEl && (addressCountryEl.value ?? '').toString().trim() === '') {
-          addressCountryEl.value = addr.country || addressCountryEl.value;
-        }
-      }
-
-      // Clear the draft so it doesn't keep refilling
-      localStorage.removeItem('relia_account_draft');
-      console.log('✅ Draft applied and cleared');
-
-      // Focus first name field for immediate entry
-      if (firstNameEl) {
-        setTimeout(() => firstNameEl.focus(), 100);
-      }
+      
+      // Wait a bit more for tab switch to complete
+      setTimeout(() => {
+        this.fillFormFromDraft(draft);
+      }, 150);
+      
     } catch (error) {
       console.error('Error parsing draft account:', error);
       localStorage.removeItem('relia_account_draft');
+    }
+  }
+
+  fillFormFromDraft(draft) {
+    console.log('📝 fillFormFromDraft called with:', draft);
+
+    const setIfEmpty = (el, value) => {
+      if (!el) {
+        console.warn('⚠️ Element not found for setIfEmpty:', el);
+        return;
+      }
+      const current = (el.value ?? '').toString().trim();
+      const next = (value ?? '').toString();
+      if (!next) {
+        console.log('📝 No value to set for', el.id);
+        return;
+      }
+      if (!current) {
+        console.log('✏️ Setting', el.id, 'to:', next);
+        el.value = next;
+      } else {
+        console.log('⏭️ Skipping', el.id, '- already has value:', current);
+      }
+    };
+
+    // Use the IDs we just added to accounts.html
+    const firstNameEl = document.getElementById('acctFirstName');
+    const lastNameEl = document.getElementById('acctLastName');
+    const companyEl = document.getElementById('acctCompany');
+    const cellPhone1El = document.getElementById('acctCellPhone1');
+    const cellularPhone1El = document.getElementById('acctCellularPhone1');
+    const emailEl = document.getElementById('acctEmail2');
+    const phoneEl = document.getElementById('acctPhone');
+
+    console.log('🔍 Form elements found:', {
+      firstNameEl: !!firstNameEl,
+      lastNameEl: !!lastNameEl,
+      companyEl: !!companyEl,
+      cellPhone1El: !!cellPhone1El,
+      emailEl: !!emailEl,
+      phoneEl: !!phoneEl
+    });
+
+    // Fill basic info (do not overwrite existing values)
+    setIfEmpty(firstNameEl, draft.first_name);
+    setIfEmpty(lastNameEl, draft.last_name);
+    setIfEmpty(companyEl, draft.company_name);
+
+    // Auto-fill phone fields
+    // Reservation/Billing "phone" should be treated as CELL and go into Cellular Phone 1.
+    // Do not auto-fill Office Phone from the draft.
+    const draftCell = draft.cell_phone || draft.phone;
+    setIfEmpty(cellPhone1El, draftCell);
+    setIfEmpty(cellularPhone1El, draftCell);
+
+    // If Office Phone is empty, keep it empty (never fill from draft)
+    if (phoneEl && !(phoneEl.value ?? '').toString().trim()) {
+      // no-op
+    }
+
+    // Auto-fill email fields
+    setIfEmpty(emailEl, draft.email);
+
+    // Also fill the Contact Info email section (if it exists)
+    const acctEmailContactEl = document.getElementById('acctEmail');
+    setIfEmpty(acctEmailContactEl, draft.email);
+
+    // Prefill account type tickers
+    const types = draft.types || {};
+    const billingTicker = document.getElementById('acctTypeBilling');
+    const passengerTicker = document.getElementById('acctTypePassenger');
+    const bookingTicker = document.getElementById('acctTypeBooking');
+
+    console.log('🎯 Setting account type checkboxes:', types);
+    if (billingTicker && types.billing) {
+      billingTicker.checked = true;
+      console.log('✅ Set billing checkbox');
+    }
+    if (passengerTicker && types.passenger) {
+      passengerTicker.checked = true;
+      console.log('✅ Set passenger checkbox');
+    }
+    if (bookingTicker && types.booking) {
+      bookingTicker.checked = true;
+      console.log('✅ Set booking checkbox');
+    }
+
+    // Prefill address tab fields if present
+    const addr = draft.address || {};
+    const addressTypeEl = document.getElementById('addressType');
+    const addressNameEl = document.getElementById('addressName');
+    const primaryAddressEl = document.getElementById('primaryAddress');
+    const addressCityEl = document.getElementById('addressCity');
+    const addressStateEl = document.getElementById('addressState');
+    const addressZipEl = document.getElementById('addressZip');
+    const addressAptEl = document.getElementById('addressApt');
+    const addressCountryEl = document.getElementById('addressCountry');
+
+    console.log('🏠 Filling address fields:', addr);
+    if (addr && typeof addr === 'object') {
+      // For selects, only set if empty/current default
+      if (addressTypeEl && (addressTypeEl.value ?? '').toString().trim() === '') {
+        addressTypeEl.value = addr.address_type || addressTypeEl.value;
+      }
+      setIfEmpty(addressNameEl, addr.address_name);
+      setIfEmpty(primaryAddressEl, addr.address_line1);
+      setIfEmpty(addressAptEl, addr.address_line2);
+      setIfEmpty(addressCityEl, addr.city);
+      if (addressStateEl && (addressStateEl.value ?? '').toString().trim() === '') {
+        addressStateEl.value = addr.state || addressStateEl.value;
+      }
+      setIfEmpty(addressZipEl, addr.zip);
+      if (addressCountryEl && (addressCountryEl.value ?? '').toString().trim() === '') {
+        addressCountryEl.value = addr.country || addressCountryEl.value;
+      }
+    }
+
+    // Clear the draft so it doesn't keep refilling
+    localStorage.removeItem('relia_account_draft');
+    console.log('✅ Draft applied and cleared');
+
+    // Focus first name field for immediate entry
+    if (firstNameEl) {
+      setTimeout(() => {
+        firstNameEl.focus();
+        console.log('🎯 Focused on first name field');
+      }, 100);
     }
   }
 
@@ -738,7 +863,39 @@ class Accounts {
       accountsListbox.addEventListener('change', (e) => {
         const accountId = e.target.value;
         if (accountId) {
-          this.loadAccount(accountId);
+          // Add visual feedback for selection
+          const selectedOption = e.target.selectedOptions[0];
+          if (selectedOption) {
+            // Briefly highlight the selected option
+            selectedOption.style.backgroundColor = '#007bff';
+            selectedOption.style.color = 'white';
+            setTimeout(() => {
+              selectedOption.style.backgroundColor = '';
+              selectedOption.style.color = '';
+            }, 1000);
+          }
+          
+          // Show loading indicator while account loads
+          const accountsMain = document.querySelector('.accounts-main');
+          if (accountsMain) {
+            accountsMain.style.opacity = '0.7';
+            accountsMain.style.pointerEvents = 'none';
+          }
+          
+          this.loadAccount(accountId).then(() => {
+            // Remove loading state
+            if (accountsMain) {
+              accountsMain.style.opacity = '';
+              accountsMain.style.pointerEvents = '';
+            }
+          }).catch(error => {
+            console.error('❌ Error loading account:', error);
+            // Remove loading state even on error
+            if (accountsMain) {
+              accountsMain.style.opacity = '';
+              accountsMain.style.pointerEvents = '';
+            }
+          });
         }
       });
       console.log('✅ Accounts listbox listener attached');
@@ -960,7 +1117,7 @@ class Accounts {
       }
     }
 
-    const saved = this.db?.saveAccountAddress(accountId, addressData);
+    const saved = await this.db?.saveAccountAddress(accountId, addressData);
     if (!saved) {
       alert('Failed to save address.');
       return;
@@ -1256,11 +1413,8 @@ class Accounts {
       
       // If no account number, this is a NEW account - assign next number
       if (isNewAccount) {
-        accountNumber = this.db.getNextAccountNumber().toString();
+        accountNumber = (await this.db.getNextAccountNumber()).toString();
         console.log('🆕 New account - assigning account number:', accountNumber);
-        
-        // Increment for next account
-        this.db.setNextAccountNumber(parseInt(accountNumber) + 1);
         
         // Update the form with the new account number
         const accountNumberEl = document.getElementById('accountNumber');
@@ -1457,9 +1611,8 @@ class Accounts {
         return;
       }
 
-      alert('Account saved successfully!\nData synced to Supabase database.');
-
-      // Show success feedback
+      // Success notification will be shown by supabase-db.js
+      // Just update the button UI to show it saved
       const btn = document.getElementById('saveAccountBtn');
       if (btn) {
         const originalText = btn.textContent;

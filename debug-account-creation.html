@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Account Creation Debug Helper</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { border: 1px solid #ccc; margin: 10px 0; padding: 15px; }
+        .button { background: #007cba; color: white; padding: 10px 20px; border: none; cursor: pointer; margin: 5px; }
+        .button:hover { background: #005a8b; }
+        .log { background: #f5f5f5; padding: 10px; font-family: monospace; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
+        .success { color: green; }
+        .error { color: red; }
+        .warning { color: orange; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Account Creation Debug Helper</h1>
+    
+    <div class="section">
+        <h3>1. Test localStorage Draft Storage</h3>
+        <button class="button" onclick="createTestDraft()">Create Test Draft</button>
+        <button class="button" onclick="checkDraft()">Check Existing Draft</button>
+        <button class="button" onclick="clearDraft()">Clear Draft</button>
+    </div>
+    
+    <div class="section">
+        <h3>2. Test Account Creation</h3>
+        <button class="button" onclick="fillReservationForm()">Fill Reservation Form</button>
+        <button class="button" onclick="openReservationForm()">Open Reservation Form</button>
+        <button class="button" onclick="openAccountsPage()">Open Accounts Page</button>
+    </div>
+    
+    <div class="section">
+        <h3>3. Debug Console</h3>
+        <div id="debugLog" class="log"></div>
+        <button class="button" onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <script>
+        // Debug logging
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'warning' ? 'warning' : type === 'success' ? 'success' : '';
+            logEl.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`[DEBUG] ${message}`);
+        }
+
+        function clearLog() {
+            document.getElementById('debugLog').innerHTML = '';
+        }
+
+        // Create a test draft in localStorage
+        function createTestDraft() {
+            const testDraft = {
+                first_name: 'John',
+                last_name: 'Doe', 
+                company_name: 'Test Company',
+                phone: '555-0123',
+                cell_phone: '555-0123',
+                email: 'john.doe@test.com',
+                type: 'individual',
+                status: 'active',
+                types: {
+                    billing: true,
+                    passenger: false,
+                    booking: false
+                },
+                address: {
+                    address_type: 'billing',
+                    address_name: 'Billing',
+                    address_line1: '123 Test St',
+                    address_line2: '',
+                    city: 'Test City',
+                    state: 'TS',
+                    zip: '12345',
+                    country: 'USA'
+                }
+            };
+            
+            localStorage.setItem('relia_account_draft', JSON.stringify(testDraft));
+            log('✅ Test draft created successfully', 'success');
+            checkDraft();
+        }
+
+        // Check if draft exists
+        function checkDraft() {
+            const draft = localStorage.getItem('relia_account_draft');
+            if (draft) {
+                try {
+                    const parsed = JSON.parse(draft);
+                    log(`✅ Draft found: ${parsed.first_name} ${parsed.last_name} (${parsed.company_name || 'No Company'})`, 'success');
+                    log(`📧 Email: ${parsed.email}, 📞 Phone: ${parsed.phone}`, 'info');
+                } catch (e) {
+                    log(`❌ Draft exists but is corrupted: ${e.message}`, 'error');
+                }
+            } else {
+                log('❌ No draft found in localStorage', 'warning');
+            }
+        }
+
+        // Clear the draft
+        function clearDraft() {
+            localStorage.removeItem('relia_account_draft');
+            log('🗑️ Draft cleared from localStorage', 'info');
+        }
+
+        // Fill reservation form with test data
+        function fillReservationForm() {
+            const newWindow = window.open('reservation-form.html', 'ReservationForm', 'width=1200,height=900');
+            if (!newWindow) {
+                log('❌ Popup blocked - please allow popups and try again', 'error');
+                return;
+            }
+            
+            newWindow.addEventListener('load', () => {
+                log('📝 Filling reservation form with test data...', 'info');
+                
+                // Wait for the form to load then fill it
+                setTimeout(() => {
+                    try {
+                        const doc = newWindow.document;
+                        const setField = (id, value) => {
+                            const el = doc.getElementById(id);
+                            if (el) {
+                                el.value = value;
+                                log(`✅ Set ${id} = ${value}`, 'success');
+                            } else {
+                                log(`⚠️ Field ${id} not found`, 'warning');
+                            }
+                        };
+                        
+                        // Fill billing fields
+                        setField('billingFirstName', 'Jane');
+                        setField('billingLastName', 'Smith');
+                        setField('billingPhone', '555-0456');
+                        setField('billingEmail', 'jane.smith@example.com');
+                        setField('billingCompany', 'Smith Industries');
+                        
+                        log('🎯 Test data filled - now click "Create Account" button in reservation form', 'success');
+                    } catch (e) {
+                        log(`❌ Error filling form: ${e.message}`, 'error');
+                    }
+                }, 1000);
+            });
+        }
+
+        // Open reservation form
+        function openReservationForm() {
+            const newWindow = window.open('reservation-form.html', 'ReservationForm', 'width=1200,height=900');
+            if (newWindow) {
+                log('✅ Opened reservation form', 'success');
+            } else {
+                log('❌ Failed to open reservation form - popup blocked', 'error');
+            }
+        }
+
+        // Open accounts page
+        function openAccountsPage() {
+            const newWindow = window.open('accounts.html?mode=new&from=reservation', 'AccountsPage', 'width=1200,height=900');
+            if (newWindow) {
+                log('✅ Opened accounts page', 'success');
+            } else {
+                log('❌ Failed to open accounts page - popup blocked', 'error');
+            }
+        }
+
+        // Initial check on page load
+        window.addEventListener('load', () => {
+            log('🚀 Debug helper loaded', 'info');
+            checkDraft();
+        });
+    </script>
+</body>
+</html>

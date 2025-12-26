@@ -49,12 +49,29 @@ class ReservationsList {
     // Find the table body in the new reservations tab
     const tableBody = document.querySelector('#newReservationsTab tbody');
     if (!tableBody) {
-      console.warn('⚠️ Could not find table body');
+      console.warn('⚠️ Could not find table body for reservations');
       return;
     }
     
     // Clear existing rows
     tableBody.innerHTML = '';
+    
+    if (reservations.length === 0) {
+      // Show empty state message
+      const emptyRow = document.createElement('tr');
+      emptyRow.innerHTML = `
+        <td colspan="11" style="text-align: center; padding: 40px; color: #666;">
+          <div>
+            <h3>📭 No Reservations Found</h3>
+            <p>The reservations database is empty or no reservations match the current filter.</p>
+            <p>Try creating a new reservation or check your database connection.</p>
+          </div>
+        </td>
+      `;
+      tableBody.appendChild(emptyRow);
+      console.log('📭 Displayed empty state message');
+      return;
+    }
     
     // Add new rows for each reservation
     reservations.forEach(res => {
@@ -63,7 +80,7 @@ class ReservationsList {
         <td><a href="#" class="conf-link" data-conf="${res.confirmation_number || ''}">${res.confirmation_number || 'N/A'}</a></td>
         <td>${this.formatDate(res.pickup_at)}</td>
         <td>${this.formatTime(res.pickup_at)}</td>
-        <td>${res.passenger_name || ''}</td>
+        <td>${res.passenger_name || res.passenger_first_name + ' ' + res.passenger_last_name || ''}</td>
         <td>${res.company_name || ''}</td>
         <td>${res.vehicle_type || ''}</td>
         <td>$${(res.grand_total || 0).toFixed(2)}</td>
@@ -74,6 +91,8 @@ class ReservationsList {
       `;
       tableBody.appendChild(row);
     });
+    
+    console.log(`✅ Displayed ${reservations.length} reservations`);
     
     // Re-attach event listeners to new elements
     this.attachRowListeners();

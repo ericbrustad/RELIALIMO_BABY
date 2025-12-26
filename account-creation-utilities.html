@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Creation Utilities</title>
+    <link rel="stylesheet" href="global.css">
+    <style>
+        .utility-container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .utility-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        .utility-section h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        .test-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .test-form .full-width {
+            grid-column: 1 / -1;
+        }
+        .btn {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+        .btn-warning {
+            background: #f39c12;
+            color: white;
+        }
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+        .log-output {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            margin-top: 15px;
+        }
+        .form-control {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+    </style>
+</head>
+<body>
+    <div class="utility-container">
+        <h1>🔧 Account Creation Utilities</h1>
+        <p>Tools for testing and debugging account creation functionality</p>
+
+        <!-- Test Account Creation -->
+        <div class="utility-section">
+            <h3>📝 Test Account Creation from Billing Data</h3>
+            <div class="test-form">
+                <div>
+                    <label for="testFirstName">First Name:</label>
+                    <input type="text" id="testFirstName" class="form-control" value="John">
+                </div>
+                <div>
+                    <label for="testLastName">Last Name:</label>
+                    <input type="text" id="testLastName" class="form-control" value="Doe">
+                </div>
+                <div>
+                    <label for="testEmail">Email:</label>
+                    <input type="email" id="testEmail" class="form-control" value="john@test.com">
+                </div>
+                <div>
+                    <label for="testPhone">Phone:</label>
+                    <input type="tel" id="testPhone" class="form-control" value="555-1234">
+                </div>
+                <div class="full-width">
+                    <label for="testCompany">Company:</label>
+                    <input type="text" id="testCompany" class="form-control" value="Test Company">
+                </div>
+            </div>
+            
+            <button class="btn btn-primary" onclick="fillReservationFormAndTest()">
+                📋 Fill Reservation Form & Test Create Account
+            </button>
+            <button class="btn btn-success" onclick="testAccountDraftCreation()">
+                💾 Test Draft Creation Only
+            </button>
+            <button class="btn btn-warning" onclick="openAccountsWithTestDraft()">
+                🌐 Open Accounts with Test Draft
+            </button>
+            <button class="btn btn-danger" onclick="directNavigationTest()">
+                🎯 Direct Test - Go to Reservation Form
+            </button>
+        </div>
+
+        <!-- Debug Tools -->
+        <div class="utility-section">
+            <h3>🐛 Debug Tools</h3>
+            <button class="btn btn-primary" onclick="debugAccountCreation()">
+                🔍 Debug Account Creation Flow
+            </button>
+            <button class="btn btn-success" onclick="checkReservationFormElements()">
+                📋 Check Reservation Form Elements
+            </button>
+            <button class="btn btn-warning" onclick="inspectAccountDraft()">
+                📝 Inspect Account Draft
+            </button>
+            <button class="btn btn-danger" onclick="clearAccountDraft()">
+                🗑️ Clear Account Draft
+            </button>
+        </div>
+
+        <!-- Draft Management -->
+        <div class="utility-section">
+            <h3>📋 Draft Management</h3>
+            <button class="btn btn-primary" onclick="viewCurrentDraft()">
+                👀 View Current Draft
+            </button>
+            <button class="btn btn-success" onclick="createManualDraft()">
+                ✍️ Create Manual Draft
+            </button>
+            <button class="btn btn-danger" onclick="deleteDraft()">
+                🗑️ Delete Draft
+            </button>
+        </div>
+
+        <!-- Log Output -->
+        <div id="logOutput" class="log-output">Ready for testing...\n</div>
+    </div>
+
+    <script>
+        // Utility logging function
+        function log(message) {
+            const logOutput = document.getElementById('logOutput');
+            const timestamp = new Date().toLocaleTimeString();
+            logOutput.textContent += `[${timestamp}] ${message}\n`;
+            logOutput.scrollTop = logOutput.scrollHeight;
+            console.log(message);
+        }
+
+        // Clear log
+        function clearLog() {
+            document.getElementById('logOutput').textContent = 'Log cleared...\n';
+        }
+
+        // Test functions
+        function fillReservationFormAndTest() {
+            log('🚀 Starting reservation form fill and test...');
+            
+            const firstName = document.getElementById('testFirstName').value;
+            const lastName = document.getElementById('testLastName').value;
+            const email = document.getElementById('testEmail').value;
+            const phone = document.getElementById('testPhone').value;
+            const company = document.getElementById('testCompany').value;
+
+            // Store test data in localStorage for the reservation form to read
+            const testData = {
+                action: 'fillAndTest',
+                data: {
+                    billingFirstName: firstName,
+                    billingLastName: lastName,
+                    billingEmail: email,
+                    billingPhone: phone,
+                    billingCompany: company
+                }
+            };
+            
+            localStorage.setItem('relia_test_data', JSON.stringify(testData));
+            log('💾 Test data stored in localStorage');
+
+            // Try to open reservation form in new window
+            const reservationUrl = 'reservation-form.html?test=1';
+            const popup = window.open(reservationUrl, 'ReservationForm', 'width=1200,height=900');
+            
+            if (popup) {
+                log('✅ Opened reservation form with test parameter');
+                
+                // Listen for messages from the popup
+                const messageHandler = (event) => {
+                    if (event.data && event.data.source === 'reservation-form') {
+                        switch (event.data.type) {
+                            case 'loaded':
+                                log('📋 Reservation form loaded');
+                                // Send fill command via postMessage
+                                popup.postMessage({
+                                    source: 'utilities',
+                                    type: 'fillBillingData',
+                                    data: testData.data
+                                }, '*');
+                                break;
+                            case 'filled':
+                                log('✅ Billing data filled successfully');
+                                // Send test command
+                                popup.postMessage({
+                                    source: 'utilities',
+                                    type: 'testCreateAccount'
+                                }, '*');
+                                break;
+                            case 'accountCreated':
+                                log('🎉 Account creation process initiated');
+                                break;
+                            case 'error':
+                                log('❌ Error from reservation form: ' + event.data.message);
+                                break;
+                        }
+                    }
+                };
+                
+                window.addEventListener('message', messageHandler);
+                
+                // Clean up listener after 30 seconds
+                setTimeout(() => {
+                    window.removeEventListener('message', messageHandler);
+                    log('🧹 Message listener cleaned up');
+                }, 30000);
+                
+            } else {
+                log('❌ Popup blocked, storing test instruction for manual execution');
+                localStorage.setItem('relia_auto_test', 'true');
+                window.location.href = reservationUrl;
+            }
+        }
+
+        function testAccountDraftCreation() {
+            log('💾 Testing account draft creation...');
+            
+            const firstName = document.getElementById('testFirstName').value;
+            const lastName = document.getElementById('testLastName').value;
+            const email = document.getElementById('testEmail').value;
+            const phone = document.getElementById('testPhone').value;
+            const company = document.getElementById('testCompany').value;
+
+            const draft = {
+                first_name: firstName,
+                last_name: lastName,
+                company_name: company,
+                phone: phone,
+                cell_phone: phone,
+                email: email,
+                type: 'individual',
+                status: 'active',
+                types: {
+                    billing: true,
+                    passenger: false,
+                    booking: false
+                },
+                address: {
+                    address_type: 'billing',
+                    address_name: 'Billing',
+                    address_line1: '123 Test St',
+                    address_line2: 'Suite 100',
+                    city: 'Test City',
+                    state: 'CA',
+                    zip: '12345',
+                    country: 'US'
+                }
+            };
+
+            try {
+                localStorage.setItem('relia_account_draft', JSON.stringify(draft));
+                log('✅ Draft created successfully');
+                log('📋 Draft content: ' + JSON.stringify(draft, null, 2));
+                
+                // Verify storage
+                const stored = localStorage.getItem('relia_account_draft');
+                if (stored) {
+                    log('✅ Draft verified in localStorage');
+                } else {
+                    log('❌ Draft not found after storage');
+                }
+            } catch (error) {
+                log('❌ Error creating draft: ' + error.message);
+            }
+        }
+
+        function openAccountsWithTestDraft() {
+            log('🌐 Opening accounts page with test draft...');
+            
+            // Create draft first
+            testAccountDraftCreation();
+            
+            // Wait a moment, then open accounts
+            setTimeout(() => {
+                const url = 'accounts.html?mode=new&from=reservation';
+                const popup = window.open(url, 'AccountsForm', 'width=1200,height=900');
+                
+                if (popup) {
+                    log('✅ Accounts page opened');
+                    try { popup.focus(); } catch { /* ignore */ }
+                } else {
+                    log('❌ Popup blocked, redirecting same window');
+                    window.location.href = url;
+                }
+            }, 500);
+        }
+
+        function debugAccountCreation() {
+            log('🐛 Running account creation debug...');
+            
+            // Try to access reservation form if it's open
+            const reservationWindows = [window];
+            
+            // Check for reservation form elements
+            let foundForm = false;
+            
+            reservationWindows.forEach(win => {
+                try {
+                    const createBtn = win.document.getElementById('createAccountBtn');
+                    if (createBtn) {
+                        foundForm = true;
+                        log('1️⃣ Create Account button found: ✅');
+                        log('   - Button text: ' + createBtn.textContent);
+                        log('   - Button visible: ' + (createBtn.offsetParent !== null));
+                        log('   - Button disabled: ' + createBtn.disabled);
+                        
+                        // Check billing fields
+                        const billingFields = {
+                            firstName: win.document.getElementById('billingFirstName'),
+                            lastName: win.document.getElementById('billingLastName'),
+                            company: win.document.getElementById('billingCompany'),
+                            phone: win.document.getElementById('billingPhone'),
+                            email: win.document.getElementById('billingEmail')
+                        };
+                        
+                        log('2️⃣ Billing form fields:');
+                        Object.entries(billingFields).forEach(([name, element]) => {
+                            if (element) {
+                                log(`   - ${name}: ${element.value || '(empty)'}`);
+                            } else {
+                                log(`   - ${name}: ELEMENT NOT FOUND`);
+                            }
+                        });
+                        
+                        // Check ReservationForm instance
+                        log('3️⃣ ReservationForm instance: ' + typeof win.reservationForm);
+                        if (win.reservationForm) {
+                            log('   - Has createAccountFromBilling method: ' + (typeof win.reservationForm.createAccountFromBilling === 'function'));
+                        }
+                    }
+                } catch (error) {
+                    // Ignore cross-origin errors
+                }
+            });
+            
+            if (!foundForm) {
+                log('❌ No reservation form found. Please open reservation-form.html first.');
+            }
+            
+            // Check localStorage
+            const existingDraft = localStorage.getItem('relia_account_draft');
+            log('4️⃣ Existing account draft: ' + (existingDraft ? 'EXISTS' : 'NOT FOUND'));
+            if (existingDraft) {
+                try {
+                    const parsed = JSON.parse(existingDraft);
+                    log('   - Draft preview: ' + JSON.stringify(parsed, null, 2).substring(0, 200) + '...');
+                } catch (e) {
+                    log('   - Draft parsing error: ' + e.message);
+                }
+            }
+        }
+
+        function checkReservationFormElements() {
+            log('📋 Checking reservation form elements...');
+            
+            // Check if we can access reservation form
+            const reservationUrl = 'reservation-form.html';
+            log('🔍 Checking for reservation form at: ' + reservationUrl);
+            
+            // If current page is reservation form
+            if (window.location.pathname.includes('reservation-form.html')) {
+                log('✅ Currently on reservation form page');
+                
+                const elements = [
+                    'createAccountBtn',
+                    'billingFirstName', 
+                    'billingLastName',
+                    'billingEmail',
+                    'billingPhone',
+                    'billingCompany'
+                ];
+                
+                elements.forEach(id => {
+                    const element = document.getElementById(id);
+                    log(`${element ? '✅' : '❌'} ${id}: ${element ? 'FOUND' : 'NOT FOUND'}`);
+                });
+                
+            } else {
+                log('⚠️ Not on reservation form page. Opening reservation form...');
+                window.open(reservationUrl, 'ReservationForm', 'width=1200,height=900');
+            }
+        }
+
+        function inspectAccountDraft() {
+            log('📝 Inspecting account draft...');
+            
+            const draft = localStorage.getItem('relia_account_draft');
+            if (draft) {
+                try {
+                    const parsed = JSON.parse(draft);
+                    log('✅ Account draft found:');
+                    log(JSON.stringify(parsed, null, 2));
+                } catch (error) {
+                    log('❌ Error parsing draft: ' + error.message);
+                    log('Raw draft: ' + draft);
+                }
+            } else {
+                log('❌ No account draft found in localStorage');
+            }
+        }
+
+        function clearAccountDraft() {
+            log('🗑️ Clearing account draft...');
+            
+            try {
+                localStorage.removeItem('relia_account_draft');
+                log('✅ Account draft cleared');
+                
+                // Verify
+                const check = localStorage.getItem('relia_account_draft');
+                if (!check) {
+                    log('✅ Verified: draft no longer exists');
+                } else {
+                    log('⚠️ Warning: draft still exists after removal');
+                }
+            } catch (error) {
+                log('❌ Error clearing draft: ' + error.message);
+            }
+        }
+
+        function viewCurrentDraft() {
+            inspectAccountDraft();
+        }
+
+        function createManualDraft() {
+            log('✍️ Creating manual draft...');
+            testAccountDraftCreation();
+        }
+
+        function deleteDraft() {
+            clearAccountDraft();
+        }
+
+        function directNavigationTest() {
+            log('🎯 Starting direct navigation test...');
+            
+            const firstName = document.getElementById('testFirstName').value;
+            const lastName = document.getElementById('testLastName').value;
+            const email = document.getElementById('testEmail').value;
+            const phone = document.getElementById('testPhone').value;
+            const company = document.getElementById('testCompany').value;
+
+            // Store test instructions in localStorage for manual testing
+            const testInstructions = {
+                message: 'Manual Test Instructions',
+                steps: [
+                    '1. Fill these values in the billing section:',
+                    `   - First Name: ${firstName}`,
+                    `   - Last Name: ${lastName}`,
+                    `   - Email: ${email}`,
+                    `   - Phone: ${phone}`,
+                    `   - Company: ${company}`,
+                    '2. Click the "Create Account" button',
+                    '3. Watch the browser console for debug messages',
+                    '4. Check if the accounts page opens with filled data'
+                ],
+                testData: {
+                    billingFirstName: firstName,
+                    billingLastName: lastName,
+                    billingEmail: email,
+                    billingPhone: phone,
+                    billingCompany: company
+                }
+            };
+            
+            localStorage.setItem('relia_test_instructions', JSON.stringify(testInstructions));
+            log('📋 Test instructions stored for manual testing');
+            log('Instructions:');
+            testInstructions.steps.forEach(step => log(step));
+            
+            // Navigate to reservation form
+            setTimeout(() => {
+                window.location.href = 'reservation-form.html?test=manual';
+            }, 3000);
+        }
+
+        // Clear log button
+        document.addEventListener('DOMContentLoaded', () => {
+            const logOutput = document.getElementById('logOutput');
+            logOutput.addEventListener('dblclick', () => {
+                clearLog();
+            });
+            
+            log('🔧 Account Creation Utilities loaded');
+            log('💡 Double-click this log area to clear it');
+        });
+    </script>
+</body>
+</html>
