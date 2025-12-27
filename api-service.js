@@ -3,6 +3,8 @@ import { getSupabaseConfig, initSupabase } from './config.js';
 
 let supabaseClient = null;
 let lastApiError = null;
+let isInitializing = false;
+let initializationPromise = null;
 
 // Explicit dev-local switch: disabled by default to keep Supabase primary
 const DEV_LOCAL_FLAG_KEY = 'relia_use_local_dev_data';
@@ -308,24 +310,48 @@ export async function getOrgContextOrThrow(client) {
 }
 
 /**
- * Initialize the Supabase client
+ * Initialize the Supabase client, ensuring it only runs once.
  */
-export async function setupAPI() {
-  try {
-    supabaseClient = await initSupabase();
-    
-    // Ensure token is valid on startup (non-blocking)
-    const isValid = await ensureValidToken(supabaseClient);
-    if (!isValid) {
-      console.warn('⚠️ Token validation indicated potential issues, but proceeding');
-    }
-    
-    console.log('✅ Supabase API initialized successfully');
-    return supabaseClient;
-  } catch (error) {
-    console.error('❌ Failed to initialize Supabase:', error);
-    throw error;
+export function setupAPI() {
+  if (initializationPromise) {
+    return initializationPromise;
   }
+
+  if (isInitializing) {
+    // This should not happen if logic is correct, but as a safeguard:
+    return new Promise(resolve => {
+      const check = () => {
+        if (!isInitializing) resolve(supabaseClient);
+        else setTimeout(check, 50);
+      };
+      check();
+    });
+  }
+
+  isInitializing = true;
+  
+  initializationPromise = (async () => {
+    try {
+      supabaseClient = initSupabase(); // Now synchronous
+      
+      // Ensure token is valid on startup (non-blocking)
+      const isValid = await ensureValidToken(supabaseClient);
+      if (!isValid) {
+        console.warn('⚠️ Token validation indicated potential issues, but proceeding');
+      }
+      
+      console.log('✅ Supabase API initialized successfully');
+      isInitializing = false;
+      return supabaseClient;
+    } catch (error) {
+      console.error('❌ Failed to initialize Supabase:', error);
+      isInitializing = false;
+      initializationPromise = null; // Allow retry
+      throw error;
+    }
+  })();
+
+  return initializationPromise;
 }
 
 /**
@@ -336,6 +362,217 @@ export function getSupabaseClient() {
     console.warn('⚠️ Supabase client not initialized. Call setupAPI() first.');
   }
   return supabaseClient;
+}
+
+// ----------------------------------------------------------------------------
+// Organization Settings (My Office)
+// ----------------------------------------------------------------------------
+// Stores organization-wide settings in Supabase (JSONB), with local dev fallback.
+
+const LOCAL_ORG_SETTINGS_KEY = 'org_settings';
+
+function mergeSettings(base, patch) {
+  try {
+    const out = { ...(base || {}) };
+    const apply = (obj, path, value) => {
+      const parts = path.split('.');
+      let cur = out;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const p = parts[i];
+        if (typeof cur[p] !== 'object' || cur[p] === null) cur[p] = {};
+        cur = cur[p];
+      }
+      cur[parts[parts.length - 1]] = value;
+    };
+    Object.entries(patch || {}).forEach(([k, v]) => apply(out, k, v));
+    return out;
+  } catch (e) {
+    console.warn('⚠️ mergeSettings failed, returning patch over base', e);
+    return { ...(base || {}), ...(patch || {}) };
+  }
+}
+
+export async function fetchOrganizationSettings() {
+  const client = getSupabaseClient();
+  const useLocalDev = isLocalDevModeEnabled();
+  if (useLocalDev || !client) {
+    const raw = localStorage.getItem(LOCAL_ORG_SETTINGS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    console.log('📥 Loaded organization settings (local):', Object.keys(parsed).length);
+    return parsed;
+  }
+
+  try {
+    lastApiError = null;
+    const { organizationId } = await getOrgContextOrThrow(client);
+    const { data, error } = await client
+      .from('organization_settings')
+      .select('settings')
+      .eq('organization_id', organizationId)
+      .maybeSingle();
+
+    if (error) throw error;
+    const settings = (data && data.settings) ? data.settings : {};
+    console.log('📥 Loaded organization settings (Supabase):', Object.keys(settings).length);
+    return settings;
+  } catch (error) {
+    console.error('❌ Error fetching organization settings:', error);
+    lastApiError = error;
+    // Graceful fallback to local
+    const raw = localStorage.getItem(LOCAL_ORG_SETTINGS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  }
+}
+
+export async function upsertOrganizationSettings(partialSettings) {
+  const client = getSupabaseClient();
+  const useLocalDev = isLocalDevModeEnabled();
+  if (useLocalDev || !client) {
+    const current = JSON.parse(localStorage.getItem(LOCAL_ORG_SETTINGS_KEY) || '{}');
+    const merged = mergeSettings(current, partialSettings || {});
+    localStorage.setItem(LOCAL_ORG_SETTINGS_KEY, JSON.stringify(merged));
+    console.log('✅ Saved organization settings (local)');
+    return { success: true, settings: merged };
+  }
+
+  try {
+    lastApiError = null;
+    const { organizationId, userId } = await getOrgContextOrThrow(client);
+
+    // Fetch current
+    const { data: existingRow, error: fetchError } = await client
+      .from('organization_settings')
+      .select('id, settings')
+      .eq('organization_id', organizationId)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    const current = existingRow?.settings || {};
+    const merged = mergeSettings(current, partialSettings || {});
+
+    if (existingRow?.id) {
+      const { data, error } = await client
+        .from('organization_settings')
+        .update({ settings: merged, updated_by: userId })
+        .eq('id', existingRow.id)
+        .select('settings')
+        .maybeSingle();
+      if (error) throw error;
+      console.log('✅ Updated organization settings (Supabase)');
+      return { success: true, settings: data?.settings || merged };
+    }
+
+    const { data, error } = await client
+      .from('organization_settings')
+      .insert([{ organization_id: organizationId, settings: merged, updated_by: userId }])
+      .select('settings')
+      .maybeSingle();
+    if (error) throw error;
+    console.log('✅ Inserted organization settings (Supabase)');
+    return { success: true, settings: data?.settings || merged };
+  } catch (error) {
+    console.error('❌ Error upserting organization settings:', error);
+    lastApiError = error;
+    // Store locally as safety net
+    const current = JSON.parse(localStorage.getItem(LOCAL_ORG_SETTINGS_KEY) || '{}');
+    const merged = mergeSettings(current, partialSettings || {});
+    localStorage.setItem(LOCAL_ORG_SETTINGS_KEY, JSON.stringify(merged));
+    return { success: false, error: error.message, settings: merged };
+  }
+}
+
+export async function listSettingDefinitions() {
+  // Try local inventory first; then Supabase `setting_definitions` if available
+  try {
+    const resp = await fetch('settings-inventory.json');
+    if (resp.ok) {
+      const json = await resp.json();
+      return json;
+    }
+  } catch (e) {
+    console.warn('⚠️ Could not load local settings-inventory.json:', e?.message || e);
+  }
+
+  const client = getSupabaseClient();
+  if (!client) return { version: 0, categories: [], notes: 'No client' };
+  try {
+    const { data, error } = await client
+      .from('setting_definitions')
+      .select('key, title, category, data_type, default_value, options')
+      .order('category', { ascending: true })
+      .order('title', { ascending: true });
+    if (error) throw error;
+    // Fold into categories
+    const categories = {};
+    (data || []).forEach(row => {
+      const catId = (row.category || 'General').toLowerCase().replace(/\s+/g, '-');
+      if (!categories[catId]) categories[catId] = { id: catId, title: row.category || 'General', settings: [] };
+      categories[catId].settings.push({
+        key: row.key,
+        type: row.data_type,
+        default: row.default_value,
+        options: row.options,
+        title: row.title
+      });
+    });
+    return { version: 1, categories: Object.values(categories) };
+  } catch (error) {
+    console.error('❌ Error listing setting definitions:', error);
+    return { version: 0, categories: [], notes: 'Fetch error' };
+  }
+}
+
+// Seed Supabase `setting_definitions` from local settings inventory
+export async function seedSettingDefinitionsFromInventory() {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: false, error: 'Supabase client not initialized' };
+  }
+
+  try {
+    // Load local inventory - try current dir first, then parent
+    let resp = await fetch('settings-inventory.json');
+    if (!resp.ok) {
+      resp = await fetch('../settings-inventory.json');
+    }
+    if (!resp.ok) {
+      throw new Error('settings-inventory.json not found or failed to load');
+    }
+    const inventory = await resp.json();
+    const categories = Array.isArray(inventory.categories) ? inventory.categories : [];
+
+    const rows = [];
+    categories.forEach(cat => {
+      const title = cat.title || cat.id || 'General';
+      const settings = Array.isArray(cat.settings) ? cat.settings : [];
+      settings.forEach(s => {
+        rows.push({
+          key: s.key,
+          title: s.title || s.key,
+          category: title,
+          data_type: s.type || 'string',
+          default_value: typeof s.default === 'undefined' ? null : s.default,
+          options: s.options || null
+        });
+      });
+    });
+
+    if (rows.length === 0) {
+      return { success: false, error: 'No settings found in inventory' };
+    }
+
+    // Upsert into setting_definitions
+    const { error } = await client
+      .from('setting_definitions')
+      .upsert(rows, { onConflict: 'key' });
+
+    if (error) throw error;
+    console.log(`✅ Seeded ${rows.length} setting definitions`);
+    return { success: true, count: rows.length };
+  } catch (error) {
+    console.error('❌ Error seeding setting definitions:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 /**
@@ -462,34 +699,12 @@ export async function fetchAffiliates() {
   try {
     lastApiError = null;
     
-    // Ensure token is valid before making request
-    const isValid = await ensureValidToken(client);
-    if (!isValid) {
-      console.warn('⚠️ Token validation failed');
-      if (confirm('Your session has expired. Would you like to log in again?')) {
-        window.location.href = 'auth.html';
-      }
-      return null;
-    }
-    
     const { data, error } = await client
       .from('affiliates')
       .select('*')
       .order('company_name', { ascending: true });
 
     console.log('🔍 fetchAffiliates - data:', data?.length, 'error:', error);
-    
-    // Handle JWT expiration
-    if (error && error.status === 401 && error.message?.includes('JWT')) {
-      console.warn('⚠️ JWT expired - clearing session');
-      localStorage.removeItem('supabase_session');
-      localStorage.removeItem('supabase_access_token');
-      // Optionally redirect to login
-      if (confirm('Your session has expired. Would you like to log in again?')) {
-        window.location.href = 'auth.html';
-      }
-      return null;
-    }
     
     if (error) throw error;
     return data;
@@ -1046,36 +1261,10 @@ export async function createReservation(reservationData) {
     const { organizationId, userId } = await getOrgContextOrThrow(client);
     console.log('🆔 Using organization ID:', organizationId, 'User ID:', userId);
     
-    // Generate confirmation number with duplicate checking
-    let confirmationNumber = reservationData.confirmationNumber || 
-                            reservationData.confirmation_number;
-    
-    if (!confirmationNumber) {
-      // Import the duplicate-safe function dynamically to avoid circular imports
-      try {
-        const { generateUniqueConfirmationNumber } = await import('./supabase-db.js');
-        confirmationNumber = await generateUniqueConfirmationNumber();
-        console.log('✅ Generated unique confirmation number:', confirmationNumber);
-      } catch (importError) {
-        console.warn('⚠️ Could not import generateUniqueConfirmationNumber, using fallback');
-        confirmationNumber = `${Date.now()}`;
-      }
-    } else {
-      // If confirmation number was provided, check for duplicates
-      try {
-        const { checkConfirmationNumberExists } = await import('./supabase-db.js');
-        const exists = await checkConfirmationNumberExists(confirmationNumber);
-        if (exists) {
-          const error = new Error(`Confirmation number ${confirmationNumber} already exists. Please use a different number.`);
-          error.code = 'DUPLICATE_CONFIRMATION_NUMBER';
-          throw error;
-        }
-      } catch (importError) {
-        console.warn('⚠️ Could not check for duplicate confirmation number:', importError.message);
-      }
-    }
-    
-    console.log('🔢 Final confirmation number to use:', confirmationNumber);
+    // Confirmation number is now generated server-side by the database sequence
+    // If client provided one explicitly, use it; otherwise the DB will assign it
+    let confirmationNumber = reservationData.confirmationNumber || reservationData.confirmation_number;
+    console.log('ℹ️  Confirmation number: ' + (confirmationNumber ? 'using provided value' : 'will be generated server-side'));
     
     // Parse pickup/dropoff from routing stops
     const stops = reservationData.routing?.stops || [];
@@ -1085,7 +1274,6 @@ export async function createReservation(reservationData) {
     // First attempt: Try normal insert with organization
     let insertData = {
       organization_id: organizationId.startsWith('dev-org-') ? null : organizationId,
-      confirmation_number: confirmationNumber,
       booked_by_user_id: userId,
       account_id: reservationData.accountId || reservationData.account_id || null,
       status: reservationData.status || 'pending',
@@ -1112,6 +1300,11 @@ export async function createReservation(reservationData) {
       currency: reservationData.currency || 'USD',
       timezone: reservationData.timezone || null
     };
+    
+    // Only include confirmation_number if explicitly provided; otherwise let DB generate it
+    if (confirmationNumber) {
+      insertData.confirmation_number = confirmationNumber;
+    }
     
     const { data, error } = await client
       .from('reservations')
@@ -1268,6 +1461,42 @@ export async function getReservation(reservationId) {
   } catch (error) {
     console.error('Error fetching reservation:', error);
     return null;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Reservation Attachment Helpers (HTML notes/files per title)
+// ----------------------------------------------------------------------------
+// These helpers provide a simple way to save/open per-reservation HTML content
+// keyed by a human title. LocalStorage-first, with Supabase fallback when table
+// `reservation_attachments` exists and permissions allow.
+export async function getReservationAttachmentTitles() {
+  try {
+    const { getTrackedTitles } = await import('./HtmlAttachmentService.js');
+    return getTrackedTitles();
+  } catch (e) {
+    console.warn('⚠️ getReservationAttachmentTitles import error:', e?.message || e);
+    return [];
+  }
+}
+
+export async function saveReservationAttachment(reservationId, title, contentHtml) {
+  try {
+    const { persistAttachment } = await import('./HtmlAttachmentService.js');
+    return await persistAttachment(reservationId, title, contentHtml);
+  } catch (e) {
+    console.warn('⚠️ saveReservationAttachment fallback due to import error:', e?.message || e);
+    return { success: false, error: e?.message || String(e) };
+  }
+}
+
+export async function fetchReservationAttachments(reservationId) {
+  try {
+    const { fetchAllForReservation } = await import('./HtmlAttachmentService.js');
+    return await fetchAllForReservation(reservationId);
+  } catch (e) {
+    console.warn('⚠️ fetchReservationAttachments fallback due to import error:', e?.message || e);
+    return [];
   }
 }
 

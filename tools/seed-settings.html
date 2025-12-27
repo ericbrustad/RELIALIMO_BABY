@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Seed Setting Definitions</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Load Supabase SDK from unpkg CDN with ES module -->
+  <script async src="https://unpkg.com/@supabase/supabase-js@2/dist/main.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; }
+    .log { white-space: pre-wrap; background: #f7f7f7; padding: 12px; border: 1px solid #ddd; border-radius: 6px; }
+    button { padding: 10px 14px; border-radius: 6px; border: 1px solid #888; cursor: pointer; }
+    button:hover { background: #fafafa; }
+  </style>
+</head>
+<body>
+  <h1>Seed Setting Definitions</h1>
+  <p>This utility reads <code>settings-inventory.json</code> and upserts rows into Supabase <code>setting_definitions</code>.</p>
+  <p><strong>Prerequisite:</strong> Tables created per <a href="../SUPABASE_SCHEMA_SETTINGS.md" target="_blank">SUPABASE_SCHEMA_SETTINGS.md</a> and you are logged in via app auth.</p>
+
+  <p>
+    <button id="seedBtn">Seed from Inventory</button>
+    <span id="status"></span>
+  </p>
+  <div class="log" id="log"></div>
+
+  <script type="module">
+    import { setupAPI, seedSettingDefinitionsFromInventory, listSettingDefinitions } from '../api-service.js';
+
+    const logEl = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+    function log(msg) { logEl.textContent += `\n${msg}`; }
+    function setStatus(msg) { statusEl.textContent = msg; }
+
+    async function init() {
+      try {
+        setStatus('Initializing Supabase…');
+        await setupAPI();
+        setStatus('Ready');
+        log('API initialized.');
+      } catch (e) {
+        setStatus('Init failed');
+        log('Init error: ' + (e?.message || e));
+      }
+    }
+
+    async function seed() {
+      setStatus('Seeding…');
+      try {
+        const result = await seedSettingDefinitionsFromInventory();
+        if (result.success) {
+          log(`✅ Upserted ${result.count} definitions.`);
+        } else {
+          log(`❌ Seed error: ${result.error}`);
+        }
+        setStatus('Done');
+        // Show categories fetched from DB afterwards
+        const defs = await listSettingDefinitions();
+        log('Fetched categories: ' + JSON.stringify(defs.categories?.map(c => c.title), null, 2));
+      } catch (e) {
+        setStatus('Error');
+        log('Seed threw: ' + (e?.message || e));
+      }
+    }
+
+    document.getElementById('seedBtn').addEventListener('click', seed);
+
+    init();
+  </script>
+</body>
+</html>

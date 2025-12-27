@@ -1,0 +1,12 @@
+{
+  "name": "relialimo",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "RELIA LIMO Transportation Management System",
+  "scripts": {
+    "dev": "python -m http.server 3000"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0"
+  }
+}

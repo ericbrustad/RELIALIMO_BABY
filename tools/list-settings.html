@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>List Setting Definitions</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; }
+    ul { padding-left: 20px; }
+    li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <h1>List Setting Definitions</h1>
+  <p>Loads categories via <code>listSettingDefinitions()</code> and renders them.</p>
+  <div id="content">Loading…</div>
+
+  <script type="module">
+    import { setupAPI, listSettingDefinitions } from '../api-service.js';
+
+    const content = document.getElementById('content');
+
+    async function init() {
+      try {
+        await setupAPI();
+        const defs = await listSettingDefinitions();
+        if (!defs.categories || defs.categories.length === 0) {
+          content.textContent = 'No categories found (create tables and seed first).';
+          return;
+        }
+        const ul = document.createElement('ul');
+        defs.categories.forEach(c => {
+          const li = document.createElement('li');
+          li.textContent = `${c.title} (${c.settings?.length || 0})`;
+          ul.appendChild(li);
+        });
+        content.textContent = '';
+        content.appendChild(ul);
+      } catch (e) {
+        content.textContent = 'Error: ' + (e?.message || e);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
