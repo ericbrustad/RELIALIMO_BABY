@@ -32,29 +32,11 @@ class PreferencesFormHandler {
     if (window.CompanySettingsManager) {
       console.log('[PreferencesFormHandler] CompanySettingsManager found, creating instance');
       this.settingsManager = new window.CompanySettingsManager();
-      // Populate legacy fields from saved settings (e.g., confirmation number start)
-      this.populateLegacyFields();
       this.setupEventListeners();
       console.log('[PreferencesFormHandler] Initialization complete - event listeners attached');
     } else {
       console.error('[PreferencesFormHandler] CompanySettingsManager not found after 10s timeout');
       console.log('[PreferencesFormHandler] Available globals:', Object.keys(window).filter(k => k.includes('Settings') || k.includes('Preferences')));
-    }
-  }
-
-  /**
-   * Populate legacy my-office inputs from saved settings
-   */
-  populateLegacyFields() {
-    try {
-      const startVal = this.settingsManager.getSetting('confirmationNumberStart');
-      const startEl = document.getElementById('confirmationNumberStart');
-      if (startEl && startVal !== undefined && startVal !== null && startVal !== '') {
-        startEl.value = startVal;
-        console.log('[PreferencesFormHandler] Set confirmationNumberStart from settings:', startVal);
-      }
-    } catch (e) {
-      console.warn('[PreferencesFormHandler] Could not populate legacy fields:', e);
     }
   }
 
@@ -161,9 +143,7 @@ class PreferencesFormHandler {
     // Special field ID mappings for more reliable capture
     const fieldIdMap = {
       'myStartPage': 'defaultStartPage',
-      'myTimeZone': 'defaultTimeZone',
-      // Legacy my-office numeric start for confirmation numbers
-      'confirmationNumberStart': 'confirmationNumberStart'
+      'myTimeZone': 'defaultTimeZone'
     };
 
     // Try to get fields by ID first (for known fields)
@@ -191,51 +171,13 @@ class PreferencesFormHandler {
       return formData;
     }
 
-    // Special mapping for known field labels to correct setting keys (camelCase)
+    // Special mapping for known field labels to correct setting keys
     const labelToKeyMap = {
-      // Startup & locale
       'my start page': 'defaultStartPage',
       'my time zone': 'defaultTimeZone',
       'default date format': 'defaultDateFormat',
       'default time format': 'defaultTimeFormat',
-      'default reservation type': 'defaultReservationType',
-      // Company info
-      'company name': 'companyName',
-      'phone number': 'companyPhone',
-      'email address': 'companyEmail',
-      'website': 'companyWebsite',
-      'address': 'companyAddress',
-      'city': 'companyCity',
-      'state': 'companyState',
-      'zip code': 'companyZip',
-      // Financial
-      'currency': 'defaultCurrency',
-      'default tax rate (%)': 'defaultTaxRate',
-      'minimum reservation amount ($)': 'minimumReservationAmount',
-      'accept credit cards': 'acceptCreditCards',
-      'accept cash': 'acceptCash',
-      'accept checks': 'acceptCheck',
-      'accept online payments': 'acceptOnlinePayment',
-      // Reservations
-      'require payment upfront': 'requirePaymentUpfront',
-      'require advance reservation (hours)': 'requireAdvanceReservation',
-      'cancellation policy (hours)': 'cancellationPolicyHours',
-      'no-show fee (%)': 'noShowFeePercent',
-      'max passengers per vehicle': 'maxPassengersPerVehicle',
-      // System
-      'maintenance mode': 'maintenanceMode',
-      'enable analytics': 'enableAnalytics',
-      'enable reporting': 'enableReporting',
-      'data backup frequency': 'dataBackupFrequency',
-      // Confirmation numbers
-      'confirmation number start': 'confirmationNumberStart'
-    };
-
-    // Helper to convert label text to a camelCase key
-    const toCamelKey = (text) => {
-      const cleaned = text.replace(/[^a-z0-9 ]+/g, ' ').trim().toLowerCase();
-      const parts = cleaned.split(/\s+/);
-      return parts.map((p, i) => i === 0 ? p : p.charAt(0).toUpperCase() + p.slice(1)).join('');
+      'default reservation type': 'defaultReservationType'
     };
 
     // Collect form-group data
@@ -247,6 +189,7 @@ class PreferencesFormHandler {
       const input = group.querySelector('input, select, textarea');
       
       if (label && input) {
+        // Get label text
         const labelText = label.textContent.trim();
         const labelLower = labelText.toLowerCase().replace(/:.*$/, '').trim();
         
@@ -257,7 +200,13 @@ class PreferencesFormHandler {
           inputValue: input.value
         });
         
-        let key = labelToKeyMap[labelLower] || toCamelKey(labelLower);
+        // Check if this label has a special mapping
+        let key = labelToKeyMap[labelLower];
+        
+        // If not in special map, generate key from label text
+        if (!key) {
+          key = labelLower.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        }
         
         if (key && input && !formData[key]) {
           let value;
@@ -272,33 +221,6 @@ class PreferencesFormHandler {
           formData[key] = value;
           console.log(`[PreferencesFormHandler] ✅ ADDED: "${labelLower}" -> key "${key}" = "${value}"`);
         }
-      }
-    });
-
-    // Also collect legacy "setting-row" style preferences within the section
-    const settingRows = section.querySelectorAll('.setting-row');
-    console.log(`[PreferencesFormHandler] Found ${settingRows.length} legacy setting rows in section`);
-    settingRows.forEach((row, idx) => {
-      const labelEl = row.querySelector('.setting-label') || row.querySelector('label') || row.querySelector('.setting-label-inline');
-      const inputEl = row.querySelector('input.setting-control, select.setting-control, textarea.setting-control')
-        || row.querySelector('input.setting-control-inline, select.setting-control-inline')
-        || row.querySelector('input, select, textarea');
-      if (!labelEl || !inputEl) return;
-      const labelText = labelEl.textContent.trim();
-      const labelLower = labelText.toLowerCase().replace(/:.*$/, '').trim();
-      let key = labelToKeyMap[labelLower] || toCamelKey(labelLower);
-      if (!key) return;
-      let value;
-      if (inputEl.type === 'checkbox') {
-        value = inputEl.checked;
-      } else if (inputEl.type === 'number') {
-        value = parseFloat(inputEl.value) || 0;
-      } else {
-        value = inputEl.value;
-      }
-      if (formData[key] === undefined) {
-        formData[key] = value;
-        console.log(`[PreferencesFormHandler] ✅ (legacy) ADDED: "${labelLower}" -> key "${key}" = "${value}"`);
       }
     });
 

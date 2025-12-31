@@ -789,12 +789,6 @@
 
     <link rel="stylesheet" href="dispatch-grid-setup.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="env.js"></script>
-    <script type="module" src="auth-guard.js"></script>
-    <script type="module" src="user-menu.js"></script>
-    <script type="module" src="CompanySettingsManager.js"></script>
-    <script type="module" src="SettingsApplicationManager.js"></script>
-    <script type="module" src="dev-mode-banner.js"></script>
     <script type="module" src="dispatch-grid.js"></script>
     <script>
       function openGridSetup() {
@@ -817,6 +811,28 @@
           
           document.querySelectorAll('.setup-tab').forEach(t => t.classList.remove('active'));
           tab.classList.add('active');
+          
+          document.querySelectorAll('.setup-content').forEach(content => {
+            content.style.display = 'none';
+          });
+          
+          document.getElementById(tabName === 'grid' ? 'gridSetupContent' : 
+                                  tabName === 'datetime' ? 'dateTimeContent' :
+                                  tabName === 'conflicts' ? 'conflictsContent' :
+                                  tabName === 'prefs' ? 'prefsContent' : 'companyContent').style.display = 'block';
+        });
+      });
+
+      // Close modal when clicking outside
+      document.getElementById('setupModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'setupModal') {
+          closeGridSetup();
+        }
+      });
+    </script>
+  </body>
+</html>
+      tab.classList.add('active');
           
           document.querySelectorAll('.setup-content').forEach(content => {
             content.style.display = 'none';

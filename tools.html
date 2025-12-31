@@ -11,7 +11,6 @@
         <!-- Tab Navigation -->
         <div class="tools-tabs">
             <button class="tools-tab active" data-tab="print-queue">Print Queue</button>
-            <button class="tools-tab" data-tab="settings">Settings</button>
         </div>
 
         <!-- Print Queue Tab -->
@@ -60,26 +59,8 @@
                 </div>
             </div>
         </div>
-
-        <!-- Settings Tab -->
-        <div class="tools-content" id="settings" style="padding:16px;">
-            <h2>Settings Utilities</h2>
-            <p>Seed and inspect setting definitions backed by Supabase.</p>
-            <ul>
-                <li><a href="tools/seed-settings.html" target="_blank">Seed Setting Definitions</a></li>
-                <li><a href="tools/list-settings.html" target="_blank">List Setting Definitions</a></li>
-                <li><a href="SUPABASE_SCHEMA_SETTINGS.md" target="_blank">Supabase Settings Schema</a></li>
-                <li><a href="SETTINGS_SEEDING_GUIDE.md" target="_blank">Seeding Guide</a></li>
-            </ul>
-            <p><em>Note:</em> Ensure you are logged in via the app before seeding.</p>
-        </div>
     </div>
 
     <script src="tools.js"></script>
-    <script type="module" src="auth-guard.js"></script>
-    <script type="module" src="user-menu.js"></script>
-    <script type="module" src="CompanySettingsManager.js"></script>
-    <script type="module" src="SettingsApplicationManager.js"></script>
-    <script type="module" src="dev-mode-banner.js"></script>
 </body>
 </html>

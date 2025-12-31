@@ -8,8 +8,6 @@ class CompanySettingsManager {
     this.settings = {};
     this.settingsKey = 'relia_company_settings';
     this.loadSettings();
-    // Non-blocking sync from Supabase
-    this.syncFromSupabase().catch(err => console.warn('[CompanySettingsManager] Supabase sync skip:', err?.message || err));
   }
 
   /**
@@ -19,21 +17,13 @@ class CompanySettingsManager {
     return {
       // General Settings
       companyName: 'Your Company Name',
-      companyStreetAddress: '',
-      companyStreetAddress2: '',
+      companyPhone: '',
+      companyEmail: '',
+      companyWebsite: '',
+      companyAddress: '',
       companyCity: '',
       companyState: '',
-      companyZipCode: '',
-      companyPrimaryPhone: '',
-      companySecondaryPhone: '',
-      companyFax: '',
-      companyGeneralEmail: '',
-      companyReservationEmail: '',
-      companyQuoteEmail: '',
-      companyBillingEmail: '',
-      companyWebsite: '',
-      companyEin: '',
-      companyShowEinOnDocs: false,
+      companyZip: '',
       
       // Business Settings
       businessType: 'Transportation',
@@ -44,7 +34,6 @@ class CompanySettingsManager {
       
       // Startup Page Setting (used by main.js for navigation)
       defaultStartPage: 'reservations',
-      defaultTimeZone: 'CST',
       defaultCurrency: 'USD',
       defaultTaxRate: 0,
       minimumReservationAmount: 0,
@@ -65,8 +54,6 @@ class CompanySettingsManager {
       cancellationPolicyHours: 2,
       noShowFeePercent: 50,
       maxPassengersPerVehicle: 6,
-      // Confirmation numbers
-      confirmationNumberStart: 100000,
       
       // Communication Settings
       sendConfirmationEmail: true,
@@ -165,8 +152,6 @@ class CompanySettingsManager {
         const parsed = JSON.parse(retrieved);
         console.log('[CompanySettingsManager] ✅ Parsed from storage - defaultStartPage:', parsed.defaultStartPage);
       }
-      // Fire-and-forget Supabase persistence
-      this.persistToSupabase().catch(err => console.warn('[CompanySettingsManager] Supabase save skip:', err?.message || err));
       
       return true;
     } catch (error) {
@@ -356,42 +341,6 @@ class CompanySettingsManager {
         }
       }
     };
-  }
-
-  /**
-   * Sync latest settings from Supabase and merge locally
-   */
-  async syncFromSupabase() {
-    try {
-      const api = await import('./api-service.js');
-      if (!api.fetchOrganizationSettings) return;
-      const remote = await api.fetchOrganizationSettings();
-      if (remote && typeof remote === 'object') {
-        this.settings = { ...this.getDefaultSettings(), ...this.settings, ...remote };
-        localStorage.setItem(this.settingsKey, JSON.stringify(this.settings));
-        console.log('[CompanySettingsManager] ✅ Synced from Supabase');
-      }
-    } catch (e) {
-      console.warn('[CompanySettingsManager] syncFromSupabase failed:', e?.message || e);
-    }
-  }
-
-  /**
-   * Persist current settings to Supabase
-   */
-  async persistToSupabase() {
-    try {
-      const api = await import('./api-service.js');
-      if (!api.upsertOrganizationSettings) return;
-      const result = await api.upsertOrganizationSettings(this.settings || {});
-      if (result?.success) {
-        console.log('[CompanySettingsManager] ✅ Persisted settings to Supabase');
-      } else {
-        console.warn('[CompanySettingsManager] ⚠️ Supabase persist reported:', result?.error || 'unknown');
-      }
-    } catch (e) {
-      console.warn('[CompanySettingsManager] persistToSupabase failed:', e?.message || e);
-    }
   }
 }
 

@@ -416,35 +416,15 @@ export async function searchAccounts(query) {
     // Get organization context for RLS
     const { organizationId } = await getOrgContextOrThrow(client);
     
-    console.log('🔍 Building accounts query for org:', organizationId, 'query:', query);
-    
     // Search across multiple fields using OR conditions
-    // Use PostgREST filter syntax for OR
-    let queryBuilder = client
+    const { data, error } = await client
       .from('accounts')
       .select('*')
-      .eq('organization_id', organizationId);
+      .eq('organization_id', organizationId)
+      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,company_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,account_number.ilike.%${query}%`)
+      .limit(10);
     
-    console.log('🔍 Query builder created:', !!queryBuilder);
-    
-    // Add OR filter using PostgREST syntax
-    const filterStr = `first_name.ilike.%${query}%,last_name.ilike.%${query}%,company_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%,account_number.ilike.%${query}%`;
-    console.log('🔍 OR filter string:', filterStr);
-    
-    queryBuilder = queryBuilder.or(filterStr);
-    console.log('🔍 OR filter added:', !!queryBuilder);
-    
-    queryBuilder = queryBuilder.limit(10);
-    console.log('🔍 Limit added, executing query...');
-    
-    const { data, error } = await queryBuilder;
-    
-    console.log('🔍 Query result - data:', data?.length || 0, 'error:', error?.message || 'none', 'error details:', error);
-    
-    if (error) {
-      console.error('🔍 Full error object:', JSON.stringify(error, null, 2));
-      throw error;
-    }
+    if (error) throw error;
     
     if (data && data.length > 0) {
       console.log('✅ Found', data.length, 'accounts from Supabase');
@@ -519,13 +499,9 @@ export async function searchAccountsByCompany(query) {
     const client = getSupabaseClient();
     if (!client) throw new Error('No Supabase client');
     
-    // Get organization context for RLS
-    const { organizationId } = await getOrgContextOrThrow(client);
-    
     const { data, error } = await client
       .from('accounts')
       .select('*')
-      .eq('organization_id', organizationId)
       .ilike('company_name', `%${query}%`)
       .not('company_name', 'is', null)
       .limit(10);
@@ -568,34 +544,15 @@ export async function searchPassengers(query) {
     // Get organization context for RLS
     const { organizationId } = await getOrgContextOrThrow(client);
     
-    console.log('🔍 Building passengers query for org:', organizationId, 'query:', query);
-    
     // Search accounts that could be passengers
-    let queryBuilder = client
+    const { data, error } = await client
       .from('accounts')
       .select('*')
-      .eq('organization_id', organizationId);
+      .eq('organization_id', organizationId)
+      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%`)
+      .limit(10);
     
-    console.log('🔍 Query builder created:', !!queryBuilder);
-    
-    // Add OR filter
-    const filterStr = `first_name.ilike.%${query}%,last_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%`;
-    console.log('🔍 OR filter string:', filterStr);
-    
-    queryBuilder = queryBuilder.or(filterStr);
-    console.log('🔍 OR filter added:', !!queryBuilder);
-    
-    queryBuilder = queryBuilder.limit(10);
-    console.log('🔍 Limit added, executing query...');
-    
-    const { data, error } = await queryBuilder;
-    
-    console.log('🔍 Query result - data:', data?.length || 0, 'error:', error?.message || 'none', 'error details:', error);
-    
-    if (error) {
-      console.error('🔍 Full error object:', JSON.stringify(error, null, 2));
-      throw error;
-    }
+    if (error) throw error;
     
     if (data && data.length > 0) {
       console.log('✅ Found', data.length, 'passenger accounts from Supabase');
@@ -633,34 +590,15 @@ export async function searchBookingAgents(query) {
     // Get organization context for RLS
     const { organizationId } = await getOrgContextOrThrow(client);
     
-    console.log('🔍 Building booking agents query for org:', organizationId, 'query:', query);
-    
     // Search accounts that could be booking agents
-    let queryBuilder = client
+    const { data, error } = await client
       .from('accounts')
       .select('*')
-      .eq('organization_id', organizationId);
+      .eq('organization_id', organizationId)
+      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%`)
+      .limit(10);
     
-    console.log('🔍 Query builder created:', !!queryBuilder);
-    
-    // Add OR filter
-    const filterStr = `first_name.ilike.%${query}%,last_name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%`;
-    console.log('🔍 OR filter string:', filterStr);
-    
-    queryBuilder = queryBuilder.or(filterStr);
-    console.log('🔍 OR filter added:', !!queryBuilder);
-    
-    queryBuilder = queryBuilder.limit(10);
-    console.log('🔍 Limit added, executing query...');
-    
-    const { data, error } = await queryBuilder;
-    
-    console.log('🔍 Query result - data:', data?.length || 0, 'error:', error?.message || 'none', 'error details:', error);
-    
-    if (error) {
-      console.error('🔍 Full error object:', JSON.stringify(error, null, 2));
-      throw error;
-    }
+    if (error) throw error;
     
     if (data && data.length > 0) {
       console.log('✅ Found', data.length, 'booking agent accounts from Supabase');
@@ -1010,34 +948,15 @@ export async function generateUniqueConfirmationNumber() {
 export async function getNextConfirmationNumber() {
   console.log('🔢 getNextConfirmationNumber called');
   const useLocalDev = isLocalDevModeEnabled();
-  
   try {
-    // Get the starting confirmation number from settings (stored in localStorage by my-office.js)
-    let startingNumber = 100000; // Default
-    try {
-      const settings = JSON.parse(localStorage.getItem('relia_company_settings') || '{}');
-      const settingValue = settings.confirmationNumberStart;
-      if (settingValue !== undefined && settingValue !== null && settingValue !== '') {
-        startingNumber = parseInt(settingValue, 10);
-        if (!Number.isFinite(startingNumber)) {
-          startingNumber = 100000;
-        }
-        console.log('🔢 Loaded starting confirmation number from settings:', startingNumber);
-      } else {
-        console.log('⚠️ confirmationNumberStart not found in settings, using default:', startingNumber);
-      }
-    } catch (settingsError) {
-      console.warn('⚠️ Could not load starting confirmation number from settings:', settingsError.message);
-    }
-    
     if (useLocalDev) {
       const localReservations = JSON.parse(localStorage.getItem('local_reservations') || '[]');
       const numericMax = localReservations.reduce((max, r) => {
         const num = parseInt(r.confirmation_number, 10);
         return Number.isFinite(num) && num > max ? num : max;
-      }, startingNumber - 1);
+      }, 99999);
       const nextNum = numericMax + 1;
-      console.log('🔢 Local dev next confirmation number:', nextNum, '(starting from', startingNumber, ')');
+      console.log('🔢 Local dev next confirmation number:', nextNum);
       return nextNum;
     }
 
@@ -1064,9 +983,9 @@ export async function getNextConfirmationNumber() {
     const numericMax = (data || []).reduce((max, row) => {
       const num = parseInt(row.confirmation_number, 10);
       return Number.isFinite(num) && num > max ? num : max;
-    }, startingNumber - 1);
+    }, 99999);
     const nextNum = numericMax + 1;
-    console.log('🔢 Returning confirmation number:', nextNum, '(starting from', startingNumber, ')');
+    console.log('🔢 Returning confirmation number:', nextNum);
     return nextNum;
   } catch (error) {
     console.error('❌ Error getting next confirmation number:', error);
