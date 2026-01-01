@@ -937,7 +937,6 @@ class MyOffice {
 
   setupSystemUsers() {
     this.cacheUserInputs();
-    this.bindUserLiveUpdates();
     this.renderUserList();
     this.bindUserButtons();
     if (this.selectedUserId) {
@@ -1005,25 +1004,7 @@ class MyOffice {
         e.preventDefault();
         if (this.selectedUserId) {
           this.populateUserDetails(this.selectedUserId);
-          this.updateActiveUserListRowPreview();
         }
-      });
-    }
-  }
-
-  bindUserLiveUpdates() {
-    const { firstName, lastName, username, login } = this.userInputs;
-    const liveFields = [firstName, lastName, username];
-
-    liveFields.forEach(field => {
-      if (field) {
-        field.addEventListener('input', () => this.updateActiveUserListRowPreview());
-      }
-    });
-
-    if (login) {
-      ['input', 'change'].forEach(evt => {
-        login.addEventListener(evt, () => this.updateActiveUserListRowPreview());
       });
     }
   }
@@ -1057,33 +1038,6 @@ class MyOffice {
 
     if (this.users.length === 0) {
       this.showUserEmptyState();
-    }
-  }
-
-  updateActiveUserListRowPreview() {
-    if (!this.selectedUserId) return;
-
-    const activeItem = document.querySelector(`.user-item[data-user-id="${this.selectedUserId}"]`);
-    if (!activeItem) return;
-
-    const nameDiv = activeItem.querySelector('.user-item-name');
-    const roleDiv = activeItem.querySelector('.user-item-role');
-
-    const firstName = this.userInputs.firstName?.value?.trim() || '';
-    const lastName = this.userInputs.lastName?.value?.trim() || '';
-    const username = this.userInputs.username?.value?.trim() || '';
-    const login = this.userInputs.login?.value?.trim() || '';
-
-    const fullName = `${firstName} ${lastName}`.trim() || 'New User';
-    const displayName = username ? `${fullName} (${username})` : fullName;
-    const roleLabel = login ? (login === 'admin' ? 'admin' : login) : 'role pending';
-
-    if (nameDiv) {
-      nameDiv.textContent = displayName;
-    }
-
-    if (roleDiv) {
-      roleDiv.textContent = roleLabel;
     }
   }
 
@@ -1425,23 +1379,8 @@ class MyOffice {
     user.displayName += user.username ? ` (${user.username})` : '';
     user.roleLabel = user.login === 'admin' ? 'admin' : user.login;
 
-    this.markNameInputsValidity();
     this.renderUserList();
     this.selectUser(user.id);
-  }
-
-  markNameInputsValidity() {
-    const { firstName, lastName } = this.userInputs;
-    const hasFirst = firstName && firstName.value.trim().length > 0;
-    const hasLast = lastName && lastName.value.trim().length > 0;
-
-    if (firstName) {
-      firstName.classList.toggle('input-valid', hasFirst);
-    }
-
-    if (lastName) {
-      lastName.classList.toggle('input-valid', hasLast);
-    }
   }
 
   deleteSelectedUser() {

@@ -177,7 +177,6 @@ class ReservationForm {
     this.dateTimeInterval = null;
     this.dateTimeFrozen = false;
     
-    this.applyDefaultStateFromSettings();
     this.init();
   }
 
@@ -444,12 +443,6 @@ class ReservationForm {
       
       this.initializeDateTime();
       console.log('✅ initializeDateTime complete');
-
-      this.setupNameFillStates();
-      console.log('✅ setupNameFillStates complete');
-
-      // Prefill State/Prov from Company Settings contact info if empty
-      this.applyDefaultStateFromSettings();
       
       this.setupTabSwitching();
       console.log('✅ setupTabSwitching complete');
@@ -962,29 +955,6 @@ class ReservationForm {
         const tabName = tab.dataset.tab;
         document.getElementById(`${tabName}Assignment`).classList.add('active');
       });
-    });
-  }
-
-  setupNameFillStates() {
-    this.refreshNameFillStates();
-
-    const fields = document.querySelectorAll(
-      'input[id*="FirstName"], input[id*="LastName"], input[id^="billing"], input[id^="passenger"]'
-    );
-
-    fields.forEach((el) => {
-      el.addEventListener('input', () => this.refreshNameFillStates());
-    });
-  }
-
-  refreshNameFillStates() {
-    const fields = document.querySelectorAll(
-      'input[id*="FirstName"], input[id*="LastName"], input[id^="billing"], input[id^="passenger"]'
-    );
-    fields.forEach((el) => {
-      if (!el) return;
-      const filled = el.value && el.value.trim();
-      el.classList.toggle('has-value', !!filled);
     });
   }
 
@@ -2565,8 +2535,6 @@ class ReservationForm {
     document.getElementById('passengerPhone').value = phone;
     document.getElementById('passengerEmail').value = email;
 
-    this.refreshNameFillStates();
-
     console.log('📋 Copied billing info to passenger');
   }
 
@@ -2580,8 +2548,6 @@ class ReservationForm {
     document.getElementById('bookedByLastName').value = lastName;
     document.getElementById('bookedByPhone').value = phone;
     document.getElementById('bookedByEmail').value = email;
-
-    this.refreshNameFillStates();
 
     console.log('📋 Copied billing info to booking agent');
   }
@@ -2732,8 +2698,6 @@ class ReservationForm {
       if (billingAccountSearch && (firstName || lastName)) {
         billingAccountSearch.value = `${firstName} ${lastName}`.trim();
       }
-
-      this.refreshNameFillStates();
 
       console.log('✅ Passenger → Billing fields copied');
     } catch (error) {
@@ -3529,35 +3493,10 @@ class ReservationForm {
         }, 300);
       });
 
-      input.addEventListener('focus', async (e) => {
-        const query = e.target.value;
-        if (query && query.length >= 3) {
-          await this.searchAddress(input, query);
-        }
-      });
-
       input.addEventListener('blur', () => {
         setTimeout(() => this.hideAddressSuggestions(input), 200);
       });
     });
-  }
-
-  applyDefaultStateFromSettings() {
-    try {
-      const stateInput = document.getElementById('state');
-      if (!stateInput || stateInput.value) return;
-
-      const settings = this.companySettingsManager?.getAllSettings?.();
-      const companyState = settings?.companyState || '';
-      if (!companyState) return;
-
-      const optionMatch = Array.from(stateInput.options).find(opt => opt.value === companyState || opt.text === companyState);
-      if (optionMatch) {
-        stateInput.value = optionMatch.value;
-      }
-    } catch (e) {
-      console.warn('⚠️ applyDefaultStateFromSettings failed:', e);
-    }
   }
 
   async searchAddress(inputElement, query) {

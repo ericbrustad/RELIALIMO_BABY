@@ -821,22 +821,6 @@ textarea.form-control {
   line-height: 1.2;
 }
 
-/* Billing & passenger tint: orange when empty, green when filled */
-input[id^="billing"],
-input[id^="passenger"],
-input[id*="FirstName"],
-input[id*="LastName"] {
-  background: #fff4e5;
-  transition: background-color 0.2s ease;
-}
-
-input.has-value[id^="billing"],
-input.has-value[id^="passenger"],
-input.has-value[id*="FirstName"],
-input.has-value[id*="LastName"] {
-  background: #e8f8ec;
-}
-
 .form-row-2,
 .form-row-3,
 .form-row-4 {
@@ -859,7 +843,7 @@ input.has-value[id*="LastName"] {
 }
 
 .cost-row {
-  grid-template-columns: 1fr 80px 32px 80px 80px;
+  grid-template-columns: 1fr 80px 80px 80px;
 }
 
 .cost-cell {
@@ -883,7 +867,7 @@ input.has-value[id*="LastName"] {
 
 .cost-row {
   display: grid;
-  grid-template-columns: 1fr 80px 32px 80px 80px;
+  grid-template-columns: 1fr 80px 80px 80px;
   border-bottom: 1px solid #e0e0e0;
   background: #fff;
 }
@@ -921,11 +905,6 @@ input.has-value[id*="LastName"] {
 
 .cost-cell:last-child {
   border-right: none;
-}
-
-.cost-cell.at-cell {
-  justify-content: center;
-  font-weight: 700;
 }
 
 .cost-input {
