@@ -727,6 +727,12 @@ body {
   font-family: inherit;
 }
 
+.form-control.input-valid {
+  background: #e6ffe6;
+  border-color: #2e8b57;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
 .form-control:focus {
   outline: none;
   border-color: #4a90e2;
