@@ -5,6 +5,42 @@ import { getSupabaseConfig, initSupabase } from './config.js';
 const SESSION_KEY = 'supabase_session';
 let refreshPromise = null;
 
+// Persist resolved org/user so UI layers can reuse without guessing
+const IDENTITY_WALLET_KEY = 'relia_identity_wallet';
+
+function saveIdentityWallet(payload) {
+  if (!payload) return;
+  try {
+    const snapshot = {
+      organizationId: payload.organizationId || payload.organization_id || null,
+      userId: payload.userId || payload.user_id || null,
+      email: payload.email || null,
+      ts: Date.now()
+    };
+    localStorage.setItem(IDENTITY_WALLET_KEY, JSON.stringify(snapshot));
+  } catch (e) {
+    console.warn('⚠️ Unable to persist identity wallet:', e);
+  }
+}
+
+function loadIdentityWallet() {
+  try {
+    const raw = localStorage.getItem(IDENTITY_WALLET_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      organizationId: parsed.organizationId || parsed.organization_id || null,
+      userId: parsed.userId || parsed.user_id || null,
+      email: parsed.email || null,
+      ts: parsed.ts || null
+    };
+  } catch (e) {
+    console.warn('⚠️ Unable to read identity wallet:', e);
+    return null;
+  }
+}
+
 const getSession = () => {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
@@ -42,9 +78,30 @@ const isExpired = (session) => {
 
 async function refreshToken() {
   if (refreshPromise) return refreshPromise;
+  let session = getSession();
 
-  const session = getSession();
-  if (!session?.refresh_token) throw new Error('NO_REFRESH_TOKEN');
+  // Try migrating from the SDK key if our cache is missing the refresh token
+  if (!session?.refresh_token) {
+    try {
+      const sdkRaw = localStorage.getItem('sb-siumiadylwcrkaqsfwkj-auth-token');
+      if (sdkRaw) {
+        const parsed = JSON.parse(sdkRaw);
+        const migrated = parsed.currentSession || parsed;
+        if (migrated?.refresh_token) {
+          setSession(migrated);
+          session = migrated;
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Failed to migrate refresh token from SDK key:', e);
+    }
+  }
+
+  if (!session?.refresh_token || !`${session.refresh_token}`.trim()) {
+    const err = new Error('NO_REFRESH_TOKEN');
+    err.status = 401;
+    throw err;
+  }
 
   const { url, anonKey } = getSupabaseConfig();
   const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: session.refresh_token });
@@ -73,16 +130,25 @@ async function refreshToken() {
     }
 
     if (response.status === 400) {
+      const body = await response.text().catch(() => '');
       clearSession();
-      throw new Error('REFRESH_INVALID');
+      const err = new Error('REFRESH_INVALID');
+      err.status = 400;
+      err.details = body;
+      throw err;
     }
 
     if (response.status === 429) {
-      throw new Error('RATE_LIMITED');
+      const err = new Error('RATE_LIMITED');
+      err.status = 429;
+      throw err;
     }
 
     const text = await response.text().catch(() => '');
-    throw new Error(`REFRESH_FAILED_${response.status}:${text}`);
+    const err = new Error(`REFRESH_FAILED_${response.status}:${text}`);
+    err.status = response.status;
+    err.details = text;
+    throw err;
   };
 
   refreshPromise = doFetch().finally(() => {
@@ -149,23 +215,39 @@ export async function apiFetch(path, { method = 'GET', headers = {}, body, retry
     h.Authorization = `Bearer ${session.access_token}`;
   }
 
-  if (session && isExpired(session)) {
+  if (session && isExpired(session) && session.refresh_token) {
     try {
       const refreshed = await refreshToken();
       if (refreshed?.access_token) {
         h.Authorization = `Bearer ${refreshed.access_token}`;
       }
     } catch (e) {
-      if (e.message === 'REFRESH_INVALID') throw e;
+      if (e.message === 'REFRESH_INVALID' || e.message === 'NO_REFRESH_TOKEN') throw e;
     }
   }
 
   const response = await fetch(fullUrl, { method, headers: h, body });
 
   if ((response.status === 401 || response.status === 403) && retry) {
-    const refreshed = await refreshToken();
-    const h2 = { ...h, Authorization: refreshed?.access_token ? `Bearer ${refreshed.access_token}` : h.Authorization };
-    return fetch(fullUrl, { method, headers: h2, body });
+    // Capture error body to aid diagnostics (RLS / auth issues)
+    try {
+      const clone = response.clone();
+      const errText = await clone.text();
+      console.warn(`⚠️ apiFetch ${response.status} body:`, errText);
+    } catch {/* ignore clone failures */}
+
+    try {
+      if (!session?.refresh_token || !`${session.refresh_token}`.trim()) {
+        throw new Error('NO_REFRESH_TOKEN');
+      }
+      const refreshed = await refreshToken();
+      const h2 = { ...h, Authorization: refreshed?.access_token ? `Bearer ${refreshed.access_token}` : h.Authorization };
+      const retryResp = await fetch(fullUrl, { method, headers: h2, body });
+      return retryResp;
+    } catch (refreshErr) {
+      console.warn('⚠️ apiFetch refresh failed:', refreshErr?.message || refreshErr);
+      throw refreshErr;
+    }
   }
 
   return response;
@@ -204,12 +286,28 @@ function resolveAdminOrgId() {
       process.env?.ORG_ID
     ) : null);
 
-  if (!candidate || candidate === '00000000-0000-0000-0000-000000000000') return null;
+  const fallbackOrgId = '54eb6ce7-ba97-4198-8566-6ac075828160';
+  if (!candidate || candidate === '00000000-0000-0000-0000-000000000000') return fallbackOrgId;
   return candidate;
 }
 
 export function getLastApiError() {
   return lastApiError;
+}
+
+function describeSupabaseError(error, context = '') {
+  if (!error) return { message: 'Unknown error' };
+  const info = {
+    context,
+    message: error.message || error.msg || 'Unknown error',
+    code: error.code,
+    status: error.status,
+    details: error.details,
+    hint: error.hint
+  };
+  if (error.body) info.body = error.body;
+  if (error.stack) info.stack = error.stack;
+  return info;
 }
 
 // Expose token validation so UI layers can force refresh before writes
@@ -358,16 +456,12 @@ function buildDevUser() {
 async function getOrgContextOrThrow(client) {
   console.log('🔐 getOrgContextOrThrow starting...');
   console.log('🔐 Client available:', !!client);
+
+  // If we already cached identity, warm it for downstream callers (does not short-circuit real checks)
+  const cachedIdentity = loadIdentityWallet();
   
   // Development mode bypass
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    console.log('🔧 Development mode: Using admin organization context');
-    const devUser = buildDevUser();
-    const devOrgId = resolveAdminOrgId();
-    return { user: devUser, organizationId: devOrgId, userId: devUser.id };
-  }
-  
-  // Development bypass for permission issues
+  // Attempt real auth/user context first (even on localhost) before any dev bypass
   try {
     // First, try to refresh session if needed (especially important for popups)
     try {
@@ -430,6 +524,7 @@ async function getOrgContextOrThrow(client) {
         // Create a fake user for development
         const devUser = buildDevUser();
         const devOrgId = resolveAdminOrgId();
+        saveIdentityWallet({ userId: devUser.id, organizationId: devOrgId, email: devUser.email });
         console.log('🔧 Using development user context:', devUser.id);
         return { user: devUser, organizationId: devOrgId, userId: devUser.id };
       }
@@ -440,6 +535,7 @@ async function getOrgContextOrThrow(client) {
       console.warn('⚠️ No user found - using development fallback');
       const devUser = buildDevUser();
       const devOrgId = resolveAdminOrgId();
+      saveIdentityWallet({ userId: devUser.id, organizationId: devOrgId, email: devUser.email });
       return { user: devUser, organizationId: devOrgId, userId: devUser.id };
     }
 
@@ -452,31 +548,40 @@ async function getOrgContextOrThrow(client) {
     
     console.log('🏢 Membership result:', membership?.organization_id || 'null', 'error:', membershipError?.message || 'none');
     
-    // Development bypass: if no organization membership found, use a default org ID
+    // If membership is missing, fall back to cached wallet or dev org (when allowed)
     if (membershipError || !membership?.organization_id) {
-      console.warn('⚠️ No organization membership found - using development fallback');
-      // Use admin org id for fallback
-      const fallbackOrgId = resolveAdminOrgId();
+      console.warn('⚠️ No organization membership found - considering fallbacks');
+      let fallbackOrgId = cachedIdentity?.organizationId || null;
+
+      if (!fallbackOrgId && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+        console.log('🔧 Development fallback: Using admin organization context (no membership found)');
+        fallbackOrgId = resolveAdminOrgId();
+      }
+
+      saveIdentityWallet({ userId: user.id, organizationId: fallbackOrgId, email: user.email });
       return { user, organizationId: fallbackOrgId, userId: user.id };
     }
 
+    saveIdentityWallet({ userId: user.id, organizationId: membership.organization_id, email: user.email });
     return { user, organizationId: membership.organization_id, userId: user.id };
     
   } catch (error) {
-    // Catch any other authentication errors and provide development fallback
+    // Catch any other authentication errors and provide development fallback when on localhost only
     console.error('❌ Authentication failed:', error);
-    
-    if (error.message && (
+
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (isLocalhost && error.message && (
         error.message.includes('permission denied') || 
         error.message.includes('RLS') ||
         error.message.includes('not authenticated')
     )) {
-      console.warn('⚠️ Database permission error - using development fallback');
+      console.warn('⚠️ Database permission error - using development fallback (localhost only)');
       const devUser = buildDevUser();
       const devOrgId = resolveAdminOrgId();
+      saveIdentityWallet({ userId: devUser.id, organizationId: devOrgId, email: devUser.email });
       return { user: devUser, organizationId: devOrgId, userId: devUser.id };
     }
-    
+
     // For other errors, still throw
     throw error;
   }
@@ -846,6 +951,11 @@ export async function fetchVehicleTypes(options = {}) {
 
     // If still no org, bail to avoid null filter errors
     if (!organizationId) {
+      const wallet = loadIdentityWallet();
+      organizationId = wallet?.organizationId || null;
+    }
+
+    if (!organizationId) {
       console.warn('⚠️ No organization_id; skipping Supabase vehicle type fetch.');
       return [];
     }
@@ -924,6 +1034,11 @@ export async function fetchActiveVehicles(options = {}) {
     }
 
     if (!organizationId) {
+      const wallet = loadIdentityWallet();
+      organizationId = wallet?.organizationId || organizationId;
+    }
+
+    if (!organizationId) {
       console.warn('⚠️ No organization_id; skipping Supabase vehicle fetch.');
       const local = loadLocalFleet();
       return local.length ? local : [];
@@ -974,7 +1089,31 @@ export async function fetchActiveVehicles(options = {}) {
 // Lightweight active vehicles for dropdowns (id + display fields)
 export async function listActiveVehiclesLight({ limit = 200, offset = 0 } = {}) {
   const activeStatuses = 'ACTIVE,AVAILABLE,IN_USE';
-  const res = await apiFetch(`/rest/v1/vehicles?select=id,veh_disp_name,unit_number,make,model,year,license_plate,status,veh_type,veh_title&status=in.(${activeStatuses})&order=veh_disp_name.asc,make.asc,model.asc,year.desc&limit=${limit}&offset=${offset}`);
+  const forcedOrgId = (typeof window !== 'undefined' && (window.VEHICLE_FORCE_ORG_ID || window.FORCED_ORG_ID || window.ENV?.FORCE_VEHICLE_ORG_ID)) || null;
+  let orgFilter = forcedOrgId ? `&organization_id=eq.${forcedOrgId}` : '';
+
+  if (!orgFilter) {
+    const wallet = loadIdentityWallet();
+    if (wallet?.organizationId) {
+      orgFilter = `&organization_id=eq.${wallet.organizationId}`;
+    }
+  }
+
+  if (!orgFilter) {
+    try {
+      const client = getSupabaseClient();
+      if (client) {
+        const ctx = await getOrgContextOrThrow(client);
+        if (ctx?.organizationId) {
+          orgFilter = `&organization_id=eq.${ctx.organizationId}`;
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Unable to resolve organization for vehicles list; proceeding without filter', err?.message || err);
+    }
+  }
+
+  const res = await apiFetch(`/rest/v1/vehicles?select=id,veh_disp_name,unit_number,make,model,year,license_plate,status,veh_type,veh_title${orgFilter}&status=in.(${activeStatuses})&order=veh_disp_name.asc,make.asc,model.asc,year.desc&limit=${limit}&offset=${offset}`);
   if (!res.ok) throw new Error(`listActiveVehiclesLight failed: ${res.status}`);
   const data = await res.json();
   return Array.isArray(data) ? data : [];
@@ -983,19 +1122,23 @@ export async function listActiveVehiclesLight({ limit = 200, offset = 0 } = {}) 
 // Active vehicle types for dropdowns
 export async function listActiveVehicleTypes({ limit = 200, offset = 0 } = {}) {
   const forcedOrgId = (typeof window !== 'undefined' && (window.VEHICLE_FORCE_ORG_ID || window.FORCED_ORG_ID || window.ENV?.FORCE_VEHICLE_ORG_ID)) || null;
-  const orgFilter = forcedOrgId ? `&organization_id=eq.${forcedOrgId}` : '';
+  let orgFilter = forcedOrgId ? `&organization_id=eq.${forcedOrgId}` : '';
+
+  if (!orgFilter) {
+    const wallet = loadIdentityWallet();
+    if (wallet?.organizationId) {
+      orgFilter = `&organization_id=eq.${wallet.organizationId}`;
+    }
+  }
   const res = await apiFetch(`/rest/v1/vehicle_types?select=id,name,code,status&status=eq.ACTIVE${orgFilter}&order=sort_order.asc,name.asc&limit=${limit}&offset=${offset}`);
   if (!res.ok) throw new Error(`listActiveVehicleTypes failed: ${res.status}`);
   return res.json();
 }
 
 export async function upsertVehicleType(vehicleType) {
-  const client = getSupabaseClient();
-  if (!client) throw new Error('Supabase client not initialized');
-
   try {
     lastApiError = null;
-    const { organizationId, user } = await getOrgContextOrThrow(client);
+    const { organizationId, user } = await getOrgContextOrThrow(getSupabaseClient());
     const now = new Date().toISOString();
     const isValidId = typeof vehicleType.id === 'string'
       && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(vehicleType.id);
@@ -1034,18 +1177,35 @@ export async function upsertVehicleType(vehicleType) {
       created_by: isValidId ? undefined : user.id,
     });
 
-    const { data, error } = await client
-      .from('vehicle_types')
-      .upsert([payload], { onConflict: 'id' })
-      .select()
-      .maybeSingle();
+    // Use REST upsert to stay compatible with buildless client (SDK not loaded)
+    const query = new URLSearchParams();
+    query.set('on_conflict', 'id');
+    const url = `/rest/v1/vehicle_types?${query.toString()}`;
 
-    if (error) throw error;
-    return data;
+    const response = await apiFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation,resolution=merge-duplicates'
+      },
+      body: JSON.stringify([payload]),
+      retry: true
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      const error = { message: `Supabase upsert failed (${response.status})`, status: response.status, body };
+      throw error;
+    }
+
+    const data = await response.json();
+    const row = Array.isArray(data) ? data[0] || null : data;
+    return row;
   } catch (error) {
-    console.error('Error upserting vehicle type:', error);
-    lastApiError = error;
-    throw error;
+    const info = describeSupabaseError(error, 'upsertVehicleType');
+    console.error('❌ upsertVehicleType Supabase error:', info);
+    lastApiError = info;
+    throw new Error(`upsertVehicleType failed: ${info.message || 'Supabase error'} [code:${info.code || 'unknown'}]`);
   }
 }
 

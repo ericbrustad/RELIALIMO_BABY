@@ -2100,6 +2100,9 @@ class MyOffice {
 
     const titleInput = container.querySelector('[data-vehicle-field="name"]');
     if (titleInput) {
+      // Always allow renaming when editing an existing vehicle type
+      titleInput.readOnly = false;
+      titleInput.disabled = false;
       titleInput.value = data.name || '';
     }
 
