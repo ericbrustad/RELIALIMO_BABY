@@ -998,7 +998,7 @@
                           <option value="half-hours">Half Hours</option>
                         </select>
                         <span style="font-size: 11px; white-space: nowrap;">Applies To:</span>
-                        <select class="form-control" style="flex: 1;">
+                        <select class="form-control" style="flex: 1;" data-service-types-select="true">
                           <option value="from-airport-to-airpo" selected>From Airport, To Airpo</option>
                           <option value="all">All Service Types</option>
                           <option value="hourly">Hourly Only</option>
@@ -1017,7 +1017,7 @@
                           <option value="vehicles">Vehicles</option>
                         </select>
                         <span style="font-size: 11px; white-space: nowrap;">Applies To:</span>
-                        <select class="form-control" style="flex: 1;">
+                        <select class="form-control" style="flex: 1;" data-service-types-select="true">
                           <option value="select-options" selected>SelectOptions</option>
                           <option value="all">All Service Types</option>
                         </select>
@@ -1035,7 +1035,7 @@
                           <option value="not-selected">Not selected</option>
                         </select>
                         <span style="font-size: 11px; white-space: nowrap;">Applies To:</span>
-                        <select class="form-control" style="flex: 1;">
+                        <select class="form-control" style="flex: 1;" data-service-types-select="true">
                           <option value="from-airport-to-airpo" selected>From Airport, To Airpo</option>
                           <option value="all">All Service Types</option>
                         </select>
@@ -1052,7 +1052,7 @@
                           <option value="child-seats">Child Seats</option>
                         </select>
                         <span style="font-size: 11px; white-space: nowrap;">Applies To:</span>
-                        <select class="form-control" style="flex: 1;">
+                        <select class="form-control" style="flex: 1;" data-service-types-select="true">
                           <option value="select-options" selected>SelectOptions</option>
                           <option value="all">All Service Types</option>
                         </select>
@@ -1070,7 +1070,7 @@
                           <option value="to-all-rates">To all rates</option>
                         </select>
                         <span style="font-size: 11px; white-space: nowrap;">Applies To:</span>
-                        <select class="form-control" style="flex: 1;">
+                        <select class="form-control" style="flex: 1;" data-service-types-select="true">
                           <option value="from-airport-to-airpo" selected>From Airport, To Airpo</option>
                           <option value="all">All Service Types</option>
                         </select>
@@ -1405,7 +1405,7 @@
                   <div class="policies-list-panel">
                     <div class="policies-list-header">
                       <h3>Policies</h3>
-                      <button class="btn btn-secondary btn-small">Show All</button>
+                      <button class="btn btn-secondary btn-small" id="policyShowAllBtn">Show All</button>
                     </div>
                     <div class="policies-list" id="policiesList">
                       <div class="policy-item active" data-policy-id="1">
@@ -1419,8 +1419,8 @@
                       </div>
                     </div>
                     <div class="policies-actions">
-                      <button class="btn btn-secondary btn-small" style="width: 100%;">Add New Agreement</button>
-                      <button class="btn btn-secondary btn-small" style="width: 100%; margin-top: 5px;">Edit</button>
+                      <button class="btn btn-secondary btn-small" style="width: 100%;" id="policyAddBtn">Add New Agreement</button>
+                      <button class="btn btn-danger btn-small" style="width: 100%; margin-top: 5px;" id="policyDeleteBtnLeft">Delete</button>
                     </div>
                   </div>
 
@@ -1549,7 +1549,7 @@
                           </label>
                         </div>
                         <div>
-                          <button class="btn btn-primary">Complete Required Fields</button>
+                          <div style="display:flex; gap:8px; justify-content:flex-end;"><button class="btn btn-secondary" id="policySaveAsBtn" type="button">Save As New</button><button class="btn btn-primary" id="policySaveBtn" type="button">Save</button><button class="btn btn-danger" id="policyDeleteBtn" type="button">Delete</button></div>
                         </div>
                       </div>
                     </div>
@@ -4792,12 +4792,10 @@ further assistance.</textarea>
                 <div class="form-row">
                   <div class="form-group">
                     <label>Associated with Service Types</label>
-                    <select class="form-control" data-vehicle-field="service_type">
-                      <option value="" selected>- - - - NOT ASSIGNED - - - -</option>
-                      <option value="airport">Airport Transfer</option>
-                      <option value="hourly">Hourly Charter</option>
-                      <option value="point">Point to Point</option>
+                    <select class="form-control" data-vehicle-field="service_type_tags" id="vehicleTypeServiceTypeTags" multiple size="6">
+                      <option value="" disabled>---- NOT ASSIGNED ----</option>
                     </select>
+                    <div style="font-size: 11px; color:#777; margin-top:4px;">Hold Ctrl/Cmd to select multiple service types.</div>
                   </div>
                 </div>
 

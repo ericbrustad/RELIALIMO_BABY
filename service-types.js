@@ -1,93 +1,459 @@
-class ServiceTypes {
+import {
+  loadServiceTypes,
+  upsertServiceTypes,
+  deleteServiceTypeById,
+  normalizeServiceType,
+  generateServiceTypeCode,
+  getActiveServiceTypes,
+  SERVICE_TYPES_STORAGE_KEY
+} from './service-types-store.js';
+import { loadPolicies, POLICIES_STORAGE_KEY } from './policies-store.js';
+
+
+class ServiceTypesPage {
   constructor() {
+    this.serviceTypes = [];
+    this.policies = [];
+    this.selectedId = null;
+
+    this.cacheEls();
+    this.bindEvents();
     this.init();
   }
 
-  init() {
-    this.setupEventListeners();
+  cacheEls() {
+    this.tableBody = document.getElementById('serviceTypesTableBody');
+    this.addBtn = document.getElementById('addServiceTypeBtn');
+
+    this.modal = document.getElementById('serviceTypeModal');
+    this.modalTitle = document.getElementById('serviceTypeModalTitle');
+    this.modalError = document.getElementById('serviceTypeModalError');
+
+    this.stName = document.getElementById('stName');
+    this.stCode = document.getElementById('stCode');
+    this.stPricingType = document.getElementById('stPricingType');
+    this.stCustomLabel = document.getElementById('stCustomLabel');
+    this.stAgreement = document.getElementById('stAgreement');
+    this.stDefaultSettings = document.getElementById('stDefaultSettings');
+    this.stSortOrder = document.getElementById('stSortOrder');
+    this.stActive = document.getElementById('stActive');
+
+    this.saveBtn = document.getElementById('saveServiceTypeBtn');
+    this.deleteBtn = document.getElementById('deleteServiceTypeBtn');
   }
 
-  setupEventListeners() {
-    // Add New button
-    const addNewBtn = document.querySelector('.btn-add-new');
-    if (addNewBtn) {
-      addNewBtn.addEventListener('click', () => {
-        this.addNewServiceType();
+  bindEvents() {
+    if (this.addBtn) {
+      this.addBtn.addEventListener('click', () => this.openCreateModal());
+    }
+
+    // Close modal buttons
+    document.querySelectorAll('[data-close-modal]').forEach((btn) => {
+      btn.addEventListener('click', () => this.closeModal());
+    });
+
+    // Clicking outside content closes
+    if (this.modal) {
+      this.modal.addEventListener('click', (e) => {
+        if (e.target === this.modal) this.closeModal();
       });
     }
 
-    // Service type links
-    document.querySelectorAll('.service-link').forEach(link => {
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        const serviceName = e.target.textContent;
-        this.editServiceType(serviceName);
+    // Auto-generate code when empty
+    if (this.stName && this.stCode) {
+      this.stName.addEventListener('input', () => {
+        if (this.selectedId) return; // editing: don't auto-overwrite
+        if (this.stCode.value.trim()) return;
+        this.stCode.value = generateServiceTypeCode(this.stName.value);
+      });
+    }
+
+    // Save
+    if (this.saveBtn) {
+      this.saveBtn.addEventListener('click', () => this.saveFromModal());
+    }
+
+    // Delete
+    if (this.deleteBtn) {
+      this.deleteBtn.addEventListener('click', () => this.deleteSelected());
+    }
+
+    // Storage updates (if another window changes service types)
+    window.addEventListener('storage', (e) => {
+      if (e.key === SERVICE_TYPES_STORAGE_KEY || e.key === POLICIES_STORAGE_KEY) {
+        this.init(true);
+      }
+    });
+  }
+
+  async init(silent = false) {
+    if (!silent) {
+      this.showInlineLoading();
+    }
+
+    try {
+      this.serviceTypes = await loadServiceTypes({ includeInactive: true, preferRemote: true });
+    } catch {
+      this.serviceTypes = [];
+    }
+    if (!Array.isArray(this.serviceTypes)) this.serviceTypes = [];
+
+    // Load Policies/Agreements for the Agreement dropdown
+    try {
+      this.policies = await loadPolicies({ includeInactive: true, preferRemote: true });
+    } catch {
+      this.policies = [];
+    }
+    this.populateAgreementOptions();
+    this.serviceTypes.sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name));
+    this.render();
+
+    if (!silent) {
+      this.hideInlineLoading();
+    }
+
+    this.broadcastUpdate();
+  }
+
+  showInlineLoading() {
+    if (!this.tableBody) return;
+    this.tableBody.innerHTML = `<tr><td colspan="8" style="padding:16px; color:#666;">Loading service types...</td></tr>`;
+  }
+
+  hideInlineLoading() {
+    // render() already replaced the content
+  }
+
+  render() {
+    if (!this.tableBody) return;
+    if (!this.serviceTypes.length) {
+      this.tableBody.innerHTML = `<tr><td colspan="8" style="padding:16px; color:#666;">No service types found.</td></tr>`;
+      return;
+    }
+
+    const rows = this.serviceTypes.map((st) => this.renderRow(st)).join('');
+    this.tableBody.innerHTML = rows;
+
+    // Wire row events
+    this.tableBody.querySelectorAll('[data-action="edit"]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget?.dataset?.id;
+        if (id) this.openEditModal(id);
       });
     });
 
-    // Checkboxes
-    document.querySelectorAll('.service-types-table input[type="checkbox"]').forEach(checkbox => {
+    this.tableBody.querySelectorAll('[data-action="delete"]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget?.dataset?.id;
+        if (id) this.confirmDelete(id);
+      });
+    });
+
+    this.tableBody.querySelectorAll('[data-action="toggle-active"]').forEach((checkbox) => {
       checkbox.addEventListener('change', (e) => {
-        const row = e.target.closest('tr');
-        const serviceName = row.querySelector('.service-link')?.textContent || '';
-        console.log(`Service type "${serviceName}" ${e.target.checked ? 'enabled' : 'disabled'}`);
+        const id = e.currentTarget?.dataset?.id;
+        const active = e.currentTarget?.checked === true;
+        if (id) this.toggleActive(id, active);
       });
     });
+  }
 
-    // Company selector
-    const companySelect = document.querySelector('.form-select-small');
-    if (companySelect) {
-      companySelect.addEventListener('change', (e) => {
-        console.log('Company changed to:', e.target.value);
+  renderRow(st) {
+    const safe = normalizeServiceType(st);
+    const pricingLabel = this.prettyPricingType(safe.pricing_type);
+    const defaultCol = safe.default_settings ? this.escapeHtml(String(safe.default_settings)) : '';
+    const agreementLabel = safe.agreement ? this.escapeHtml(this.getAgreementLabel(safe.agreement)) : '';
+    return `
+      <tr>
+        <td style="text-align:center;">
+          <input type="checkbox" data-action="toggle-active" data-id="${this.escapeAttr(safe.id)}" ${safe.active ? 'checked' : ''} />
+        </td>
+        <td>
+          <a href="#" class="service-link" data-action="edit" data-id="${this.escapeAttr(safe.id)}">${this.escapeHtml(safe.name || '(unnamed)')}</a>
+        </td>
+        <td>${this.escapeHtml(safe.code || '')}</td>
+        <td>${this.escapeHtml(pricingLabel)}</td>
+        <td>${this.escapeHtml(safe.custom_label || '')}</td>
+        <td>${agreementLabel}</td>
+        <td>${defaultCol}</td>
+        <td>
+          <div class="action-buttons">
+            <button class="btn-small" data-action="edit" data-id="${this.escapeAttr(safe.id)}">Edit</button>
+            <button class="btn-small" data-action="delete" data-id="${this.escapeAttr(safe.id)}">Delete</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+
+  // Policies/Agreements
+  // - Service Types store `agreement` as either:
+  //   - a policy UUID (preferred)
+  //   - a legacy free-text name (older data)
+  findPolicyByIdOrName(value) {
+    const v = (value || '').toString().trim();
+    if (!v) return null;
+    const list = Array.isArray(this.policies) ? this.policies : [];
+    const byId = list.find((p) => p && p.id === v);
+    if (byId) return byId;
+    const lower = v.toLowerCase();
+    return list.find((p) => (p?.name || '').toString().trim().toLowerCase() === lower) || null;
+  }
+
+  getAgreementLabel(value) {
+    const p = this.findPolicyByIdOrName(value);
+    if (!p) return (value || '').toString();
+    return p.active === false ? `${p.name} (Inactive)` : (p.name || '').toString();
+  }
+
+  coerceAgreementToPolicyId(value) {
+    const v = (value || '').toString().trim();
+    if (!v) return '';
+    const p = this.findPolicyByIdOrName(v);
+    return p?.id || v;
+  }
+
+  populateAgreementOptions() {
+    if (!(this.stAgreement instanceof HTMLSelectElement)) {
+      return;
+    }
+
+    // Preserve current selection if possible
+    let currentValue = (this.stAgreement.value || '').toString().trim();
+
+    // If the stored value is a legacy policy name, upgrade it to the policy id
+    currentValue = this.coerceAgreementToPolicyId(currentValue);
+
+    const policies = Array.isArray(this.policies) ? this.policies.slice() : [];
+    policies.sort((a, b) => {
+      const ao = Number(a?.sort_order) || 0;
+      const bo = Number(b?.sort_order) || 0;
+      if (ao !== bo) return ao - bo;
+      return String(a?.name || '').localeCompare(String(b?.name || ''));
+    });
+
+    // Rebuild options
+    this.stAgreement.innerHTML = '';
+    this.stAgreement.add(new Option('-- No Agreement --', ''));
+
+    // Active first, then inactive
+    const active = policies.filter((p) => p && p.active !== false);
+    const inactive = policies.filter((p) => p && p.active === false);
+
+    active.forEach((p) => {
+      if (!p?.id) return;
+      this.stAgreement.add(new Option(p.name || p.id, p.id));
+    });
+
+    if (inactive.length) {
+      // Visual separator
+      this.stAgreement.add(new Option('──────────', '__sep__'));
+      inactive.forEach((p) => {
+        if (!p?.id) return;
+        this.stAgreement.add(new Option(`${p.name || p.id} (Inactive)`, p.id));
       });
     }
 
-    // Sidebar navigation
-    document.querySelectorAll('.settings-nav-subitem').forEach(item => {
-      item.addEventListener('click', (e) => {
-        e.preventDefault();
-        const subitem = e.target;
-        
-        // Remove active class from all subitems
-        document.querySelectorAll('.settings-nav-subitem').forEach(si => {
-          si.classList.remove('active');
-        });
-        
-        // Add active class to clicked item
-        subitem.classList.add('active');
-        
-        // Handle navigation
-        const text = subitem.textContent.trim();
-        this.navigateToSubsection(text);
-      });
-    });
+    // Restore selection (or keep legacy value)
+    if (currentValue) {
+      const exists = Array.from(this.stAgreement.options).some((o) => o.value === currentValue);
+      if (!exists) {
+        this.stAgreement.add(new Option(`Legacy: ${currentValue}`, currentValue));
+      }
+      this.stAgreement.value = currentValue;
+    }
+
+    // Prevent selecting the separator
+    this.stAgreement.addEventListener('change', () => {
+      if (this.stAgreement.value === '__sep__') this.stAgreement.value = '';
+    }, { once: true });
   }
 
-  addNewServiceType() {
-    alert('Add New Service Type dialog would open here.\n\nIn a full implementation, this would open a modal or form to create a new service type with fields for:\n- Name\n- Code\n- Pricing Type\n- Custom Label\n- Agreement\n- Default settings');
+  prettyPricingType(value) {
+    const v = (value || '').toString().toUpperCase();
+    if (v === 'HOURS') return 'Hours';
+    if (v === 'DISTANCE') return 'Distance';
+    if (v === 'PASSENGER') return 'Passenger';
+    if (v === 'FIXED') return 'Fixed';
+    if (v === 'HYBRID') return 'Hybrid';
+    return v || '—';
   }
 
-  editServiceType(serviceName) {
-    alert(`Edit Service Type: ${serviceName}\n\nIn a full implementation, this would open a form to edit:\n- Name\n- Code\n- Pricing Type\n- Custom Label\n- Agreement\n- Default settings\n- Active status`);
+  openCreateModal() {
+    this.selectedId = null;
+    this.modalTitle.textContent = 'Add Service Type';
+    this.deleteBtn.style.display = 'none';
+    this.clearError();
+
+    this.stName.value = '';
+    this.stCode.value = '';
+    this.stPricingType.value = 'DISTANCE';
+    this.stCustomLabel.value = '';
+    this.stAgreement.value = '';
+    this.stDefaultSettings.value = '';
+    this.stSortOrder.value = '0';
+    this.stActive.checked = true;
+
+    this.openModal();
   }
 
-  navigateToSubsection(subsection) {
-    console.log('Navigate to:', subsection);
-    
-    // In a real implementation, you would navigate to different pages
-    if (subsection === 'System Mapping') {
-      // Navigate to system mapping page
-      window.location.href = 'system-mapping.html';
-    } else if (subsection === 'Service Types') {
-      // Already on this page
-      console.log('Already on Service Types page');
+  openEditModal(id) {
+    const st = this.serviceTypes.find((x) => x.id === id);
+    if (!st) return;
+
+    this.selectedId = id;
+    this.modalTitle.textContent = 'Edit Service Type';
+    this.deleteBtn.style.display = 'inline-block';
+    this.clearError();
+
+    this.stName.value = st.name || '';
+    this.stCode.value = st.code || '';
+    this.stPricingType.value = (st.pricing_type || 'DISTANCE').toUpperCase();
+    this.stCustomLabel.value = st.custom_label || '';
+    this.stAgreement.value = st.agreement || '';
+    this.stDefaultSettings.value = st.default_settings || '';
+    this.stSortOrder.value = String(Number.isFinite(st.sort_order) ? st.sort_order : 0);
+    this.stActive.checked = st.active !== false;
+
+    this.openModal();
+  }
+
+  openModal() {
+    this.populateAgreementOptions();
+
+    if (!this.modal) return;
+    this.modal.classList.add('active');
+    this.modal.setAttribute('aria-hidden', 'false');
+    setTimeout(() => this.stName?.focus?.(), 50);
+  }
+
+  closeModal() {
+    if (!this.modal) return;
+    this.modal.classList.remove('active');
+    this.modal.setAttribute('aria-hidden', 'true');
+  }
+
+  showError(msg) {
+    if (!this.modalError) return;
+    this.modalError.textContent = msg;
+    this.modalError.style.display = 'block';
+  }
+
+  clearError() {
+    if (!this.modalError) return;
+    this.modalError.textContent = '';
+    this.modalError.style.display = 'none';
+  }
+
+  validateModal() {
+    const name = (this.stName.value || '').trim();
+    const code = (this.stCode.value || '').trim();
+
+    if (!name) return 'Name is required.';
+    if (!code) return 'Code is required.';
+    if (!/^[a-z0-9][a-z0-9\-]*[a-z0-9]$/.test(code) && code.length > 1) {
+      return 'Code must be lowercase letters/numbers with dashes (no spaces).';
+    }
+
+    // Enforce unique code (case-insensitive)
+    const normalizedCode = code.toLowerCase();
+    const conflict = this.serviceTypes.find((s) => (s.code || '').toLowerCase() === normalizedCode && s.id !== this.selectedId);
+    if (conflict) return `Code "${code}" is already in use. Choose another.`;
+
+    return null;
+  }
+
+  async saveFromModal() {
+    const error = this.validateModal();
+    if (error) {
+      this.showError(error);
+      return;
+    }
+    this.clearError();
+
+    const base = {
+      id: this.selectedId || undefined,
+      name: (this.stName.value || '').trim(),
+      code: (this.stCode.value || '').trim(),
+      pricing_type: (this.stPricingType.value || 'DISTANCE').toUpperCase(),
+      custom_label: (this.stCustomLabel.value || '').trim(),
+      // Store agreement as policy id when possible (still supports legacy free-text)
+      agreement: this.coerceAgreementToPolicyId((this.stAgreement.value || '').trim()),
+      default_settings: (this.stDefaultSettings.value || '').trim(),
+      sort_order: Number(this.stSortOrder.value || 0),
+      active: this.stActive.checked
+    };
+
+    let updated = [...this.serviceTypes];
+    if (this.selectedId) {
+      updated = updated.map((st) => st.id === this.selectedId ? normalizeServiceType({ ...st, ...base, id: this.selectedId }) : st);
     } else {
-      alert(`Navigation to "${subsection}" is under construction`);
+      updated.push(normalizeServiceType(base));
     }
+
+    // Persist
+    this.serviceTypes = await upsertServiceTypes(updated, { preferRemote: true });
+    this.serviceTypes.sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name));
+    this.render();
+    this.closeModal();
+    this.broadcastUpdate();
+  }
+
+  async toggleActive(id, active) {
+    const updated = this.serviceTypes.map((st) => st.id === id ? normalizeServiceType({ ...st, active }) : st);
+    this.serviceTypes = await upsertServiceTypes(updated, { preferRemote: true });
+    this.serviceTypes.sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name));
+    this.render();
+    this.broadcastUpdate();
+  }
+
+  confirmDelete(id) {
+    const st = this.serviceTypes.find((x) => x.id === id);
+    const name = st?.name || 'this service type';
+    if (!confirm(`Delete "${name}"?\n\nThis only removes the service type definition.\nVehicle types may still reference its code until you update them.`)) {
+      // Re-render to restore checkbox state in case user clicked row delete after toggle
+      this.render();
+      return;
+    }
+    this.deleteById(id);
+  }
+
+  async deleteSelected() {
+    if (!this.selectedId) return;
+    this.confirmDelete(this.selectedId);
+    this.closeModal();
+  }
+
+  async deleteById(id) {
+    await deleteServiceTypeById(id, { preferRemote: true });
+    this.serviceTypes = this.serviceTypes.filter((st) => st.id !== id);
+    this.render();
+    this.broadcastUpdate();
+  }
+
+  broadcastUpdate() {
+    // Tell parent frame to refresh service-type dependent dropdowns
+    try {
+      const active = getActiveServiceTypes(this.serviceTypes);
+      window.parent?.postMessage?.({ action: 'serviceTypesUpdated', payload: active }, '*');
+    } catch { /* ignore */ }
+    // Same-window event already emitted by the store via localStorage write.
+  }
+
+  escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  escapeAttr(text) {
+    return this.escapeHtml(text).replace(/"/g, '&quot;');
   }
 }
 
-// Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  new ServiceTypes();
+  new ServiceTypesPage();
 });

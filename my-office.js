@@ -1,6 +1,8 @@
 // Import API service
-import { setupAPI, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, fetchVehicleTypes, upsertVehicleType, deleteVehicleType, fetchActiveVehicles } from './api-service.js';
+import { setupAPI, apiFetch, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, fetchVehicleTypes, upsertVehicleType, deleteVehicleType, fetchActiveVehicles } from './api-service.js';
 import { wireMainNav } from './navigation.js';
+import { loadServiceTypes, SERVICE_TYPES_STORAGE_KEY } from './service-types-store.js';
+import { loadPolicies, upsertPolicy, deletePolicyById, getActivePolicies, POLICIES_STORAGE_KEY, normalizePolicy } from './policies-store.js';
 
 class MyOffice {
   constructor() {
@@ -13,10 +15,16 @@ class MyOffice {
     this.companySettingsManager = new CompanySettingsManager();
     this.drivers = [];
     this.affiliates = [];
+    this.serviceTypes = [];
+    this.policies = [];
+    this.selectedPolicyId = null;
+    this.currentPolicyTab = 'stored';
+    this.policyShowAll = false;
     this.vehicleTypeSeeds = this.buildVehicleTypeSeeds();
     this.vehicleTypeDrafts = {};
     this.activeVehicleTypeId = null;
     this.vehicleTypeSelectionInitialized = false;
+    this.vehicleTypeShowAll = false;
     this.vehicleTabsLocked = true;
     this.apiReady = false;
     this.fleetRecords = [];
@@ -69,11 +77,16 @@ class MyOffice {
     this.setupCompanyInfoForm();
     this.setupAccountsCalendarPrefs();
     this.setupVehicleTypeSelection();
+    this.setupVehicleTypeShowAllToggle();
     this.setupVehicleTypeSave();
     this.setupVehicleTypeTitleSync();
     this.setupVehicleRatesSave();
     this.setupVehicleTypeCreateDelete();
     this.populatePassengerCapacityOptions();
+    this.setupServiceTypesSync();
+    this.loadAndApplyServiceTypes();
+    this.setupPoliciesSync();
+    this.loadAndApplyPolicies();
     this.initializeFleetSection();
     this.updateVehicleTypeTabLockState();
     this.renderLoggedInEmail();
@@ -370,13 +383,16 @@ class MyOffice {
       });
     });
 
-    // Policies - Policy selection
-    document.querySelectorAll('.policy-item').forEach(item => {
-      item.addEventListener('click', (e) => {
-        const policyId = e.currentTarget.dataset.policyId;
-        this.selectPolicy(policyId);
+    // Policies - list selection (delegated; list is dynamic)
+    const policiesList = document.getElementById('policiesList');
+    if (policiesList) {
+      policiesList.addEventListener('click', (e) => {
+        const item = e.target?.closest?.('.policy-item');
+        if (item?.dataset?.policyId) {
+          this.selectPolicy(item.dataset.policyId);
+        }
       });
-    });
+    }
 
     // Policies - Policy tab switching
     document.querySelectorAll('.policy-tab').forEach(tab => {
@@ -387,6 +403,42 @@ class MyOffice {
         }
       });
     });
+
+    // Policies - buttons
+    const policyShowAllBtn = document.getElementById('policyShowAllBtn');
+    if (policyShowAllBtn) {
+      policyShowAllBtn.addEventListener('click', () => {
+        this.policyShowAll = !this.policyShowAll;
+        this.renderPoliciesList();
+      });
+    }
+
+    const policyAddBtn = document.getElementById('policyAddBtn');
+    if (policyAddBtn) {
+      policyAddBtn.addEventListener('click', () => {
+        this.createNewPolicy();
+      });
+    }
+
+    const policySaveBtn = document.getElementById('policySaveBtn');
+    if (policySaveBtn) {
+      policySaveBtn.addEventListener('click', () => this.savePolicy({ asNew: false }));
+    }
+
+    const policySaveAsBtn = document.getElementById('policySaveAsBtn');
+    if (policySaveAsBtn) {
+      policySaveAsBtn.addEventListener('click', () => this.savePolicy({ asNew: true }));
+    }
+
+    const policyDeleteBtn = document.getElementById('policyDeleteBtn');
+    if (policyDeleteBtn) {
+      policyDeleteBtn.addEventListener('click', () => this.deleteSelectedPolicy());
+    }
+
+    const policyDeleteBtnLeft = document.getElementById('policyDeleteBtnLeft');
+    if (policyDeleteBtnLeft) {
+      policyDeleteBtnLeft.addEventListener('click', () => this.deleteSelectedPolicy());
+    }
 
     // HTML Editor - Toolbar buttons
     document.querySelectorAll('.toolbar-btn').forEach(btn => {
@@ -1452,31 +1504,317 @@ class MyOffice {
       emptyState.style.display = 'block';
     }
   }
-
-  selectPolicy(policyId) {
-    // Update policy list active state
-    document.querySelectorAll('.policy-item').forEach(item => {
-      item.classList.remove('active');
-      if (item.dataset.policyId === policyId) {
-        item.classList.add('active');
+  // ---------- Policies / Agreements ----------
+  setupPoliciesSync() {
+    // Refresh when another page (like Service Types iframe) updates policies storage
+    window.addEventListener('storage', (e) => {
+      if (!e) return;
+      if (e.key === POLICIES_STORAGE_KEY) {
+        this.loadAndApplyPolicies();
       }
     });
+  }
 
-    // In a real app, you would load the policy's data here
-    console.log('Selected policy:', policyId);
+  async loadAndApplyPolicies() {
+    try {
+      const preferRemote = !!this.apiReady; // only try Supabase after auth init
+      let policies = await loadPolicies({ includeInactive: true, preferRemote });
+
+      // Seed if empty (grab current editor content as first “standard” agreement)
+      if (!Array.isArray(policies) || !policies.length) {
+        policies = this.seedDefaultPoliciesFromEditor();
+        // Persist to storage immediately so other pages (Service Types) can use them
+        for (const p of policies) {
+          await upsertPolicy(p, { preferRemote: false });
+        }
+      }
+
+      this.policies = Array.isArray(policies) ? policies.map(normalizePolicy) : [];
+      this.renderPoliciesList();
+
+      // Auto-select first policy in the current tab if none selected
+      if (!this.selectedPolicyId) {
+        const first = this.getPoliciesForCurrentTab()[0];
+        if (first?.id) this.selectPolicy(first.id);
+      }
+    } catch (err) {
+      console.warn('Policies: load failed; continuing with empty list.', err);
+      this.policies = this.policies || [];
+      this.renderPoliciesList();
+    }
+  }
+
+  seedDefaultPoliciesFromEditor() {
+    const nameEl = document.getElementById('policyName');
+    const typeEl = document.getElementById('policyType');
+    const statusEl = document.getElementById('policyStatus');
+
+    const initialName = (nameEl?.value || 'Standard Agreement').toString().trim() || 'Standard Agreement';
+    const initialType = (typeEl?.value || 'rental').toString().trim().toLowerCase() || 'rental';
+    const initialActive = (statusEl?.value || 'active') !== 'inactive';
+
+    const agreementHtml = this.getEditorHtml() || '<p><strong>Standard Agreement</strong></p><p>Enter agreement text here.</p>';
+    const privacyHtml =
+      '<h2>Privacy Policy</h2>' +
+      '<p>This Privacy Policy describes how we collect, use, and protect customer information.</p>' +
+      '<p><strong>Information we collect:</strong> Name, contact details, pickup/dropoff locations, and payment details.</p>' +
+      '<p><strong>How we use it:</strong> To provide transportation services, confirmations, receipts, and support.</p>' +
+      '<p><strong>Sharing:</strong> Only with drivers/affiliates needed to fulfill trips, and payment processors as required.</p>' +
+      '<p><strong>Contact:</strong> Add your company contact email/phone here.</p>';
+
+    const standardAgreement = normalizePolicy({
+      id: crypto?.randomUUID?.() || undefined,
+      name: initialName,
+      type: initialType,
+      active: initialActive,
+      status: initialActive ? 'active' : 'inactive',
+      sort_order: 10,
+      html: agreementHtml
+    });
+
+    const privacyPolicy = normalizePolicy({
+      id: crypto?.randomUUID?.() || undefined,
+      name: 'Privacy Policy',
+      type: 'privacy',
+      active: true,
+      status: 'active',
+      sort_order: 20,
+      html: privacyHtml
+    });
+
+    return [standardAgreement, privacyPolicy];
+  }
+
+  getPoliciesForCurrentTab() {
+    const tab = this.currentPolicyTab || 'stored';
+    const showAll = !!this.policyShowAll;
+
+    const inTab = (p) => {
+      if (tab === 'privacy') return (p.type || '').toLowerCase() === 'privacy';
+      // “Stored Agreements” tab shows everything except privacy
+      return (p.type || '').toLowerCase() !== 'privacy';
+    };
+
+    let list = Array.isArray(this.policies) ? this.policies.filter(inTab) : [];
+    if (!showAll) list = list.filter((p) => p.active);
+
+    // deterministic ordering
+    list.sort((a, b) => (Number(a.sort_order) - Number(b.sort_order)) || a.name.localeCompare(b.name));
+    return list;
+  }
+
+  renderPoliciesList() {
+    const listEl = document.getElementById('policiesList');
+    if (!listEl) return;
+
+    const showAllBtn = document.getElementById('policyShowAllBtn');
+    if (showAllBtn) {
+      showAllBtn.textContent = this.policyShowAll ? 'Show Active' : 'Show All';
+    }
+
+    const policies = this.getPoliciesForCurrentTab();
+    listEl.innerHTML = '';
+
+    if (!policies.length) {
+      const empty = document.createElement('div');
+      empty.style.padding = '10px';
+      empty.style.color = '#777';
+      empty.textContent = 'No policies found. Click “Add New Agreement” to create one.';
+      listEl.appendChild(empty);
+      return;
+    }
+
+    policies.forEach((p) => {
+      const item = document.createElement('div');
+      item.className = 'policy-item';
+      if (p.id === this.selectedPolicyId) item.classList.add('active');
+      if (!p.active) item.classList.add('inactive');
+      item.dataset.policyId = p.id;
+
+      const name = document.createElement('div');
+      name.className = 'policy-item-name';
+      name.textContent = p.active ? p.name : `${p.name} (Inactive)`;
+      item.appendChild(name);
+
+      listEl.appendChild(item);
+    });
+  }
+
+  selectPolicy(policyId) {
+    this.selectedPolicyId = policyId;
+
+    const policy = Array.isArray(this.policies) ? this.policies.find((p) => p.id === policyId) : null;
+    if (!policy) {
+      this.renderPoliciesList();
+      return;
+    }
+
+    // Update list highlight
+    this.renderPoliciesList();
+
+    // Populate editor fields
+    const nameEl = document.getElementById('policyName');
+    const typeEl = document.getElementById('policyType');
+    const statusEl = document.getElementById('policyStatus');
+    const useDefaultEl = document.getElementById('useAsDefault');
+    const farmoutEl = document.getElementById('defaultFarmoutAgreement');
+
+    if (nameEl) nameEl.value = policy.name || '';
+    if (typeEl) typeEl.value = (policy.type || 'rental').toLowerCase();
+    if (statusEl) statusEl.value = policy.active ? 'active' : 'inactive';
+    if (useDefaultEl) useDefaultEl.checked = !!policy.use_as_default;
+    if (farmoutEl) farmoutEl.checked = !!policy.default_farmout;
+
+    this.setEditorHtml(policy.html || '');
   }
 
   switchPolicyTab(policyType) {
+    this.currentPolicyTab = policyType || 'stored';
+
     // Update tab active state
     document.querySelectorAll('.policy-tab').forEach(tab => {
       tab.classList.remove('active');
-      if (tab.dataset.policyType === policyType) {
+      if (tab.dataset.policyType === this.currentPolicyTab) {
         tab.classList.add('active');
       }
     });
 
-    console.log('Switched to policy type:', policyType);
+    // Reset selection to first item in tab
+    this.selectedPolicyId = null;
+    this.renderPoliciesList();
+    const first = this.getPoliciesForCurrentTab()[0];
+    if (first?.id) this.selectPolicy(first.id);
   }
+
+  getEditorHtml() {
+    const sourceEl = document.getElementById('htmlEditorSource');
+    const editorEl = document.getElementById('htmlEditor');
+
+    // If source view is visible, it is the source of truth
+    if (sourceEl && sourceEl.style.display !== 'none') {
+      return (sourceEl.value || '').toString();
+    }
+    if (editorEl) return (editorEl.innerHTML || '').toString();
+    return '';
+  }
+
+  setEditorHtml(html) {
+    const sourceEl = document.getElementById('htmlEditorSource');
+    const editorEl = document.getElementById('htmlEditor');
+
+    if (sourceEl) sourceEl.value = html || '';
+    if (editorEl) editorEl.innerHTML = html || '';
+  }
+
+  getPolicyDraftFromEditor() {
+    const nameEl = document.getElementById('policyName');
+    const typeEl = document.getElementById('policyType');
+    const statusEl = document.getElementById('policyStatus');
+    const useDefaultEl = document.getElementById('useAsDefault');
+    const farmoutEl = document.getElementById('defaultFarmoutAgreement');
+
+    const name = (nameEl?.value || '').toString().trim() || 'Untitled Policy';
+    const type = (typeEl?.value || 'rental').toString().trim().toLowerCase();
+    const active = (statusEl?.value || 'active') !== 'inactive';
+
+    const html = this.getEditorHtml();
+
+    return normalizePolicy({
+      id: this.selectedPolicyId || undefined,
+      name,
+      type,
+      active,
+      status: active ? 'active' : 'inactive',
+      use_as_default: !!useDefaultEl?.checked,
+      default_farmout: !!farmoutEl?.checked,
+      html,
+      sort_order: 0
+    });
+  }
+
+  async createNewPolicy() {
+    const draft = this.getPolicyDraftFromEditor();
+    const tab = this.currentPolicyTab || 'stored';
+
+    const type = tab === 'privacy' ? 'privacy' : 'rental';
+    const p = normalizePolicy({
+      id: crypto?.randomUUID?.() || undefined,
+      name: tab === 'privacy' ? 'New Privacy Policy' : 'New Agreement',
+      type,
+      active: true,
+      status: 'active',
+      html: type === 'privacy'
+        ? '<h2>Privacy Policy</h2><p>Enter your privacy policy here...</p>'
+        : '<p><strong>Agreement</strong></p><p>Enter agreement text here...</p>',
+      sort_order: (this.policies?.length || 0) + 100
+    });
+
+    const saved = await upsertPolicy(p, { preferRemote: !!this.apiReady });
+
+    // refresh local memory
+    const idx = (this.policies || []).findIndex((x) => x.id === saved.id);
+    if (idx >= 0) this.policies[idx] = saved;
+    else this.policies.push(saved);
+
+    this.currentPolicyTab = saved.type === 'privacy' ? 'privacy' : 'stored';
+    this.selectPolicy(saved.id);
+    this.renderPoliciesList();
+  }
+
+  async savePolicy({ asNew = false } = {}) {
+    const draft = this.getPolicyDraftFromEditor();
+
+    const willBeNew = asNew || !this.selectedPolicyId;
+    const id = willBeNew ? (crypto?.randomUUID?.() || undefined) : draft.id;
+
+    let name = draft.name;
+    if (willBeNew) {
+      // If saving as new, allow rename (prompt is optional)
+      const suggested = name && !name.toLowerCase().includes('copy') ? `${name} (Copy)` : name;
+      const input = prompt('Save As New Policy Name:', suggested || name);
+      if (input !== null) {
+        name = input.toString().trim() || name;
+      }
+    }
+
+    const payload = normalizePolicy({
+      ...draft,
+      id,
+      name
+    });
+
+    const saved = await upsertPolicy(payload, { preferRemote: !!this.apiReady });
+
+    // Update memory
+    const idx = (this.policies || []).findIndex((x) => x.id === saved.id);
+    if (idx >= 0) this.policies[idx] = saved;
+    else this.policies.push(saved);
+
+    this.selectedPolicyId = saved.id;
+    this.currentPolicyTab = saved.type === 'privacy' ? 'privacy' : 'stored';
+    this.renderPoliciesList();
+    this.selectPolicy(saved.id);
+  }
+
+  async deleteSelectedPolicy() {
+    if (!this.selectedPolicyId) return;
+    const p = this.policies?.find((x) => x.id === this.selectedPolicyId);
+    const name = p?.name || 'this policy';
+    const ok = confirm(`Delete ${name}? This cannot be undone.`);
+    if (!ok) return;
+
+    await deletePolicyById(this.selectedPolicyId, { preferRemote: !!this.apiReady });
+
+    this.policies = (this.policies || []).filter((x) => x.id !== this.selectedPolicyId);
+    this.selectedPolicyId = null;
+    this.renderPoliciesList();
+
+    const first = this.getPoliciesForCurrentTab()[0];
+    if (first?.id) this.selectPolicy(first.id);
+  }
+
+
+
 
   executeEditorCommand(command) {
     const editor = document.getElementById('htmlEditor');
@@ -1967,6 +2305,117 @@ class MyOffice {
       this.populateVehicleTypeForm(initialItem.dataset.vehicleId);
     }
   }
+  setupVehicleTypeShowAllToggle() {
+    const btn = document.getElementById('vehicleTypeShowAllBtn');
+    if (!btn) return;
+
+    btn.addEventListener('click', async () => {
+      this.vehicleTypeShowAll = !this.vehicleTypeShowAll;
+      btn.textContent = this.vehicleTypeShowAll ? 'Show Active' : 'Show All';
+      await this.loadVehicleTypesList();
+    });
+  }
+
+  startInlineVehicleTypeRename(vehicleId) {
+    const list = document.getElementById('vehicleTypeList');
+    if (!list) return;
+
+    const item = list.querySelector(`.vehicle-type-item[data-vehicle-id="${vehicleId}"]`);
+    if (!item) return;
+
+    const nameSpan = item.querySelector('.vehicle-type-name');
+    if (!nameSpan) return;
+
+    const original = (nameSpan.textContent || '').trim();
+
+    nameSpan.setAttribute('contenteditable', 'true');
+    nameSpan.classList.add('editing');
+    nameSpan.focus();
+
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(nameSpan);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch {}
+
+    const onKeyDown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        nameSpan.blur();
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        nameSpan.textContent = original;
+        nameSpan.blur();
+      }
+    };
+
+    const finish = async () => {
+      nameSpan.removeEventListener('blur', finish);
+      nameSpan.removeEventListener('keydown', onKeyDown);
+
+      nameSpan.setAttribute('contenteditable', 'false');
+      nameSpan.classList.remove('editing');
+
+      const next = (nameSpan.textContent || '').trim();
+      if (!next || next === original) {
+        nameSpan.textContent = original;
+        return;
+      }
+
+      await this.commitVehicleTypeRename(vehicleId, next);
+    };
+
+    nameSpan.addEventListener('keydown', onKeyDown);
+    nameSpan.addEventListener('blur', finish);
+  }
+
+  async commitVehicleTypeRename(vehicleId, newName) {
+    // Local cache so UI updates immediately
+    const existing = this.vehicleTypeSeeds?.[vehicleId] || {};
+    this.vehicleTypeSeeds = this.vehicleTypeSeeds || {};
+    this.vehicleTypeSeeds[vehicleId] = { ...existing, id: vehicleId, name: newName, status: existing.status || 'active' };
+
+    if (this.vehicleTypeDrafts?.[vehicleId]) {
+      const draft = { ...this.vehicleTypeDrafts[vehicleId], name: newName };
+      this.vehicleTypeDrafts[vehicleId] = draft;
+      this.persistVehicleTypeDraft(vehicleId, draft);
+    }
+
+    if (this.activeVehicleTypeId === vehicleId) {
+      const titleInput = document.getElementById('vehicleTypeName');
+      if (titleInput) titleInput.value = newName;
+    }
+
+    // Remote persist (best-effort) - only for UUID vehicle type ids
+    const isUuid = typeof vehicleId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vehicleId);
+    if (this.apiReady && isUuid) {
+      try {
+        const now = new Date().toISOString();
+        const payload = { name: newName, updated_at: now };
+        const res = await apiFetch(`/rest/v1/vehicle_types?id=eq.${encodeURIComponent(vehicleId)}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Prefer: 'return=representation'
+          },
+          body: JSON.stringify(payload),
+          retry: true
+        });
+        if (!res.ok) {
+          console.warn('Vehicle type rename remote failed:', res.status);
+        }
+      } catch (err) {
+        console.warn('Vehicle type rename remote error:', err);
+      }
+    }
+
+    this.refreshVehicleTypeList(vehicleId, newName);
+  }
+
+
 
   setupVehicleTypeSave() {
     const saveBtn = document.getElementById('vehicleTypeSaveBtn');
@@ -2122,7 +2571,24 @@ class MyOffice {
     setSelectValue(container.querySelector('[data-vehicle-field="pricing_basis"]'), data.pricing_basis, 'hours');
     setSelectValue(container.querySelector('[data-vehicle-field="passenger_capacity"]'), data.passenger_capacity, '2');
     setSelectValue(container.querySelector('[data-vehicle-field="luggage_capacity"]'), data.luggage_capacity, '6');
-    setSelectValue(container.querySelector('[data-vehicle-field="service_type"]'), data.service_type, '');
+    // Associated Service Types (multi-select)
+    const serviceTypeSelect = container.querySelector('[data-vehicle-field="service_type"]');
+    if (serviceTypeSelect) {
+      const tagsRaw = Array.isArray(data.service_type_tags)
+        ? data.service_type_tags
+        : (data.service_type ? [data.service_type] : []);
+      const tags = this.normalizeServiceTypeTags(tagsRaw);
+
+      if (serviceTypeSelect instanceof HTMLSelectElement && serviceTypeSelect.multiple) {
+        Array.from(serviceTypeSelect.options).forEach((opt) => {
+          opt.selected = tags.includes(opt.value);
+        });
+        // Refresh enhanced multi-select UI label (if present)
+        this.updateServiceTypesMultiSelectLabel(serviceTypeSelect);
+      } else {
+        setSelectValue(serviceTypeSelect, tags[0] || data.service_type || '', '');
+      }
+    }
 
     const colorInput = container.querySelector('[data-vehicle-field="color_hex"]');
     if (colorInput) {
@@ -2229,7 +2695,19 @@ class MyOffice {
 
     const serviceType = container.querySelector('[data-vehicle-field="service_type"]');
     if (serviceType) {
-      draft.service_type = serviceType.value || '';
+      // Vehicle Types can be associated with one OR MORE service types.
+      // We store multiple selections in `service_type_tags` (TEXT[]) and keep `service_type` for legacy compatibility.
+      if (serviceType instanceof HTMLSelectElement && serviceType.multiple) {
+        const selected = Array.from(serviceType.selectedOptions)
+          .map((opt) => opt.value)
+          .filter((v) => v && v.trim());
+        draft.service_type_tags = this.normalizeServiceTypeTags(selected);
+        draft.service_type = draft.service_type_tags[0] || '';
+      } else {
+        const v = serviceType.value || '';
+        draft.service_type_tags = this.normalizeServiceTypeTags(v ? [v] : []);
+        draft.service_type = v;
+      }
     }
 
     const accessibleCheckbox = container.querySelector('[data-vehicle-field="accessible"]');
@@ -2492,11 +2970,45 @@ class MyOffice {
     records.sort((a, b) => this.normalizeVehicleTypeName(a.name || '').localeCompare(this.normalizeVehicleTypeName(b.name || ''), undefined, { sensitivity: 'base' }));
 
     list.innerHTML = '';
-    records.forEach((v) => {
+
+    const showAll = !!this.vehicleTypeShowAll;
+    const isActive = (v) => {
+      const status = (v?.status ?? (v?.active === false ? 'inactive' : 'active') ?? 'active').toString().toLowerCase();
+      return status !== 'inactive';
+    };
+
+    const visible = showAll ? records : records.filter(isActive);
+
+    visible.forEach((v) => {
       const div = document.createElement('div');
       div.className = 'vehicle-type-item';
       div.dataset.vehicleId = v.id || v.code || crypto.randomUUID();
-      div.textContent = this.normalizeVehicleTypeName(v.name || 'Untitled Vehicle Type');
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'vehicle-type-name';
+      nameSpan.textContent = this.normalizeVehicleTypeName(v.name || 'Untitled Vehicle Type');
+      div.appendChild(nameSpan);
+
+      if (!isActive(v)) {
+        div.classList.add('inactive');
+        const badge = document.createElement('span');
+        badge.className = 'vehicle-type-badge';
+        badge.textContent = 'Inactive';
+        div.appendChild(badge);
+      }
+
+      const renameBtn = document.createElement('button');
+      renameBtn.type = 'button';
+      renameBtn.className = 'vehicle-type-rename-btn';
+      renameBtn.title = 'Rename vehicle type';
+      renameBtn.textContent = '✎';
+      renameBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.startInlineVehicleTypeRename(div.dataset.vehicleId);
+      });
+      div.appendChild(renameBtn);
+
       list.appendChild(div);
     });
 
@@ -2517,7 +3029,9 @@ class MyOffice {
       item.dataset.vehicleId = vehicleId;
       list.appendChild(item);
     }
-    item.textContent = name || 'Untitled Vehicle Type';
+    const span = item.querySelector('.vehicle-type-name');
+    if (span) span.textContent = name || 'Untitled Vehicle Type';
+    else item.textContent = name || 'Untitled Vehicle Type';
     list.querySelectorAll('.vehicle-type-item').forEach(el => el.classList.remove('active'));
     item.classList.add('active');
     this.populateVehicleTypeForm(vehicleId);
@@ -4590,6 +5104,327 @@ class MyOffice {
       alert('Error deleting driver: ' + error.message);
     }
   }
+
+  // -----------------------------
+  // Service Types (System Settings)
+  // -----------------------------
+
+  setupServiceTypesSync() {
+    // Listen for postMessage from the System Settings iframe (service-types.html)
+    window.addEventListener('message', (event) => {
+      const data = event?.data;
+      if (!data) return;
+      if (data.action === 'serviceTypesUpdated' && Array.isArray(data.payload)) {
+        // payload is active-only list in most cases
+        this.serviceTypes = data.payload;
+        this.refreshServiceTypeDropdowns();
+      }
+    });
+
+    // Listen for same-window custom event emitted by the store when localStorage changes
+    window.addEventListener('relia:service-types-updated', (e) => {
+      const list = e?.detail;
+      if (Array.isArray(list)) {
+        this.serviceTypes = list;
+        this.refreshServiceTypeDropdowns();
+      }
+    });
+
+    // Listen for cross-window localStorage sync
+    window.addEventListener('storage', (e) => {
+      if (e.key === SERVICE_TYPES_STORAGE_KEY) {
+        this.loadAndApplyServiceTypes();
+      }
+    });
+  }
+
+  async loadAndApplyServiceTypes() {
+    try {
+      const list = await loadServiceTypes({ includeInactive: true, preferRemote: true });
+      this.serviceTypes = Array.isArray(list) ? list : [];
+      this.refreshServiceTypeDropdowns();
+    } catch (e) {
+      console.warn('⚠️ Failed to load service types; using existing list.', e);
+      this.refreshServiceTypeDropdowns();
+    }
+  }
+
+  refreshServiceTypeDropdowns() {
+    const active = Array.isArray(this.serviceTypes)
+      ? this.serviceTypes.filter((st) => st && st.active !== false && st.code)
+      : [];
+
+    // 1) Update any Company Preferences selectors that contain "All Service Types"
+    this.refreshServiceTypeFilterSelects(active);
+
+    // 2) Update Vehicle Types editor multi-select
+    this.refreshVehicleTypeServiceTypesSelect(active);
+  }
+
+  refreshServiceTypeFilterSelects(activeServiceTypes) {
+    const selects = Array.from(document.querySelectorAll('select'));
+    selects.forEach((select) => {
+      const options = Array.from(select.options || []);
+      const looksLikeServiceTypeFilter = options.some((opt) => /all\s+service\s+types/i.test(opt.textContent || ''));
+      if (!looksLikeServiceTypeFilter) return;
+
+      const currentValue = select.value;
+      const currentText = select.selectedOptions?.[0]?.textContent || currentValue;
+
+      // Build new options
+      const newOptions = [];
+      newOptions.push(new Option('All Service Types', 'all'));
+
+      activeServiceTypes
+        .slice()
+        .sort((a, b) => (Number(a.sort_order) - Number(b.sort_order)) || String(a.name || '').localeCompare(String(b.name || '')))
+        .forEach((st) => {
+          newOptions.push(new Option(st.name, st.code));
+        });
+
+      // Preserve legacy selection if it doesn't exist in the new list
+      const hasCurrent = newOptions.some((o) => o.value === currentValue);
+      if (currentValue && !hasCurrent && currentValue !== 'all') {
+        newOptions.push(new Option(`Legacy: ${currentText || currentValue}`, currentValue));
+      }
+
+      // Replace DOM options
+      select.innerHTML = '';
+      newOptions.forEach((opt) => select.add(opt));
+
+      // Restore selection
+      if (currentValue && Array.from(select.options).some((o) => o.value === currentValue)) {
+        select.value = currentValue;
+      } else if (Array.from(select.options).some((o) => o.value === 'all')) {
+        select.value = 'all';
+      }
+    });
+  }
+
+  refreshVehicleTypeServiceTypesSelect(activeServiceTypes) {
+    const container = document.getElementById('editVehicleTypeContent');
+    if (!container) return;
+
+    const select = container.querySelector('[data-vehicle-field="service_type"]');
+    if (!(select instanceof HTMLSelectElement)) return;
+
+    // Ensure multi-select capability
+    select.multiple = true;
+
+    // Determine current tags to keep selected
+    const data = this.activeVehicleTypeId ? this.getVehicleTypeData(this.activeVehicleTypeId) : null;
+    const rawTags = Array.isArray(data?.service_type_tags)
+      ? data.service_type_tags
+      : (data?.service_type ? [data.service_type] : Array.from(select.selectedOptions || []).map((o) => o.value));
+
+    const selectedTags = this.normalizeServiceTypeTags(rawTags);
+
+    // Rebuild select options
+    const activeSorted = activeServiceTypes
+      .slice()
+      .sort((a, b) => (Number(a.sort_order) - Number(b.sort_order)) || String(a.name || '').localeCompare(String(b.name || '')));
+
+    const allowedCodes = new Set(activeSorted.map((s) => s.code));
+    const legacyCodes = selectedTags.filter((code) => code && !allowedCodes.has(code));
+
+    select.innerHTML = '';
+    select.add(new Option('- - - - NOT ASSIGNED - - - -', ''));
+
+    activeSorted.forEach((st) => {
+      select.add(new Option(st.name, st.code));
+    });
+
+    legacyCodes.forEach((code) => {
+      select.add(new Option(`Legacy: ${code}`, code));
+    });
+
+    // Apply selection
+    Array.from(select.options).forEach((opt) => {
+      opt.selected = selectedTags.includes(opt.value);
+    });
+
+    // Enhance UI (checkbox dropdown) — keeps the underlying select as the data source
+    this.renderServiceTypesMultiSelect(select, activeSorted);
+
+    // Update label
+    this.updateServiceTypesMultiSelectLabel(select);
+  }
+
+  normalizeServiceTypeTags(input) {
+    const arr = Array.isArray(input)
+      ? input
+      : (typeof input === 'string' && input.trim() ? [input.trim()] : []);
+    const out = [];
+    arr.forEach((raw) => {
+      const tag = String(raw || '').trim();
+      if (!tag) return;
+
+      // Backwards-compat mappings from older hardcoded values
+      if (tag === 'airport' || tag === 'airport-transfer') {
+        out.push('from-airport', 'to-airport');
+        return;
+      }
+      if (tag === 'point') {
+        out.push('point-to-point');
+        return;
+      }
+      out.push(tag);
+    });
+    return Array.from(new Set(out));
+  }
+
+  renderServiceTypesMultiSelect(select, activeSorted) {
+    if (!(select instanceof HTMLSelectElement)) return;
+
+    // Build wrapper once
+    if (select.dataset.reliaMultiselect === '1') {
+      // Re-render options list in case service types changed
+      const wrapper = select.parentElement?.querySelector('.relia-multiselect');
+      if (wrapper) {
+        this.populateServiceTypesMultiSelectUI(wrapper, select, activeSorted);
+      }
+      return;
+    }
+
+    select.dataset.reliaMultiselect = '1';
+    select.style.display = 'none';
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'relia-multiselect';
+
+    wrapper.innerHTML = `
+      <button type="button" class="relia-multiselect-toggle">- - - - NOT ASSIGNED - - - -</button>
+      <div class="relia-multiselect-menu" style="display:none;">
+        <label class="relia-multiselect-item relia-multiselect-selectall">
+          <input type="checkbox" class="relia-multiselect-selectall-checkbox" />
+          <span>Select All</span>
+        </label>
+        <div class="relia-multiselect-options"></div>
+      </div>
+    `;
+
+    select.insertAdjacentElement('afterend', wrapper);
+
+    // Toggle open/close
+    const toggle = wrapper.querySelector('.relia-multiselect-toggle');
+    const menu = wrapper.querySelector('.relia-multiselect-menu');
+
+    toggle?.addEventListener('click', (e) => {
+      e.preventDefault();
+      const isOpen = menu.style.display === 'block';
+      menu.style.display = isOpen ? 'none' : 'block';
+      if (!isOpen) {
+        this.syncMultiSelectCheckboxesFromSelect(wrapper, select);
+      }
+    });
+
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+      if (!wrapper.contains(e.target) && menu.style.display === 'block') {
+        menu.style.display = 'none';
+      }
+    });
+
+    // Populate list + wire checkbox changes
+    this.populateServiceTypesMultiSelectUI(wrapper, select, activeSorted);
+
+    // Initial label
+    this.updateServiceTypesMultiSelectLabel(select);
+  }
+
+  populateServiceTypesMultiSelectUI(wrapper, select, activeSorted) {
+    const optionsContainer = wrapper.querySelector('.relia-multiselect-options');
+    const selectAllBox = wrapper.querySelector('.relia-multiselect-selectall-checkbox');
+
+    if (!optionsContainer || !selectAllBox) return;
+
+    optionsContainer.innerHTML = '';
+
+    activeSorted.forEach((st) => {
+      const item = document.createElement('label');
+      item.className = 'relia-multiselect-item';
+      item.innerHTML = `
+        <input type="checkbox" value="${this.escapeHtml(String(st.code))}" />
+        <span>${this.escapeHtml(String(st.name))}</span>
+      `;
+      optionsContainer.appendChild(item);
+    });
+
+    // Wire checkbox change events
+    optionsContainer.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        this.applyMultiSelectCheckboxesToSelect(wrapper, select);
+      });
+    });
+
+    // Select all
+    selectAllBox.addEventListener('change', () => {
+      const checked = selectAllBox.checked === true;
+      optionsContainer.querySelectorAll('input[type="checkbox"]').forEach((cb) => { cb.checked = checked; });
+      this.applyMultiSelectCheckboxesToSelect(wrapper, select);
+    });
+
+    // Sync initial state
+    this.syncMultiSelectCheckboxesFromSelect(wrapper, select);
+  }
+
+  syncMultiSelectCheckboxesFromSelect(wrapper, select) {
+    const selectedValues = new Set(Array.from(select.selectedOptions || []).map((o) => o.value).filter(Boolean));
+    const optionCheckboxes = wrapper.querySelectorAll('.relia-multiselect-options input[type="checkbox"]');
+    optionCheckboxes.forEach((cb) => {
+      cb.checked = selectedValues.has(cb.value);
+    });
+
+    const selectAllBox = wrapper.querySelector('.relia-multiselect-selectall-checkbox');
+    if (selectAllBox) {
+      const allChecked = optionCheckboxes.length > 0 && Array.from(optionCheckboxes).every((cb) => cb.checked);
+      selectAllBox.checked = allChecked;
+    }
+  }
+
+  applyMultiSelectCheckboxesToSelect(wrapper, select) {
+    const values = Array.from(wrapper.querySelectorAll('.relia-multiselect-options input[type="checkbox"]:checked'))
+      .map((cb) => cb.value)
+      .filter(Boolean);
+
+    // Apply to underlying select
+    const selectedSet = new Set(values);
+    Array.from(select.options).forEach((opt) => {
+      opt.selected = selectedSet.has(opt.value);
+    });
+
+    // Update label text
+    this.updateServiceTypesMultiSelectLabel(select);
+  }
+
+  updateServiceTypesMultiSelectLabel(select) {
+    if (!(select instanceof HTMLSelectElement)) return;
+    const wrapper = select.parentElement?.querySelector('.relia-multiselect');
+    if (!wrapper) return;
+
+    const toggle = wrapper.querySelector('.relia-multiselect-toggle');
+    if (!toggle) return;
+
+    const selected = Array.from(select.selectedOptions || [])
+      .map((o) => o.textContent?.trim() || o.value)
+      .filter((v) => v && v !== '- - - - NOT ASSIGNED - - - -' && v !== 'Legacy:');
+
+    if (!selected.length) {
+      toggle.textContent = '- - - - NOT ASSIGNED - - - -';
+      return;
+    }
+    toggle.textContent = selected.join(', ');
+  }
+
+  escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
 }
 
 // Initialize when DOM is ready

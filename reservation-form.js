@@ -7,6 +7,7 @@ import { fetchDrivers, setupAPI, listDriverNames, listActiveVehiclesLight, listA
 import './CompanySettingsManager.js';
 import supabaseDb from './supabase-db.js';
 import { wireMainNav } from './navigation.js';
+import { loadServiceTypes, SERVICE_TYPES_STORAGE_KEY } from './service-types-store.js';
 
 // Use Supabase-only database (no localStorage)
 const db = supabaseDb;
@@ -412,6 +413,7 @@ class ReservationForm {
 
   async init() {
     console.log('🚀 ReservationForm initializing...');
+    await this.loadServiceTypesIntoDropdown();
     console.log('✅ this keyword available:', !!this);
     console.log('👀 [ReservationForm] View mode enabled:', this.isViewMode);
     if (this.isViewMode) {
@@ -5548,6 +5550,60 @@ class ReservationForm {
       }
     }
   }
+
+  // -----------------------------
+  // Service Types (dynamic dropdown)
+  // -----------------------------
+  async loadServiceTypesIntoDropdown() {
+    const select = document.getElementById('serviceType');
+    if (!(select instanceof HTMLSelectElement)) return;
+
+    try {
+      const list = await loadServiceTypes({ includeInactive: false, preferRemote: true });
+      const active = Array.isArray(list) ? list.filter((s) => s && s.active !== false && s.code) : [];
+
+      // Preserve current selection (especially important when editing an existing reservation)
+      const currentValue = select.value;
+
+      // Rebuild options
+      select.innerHTML = '';
+      select.add(new Option('- - - - NOT ASSIGNED - - - -', ''));
+
+      active
+        .slice()
+        .sort((a, b) => (Number(a.sort_order) - Number(b.sort_order)) || String(a.name || '').localeCompare(String(b.name || '')))
+        .forEach((st) => {
+          select.add(new Option(st.name, st.code));
+        });
+
+      // Keep legacy value if not found
+      const exists = Array.from(select.options).some((o) => o.value === currentValue);
+      if (currentValue && !exists) {
+        select.add(new Option(`Legacy: ${currentValue}`, currentValue));
+      }
+
+      // Restore selection
+      if (currentValue) select.value = currentValue;
+
+      // Listen for changes coming from the Service Types admin page
+      if (!this._serviceTypesListenersInstalled) {
+        this._serviceTypesListenersInstalled = true;
+
+        window.addEventListener('storage', (e) => {
+          if (e.key === SERVICE_TYPES_STORAGE_KEY) {
+            this.loadServiceTypesIntoDropdown();
+          }
+        });
+
+        window.addEventListener('relia:service-types-updated', () => {
+          this.loadServiceTypesIntoDropdown();
+        });
+      }
+    } catch (e) {
+      console.warn('⚠️ Could not load service types; leaving existing dropdown options.', e);
+    }
+  }
+
 }
 
 // Initialize when DOM is ready
@@ -5677,4 +5733,3 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 });
-

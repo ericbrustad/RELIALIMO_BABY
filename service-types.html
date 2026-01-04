@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Service Types - RELIA🐂LIMO™</title>
+    <link rel="stylesheet" href="my-office.css" />
     <link rel="stylesheet" href="service-types.css" />
   </head>
   <body>
@@ -56,7 +57,7 @@
                 <option value="user">user</option>
               </select>
             </div>
-            <button class="btn-add-new">Add New</button>
+            <button class="btn-add-new" id="addServiceTypeBtn">Add New</button>
           </div>
         </div>
 
@@ -72,213 +73,78 @@
                 <th style="width: 150px;">Custom Label</th>
                 <th style="width: 200px;">Agreement</th>
                 <th style="width: 180px;">Default</th>
+                <th style="width: 140px;">Action</th>
               </tr>
             </thead>
-            <tbody>
-              <tr>
-                <td><input type="checkbox" checked /></td>
-                <td><a href="#" class="service-link">From Airport</a></td>
-                <td>ARPT</td>
-                <td>Distance</td>
-                <td>From Airport</td>
-                <td></td>
-                <td>Airport Arrival</td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" checked /></td>
-                <td><a href="#" class="service-link">To Airport</a></td>
-                <td>AIRD</td>
-                <td>Distance</td>
-                <td>To Airport</td>
-                <td></td>
-                <td>Airport Departure</td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" checked /></td>
-                <td><a href="#" class="service-link">Hourly/As Directed</a></td>
-                <td>HRL</td>
-                <td>Hourly</td>
-                <td>Hourly/As Directed</td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" checked /></td>
-                <td><a href="#" class="service-link">Point-to-Point</a></td>
-                <td>PTP</td>
-                <td>Distance</td>
-                <td>Point-to-Point</td>
-                <td></td>
-                <td>Hourly, Point-To-Point</td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">Altet</a></td>
-                <td>3AS</td>
-                <td>Distance</td>
-                <td>Altet</td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">Point to Point (form trip</a></td>
-                <td>PNPINT</td>
-                <td>Distance</td>
-                <td>Point to Point about trip</td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">Quote</a></td>
-                <td>Quote</td>
-                <td>Hourly, Distance</td>
-                <td>Quote</td>
-                <td>Erix Coach and Car Agreement</td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">RECUR</a></td>
-                <td>RECUR</td>
-                <td>Fixed</td>
-                <td>Recurring</td>
-                <td>affiliate farmout Agreement</td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" checked /></td>
-                <td><a href="#" class="service-link">Side-way Light Tour</a></td>
-                <td>Hourly6</td>
-                <td>Hourly</td>
-                <td>Holiday light tour</td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">UNITS DISP to unitsDISP</a></td>
-                <td>UNITSDII</td>
-                <td>Fixed</td>
-                <td>UNITS 2 AIRPORT</td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">training Retur -Simple</a></td>
-                <td>RAS</td>
-                <td>Fixed-D Distance</td>
-                <td>Roundtrip</td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">Birthday Party</a></td>
-                <td>BRTH</td>
-                <td>Fixed</td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">Charter</a></td>
-                <td>CH</td>
-                <td>Fixed</td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">SharedTrip</a></td>
-                <td>PROSTEP</td>
-                <td>Fixed</td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">Prom</a></td>
-                <td>PROM</td>
-                <td>Fixed</td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">Road Show</a></td>
-                <td>ROAD</td>
-                <td>Fixed</td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">From Seaport</a></td>
-                <td>SEAA</td>
-                <td>Fixed</td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">To Seaport</a></td>
-                <td>SEAD</td>
-                <td>Fixed</td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">Tour</a></td>
-                <td>TOUR</td>
-                <td>Fixed</td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">Transfer</a></td>
-                <td>TRF</td>
-                <td>Fixed</td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">Other</a></td>
-                <td>OTH</td>
-                <td>Fixed</td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td><a href="#" class="service-link">Custom (Invoice)</a></td>
-                <td>CUSTOM</td>
-                <td>Fixed</td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-            </tbody>
+            <tbody id="serviceTypesTableBody"></tbody>
           </table>
         </div>
       </main>
     </div>
 
-    <script src="service-types.js"></script>
+    
+    <!-- Add/Edit Service Type Modal -->
+    <div id="serviceTypeModal" class="modal" aria-hidden="true">
+      <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="serviceTypeModalTitle">
+        <div class="modal-header">
+          <h3 id="serviceTypeModalTitle">Service Type</h3>
+          <button type="button" class="modal-close" data-close-modal title="Close">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="stName">Name</label>
+              <input id="stName" type="text" class="form-control" placeholder="e.g., From Airport" />
+            </div>
+            <div class="form-group">
+              <label for="stCode">Code</label>
+              <input id="stCode" type="text" class="form-control" placeholder="e.g., from-airport" />
+              <div class="hint">Lowercase letters, numbers, and dashes recommended.</div>
+            </div>
+            <div class="form-group">
+              <label for="stPricingType">Pricing Type</label>
+              <select id="stPricingType" class="form-control">
+                <option value="DISTANCE">Distance</option>
+                <option value="HOURS">Hours</option>
+                <option value="PASSENGER">Passenger</option>
+                <option value="FIXED">Fixed</option>
+                <option value="HYBRID">Hybrid</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="stCustomLabel">Custom Label</label>
+              <input id="stCustomLabel" type="text" class="form-control" placeholder="Optional label to show on screens/receipts" />
+            </div>
+            <div class="form-group">
+              <label for="stAgreement">Agreement</label>
+              <select id="stAgreement" class="form-control">
+                <option value="">-- No Agreement --</option>
+              </select>
+              <div class="field-hint">Agreements come from <strong>Office → Company Settings → Policies</strong>.</div>
+            </div>
+            <div class="form-group">
+              <label for="stDefaultSettings">Default Settings</label>
+              <input id="stDefaultSettings" type="text" class="form-control" placeholder="Optional defaults (text/json)" />
+            </div>
+            <div class="form-group">
+              <label for="stSortOrder">Sort Order</label>
+              <input id="stSortOrder" type="number" class="form-control" placeholder="0" />
+            </div>
+            <div class="form-group" style="display:flex; align-items:center; gap:10px; padding-top:24px;">
+              <input id="stActive" type="checkbox" checked />
+              <label for="stActive" style="margin:0;">Active</label>
+            </div>
+          </div>
+          <div id="serviceTypeModalError" class="modal-error" style="display:none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" data-close-modal>Cancel</button>
+          <button type="button" class="btn-danger" id="deleteServiceTypeBtn" style="display:none;">Delete</button>
+          <button type="button" class="btn-primary" id="saveServiceTypeBtn">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="service-types.js"></script>
   </body>
 </html>

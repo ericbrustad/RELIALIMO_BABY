@@ -2544,3 +2544,312 @@ export async function saveBookingAgentToSupabase(agentData) {
     return null;
   }
 }
+
+
+// ============================================================================
+// SERVICE TYPE CRUD OPERATIONS
+// ============================================================================
+//
+// Source of truth for Reservation Form "Service Type" dropdown and for
+// Vehicle Types "Associated with Service Types" assignment.
+//
+// Strategy:
+// - Prefer Supabase table `service_types` when available
+// - Fall back to localStorage when table is missing / auth isn't ready
+//
+// Local storage key is also used as a cache so changes made in the Service Types
+// System Settings iframe can propagate across pages via the `storage` event.
+//
+
+const LOCAL_SERVICE_TYPES_KEY = 'relia_service_types_v1';
+
+function slugifyServiceTypeCode(input) {
+  return (input || '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/['"]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+}
+
+function ensureServiceTypeId(st) {
+  if (st?.id && typeof st.id === 'string') return st.id;
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+  } catch (e) {
+    // ignore
+  }
+  return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeServiceTypeRow(row) {
+  const name = (row?.name || '').toString().trim();
+  const code = (row?.code || row?.service_code || '').toString().trim() || slugifyServiceTypeCode(name);
+  const statusRaw = (row?.status ?? row?.active ?? row?.is_active ?? 'ACTIVE');
+  const status = (typeof statusRaw === 'string')
+    ? statusRaw.toUpperCase()
+    : (statusRaw === false ? 'INACTIVE' : 'ACTIVE');
+
+  const billingMode = (row?.billing_mode || row?.pricing_type || row?.rate_mode || '').toString().trim() || null;
+
+  return {
+    id: row?.id || null,
+    organization_id: row?.organization_id || null,
+    name,
+    code,
+    status,
+    billing_mode: billingMode,
+    sort_order: Number.isFinite(Number(row?.sort_order)) ? Number(row.sort_order) : 0,
+    description: (row?.description || '').toString(),
+    metadata: row?.metadata && typeof row.metadata === 'object' ? row.metadata : {}
+  };
+}
+
+function dedupeServiceTypes(list) {
+  const out = [];
+  const seen = new Set();
+  (Array.isArray(list) ? list : []).forEach((raw) => {
+    const st = normalizeServiceTypeRow(raw);
+    const key = (st.code || st.name || '').toLowerCase();
+    if (!key) return;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ ...st, id: st.id || ensureServiceTypeId(st) });
+  });
+
+  // Keep stable ordering: sort_order then name
+  out.sort((a, b) => {
+    const ao = Number.isFinite(a.sort_order) ? a.sort_order : 0;
+    const bo = Number.isFinite(b.sort_order) ? b.sort_order : 0;
+    if (ao !== bo) return ao - bo;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+
+  return out;
+}
+
+function defaultServiceTypesSeed() {
+  return [
+    { name: 'From Airport', code: 'from-airport', status: 'ACTIVE', billing_mode: 'DISTANCE', sort_order: 10 },
+    { name: 'To Airport', code: 'to-airport', status: 'ACTIVE', billing_mode: 'DISTANCE', sort_order: 20 },
+    { name: 'Point-to-Point', code: 'point-to-point', status: 'ACTIVE', billing_mode: 'DISTANCE', sort_order: 30 },
+    { name: 'Hourly / As Directed', code: 'hourly', status: 'ACTIVE', billing_mode: 'HOURLY', sort_order: 40 },
+  ];
+}
+
+function loadLocalServiceTypes() {
+  try {
+    const raw = localStorage.getItem(LOCAL_SERVICE_TYPES_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (Array.isArray(parsed) && parsed.length) {
+      return dedupeServiceTypes(parsed);
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  const seeded = dedupeServiceTypes(defaultServiceTypesSeed().map((st) => ({ ...st, id: ensureServiceTypeId(st) })));
+  try {
+    localStorage.setItem(LOCAL_SERVICE_TYPES_KEY, JSON.stringify(seeded));
+  } catch (e) {
+    // ignore
+  }
+  return seeded;
+}
+
+function saveLocalServiceTypes(list) {
+  const cleaned = dedupeServiceTypes(list);
+  try {
+    localStorage.setItem(LOCAL_SERVICE_TYPES_KEY, JSON.stringify(cleaned));
+  } catch (e) {
+    console.warn('⚠️ Unable to persist service types locally:', e);
+  }
+  return cleaned;
+}
+
+function isActiveServiceType(st) {
+  const flag = (st?.status || '').toString().trim().toUpperCase();
+  if (!flag) return true;
+  return flag === 'ACTIVE';
+}
+
+function ensureUniqueServiceCode(list, desiredCode, currentId = null) {
+  let code = slugifyServiceTypeCode(desiredCode);
+  if (!code) code = 'service';
+  const existing = new Set(
+    (Array.isArray(list) ? list : [])
+      .filter((x) => !currentId || x.id !== currentId)
+      .map((x) => (x.code || '').toLowerCase())
+      .filter(Boolean)
+  );
+
+  if (!existing.has(code.toLowerCase())) return code;
+
+  // append -2, -3 ...
+  let n = 2;
+  while (existing.has(`${code}-${n}`.toLowerCase())) n += 1;
+  return `${code}-${n}`;
+}
+
+export async function fetchServiceTypes(options = {}) {
+  const { includeInactive = false } = options;
+  const client = getSupabaseClient();
+  // Try Supabase first
+  if (client) {
+    try {
+      lastApiError = null;
+      const { organizationId } = await getOrgContextOrThrow(client);
+      const { data, error } = await client
+        .from('service_types')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('sort_order', { ascending: true });
+
+      if (error) throw error;
+
+      const normalized = dedupeServiceTypes(data || []);
+      // Cache locally for fast rendering + cross-page sync
+      saveLocalServiceTypes(normalized);
+      if (includeInactive) return normalized;
+      return normalized.filter(isActiveServiceType);
+    } catch (error) {
+      // Most common failure: table doesn't exist yet (relation "service_types" does not exist)
+      console.warn('⚠️ fetchServiceTypes failed; falling back to local storage:', error);
+      lastApiError = error;
+    }
+  }
+
+  const local = loadLocalServiceTypes();
+  if (includeInactive) return local;
+  return local.filter(isActiveServiceType);
+}
+
+export async function upsertServiceType(serviceType) {
+  const draft = normalizeServiceTypeRow(serviceType || {});
+  if (!draft.name) {
+    throw new Error('Service Type name is required');
+  }
+
+  // Always ensure code is present + unique in local cache
+  const localExisting = loadLocalServiceTypes();
+  const isValidUuid = typeof draft.id === 'string'
+    && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(draft.id);
+
+  draft.id = draft.id || ensureServiceTypeId(draft);
+  draft.code = ensureUniqueServiceCode(localExisting, draft.code || draft.name, draft.id);
+
+  const client = getSupabaseClient();
+
+  // Try Supabase first
+  if (client) {
+    try {
+      lastApiError = null;
+      const { organizationId, user } = await getOrgContextOrThrow(client);
+      const now = new Date().toISOString();
+
+      const payload = {
+        id: isValidUuid ? draft.id : undefined,
+        organization_id: organizationId,
+        name: draft.name,
+        code: draft.code,
+        status: (draft.status || 'ACTIVE').toString().toUpperCase(),
+        billing_mode: draft.billing_mode,
+        sort_order: Number.isFinite(draft.sort_order) ? draft.sort_order : 0,
+        description: draft.description || null,
+        metadata: draft.metadata || {},
+        updated_at: now,
+        updated_by: user?.id || null,
+        created_at: isValidUuid ? undefined : now,
+        created_by: isValidUuid ? undefined : (user?.id || null),
+      };
+
+      // Upsert and return row
+      const table = client.from('service_types');
+
+      let response;
+      if (typeof table.upsert === 'function') {
+        // Supabase-js style client
+        response = await table.upsert([payload]).select();
+      } else if (isValidUuid) {
+        // REST client fallback: update by id
+        const updatePayload = { ...payload };
+        delete updatePayload.created_at;
+        delete updatePayload.created_by;
+        delete updatePayload.organization_id;
+
+        response = await table
+          .update(updatePayload)
+          .eq('id', draft.id)
+          .eq('organization_id', organizationId)
+          .select();
+
+        // If row didn't exist, insert instead
+        if (!response?.data || (Array.isArray(response.data) && response.data.length === 0)) {
+          const insertPayload = { ...payload };
+          delete insertPayload.id; // let DB generate id
+          response = await table.insert([insertPayload]).select();
+        }
+      } else {
+        // REST client fallback: insert new
+        const insertPayload = { ...payload };
+        delete insertPayload.id; // let DB generate id
+        response = await table.insert([insertPayload]).select();
+      }
+
+      const { data, error } = response || {};
+      if (error) throw error;
+
+      const row = Array.isArray(data) ? data[0] || null : data;
+      if (row) {
+        const normalized = normalizeServiceTypeRow(row);
+        // update local cache too
+        const updatedLocal = localExisting.filter((x) => x.id !== normalized.id);
+        updatedLocal.push({ ...normalized, id: normalized.id || ensureServiceTypeId(normalized) });
+        saveLocalServiceTypes(updatedLocal);
+        return normalized;
+      }
+    } catch (error) {
+      console.warn('⚠️ upsertServiceType failed; saving locally:', error);
+      lastApiError = error;
+      // fall through to local save
+    }
+  }
+
+  // Local fallback upsert
+  const updated = localExisting.filter((x) => x.id !== draft.id);
+  updated.push(draft);
+  saveLocalServiceTypes(updated);
+  return draft;
+}
+
+export async function deleteServiceType(serviceTypeId) {
+  if (!serviceTypeId) return false;
+  const client = getSupabaseClient();
+  // Try Supabase delete
+  if (client) {
+    try {
+      lastApiError = null;
+      const { organizationId } = await getOrgContextOrThrow(client);
+      const { error } = await client
+        .from('service_types')
+        .delete()
+        .eq('id', serviceTypeId)
+        .eq('organization_id', organizationId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.warn('⚠️ deleteServiceType failed; deleting locally:', error);
+      lastApiError = error;
+      // fall through to local delete
+    }
+  }
+
+  const localExisting = loadLocalServiceTypes();
+  const updated = localExisting.filter((x) => x.id !== serviceTypeId);
+  saveLocalServiceTypes(updated);
+  return true;
+}

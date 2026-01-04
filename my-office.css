@@ -4663,3 +4663,123 @@ body {
     border-left: 3px solid #4a90e2;
   }
 }
+
+
+
+/* ---------------------------------------------
+   Vehicle Type -> Service Types multi-select UI
+----------------------------------------------*/
+.relia-multiselect {
+  position: relative;
+  width: 100%;
+}
+
+.relia-multiselect-toggle {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.relia-multiselect-toggle:hover {
+  background: #f8f9fa;
+}
+
+.relia-multiselect-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 5000;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  max-height: 280px;
+  overflow: auto;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.18);
+  padding: 8px;
+}
+
+.relia-multiselect-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.relia-multiselect-item:hover {
+  background: #f3f4f6;
+}
+
+.relia-multiselect-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.relia-multiselect-selectall {
+  border-bottom: 1px solid #eee;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+}
+
+
+/* Vehicle Types list: show/hide inactive + inline rename */
+.vehicle-type-item{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vehicle-type-name{
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vehicle-type-item.inactive{
+  opacity: 0.65;
+}
+
+.vehicle-type-badge{
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #ddd;
+  background: #f4f4f4;
+  color: #555;
+  margin-left: 6px;
+}
+
+.vehicle-type-rename-btn{
+  opacity: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: inherit;
+}
+
+.vehicle-type-item:hover .vehicle-type-rename-btn{
+  opacity: 1;
+  border-color: rgba(0,0,0,0.12);
+}
+
+.vehicle-type-name.editing{
+  padding: 2px 4px;
+  border-radius: 3px;
+  outline: 1px solid #ffc107;
+  background: #fff3cd;
+}
+
