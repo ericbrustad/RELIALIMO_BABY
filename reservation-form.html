@@ -515,15 +515,15 @@
 
                 <!-- Address Entry Form -->
                 <div class="address-entry">
-                  <div class="form-group" style="position: relative; z-index: 100;">
-                    <label>Location Description/ Name</label>
-                          <input type="text" id="locationName" class="form-control location-name" placeholder="Search landmark, business, or enter name..." autocomplete="off" />
+                  <div class="form-group location-name-group" style="position: relative;">
+                      <label>Location Description/ Name</label>
+                        <input type="text" id="locationName" class="form-control location-name" placeholder="Search Google Places (name/landmark)..." autocomplete="off" />
                     <div id="locationNameSuggestions" class="location-suggestions"></div>
                   </div>
 
                   <div class="form-group" style="position: relative; z-index: 100;">
-                    <label>Address 1</label>
-                          <input type="text" id="address1" class="form-control address-input" placeholder="Start typing address..." />
+                      <label>Address 1</label>
+                        <input type="text" id="address1" class="form-control address-input" placeholder="Search Google Maps / type address..." />
                     <div id="addressSuggestions" class="address-suggestions"></div>
                   </div>
 
@@ -1083,7 +1083,7 @@
 
                       <div class="cost-row">
                         <div class="cost-cell">Per Mile</div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0" step="0.1" /></div>
+                        <div class="cost-cell"><input type="number" id="secondaryPerMileQty" class="cost-input" value="0" step="0.1" /></div>
                         <div class="cost-cell"><input type="number" class="cost-input" value="0" step="0.01" /></div>
                         <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
                       </div>
@@ -1139,15 +1139,15 @@
 
                       <div class="cost-row">
                         <div class="cost-cell">Per Mile</div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"></div>
+                        <div class="cost-cell"><input type="number" class="cost-input" value="0" step="0.1" /></div>
+                        <div class="cost-cell"><input type="number" class="cost-input" value="0" step="0.01" /></div>
                         <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
                       </div>
 
                       <div class="cost-row">
                         <div class="cost-cell">Per Hour</div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"></div>
+                        <div class="cost-cell"><input type="number" id="secondaryPerHourQty" class="cost-input" value="0" step="0.5" /></div>
+                        <div class="cost-cell"><input type="number" class="cost-input" value="0" step="0.01" /></div>
                         <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
                       </div>
 
@@ -2053,6 +2053,13 @@
         }
         console.log('✅ Stop added to trip table with airport/FBO info');
 
+        // Refresh route metrics so distance/duration and quantities stay in sync
+        try {
+          window.reservationFormInstance?.updateTripMetricsFromStops?.();
+        } catch (err) {
+          console.warn('⚠️ Failed to refresh route metrics after adding stop:', err);
+        }
+
         // Clear the form
         document.getElementById('locationName').value = '';
         document.getElementById('address1').value = '';
@@ -2197,6 +2204,13 @@
           emptyRow.className = 'empty-row';
           emptyRow.innerHTML = '<td colspan="5" class="empty-message">No addresses added yet. Use the form below to add addresses.</td>';
           tableBody.appendChild(emptyRow);
+        }
+
+        // Recompute route metrics after stop removal
+        try {
+          window.reservationFormInstance?.updateTripMetricsFromStops?.();
+        } catch (err) {
+          console.warn('⚠️ Failed to refresh route metrics after removing stop:', err);
         }
       }
 

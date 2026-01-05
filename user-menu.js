@@ -22,19 +22,30 @@ function getRole(user) {
   );
 }
 
+function ensureStyles() {
+  const id = 'user-menu-styles';
+  if (document.getElementById(id)) return;
+  const link = document.createElement('link');
+  link.id = id;
+  link.rel = 'stylesheet';
+  link.href = 'user-menu.css';
+  document.head?.appendChild(link);
+}
+
 function ensureContainer() {
   let container = document.getElementById('userMenuContainer');
-  if (container) return container;
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'userMenuContainer';
+  } else if (container.parentElement && container.parentElement !== document.body) {
+    container.parentElement.removeChild(container);
+  }
 
-  // Only render in Office tabs bar so it stays top-right with the tab row (avoid sidebar/bottom placement)
-  let target = document.querySelector('.window-tabs-bar');
-  if (!target) return null;
+  // Single, fixed overlay in the top-left
+  container.classList.add('user-menu-overlay');
+  container.classList.remove('user-menu-floating');
+  document.body.appendChild(container);
 
-  container = document.createElement('div');
-  container.id = 'userMenuContainer';
-  // Nudge to the right edge when placed in the tabs bar
-  container.style.marginLeft = 'auto';
-  target.appendChild(container);
   return container;
 }
 
@@ -188,6 +199,17 @@ async function refreshUser() {
 }
 
 async function init() {
+  // Avoid duplicate pills when running inside an iframe that already has one at the top window
+  try {
+    if (window.self !== window.top) {
+      const parentHasMenu = !!window.top?.document?.getElementById('userMenuContainer');
+      if (parentHasMenu) return;
+    }
+  } catch {
+    // Cross-origin or other access issue; continue locally
+  }
+
+  ensureStyles();
   const container = ensureContainer();
   if (!container) return;
 

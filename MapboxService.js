@@ -4,7 +4,6 @@ export class MapboxService {
     this.accessToken = 'pk.eyJ1IjoiZXJpeGNvYWNoIiwiYSI6ImNtaDdocXI0NDB1dW4yaW9tZWFka3NocHAifQ.h1czc1VBwbBJQbdJTU5HHA';
     this.geocodeCache = new Map();
     this.routeCache = new Map();
-    this.disableForPage = this.isDisabledForPage();
     
     // Check if token is set
     if (this.accessToken === 'YOUR_MAPBOX_TOKEN_HERE') {
@@ -26,9 +25,6 @@ export class MapboxService {
   }
 
   async geocodeAddress(query) {
-    if (this.disableForPage) {
-      return [];
-    }
     // Check if token is set
     if (this.accessToken === 'YOUR_MAPBOX_TOKEN_HERE') {
       console.error('Mapbox token not configured. Please add your token to MapboxService.js');
@@ -74,9 +70,6 @@ export class MapboxService {
   }
 
   async searchPOI(query) {
-    if (this.disableForPage) {
-      return [];
-    }
     // POI search specifically for landmarks, businesses, and points of interest
     if (this.accessToken === 'YOUR_MAPBOX_TOKEN_HERE') {
       console.error('Mapbox token not configured. Please add your token to MapboxService.js');
@@ -125,25 +118,15 @@ export class MapboxService {
     context.forEach(item => {
       const [type] = item.id.split('.');
       if (type === 'place') parsed.city = item.text;
-      if (type === 'region') {
-        const code = item.short_code ? item.short_code.split('-').pop()?.toUpperCase() : '';
-        parsed.state = code || item.text; // prefer USPS/ISO code so <select> matches
-        parsed.stateName = item.text;
-      }
+      if (type === 'region') parsed.state = item.text;
       if (type === 'postcode') parsed.zipcode = item.text;
-      if (type === 'country') {
-        parsed.country = item.text;
-        parsed.countryCode = item.short_code ? item.short_code.toUpperCase() : '';
-      }
+      if (type === 'country') parsed.country = item.text;
     });
 
     return parsed;
   }
 
   async getRoute(coordinates) {
-    if (this.disableForPage) {
-      throw new Error('Mapbox disabled for this page');
-    }
     // Check if token is set
     if (this.accessToken === 'YOUR_MAPBOX_TOKEN_HERE') {
       console.error('Mapbox token not configured. Please add your token to MapboxService.js');
@@ -253,12 +236,5 @@ export class MapboxService {
   clearCache() {
     this.geocodeCache.clear();
     this.routeCache.clear();
-  }
-
-  isDisabledForPage() {
-    if (typeof window === 'undefined') return false;
-    if (window.DISABLE_MAPBOX === true) return true;
-    const path = (window.location?.pathname || '').toLowerCase();
-    return path.includes('reservation-form');
   }
 }

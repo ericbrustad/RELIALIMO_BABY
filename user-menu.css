@@ -3,29 +3,33 @@
    =================================== */
 
 #userMenuContainer {
-  margin-left: 0;
   display: flex;
   align-items: center;
 }
 
-/* Hide the main header pill in vertical (sidebar) layout to avoid bottom-left placement */
-html[data-layout="vertical"] #userMenuContainer {
-  display: none !important;
+/* Overlay: top-left, above everything but non-blocking outside its own footprint */
+.user-menu-overlay {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 4000;
+  pointer-events: none;
 }
 
-/* When mounted inside the Office window tabs bar, push to the right */
-.window-tabs-bar #userMenuContainer {
-  margin-left: auto;
-}
-
-.window-tabs-bar .user-menu-toggle {
-  background: #ffffff;
-  border-color: #c6c6c6;
+.user-menu-overlay .user-menu-wrapper {
+  pointer-events: auto;
 }
 
 /* User Menu Wrapper */
 .user-menu-wrapper {
   position: relative;
+}
+
+.user-menu-floating {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 4000;
 }
 
 /* User Menu Toggle Button */

@@ -8,8 +8,8 @@ export class GoogleMapsService {
     // Get API key from environment
     this.apiKey = apiKey || this.getGoogleApiKey();
     this.sessionToken = null;
-    this.placesService = null;
-    this.autocompleteService = null;
+    this.placesService = null; // legacy (kept for backward compat, no longer initialized)
+    this.autocompleteService = null; // legacy (kept for backward compat, no longer initialized)
     this.geocoder = null;
     this.directionsService = null;
     this.geocodingCache = new Map();
@@ -68,58 +68,16 @@ export class GoogleMapsService {
       return [];
     }
 
-    await this.ensurePlacesReady();
-    if (!this.autocompleteService) {
-      console.warn('[GoogleMapsService] Autocomplete service not ready');
-      return [];
-    }
-
     const results = [];
 
     try {
-      const request = {
-        input,
-        sessionToken: this.sessionToken,
-      };
-
-      if (options.country) {
-        request.componentRestrictions = { country: options.country };
-      }
-
-       // Allow businesses/landmarks when requested; otherwise bias toward addresses
-      if (options.includeBusinessesAndLandmarks === false) {
-        request.types = ['address'];
-      }
-
-      if (options.locationBias?.latitude && options.locationBias?.longitude && window.google?.maps) {
-        request.locationBias = new google.maps.LatLng(options.locationBias.latitude, options.locationBias.longitude);
-      }
-
-      const predictions = await new Promise((resolve) => {
-        this.autocompleteService.getPlacePredictions(request, (preds, status) => {
-          if (status !== google.maps.places.PlacesServiceStatus.OK && status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-            console.warn('[GoogleMapsService] Autocomplete status:', status);
-          }
-          resolve(preds || []);
-        });
-      });
-
-      results.push(
-        ...(predictions || []).map(prediction => ({
-          placeId: prediction.place_id,
-          description: prediction.description,
-          mainText: prediction.structured_formatting?.main_text || prediction.description,
-          secondaryText: prediction.structured_formatting?.secondary_text || '',
-          types: prediction.types,
-          matchedSubstrings: prediction.matched_substrings,
-          source: 'autocomplete'
-        }))
-      );
+      const suggestions = await this.fetchAutocompleteSuggestions(input, options);
+      results.push(...suggestions);
     } catch (error) {
       console.error('Address search error (autocomplete):', error);
     }
 
-    // Fallback: use Find Place (text) which works well for businesses/landmarks and fuzzy address text
+    // Fallback: use Places Text Search when autocomplete yields nothing (or when businesses requested)
     if (includePlaces && results.length === 0) {
       try {
         const placeResults = await this.findPlaceByText(input, {
@@ -137,30 +95,8 @@ export class GoogleMapsService {
   }
 
   async findPlaceByText(query, options = {}) {
-    await this.ensurePlacesReady();
-    if (!this.placesService) return [];
-
-    const request = {
-      query,
-      fields: ['formatted_address', 'name', 'geometry', 'place_id', 'types']
-    };
-
-    if (options.locationBias?.latitude && options.locationBias?.longitude && window.google?.maps) {
-      request.locationBias = new google.maps.LatLng(options.locationBias.latitude, options.locationBias.longitude);
-    }
-
-    return await new Promise((resolve, reject) => {
-      this.placesService.findPlaceFromQuery(request, (places, status) => {
-        if (status !== google.maps.places.PlacesServiceStatus.OK && status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-          console.warn('[GoogleMapsService] findPlaceFromQuery status:', status);
-          if (status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-            reject(new Error(`Places status: ${status}`));
-            return;
-          }
-        }
-        resolve(places || []);
-      });
-    });
+    const response = await this.searchTextPlaces(query, options);
+    return response;
   }
 
   mapPlaceToSuggestion(place, source = 'text') {
@@ -194,60 +130,27 @@ export class GoogleMapsService {
     }
 
     try {
-      await this.ensurePlacesReady();
-      if (!this.placesService) return [];
-
-      const useNearbySearch = options.location && options.radius;
-
-      const results = await new Promise((resolve, reject) => {
-        if (useNearbySearch && window.google?.maps) {
-          const request = {
-            location: new google.maps.LatLng(options.location.latitude, options.location.longitude),
-            radius: options.radius || 5000,
-            keyword: query,
-          };
-          if (options.type) request.type = options.type;
-          this.placesService.nearbySearch(request, (places, status) => {
-            if (status !== google.maps.places.PlacesServiceStatus.OK && status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-              console.warn('[GoogleMapsService] nearbySearch status:', status);
-              if (status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-                reject(new Error(`Places status: ${status}`));
-                return;
-              }
-            }
-            resolve(places || []);
-          });
-        } else {
-          const request = { query };
-          if (options.type) request.type = options.type;
-          this.placesService.textSearch(request, (places, status) => {
-            if (status !== google.maps.places.PlacesServiceStatus.OK && status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-              console.warn('[GoogleMapsService] textSearch status:', status);
-              if (status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-                reject(new Error(`Places status: ${status}`));
-                return;
-              }
-            }
-            resolve(places || []);
-          });
-        }
+      const mapped = await this.searchTextPlaces(query, {
+        locationBias: options.location,
+        radius: options.radius,
+        type: options.type
       });
 
-      const mapped = (results || []).map(place => ({
-        placeId: place.place_id,
+      const normalized = (mapped || []).map(place => ({
+        placeId: place.placeId,
         name: place.name,
-        address: place.formatted_address || place.vicinity,
+        address: place.address,
         types: place.types,
-        location: place.geometry?.location,
+        location: place.location,
         rating: place.rating,
-        userRatingsTotal: place.user_ratings_total,
-        openNow: place.opening_hours?.isOpen?.(),
-        photoReference: place.photos?.[0]?.photo_reference,
-        businessStatus: place.business_status,
+        userRatingsTotal: place.userRatingsTotal,
+        openNow: place.openNow,
+        photoReference: place.photoReference,
+        businessStatus: place.businessStatus,
       }));
 
-      this.placeCache.set(cacheKey, mapped);
-      return mapped;
+      this.placeCache.set(cacheKey, normalized);
+      return normalized;
     } catch (error) {
       console.error('Business search error:', error);
       return [];
@@ -270,31 +173,21 @@ export class GoogleMapsService {
     }
 
     try {
-      await this.ensurePlacesReady();
-      if (!this.placesService) return [];
-
-      const request = { query, type: 'point_of_interest' };
-      if (options.location && window.google?.maps) {
-        request.location = new google.maps.LatLng(options.location.latitude, options.location.longitude);
-      }
-      if (options.radius) {
-        request.radius = options.radius;
-      }
-
-      const places = await new Promise((resolve, reject) => {
-        this.placesService.textSearch(request, (res, status) => {
-          if (status !== google.maps.places.PlacesServiceStatus.OK && status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-            console.warn('[GoogleMapsService] Landmark textSearch status:', status);
-            if (status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-              reject(new Error(`Places status: ${status}`));
-              return;
-            }
-          }
-          resolve(res || []);
-        });
+      const places = await this.searchTextPlaces(query, {
+        locationBias: options.location,
+        radius: options.radius,
+        type: 'point_of_interest'
       });
 
-      const results = (places || []).map(place => this.mapPlaceToSuggestion(place, 'landmark'));
+      const results = (places || []).map(place => this.mapPlaceToSuggestion({
+        place_id: place.placeId,
+        formatted_address: place.address,
+        name: place.name,
+        vicinity: place.address,
+        geometry: { location: place.location },
+        types: place.types
+      }, 'landmark'));
+
       this.placeCache.set(cacheKey, results);
       return results;
     } catch (error) {
@@ -316,33 +209,20 @@ export class GoogleMapsService {
     }
 
     try {
-      await this.ensurePlacesReady();
-      if (!this.placesService) return null;
-
-      const details = await new Promise((resolve, reject) => {
-        this.placesService.getDetails({
-          placeId,
-          fields: ['address_components', 'formatted_address', 'geometry', 'name', 'formatted_phone_number', 'website', 'url', 'business_status', 'opening_hours', 'photos']
-        }, (result, status) => {
-          if (status !== google.maps.places.PlacesServiceStatus.OK) {
-            reject(new Error(`Places status: ${status}`));
-            return;
-          }
-          resolve(result);
-        });
-      });
+      const details = await this.fetchPlaceDetails(placeId);
+      if (!details) return null;
 
       const parsed = {
-        placeId: details.place_id,
+        placeId: details.placeId,
         name: details.name,
-        address: details.formatted_address,
-        coordinates: details.geometry?.location,
-        phone: details.formatted_phone_number,
+        address: details.address,
+        coordinates: details.location,
+        phone: details.phone,
         website: details.website,
-        googleMapsUrl: details.url,
-        addressComponents: this.parseAddressComponents(details.address_components),
-        businessStatus: details.business_status,
-        openingHours: details.opening_hours,
+        googleMapsUrl: details.googleMapsUrl,
+        addressComponents: this.parseAddressComponents(details.addressComponentsRaw),
+        businessStatus: details.businessStatus,
+        openingHours: details.openingHours,
       };
 
       this.placeCache.set(placeId, parsed);
@@ -498,7 +378,7 @@ export class GoogleMapsService {
       return null;
     }
 
-    if (this.placesService && this.autocompleteService && this.geocoder) {
+    if (this.geocoder) {
       return true;
     }
 
@@ -521,13 +401,11 @@ export class GoogleMapsService {
 
     if (!this.placesReadyPromise) {
       this.placesReadyPromise = this.mapsScriptPromise.then(() => {
-        if (!window.google?.maps?.places) {
-          throw new Error('Google Maps Places library not available after load');
+        if (!window.google?.maps) {
+          throw new Error('Google Maps library not available after load');
         }
-        this.autocompleteService = new google.maps.places.AutocompleteService();
-        this.placesService = new google.maps.places.PlacesService(document.createElement('div'));
         this.geocoder = new google.maps.Geocoder();
-        this.sessionToken = new google.maps.places.AutocompleteSessionToken();
+        this.sessionToken = new (google.maps.places?.AutocompleteSessionToken || function(){ return { toString(){ return `session_${Date.now()}`; } }; })();
         this.directionsService = new google.maps.DirectionsService();
       });
     }
@@ -570,7 +448,12 @@ export class GoogleMapsService {
 
     const result = await new Promise((resolve, reject) => {
       this.directionsService.route(request, (response, status) => {
-        if (status !== google.maps.DirectionsStatus.OK) {
+        if (status === 'ZERO_RESULTS') {
+          resolve(null);
+          return;
+        }
+        const okStatus = (google?.maps?.DirectionsStatus?.OK) || 'OK';
+        if (status !== okStatus && status !== 'OK') {
           reject(new Error(`Directions failed: ${status}`));
           return;
         }
@@ -578,20 +461,39 @@ export class GoogleMapsService {
       });
     });
 
-    const leg = result?.routes?.[0]?.legs?.reduce((acc, leg) => {
+    if (!result || !result.routes?.length) {
+      return {
+        distanceMeters: 0,
+        durationSeconds: 0,
+        distanceText: '-',
+        durationText: '-',
+        steps: []
+      };
+    }
+
+    const legs = result.routes[0].legs || [];
+
+    const totals = legs.reduce((acc, leg) => {
       acc.distanceMeters += leg.distance?.value || 0;
       acc.durationSeconds += leg.duration?.value || 0;
       return acc;
     }, { distanceMeters: 0, durationSeconds: 0 });
 
-    const distanceMeters = leg?.distanceMeters || 0;
-    const durationSeconds = leg?.durationSeconds || 0;
+    const steps = legs.flatMap(leg => (leg.steps || []).map(step => ({
+      instruction: this.stripHtml(step.instructions || step.html_instructions || ''),
+      distance: step.distance?.text || '',
+      duration: step.duration?.text || ''
+    })));
+
+    const distanceMeters = totals.distanceMeters || 0;
+    const durationSeconds = totals.durationSeconds || 0;
 
     return {
       distanceMeters,
       durationSeconds,
       distanceText: distanceMeters ? `${(distanceMeters / 1609.344).toFixed(1)} mi` : '-',
-      durationText: durationSeconds ? this.formatDuration(durationSeconds) : '-'
+      durationText: durationSeconds ? this.formatDuration(durationSeconds) : '-',
+      steps
     };
   }
 
@@ -616,6 +518,185 @@ export class GoogleMapsService {
     if (!this.apiKey) return null;
     
     return `https://maps.googleapis.com/maps/api/staticmap?center=${latitude},${longitude}&zoom=${zoom}&size=${width}x${height}&markers=color:red%7C${latitude},${longitude}&key=${this.apiKey}`;
+  }
+
+  stripHtml(input) {
+    if (!input) return '';
+    return input.replace(/<[^>]+>/g, '').trim();
+  }
+
+  /**
+   * Modern Places autocomplete via Places API (v1) to avoid deprecated AutocompleteService.
+   */
+  async fetchAutocompleteSuggestions(input, options = {}) {
+    if (!this.apiKey) return [];
+
+    const body = {
+      input,
+      sessionToken: this.sessionToken,
+      languageCode: options.languageCode || 'en',
+      includedPrimaryTypes: options.types,
+    };
+
+    // Address-only
+    if (options.includeBusinessesAndLandmarks === false) {
+      body.includedPrimaryTypes = ['street_address', 'premise', 'route'];
+    }
+
+    const bias = this.buildLocationBias(options.locationBias || options.location);
+    if (bias) body.locationBias = bias;
+
+    const resp = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': this.apiKey,
+        'X-Goog-FieldMask': 'suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat,suggestions.placePrediction.types'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      console.warn('[GoogleMapsService] autocomplete response not ok:', resp.status);
+      return [];
+    }
+
+    const data = await resp.json();
+    const suggestions = data?.suggestions || [];
+
+    return suggestions.map(s => {
+      const p = s.placePrediction || {};
+      return {
+        placeId: p.placeId,
+        description: p.text?.text || '',
+        mainText: p.structuredFormat?.mainText?.text || p.text?.text || '',
+        secondaryText: p.structuredFormat?.secondaryText?.text || '',
+        types: p.types || [],
+        source: 'autocomplete'
+      };
+    });
+  }
+
+  /**
+   * Places API Text Search (v1) replacement for legacy PlacesService text/nearby search.
+   */
+  async searchTextPlaces(query, options = {}) {
+    if (!this.apiKey) return [];
+    const body = {
+      textQuery: query,
+      pageSize: 10
+    };
+
+    const bias = this.buildLocationBias(options.locationBias || options.location);
+    if (bias) body.locationBias = bias;
+    if (options.radius) {
+      const center = bias?.circle?.center
+        || bias?.rectangle?.high
+        || (options.locationBias && options.locationBias.latitude && options.locationBias.longitude
+            ? { latitude: options.locationBias.latitude, longitude: options.locationBias.longitude }
+            : null);
+      if (center) {
+        body.locationBias = {
+          circle: {
+            center,
+            radius: options.radius
+          }
+        };
+      }
+    }
+
+    // Type filtering via includedPrimaryTypes when provided
+    if (options.type) {
+      body.includedPrimaryTypes = [options.type];
+    }
+
+    const resp = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': this.apiKey,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.rating,places.userRatingCount,places.businessStatus'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      console.warn('[GoogleMapsService] searchText response not ok:', resp.status);
+      return [];
+    }
+
+    const data = await resp.json();
+    return (data?.places || []).map(p => ({
+      placeId: p.id,
+      name: p.displayName?.text || p.displayName,
+      address: p.formattedAddress,
+      types: p.types,
+      location: p.location ? { lat: () => p.location.latitude, lng: () => p.location.longitude } : null,
+      rating: p.rating,
+      userRatingsTotal: p.userRatingCount,
+      businessStatus: p.businessStatus,
+    }));
+  }
+
+  /**
+   * Places API fetch place details (v1) replacement for legacy getDetails.
+   */
+  async fetchPlaceDetails(placeId) {
+    if (!this.apiKey || !placeId) return null;
+
+    const fields = [
+      'id',
+      'displayName',
+      'formattedAddress',
+      'location',
+      'internationalPhoneNumber',
+      'websiteUri',
+      'googleMapsUri',
+      'addressComponents',
+      'businessStatus',
+      'currentOpeningHours'
+    ].join(',');
+
+    const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?fields=${fields}`;
+
+    const resp = await fetch(url, {
+      headers: {
+        'X-Goog-Api-Key': this.apiKey,
+      }
+    });
+
+    if (!resp.ok) {
+      console.warn('[GoogleMapsService] place details response not ok:', resp.status);
+      return null;
+    }
+
+    const p = await resp.json();
+    return {
+      placeId: p.id,
+      name: p.displayName?.text || p.displayName,
+      address: p.formattedAddress,
+      location: p.location ? { lat: () => p.location.latitude, lng: () => p.location.longitude } : null,
+      phone: p.internationalPhoneNumber,
+      website: p.websiteUri,
+      googleMapsUrl: p.googleMapsUri,
+      addressComponentsRaw: (p.addressComponents || []).map(c => ({
+        long_name: c.longText,
+        short_name: c.shortText,
+        types: c.types || []
+      })),
+      businessStatus: p.businessStatus,
+      openingHours: p.currentOpeningHours,
+    };
+  }
+
+  buildLocationBias(location) {
+    if (!location?.latitude || !location?.longitude) return null;
+    return {
+      circle: {
+        center: { latitude: location.latitude, longitude: location.longitude },
+        radius: 5000
+      }
+    };
   }
 }
 

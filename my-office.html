@@ -291,6 +291,41 @@
                 <div class="form-actions">
                   <button class="btn btn-primary btn-large" id="saveCompanyInfoBtn">Update My Company Contact Information</button>
                 </div>
+
+                <!-- Route tester + map preview -->
+                <div class="company-map-route">
+                  <div id="companyRouteMapCard" class="route-map-card">
+                    <div class="route-map-header">
+                      <div>
+                        <div class="route-map-title">Map Preview</div>
+                        <div class="route-map-subtitle">Visual only (Mapbox). Distance & duration from Google.</div>
+                      </div>
+                      <button type="button" id="companyRouteExpandBtn" class="btn btn-secondary btn-small">Expand Map</button>
+                    </div>
+                    <div class="route-map-inner">
+                      <img id="companyRouteMapImg" class="route-map-img" src="" alt="Map preview" />
+                    </div>
+                    <div class="route-inline-metrics">
+                      <span>Distance: <strong id="companyRouteDistance">-</strong></span>
+                      <span>Duration: <strong id="companyRouteDuration">-</strong></span>
+                    </div>
+                    <div class="route-status" id="companyRouteStatus"></div>
+                  </div>
+
+                  <div class="route-controls-card">
+                    <div class="route-controls-header">Quick Route Check</div>
+                    <div class="form-group">
+                      <label>Origin</label>
+                      <input type="text" id="companyRouteOrigin" class="form-control" placeholder="Company address" />
+                    </div>
+                    <div class="form-group">
+                      <label>Destination</label>
+                      <input type="text" id="companyRouteDestination" class="form-control" placeholder="Enter destination address" />
+                    </div>
+                    <button type="button" class="btn btn-primary" id="companyRouteRun">Get Distance & Duration</button>
+                    <p class="route-helper-text">Results use Google Directions. Map renders via Mapbox for a quick visual.</p>
+                  </div>
+                </div>
               </div>
             </section>
 

@@ -447,7 +447,10 @@ class ReservationForm {
       // Check authentication status
       await this.checkAuthenticationStatus();
       console.log('✅ Authentication check complete');
-      
+
+      // Wait for Supabase to hydrate a real session before loading org-scoped data
+      await this.waitForAuthSession('loadReferenceData');
+
       await this.loadReferenceData();
       console.log('✅ Driver/vehicle reference data loaded');
       // Refresh address bias using the latest company location
@@ -634,6 +637,7 @@ class ReservationForm {
 
     try {
       await setupAPI();
+      await this.waitForAuthSession('drivers');
       let options = buildOptions(await listDriverNames({ limit: 200, offset: 0 }));
       let source = 'listDriverNames';
 
@@ -693,6 +697,10 @@ class ReservationForm {
 
     try {
       await setupAPI();
+
+      // Ensure we have a live session so RLS does not zero out the dataset
+      const session = await this.waitForAuthSession('vehicleTypes');
+
       let vehicles = [];
       try {
         vehicles = await listActiveVehiclesLight({ limit: 200, offset: 0 });
@@ -750,9 +758,6 @@ class ReservationForm {
             })
         : [];
 
-      const defaultSeedTypes = ['Sedan', 'SUV', 'Sprinter', 'Van', 'Bus', 'Mini Coach', 'Motorcoach', 'Stretch Limo'];
-      const defaultOptions = defaultSeedTypes.map(t => ({ value: t, label: t }));
-
       const mergedOptions = [];
       const seen = new Set();
       const pushUnique = (arr) => {
@@ -766,7 +771,21 @@ class ReservationForm {
 
       pushUnique(typeOptionsFromTable);
       pushUnique(typeOptionsFallback);
-      if (!mergedOptions.length) pushUnique(defaultOptions);
+
+      // If still empty and we had a valid session, surface a clear warning instead of seeding a fake "Vehicle" entry.
+      if (!mergedOptions.length && session) {
+        const message = '-- No vehicle types found (check organization membership or data) --';
+        render(vehicleTypeSelect, [], message);
+        render(primaryCar, [], message);
+        render(secondaryCar, [], message);
+        return;
+      }
+
+      // Offline/unauthenticated safety net: seed a minimal list only when no data AND no session was available.
+      if (!mergedOptions.length) {
+        const defaultSeedTypes = ['Sedan', 'SUV', 'Sprinter', 'Van', 'Bus', 'Mini Coach', 'Motorcoach', 'Stretch Limo'];
+        defaultSeedTypes.forEach((t) => mergedOptions.push({ value: t, label: t }));
+      }
 
       // Capture rate metadata for downstream cost application
       this.vehicleTypeRates = {};
@@ -954,12 +973,13 @@ class ReservationForm {
         console.log('✅ User authenticated:', authUser.email || authUser.id);
         
         // Check organization membership
-        const { data: membership, error: membershipError } = await client
+        const { data: membershipList, error: membershipError } = await client
           .from('organization_members')
           .select('organization_id')
-          .eq('user_id', authUser.id)
-          .single();
-          
+          .eq('user_id', authUser.id);
+
+        const membership = Array.isArray(membershipList) && membershipList.length ? membershipList[0] : null;
+        
         if (membershipError || !membership?.organization_id) {
           console.warn('⚠️ User not in organization:', membershipError?.message);
           
@@ -983,6 +1003,56 @@ class ReservationForm {
       console.error('❌ Authentication check failed:', error);
       this.showAuthWarning('Authentication check failed: ' + error.message);
       return false;
+    }
+  }
+
+  async waitForAuthSession(reason = 'auth') {
+    const timeoutMs = 5000;
+    const start = Date.now();
+    try {
+      const { getSupabaseClient } = await import('./api-service.js');
+      const client = getSupabaseClient();
+      if (!client) return null;
+
+      // Fast path: existing session
+      const { data: initial } = await client.auth.getSession();
+      if (initial?.session) {
+        this.activeSession = initial.session;
+        return initial.session;
+      }
+
+      // Wait for SIGNED_IN or TOKEN_REFRESHED
+      let settled = false;
+      return await new Promise((resolve) => {
+        let cleanup = null;
+        const timer = setTimeout(() => {
+          settled = true;
+          resolve(null);
+        }, timeoutMs);
+
+        const listener = client.auth.onAuthStateChange((event, session) => {
+          if (!session || settled) return;
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            settled = true;
+            clearTimeout(timer);
+            cleanup?.();
+            this.activeSession = session;
+            resolve(session);
+          }
+        });
+
+        // Normalize unsubscribe across real supabase-js (subscription object) and local mock (function)
+        cleanup = typeof listener === 'function'
+          ? listener
+          : typeof listener?.subscription?.unsubscribe === 'function'
+            ? () => listener.subscription.unsubscribe()
+            : typeof listener?.unsubscribe === 'function'
+              ? () => listener.unsubscribe()
+              : null;
+      });
+    } finally {
+      const elapsed = Date.now() - start;
+      console.log(`⏱️ waitForAuthSession (${reason}) finished in ${elapsed}ms`);
     }
   }
 
@@ -1288,13 +1358,20 @@ class ReservationForm {
     if (createStopBtn) {
       if (!createStopBtn.dataset.bound) {
         createStopBtn.dataset.bound = 'true';
-        createStopBtn.addEventListener('click', (e) => {
+        createStopBtn.addEventListener('click', async (e) => {
           e.preventDefault();
 
           if (typeof window.handleCreateStop === 'function') {
             window.handleCreateStop();
           } else {
-            this.createAddressRow();
+            await this.createAddressRow();
+          }
+
+          // Recompute route metrics after any stop change
+          try {
+            await this.updateTripMetricsFromStops();
+          } catch (err) {
+            console.warn('⚠️ Failed to update route metrics after stop change:', err);
           }
 
           // Safety: ensure the button returns to CREATE even if two handlers ever slipped in.
@@ -4001,6 +4078,26 @@ class ReservationForm {
   }
 
   async updateTripMetricsFromStops() {
+    const routeInfo = document.getElementById('routeInfo');
+    const distanceEl = document.getElementById('routeDistance');
+    const durationEl = document.getElementById('routeDuration');
+    const inlineDistance = document.getElementById('routeDistanceInline');
+    const inlineDuration = document.getElementById('routeDurationInline');
+    const directionsEl = document.getElementById('routeDirections');
+    const perHourQty = document.getElementById('hourQty');
+    const secondaryPerMileQty = document.getElementById('secondaryPerMileQty');
+    const secondaryPerHourQty = document.getElementById('secondaryPerHourQty');
+
+    const resetRouteUi = () => {
+      if (routeInfo) routeInfo.style.display = 'none';
+      if (distanceEl) distanceEl.textContent = '-';
+      if (durationEl) durationEl.textContent = '-';
+      if (inlineDistance) inlineDistance.textContent = '-';
+      if (inlineDuration) inlineDuration.textContent = '-';
+      if (directionsEl) directionsEl.innerHTML = '';
+      this.latestRouteSummary = null;
+    };
+
     const stops = this.getStops();
     const stopsWithAddress = Array.isArray(stops)
       ? stops.filter(s => s && (s.fullAddress || s.address || s.address1))
@@ -4018,13 +4115,7 @@ class ReservationForm {
     }) || stopsWithAddress[stopsWithAddress.length - 1];
 
     if (!pickupStop || !dropoffStop || pickupStop === dropoffStop) {
-      const routeInfo = document.getElementById('routeInfo');
-      if (routeInfo) routeInfo.style.display = 'none';
-      const inlineDistance = document.getElementById('routeDistanceInline');
-      const inlineDuration = document.getElementById('routeDurationInline');
-      if (inlineDistance) inlineDistance.textContent = '-';
-      if (inlineDuration) inlineDuration.textContent = '-';
-      this.latestRouteSummary = null;
+      resetRouteUi();
       return;
     }
 
@@ -4036,7 +4127,7 @@ class ReservationForm {
       .filter(Boolean);
 
     if (!origin || !destination) {
-      this.latestRouteSummary = null;
+      resetRouteUi();
       return;
     }
 
@@ -4045,20 +4136,61 @@ class ReservationForm {
       summary = await this.googleMapsService.getRouteSummary({ origin, destination, waypoints: waypointStops });
     } catch (e) {
       console.warn('⚠️ Directions lookup failed:', e);
+      resetRouteUi();
       return;
     }
 
-    const routeInfo = document.getElementById('routeInfo');
+    if (!summary) {
+      resetRouteUi();
+      return;
+    }
+
     if (routeInfo) routeInfo.style.display = 'block';
 
-    const distanceEl = document.getElementById('routeDistance');
-    const durationEl = document.getElementById('routeDuration');
-    const inlineDistance = document.getElementById('routeDistanceInline');
-    const inlineDuration = document.getElementById('routeDurationInline');
     if (distanceEl) distanceEl.textContent = summary.distanceText;
     if (durationEl) durationEl.textContent = summary.durationText;
     if (inlineDistance) inlineDistance.textContent = summary.distanceText;
     if (inlineDuration) inlineDuration.textContent = summary.durationText;
+
+    const distanceMiles = summary.distanceMeters ? summary.distanceMeters / 1609.344 : null;
+    const durationHours = summary.durationSeconds ? summary.durationSeconds / 3600 : null;
+
+    const shouldOverwrite = (input) => {
+      if (!input) return false;
+      const current = (input.value || '').trim();
+      return current === '' || current === '0' || current === '0.0' || current === '0.00' || input.dataset.autofilled === 'route';
+    };
+
+    if (durationHours !== null) {
+      if (perHourQty && shouldOverwrite(perHourQty)) {
+        perHourQty.value = durationHours.toFixed(2);
+        perHourQty.dataset.autofilled = 'route';
+      }
+      if (secondaryPerHourQty && shouldOverwrite(secondaryPerHourQty)) {
+        secondaryPerHourQty.value = durationHours.toFixed(2);
+        secondaryPerHourQty.dataset.autofilled = 'route';
+      }
+    }
+
+    if (distanceMiles !== null && secondaryPerMileQty && shouldOverwrite(secondaryPerMileQty)) {
+      secondaryPerMileQty.value = distanceMiles.toFixed(1);
+      secondaryPerMileQty.dataset.autofilled = 'route';
+    }
+
+    if (directionsEl) {
+      if (summary.steps && summary.steps.length) {
+        directionsEl.innerHTML = summary.steps.map((step, index) => {
+          const detail = [step.distance, step.duration].filter(Boolean).join(' • ');
+          const detailHtml = detail ? ` <span class="step-distance">(${detail})</span>` : '';
+          return `
+      <div class="direction-step">
+        <strong>${index + 1}.</strong> ${step.instruction}${detailHtml}
+      </div>`;
+        }).join('');
+      } else {
+        directionsEl.innerHTML = '<div class="direction-step">No directions available.</div>';
+      }
+    }
 
     this.latestRouteSummary = {
       ...summary,

@@ -38,8 +38,6 @@ create table if not exists public.organizations (
   state text,
   postal_code text,
   country text,
-  latitude numeric,
-  longitude numeric,
   website text,
   timezone text default 'America/Chicago',
   currency text default 'USD',
@@ -232,36 +230,7 @@ create index idx_booking_agents_name on public.booking_agents(first_name, last_n
 create index idx_booking_agents_email on public.booking_agents(email);
 
 -- ===================================
--- 7. AIRPORTS TABLE
--- ===================================
-
-create table if not exists public.airports (
-  id uuid primary key default uuid_generate_v4(),
-  organization_id uuid references public.organizations(id) on delete cascade,
-  code text not null,
-  name text,
-  description text,
-  address_line1 text,
-  address_line2 text,
-  city text,
-  state text,
-  postal_code text,
-  country text default 'United States',
-  latitude numeric,
-  longitude numeric,
-  pickup_title text,
-  pickup_instructions text,
-  status text default 'ACTIVE' check (status in ('ACTIVE', 'INACTIVE')),
-  label text,
-  created_at timestamp with time zone default now(),
-  updated_at timestamp with time zone default now(),
-  unique(organization_id, code)
-);
-
-alter table public.airports enable row level security;
-
--- ===================================
--- 8. DRIVERS TABLE
+-- 7. DRIVERS TABLE
 -- ===================================
 
 create table if not exists public.drivers (

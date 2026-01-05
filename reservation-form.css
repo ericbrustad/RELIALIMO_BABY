@@ -625,7 +625,7 @@ body {
   background: white;
   border: 1px solid #ccc;
   border-radius: 3px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .panel-small {
@@ -659,7 +659,7 @@ body {
 .form-section {
   padding: 12px;
   max-height: none;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .subsection-title {
@@ -1043,17 +1043,17 @@ textarea.form-control {
   position: absolute;
   background: white;
   border: 1px solid #ccc;
-  border-top: none;
-  border-radius: 0 0 3px 3px;
+  border-radius: 3px;
   max-height: 200px;
   overflow-y: auto;
   width: 100%;
-  z-index: 1000;
+  z-index: 5000;
   display: none;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  margin-top: -1px;
-  top: 100%;
+  margin-top: 0;
+  top: 0;
   left: 0;
+  padding-top: 2px;
 }
 
 .suggestions-dropdown.active,
@@ -1511,15 +1511,16 @@ textarea.form-control {
   position: absolute;
   background: white;
   border: 1px solid #ccc;
-  border-top: none;
-  border-radius: 0 0 3px 3px;
+  border-radius: 3px;
   max-height: 200px;
   overflow-y: auto;
   width: 100%;
-  z-index: 1000;
+  z-index: 5000;
   display: none;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  margin-top: -1px;
+  margin-top: 0;
+  top: 0;
+  padding-top: 2px;
 }
 
 .address-suggestions.active {
@@ -1568,7 +1569,7 @@ textarea.form-control {
 .address-grid {
   display: grid;
   grid-template-columns: 1fr 100px 100px;
-  gap: 12px;
+  gap: 6px;
 }
 
 /* Location Types */
@@ -1973,10 +1974,56 @@ body.view-mode .address-entry-card {
 /* Address Entry */
 .address-entry {
   background: #f8f9fa;
-  padding: 15px;
+  padding: 12px;
   border: 1px solid #e0e0e0;
   border-radius: 3px;
-  margin: 0 0 30px 0;
+  margin: 0 0 20px 0;
+  position: relative;
+  overflow: visible;
+}
+
+.address-entry .form-group {
+  margin-bottom: 2px;
+  position: relative;
+}
+
+.location-name-group {
+  position: relative;
+  z-index: 8000;
+}
+
+.location-name-group .location-suggestions {
+  top: 100%;
+}
+
+.address-entry .form-group label {
+  margin-bottom: 2px;
+  font-size: 11px;
+}
+
+.address-entry .form-control {
+  padding: 9px 12px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.address-entry .address-input,
+.address-entry .location-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.address-entry textarea.form-control {
+  min-height: 96px;
+}
+
+.address-entry .address-grid {
+  gap: 6px;
+}
+
+.address-entry .address-suggestions,
+.address-entry .location-suggestions {
+  z-index: 4000;
 }
 
 /* Stop Type Selector */

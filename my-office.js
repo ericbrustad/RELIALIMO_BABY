@@ -4,6 +4,7 @@ import { wireMainNav } from './navigation.js';
 import { loadServiceTypes, SERVICE_TYPES_STORAGE_KEY } from './service-types-store.js';
 import { loadPolicies, upsertPolicy, deletePolicyById, getActivePolicies, POLICIES_STORAGE_KEY, normalizePolicy } from './policies-store.js';
 import { MapboxService } from './MapboxService.js';
+import { googleMapsService } from './GoogleMapsService.js';
 
 class MyOffice {
   constructor() {
@@ -65,8 +66,10 @@ class MyOffice {
     this.selectedUserId = this.users[0]?.id || null;
     this.userInputs = {};
     this.mapboxService = new MapboxService();
+    this.googleMapsService = googleMapsService;
     this.companyGeo = { latitude: null, longitude: null };
     this.airportGeo = { latitude: null, longitude: null };
+    this.companyRouteMapExpanded = false;
     this.init();
   }
 
@@ -80,6 +83,7 @@ class MyOffice {
     this.setupAirportAddressLookup();
     this.setupSystemUsers();
     this.setupCompanyInfoForm();
+    this.setupCompanyRouteTester();
     this.setupAccountsCalendarPrefs();
     this.setupVehicleTypeSelection();
     this.setupVehicleTypeShowAllToggle();
@@ -982,6 +986,141 @@ class MyOffice {
     addressInput.addEventListener('blur', () => {
       setTimeout(() => suggestions.classList.remove('active'), 200);
     });
+  }
+
+  setupCompanyRouteTester() {
+    const originInput = document.getElementById('companyRouteOrigin');
+    const destinationInput = document.getElementById('companyRouteDestination');
+    const runBtn = document.getElementById('companyRouteRun');
+    const expandBtn = document.getElementById('companyRouteExpandBtn');
+    const mapCard = document.getElementById('companyRouteMapCard');
+
+    if (!originInput || !destinationInput || !runBtn) return;
+
+    // Prefill origin from company address if empty
+    const prefillOrigin = () => {
+      const assembled = this.buildCompanyAddressString();
+      if (assembled && !originInput.value) {
+        originInput.value = assembled;
+      }
+    };
+    prefillOrigin();
+
+    runBtn.addEventListener('click', () => {
+      this.runCompanyRouteLookup();
+    });
+
+    [originInput, destinationInput].forEach(input => {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this.runCompanyRouteLookup();
+        }
+      });
+    });
+
+    if (expandBtn && mapCard) {
+      expandBtn.addEventListener('click', () => {
+        this.companyRouteMapExpanded = !this.companyRouteMapExpanded;
+        mapCard.classList.toggle('expanded', this.companyRouteMapExpanded);
+        expandBtn.textContent = this.companyRouteMapExpanded ? 'Collapse Map' : 'Expand Map';
+      });
+    }
+  }
+
+  buildCompanyAddressString() {
+    const address1 = document.getElementById('companyStreetAddress')?.value?.trim();
+    const address2 = document.getElementById('companyStreetAddress2')?.value?.trim();
+    const city = document.getElementById('companyCity')?.value?.trim();
+    const state = document.getElementById('companyState')?.value?.trim();
+    const zip = document.getElementById('companyZipCode')?.value?.trim();
+
+    return [address1, address2, city, state, zip].filter(Boolean).join(', ');
+  }
+
+  async runCompanyRouteLookup() {
+    const originInput = document.getElementById('companyRouteOrigin');
+    const destinationInput = document.getElementById('companyRouteDestination');
+    const distanceEl = document.getElementById('companyRouteDistance');
+    const durationEl = document.getElementById('companyRouteDuration');
+    const statusEl = document.getElementById('companyRouteStatus');
+
+    if (!originInput || !destinationInput || !distanceEl || !durationEl) return;
+
+    const origin = (originInput.value || '').trim();
+    const destination = (destinationInput.value || '').trim();
+
+    if (!origin || !destination) {
+      statusEl.textContent = 'Enter both origin and destination.';
+      return;
+    }
+
+    statusEl.textContent = 'Looking up route via Google...';
+    distanceEl.textContent = '-';
+    durationEl.textContent = '-';
+
+    try {
+      const summary = await this.googleMapsService.getRouteSummary({ origin, destination });
+      if (!summary) {
+        statusEl.textContent = 'No route found.';
+        return;
+      }
+
+      distanceEl.textContent = summary.distanceText || '-';
+      durationEl.textContent = summary.durationText || '-';
+      statusEl.textContent = 'Route loaded.';
+
+      // Render map with Mapbox (visual only) using the two addresses
+      this.renderCompanyRouteMap(origin, destination).catch((err) => {
+        console.warn('Map render failed:', err);
+      });
+    } catch (err) {
+      console.warn('Route lookup failed:', err);
+      statusEl.textContent = 'Route lookup failed.';
+    }
+  }
+
+  async renderCompanyRouteMap(origin, destination) {
+    const mapImg = document.getElementById('companyRouteMapImg');
+    const mapCard = document.getElementById('companyRouteMapCard');
+    if (!mapImg || !mapCard) return;
+
+    const token = this.mapboxService?.accessToken;
+    if (!token || token === 'YOUR_MAPBOX_TOKEN_HERE') {
+      mapImg.alt = 'Mapbox token missing';
+      return;
+    }
+
+    const [origGeo, destGeo] = await Promise.all([
+      this.mapboxService.geocodeAddress(origin),
+      this.mapboxService.geocodeAddress(destination)
+    ]);
+
+    const origCoords = Array.isArray(origGeo) && origGeo[0]?.coordinates ? origGeo[0].coordinates : null;
+    const destCoords = Array.isArray(destGeo) && destGeo[0]?.coordinates ? destGeo[0].coordinates : null;
+
+    if (!origCoords || !destCoords) {
+      mapImg.alt = 'Could not geocode addresses for map.';
+      return;
+    }
+
+    const [origLng, origLat] = origCoords;
+    const [destLng, destLat] = destCoords;
+
+    // Build static map with two pins and a path
+    const markers = [
+      `pin-s-a+285A98(${origLng},${origLat})`,
+      `pin-s-b+cc3333(${destLng},${destLat})`
+    ];
+    const path = `path-4+285A98-0.7(${origLng},${origLat};${destLng},${destLat})`;
+
+    const centerLng = (origLng + destLng) / 2;
+    const centerLat = (origLat + destLat) / 2;
+
+    const url = `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/${markers.join(',')},${path}/${centerLng},${centerLat},9/480x320?access_token=${token}`;
+
+    mapImg.src = url;
+    mapImg.alt = 'Route map preview';
   }
 
   showCompanyAddressSuggestions(inputElement, suggestionsContainer, results) {
