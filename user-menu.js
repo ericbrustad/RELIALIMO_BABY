@@ -34,6 +34,7 @@ function ensureStyles() {
 
 function ensureContainer() {
   let container = document.getElementById('userMenuContainer');
+  
   if (!container) {
     container = document.createElement('div');
     container.id = 'userMenuContainer';
@@ -41,7 +42,7 @@ function ensureContainer() {
     container.parentElement.removeChild(container);
   }
 
-  // Single, fixed overlay in the top-left
+  // Fixed overlay in the top-right corner
   container.classList.add('user-menu-overlay');
   container.classList.remove('user-menu-floating');
   document.body.appendChild(container);
@@ -52,6 +53,12 @@ function ensureContainer() {
 function renderSkeleton(container) {
   container.innerHTML = `
     <div class="user-menu-wrapper">
+      <!-- Layout Toggle Buttons -->
+      <div class="layout-toggle-inline" aria-label="Layout selector">
+        <button type="button" id="inlineLayoutVertical" title="Vertical layout">⬛</button>
+        <button type="button" id="inlineLayoutHorizontal" title="Horizontal layout">▬</button>
+      </div>
+
       <button type="button" class="user-menu-toggle" aria-expanded="false" id="userMenuToggle">
         <span class="user-avatar" id="userMenuAvatar">?</span>
         <span class="user-email" id="userMenuEmail">...</span>
@@ -171,6 +178,38 @@ function wireInteractions() {
       window.location.href = 'auth.html';
     });
   }
+
+  // Wire up inline layout toggle buttons
+  wireLayoutToggle();
+}
+
+function wireLayoutToggle() {
+  const vertBtn = document.getElementById('inlineLayoutVertical');
+  const horzBtn = document.getElementById('inlineLayoutHorizontal');
+
+  function setLayout(mode) {
+    const normalized = mode === 'horizontal' ? 'horizontal' : 'vertical';
+    localStorage.setItem('headerLayout', normalized);
+    document.documentElement.setAttribute('data-layout', normalized);
+    if (vertBtn) vertBtn.classList.toggle('active', normalized === 'vertical');
+    if (horzBtn) horzBtn.classList.toggle('active', normalized === 'horizontal');
+
+    // Also update any legacy toggle buttons in parent/top frame
+    try {
+      const doc = window.top?.document || document;
+      doc.querySelectorAll('.layout-toggle button').forEach(btn => {
+        const isVertical = btn.id === 'layoutVertical';
+        btn.classList.toggle('active', isVertical ? normalized === 'vertical' : normalized === 'horizontal');
+      });
+    } catch { /* cross-origin */ }
+  }
+
+  // Initialize from stored preference
+  const saved = localStorage.getItem('headerLayout') || 'vertical';
+  setLayout(saved);
+
+  if (vertBtn) vertBtn.addEventListener('click', () => setLayout('vertical'));
+  if (horzBtn) horzBtn.addEventListener('click', () => setLayout('horizontal'));
 }
 
 async function refreshUser() {

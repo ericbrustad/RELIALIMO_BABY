@@ -13,6 +13,35 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
+// Expose a single, SDK-managed session refresher for the rest of the app.
+// This prevents refresh-token races between multiple auth implementations.
+if (typeof window !== 'undefined') {
+  window.__RELIA_SDK_AUTH_MANAGED = true;
+
+  // Provide a shared helper to obtain a fresh session (and optionally force refresh).
+  window.__reliaGetValidSession = async function getValidSession(options = {}) {
+    const minimumRemainingMs = Number.isFinite(options.minimumRemainingMs) ? options.minimumRemainingMs : 120_000;
+    const force = options.force === true;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return null;
+
+      const expiresAtMs = session.expires_at ? session.expires_at * 1000 : null;
+      const remaining = expiresAtMs ? (expiresAtMs - Date.now()) : null;
+
+      if (force || (remaining != null && remaining < minimumRemainingMs)) {
+        const { data, error } = await supabase.auth.refreshSession();
+        if (!error && data?.session) return data.session;
+      }
+      return session;
+    } catch (e) {
+      console.warn('AuthGuard: __reliaGetValidSession failed', e);
+      return null;
+    }
+  };
+}
+
 // --- AUTH LOGIC ---
 
 let lastKnownSession = null;
@@ -140,10 +169,19 @@ supabase.auth.onAuthStateChange((event, session) => {
     if (session.access_token) {
       localStorage.setItem('supabase_access_token', session.access_token);
     }
+
+    // Notify any buildless REST helpers listening for auth updates in this same window.
+    try {
+      window.dispatchEvent(new CustomEvent('supabase-session-change', { detail: session }));
+    } catch (_) {}
   } else {
     lastKnownSession = null;
     localStorage.removeItem('supabase_session');
     localStorage.removeItem('supabase_access_token');
+
+    try {
+      window.dispatchEvent(new CustomEvent('supabase-session-change', { detail: null }));
+    } catch (_) {}
   }
 });
 

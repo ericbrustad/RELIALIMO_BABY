@@ -201,9 +201,23 @@ export async function robustRefresh(maxTries = 3) {
 }
 
 export async function apiFetch(path, { method = 'GET', headers = {}, body, retry = true } = {}) {
-  const session = getSession();
+  let session = getSession();
   const { url, anonKey } = getSupabaseConfig();
   const fullUrl = path.startsWith('http') ? path : `${url}${path}`;
+
+  // Prefer the SDK-managed session refresher when available (auth-guard).
+  // This avoids refresh-token rotation races between multiple refresh implementations.
+  try {
+    if (typeof window !== 'undefined' && typeof window.__reliaGetValidSession === 'function') {
+      const sdkSession = await window.__reliaGetValidSession({ minimumRemainingMs: 120_000 });
+      if (sdkSession?.access_token) {
+        session = sdkSession;
+        setSession(sdkSession);
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ apiFetch: SDK session helper failed:', e);
+  }
 
   const h = {
     apikey: anonKey,
@@ -211,49 +225,35 @@ export async function apiFetch(path, { method = 'GET', headers = {}, body, retry
     ...headers
   };
 
+  // Use the best available bearer token: SDK session -> cached session -> anon.
   if (session?.access_token) {
     h.Authorization = `Bearer ${session.access_token}`;
-  }
-
-  if (session && isExpired(session) && session.refresh_token) {
-    try {
-      const refreshed = await refreshToken();
-      if (refreshed?.access_token) {
-        h.Authorization = `Bearer ${refreshed.access_token}`;
-      }
-    } catch (e) {
-      if (e.message === 'REFRESH_INVALID' || e.message === 'NO_REFRESH_TOKEN') throw e;
-    }
+  } else {
+    h.Authorization = `Bearer ${anonKey}`;
   }
 
   const response = await fetch(fullUrl, { method, headers: h, body });
 
+  // If auth failed, try a single forced refresh via the SDK (if present) and retry once.
   if ((response.status === 401 || response.status === 403) && retry) {
-    // Capture error body to aid diagnostics (RLS / auth issues)
     try {
-      const clone = response.clone();
-      const errText = await clone.text();
-      console.warn(`⚠️ apiFetch ${response.status} body:`, errText);
-    } catch {/* ignore clone failures */}
-
-    try {
-      if (!session?.refresh_token || !`${session.refresh_token}`.trim()) {
-        throw new Error('NO_REFRESH_TOKEN');
+      if (typeof window !== 'undefined' && typeof window.__reliaGetValidSession === 'function') {
+        const forced = await window.__reliaGetValidSession({ force: true, minimumRemainingMs: 0 });
+        if (forced?.access_token) {
+          setSession(forced);
+          const h2 = { ...h, Authorization: `Bearer ${forced.access_token}` };
+          return await fetch(fullUrl, { method, headers: h2, body });
+        }
       }
-      const refreshed = await refreshToken();
-      const h2 = { ...h, Authorization: refreshed?.access_token ? `Bearer ${refreshed.access_token}` : h.Authorization };
-      const retryResp = await fetch(fullUrl, { method, headers: h2, body });
-      return retryResp;
     } catch (refreshErr) {
-      console.warn('⚠️ apiFetch refresh failed:', refreshErr?.message || refreshErr);
-      throw refreshErr;
+      console.warn('⚠️ apiFetch SDK forced refresh failed:', refreshErr?.message || refreshErr);
     }
   }
 
   return response;
 }
 
-// Local dev mode toggle used by dev-mode-banner.js
+// Local dev mode toggle used by dev-mode-banner.js used by dev-mode-banner.js
 const DEV_MODE_STORAGE_KEY = 'relia_local_dev_mode';
 
 export function isLocalDevModeEnabled() {
@@ -275,6 +275,62 @@ export function setLocalDevModeEnabled(enabled) {
 
 let supabaseClient = null;
 let lastApiError = null;
+
+// Valid driver table columns based on database schema
+const VALID_DRIVER_COLUMNS = [
+  'id', 'organization_id', 'user_id', 'first_name', 'last_name', 'email', 'contact_email',
+  'cell_phone', 'cell_phone_provider', 'home_phone', 'fax', 'other_phone', 'other_phone_provider',
+  'primary_address', 'address_line2', 'city', 'state', 'address_zip', 'postal_code', 'country',
+  'license_number', 'license_state', 'license_exp_date', 'badge_id', 'badge_exp_date',
+  'ssn', 'dob', 'tlc_license_number', 'tlc_license_exp_date', 'payroll_id',
+  'hire_date', 'termination_date', 'driver_level', 'status', 'type', 'is_active', 'is_vip',
+  'suppress_auto_notifications', 'show_call_email_dispatch', 'quick_edit_dispatch',
+  'include_phone_home', 'include_phone_cell', 'include_phone_other',
+  'notify_email', 'notify_fax', 'notify_sms', 'include_phone_1', 'include_phone_2', 'include_phone_3',
+  'driver_alias', 'driver_group', 'assigned_vehicle_id', 'dispatch_display_name', 'trip_sheets_display_name',
+  'driver_notes', 'web_username', 'web_password', 'web_access',
+  'trip_regular_rate', 'trip_overtime_rate', 'trip_double_time_rate',
+  'travel_regular_rate', 'travel_overtime_rate', 'travel_double_time_rate',
+  'passenger_regular_rate', 'passenger_overtime_rate', 'passenger_double_time_rate',
+  'voucher_fee', 'extra_nv_1', 'extra_nv_2', 'extra_nv_3', 'extra_fl_1', 'extra_fl_2', 'extra_fl_3',
+  'created_by', 'updated_by', 'created_at', 'updated_at',
+  'driver_status', 'affiliate_id', 'affiliate_name'
+];
+
+/**
+ * Sanitize driver data to only include valid database columns
+ * and fix data types as needed
+ */
+function sanitizeDriverData(data) {
+  const sanitized = {};
+  
+  for (const [key, value] of Object.entries(data)) {
+    // Only include columns that exist in the database
+    if (!VALID_DRIVER_COLUMNS.includes(key)) {
+      console.log(`⚠️ Removing unknown driver field: ${key}`);
+      continue;
+    }
+    
+    // Skip undefined values
+    if (value === undefined) continue;
+    
+    // Handle empty strings for UUID fields - convert to null
+    if ((key === 'assigned_vehicle_id' || key === 'affiliate_id' || key === 'user_id') && value === '') {
+      sanitized[key] = null;
+      continue;
+    }
+    
+    // Handle empty strings for date fields - convert to null
+    if (key.endsWith('_date') && value === '') {
+      sanitized[key] = null;
+      continue;
+    }
+    
+    sanitized[key] = value;
+  }
+  
+  return sanitized;
+}
 
 function resolveAdminOrgId() {
   const env = (typeof window !== 'undefined' && window.ENV) ? window.ENV : {};
@@ -322,6 +378,16 @@ async function ensureValidToken(client) {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       console.log('🔧 Development mode: Bypassing token validation');
       return true;
+    }
+
+    // If auth-guard is managing sessions (supabase-js), delegate validation/refresh to it.
+    try {
+      if (typeof window !== 'undefined' && typeof window.__reliaGetValidSession === 'function') {
+        await window.__reliaGetValidSession({ minimumRemainingMs: 5 * 60_000 });
+        return true;
+      }
+    } catch (e) {
+      console.warn('⚠️ ensureValidToken: SDK session helper failed:', e);
     }
     
     const session = localStorage.getItem('supabase_session');
@@ -408,6 +474,19 @@ async function refreshAccessToken(client, providedRefreshToken) {
     if (!providedRefreshToken) {
       console.warn('⚠️ No refresh token available');
       return { success: false, error: 'No refresh token' };
+    }
+
+    // Prefer the SDK-managed refresh when available to avoid refresh-token rotation races.
+    try {
+      if (typeof window !== 'undefined' && typeof window.__reliaGetValidSession === 'function') {
+        const session = await window.__reliaGetValidSession({ force: true, minimumRemainingMs: 0 });
+        if (session?.access_token) {
+          setSession(session);
+          return { success: true, message: 'SDK refreshSession succeeded' };
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ refreshAccessToken: SDK refresh failed:', e);
     }
 
     // Ensure the stored session has a refresh token before calling refreshToken()
@@ -540,12 +619,12 @@ async function getOrgContextOrThrow(client) {
     }
 
     console.log('🏢 Getting organization membership...');
-    const { data: membership, error: membershipError } = await client
+    const { data: membershipList, error: membershipError } = await client
       .from('organization_members')
       .select('organization_id')
-      .eq('user_id', user.id)
-      .single();
-    
+      .eq('user_id', user.id);
+
+    const membership = Array.isArray(membershipList) && membershipList.length ? membershipList[0] : null;
     console.log('🏢 Membership result:', membership?.organization_id || 'null', 'error:', membershipError?.message || 'none');
     
     // If membership is missing, fall back to cached wallet or dev org (when allowed)
@@ -592,6 +671,7 @@ async function getOrgContextOrThrow(client) {
  */
 export async function setupAPI() {
   try {
+    if (supabaseClient) return supabaseClient;
     supabaseClient = await initSupabase();
     
     // Ensure token is valid on startup (non-blocking)
@@ -619,7 +699,11 @@ export function getSupabaseClient() {
 }
 
 const DEV_DRIVERS_KEY = 'dev_drivers';
-const isDevHost = () => window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const isDevHost = () => {
+  // If FORCE_DATABASE_ON_LOCALHOST is true, never use dev/localStorage mode
+  if (window.ENV?.FORCE_DATABASE_ON_LOCALHOST) return false;
+  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+};
 
 const loadDevDrivers = () => {
   if (!isDevHost()) return [];
@@ -651,8 +735,9 @@ export async function listDrivers({ limit = 50, offset = 0 } = {}) {
 }
 
 // Lightweight driver list for dropdowns (active only, name fallback)
+// Includes assigned_vehicle_id for auto-selection of driver's assigned vehicle
 export async function listDriverNames({ limit = 200, offset = 0 } = {}) {
-  const res = await apiFetch(`/rest/v1/drivers?select=id,dispatch_display_name,first_name,last_name,status&status=eq.ACTIVE&order=last_name.asc,first_name.asc&limit=${limit}&offset=${offset}`);
+  const res = await apiFetch(`/rest/v1/drivers?select=id,dispatch_display_name,first_name,last_name,status,assigned_vehicle_id&order=last_name.asc,first_name.asc&limit=${limit}&offset=${offset}`);
   if (!res.ok) throw new Error(`listDriverNames failed: ${res.status}`);
   return res.json();
 }
@@ -704,11 +789,14 @@ export async function createDriver(driverData) {
   
   try {
     const timestamp = new Date().toISOString();
-    const payload = {
+    // Sanitize driver data - remove fields that aren't in the database schema
+    const payload = sanitizeDriverData({
       ...driverData,
       created_at: driverData.created_at || timestamp,
       updated_at: driverData.updated_at || timestamp
-    };
+    });
+
+    console.log('📤 createDriver payload:', payload);
 
     const res = await apiFetch('/rest/v1/drivers', {
       method: 'POST',
@@ -716,7 +804,11 @@ export async function createDriver(driverData) {
       body: JSON.stringify(payload)
     });
 
-    if (!res.ok) throw new Error(`createDriver failed: ${res.status}`);
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error('❌ createDriver API error:', res.status, errorBody);
+      throw new Error(`createDriver failed: ${res.status} - ${errorBody}`);
+    }
     const data = await res.json();
     return Array.isArray(data) ? data[0] || null : data;
   } catch (error) {
@@ -745,10 +837,13 @@ export async function updateDriver(driverId, driverData) {
   }
   
   try {
-    const payload = {
+    // Sanitize driver data - remove fields that aren't in the database schema
+    const payload = sanitizeDriverData({
       ...driverData,
       updated_at: driverData.updated_at || new Date().toISOString()
-    };
+    });
+
+    console.log('📤 updateDriver payload:', payload);
 
     const res = await apiFetch(`/rest/v1/drivers?id=eq.${encodeURIComponent(driverId)}`, {
       method: 'PATCH',
@@ -756,7 +851,11 @@ export async function updateDriver(driverId, driverData) {
       body: JSON.stringify(payload)
     });
 
-    if (!res.ok) throw new Error(`updateDriver failed: ${res.status}`);
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error('❌ updateDriver API error:', res.status, errorBody);
+      throw new Error(`updateDriver failed: ${res.status} - ${errorBody}`);
+    }
     const data = await res.json();
     return Array.isArray(data) ? data[0] || null : data;
   } catch (error) {
@@ -993,10 +1092,9 @@ export async function fetchVehicleTypes(options = {}) {
 export async function fetchActiveVehicles(options = {}) {
   const { includeInactive = false, limit = 500 } = options;
   const client = getSupabaseClient();
-  const isDevHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
+  // ALWAYS load localStorage fleet - it contains real fleet vehicles created locally
   const loadLocalFleet = () => {
-    if (!isDevHost) return [];
     try {
       const raw = localStorage.getItem('cr_fleet');
       if (!raw) return [];
@@ -1005,21 +1103,33 @@ export async function fetchActiveVehicles(options = {}) {
 
       return parsed.map((v, idx) => ({
         id: v.id || `local-fleet-${idx}`,
-        veh_disp_name: v.plate || v.name || v.type || 'Vehicle',
-        veh_title: v.type || v.name || v.plate,
-        veh_type: v.type || v.veh_type || v.name,
+        veh_disp_name: v.veh_disp_name || v.plate || v.name || v.type || 'Vehicle',
+        veh_title: v.veh_title || v.type || v.name || v.plate,
+        veh_type: v.veh_type || v.vehicle_type || v.type || v.name,
+        vehicle_type: v.vehicle_type || v.veh_type,
+        vehicle_type_id: v.vehicle_type_id,
         status: v.status || 'ACTIVE',
-        veh_active: v.veh_active ?? 'Y'
+        veh_active: v.veh_active ?? 'Y',
+        unit_number: v.unit_number,
+        make: v.make,
+        model: v.model,
+        year: v.year,
+        color: v.color,
+        license_plate: v.license_plate,
+        assigned_driver_id: v.assigned_driver_id,
+        veh_pax_capacity: v.veh_pax_capacity || v.passenger_capacity
       }));
     } catch (e) {
-      console.warn('⚠️ Failed to load local fleet fallback:', e);
+      console.warn('⚠️ Failed to load local fleet:', e);
       return [];
     }
   };
 
+  // Always load local fleet first
+  const localVehicles = loadLocalFleet();
+
   if (!client) {
-    const local = loadLocalFleet();
-    if (local.length) return local;
+    if (localVehicles.length) return localVehicles;
     return [];
   }
 
@@ -1039,9 +1149,8 @@ export async function fetchActiveVehicles(options = {}) {
     }
 
     if (!organizationId) {
-      console.warn('⚠️ No organization_id; skipping Supabase vehicle fetch.');
-      const local = loadLocalFleet();
-      return local.length ? local : [];
+      console.warn('⚠️ No organization_id; using local fleet only.');
+      return localVehicles.length ? localVehicles : [];
     }
 
     const { data, error } = await client
@@ -1063,23 +1172,35 @@ export async function fetchActiveVehicles(options = {}) {
           return ['Y', 'YES', 'ACTIVE', 'TRUE', 'T', '1'].includes(flag);
         });
 
-    if (filtered.length) return filtered;
-
-    const local = loadLocalFleet();
-    if (local.length) {
-      console.warn('⚠️ Using local fleet fallback because Supabase returned 0 vehicles');
-      return local;
+    // ALWAYS merge Supabase and localStorage - don't just return one or the other
+    const seenIds = new Set();
+    const merged = [];
+    
+    // Add Supabase vehicles first
+    for (const v of filtered) {
+      if (v.id) seenIds.add(v.id);
+      merged.push(v);
     }
+    
+    // Add local vehicles that aren't already in Supabase
+    for (const v of localVehicles) {
+      if (!v.id || !seenIds.has(v.id)) {
+        if (v.id) seenIds.add(v.id);
+        merged.push(v);
+      }
+    }
+    
+    console.log(`✅ fetchActiveVehicles: ${filtered.length} from Supabase, ${localVehicles.length} from localStorage, ${merged.length} total`);
+    return merged;
 
-    return filtered;
   } catch (error) {
     console.error('Error fetching active vehicles:', error);
     lastApiError = error;
 
-    const local = loadLocalFleet();
-    if (local.length) {
+    // On error, return local vehicles as fallback
+    if (localVehicles.length) {
       console.warn('⚠️ Using local fleet fallback because Supabase fetch failed');
-      return local;
+      return localVehicles;
     }
 
     return [];
@@ -1113,7 +1234,7 @@ export async function listActiveVehiclesLight({ limit = 200, offset = 0 } = {}) 
     }
   }
 
-  const res = await apiFetch(`/rest/v1/vehicles?select=id,veh_disp_name,unit_number,make,model,year,license_plate,status,veh_type,veh_title${orgFilter}&status=in.(${activeStatuses})&order=veh_disp_name.asc,make.asc,model.asc,year.desc&limit=${limit}&offset=${offset}`);
+  const res = await apiFetch(`/rest/v1/vehicles?select=id,veh_disp_name,unit_number,make,model,year,license_plate,status,veh_type,veh_title,assigned_driver_id${orgFilter}&status=in.(${activeStatuses})&order=veh_disp_name.asc,make.asc,model.asc,year.desc&limit=${limit}&offset=${offset}`);
   if (!res.ok) throw new Error(`listActiveVehiclesLight failed: ${res.status}`);
   const data = await res.json();
   return Array.isArray(data) ? data : [];
@@ -1140,17 +1261,25 @@ export async function upsertVehicleType(vehicleType) {
     lastApiError = null;
     const { organizationId, user } = await getOrgContextOrThrow(getSupabaseClient());
     const now = new Date().toISOString();
-    const isValidId = typeof vehicleType.id === 'string'
+    
+    // Check if this is an existing UUID record
+    const isUUID = typeof vehicleType.id === 'string'
       && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(vehicleType.id);
+
+    // For non-UUID ids (legacy numeric like '2'), generate a new UUID
+    const newUUID = !isUUID ? crypto.randomUUID() : null;
+    const effectiveId = isUUID ? vehicleType.id : newUUID;
 
     const metadata = {
       ...(vehicleType.metadata || {}),
       ...(vehicleType.rates ? { rates: vehicleType.rates } : {}),
-      ...(vehicleType.images ? { images: vehicleType.images } : {})
+      ...(vehicleType.images ? { images: vehicleType.images } : {}),
+      // Store legacy id in metadata for reference
+      ...(vehicleType.id && !isUUID ? { legacy_id: vehicleType.id } : {})
     };
 
     const payload = sanitizeVehiclePayload({
-      id: isValidId ? vehicleType.id : undefined,
+      id: effectiveId,
       organization_id: organizationId,
       name: vehicleType.name?.trim() || null,
       code: vehicleType.code?.trim() || null,
@@ -1173,32 +1302,88 @@ export async function upsertVehicleType(vehicleType) {
       metadata,
       updated_at: now,
       updated_by: user.id,
-      created_at: isValidId ? undefined : now,
-      created_by: isValidId ? undefined : user.id,
+      created_at: isUUID ? undefined : now,
+      created_by: isUUID ? undefined : user.id,
     });
 
-    // Use REST upsert to stay compatible with buildless client (SDK not loaded)
-    const query = new URLSearchParams();
-    query.set('on_conflict', 'id');
-    const url = `/rest/v1/vehicle_types?${query.toString()}`;
-
-    const response = await apiFetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Prefer: 'return=representation,resolution=merge-duplicates'
-      },
-      body: JSON.stringify([payload]),
-      retry: true
-    });
+    let response;
+    
+    if (isUUID) {
+      // UPDATE existing record with PATCH using UUID id
+      console.log('📤 Updating vehicle type by UUID:', vehicleType.id);
+      const updatePayload = { ...payload };
+      delete updatePayload.id;
+      delete updatePayload.created_at;
+      delete updatePayload.created_by;
+      
+      response = await apiFetch(`/rest/v1/vehicle_types?id=eq.${encodeURIComponent(vehicleType.id)}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Prefer: 'return=representation'
+        },
+        body: JSON.stringify(updatePayload),
+        retry: true
+      });
+    } else {
+      // Non-UUID id or no id - check if name already exists first
+      const searchName = vehicleType.name?.trim();
+      console.log('📤 Checking if vehicle type exists by name:', searchName);
+      
+      // Use ilike for case-insensitive match
+      const lookupRes = await apiFetch(`/rest/v1/vehicle_types?name=ilike.${encodeURIComponent(searchName)}&organization_id=eq.${organizationId}&select=id,name`, {
+        method: 'GET'
+      });
+      
+      console.log('📤 Lookup response status:', lookupRes.status);
+      
+      if (lookupRes.ok) {
+        const existing = await lookupRes.json();
+        console.log('📤 Lookup result:', existing);
+        if (existing && existing.length > 0) {
+          // Name exists - update existing record
+          console.log('📤 Found existing vehicle type by name, updating UUID:', existing[0].id);
+          const updatePayload = { ...payload };
+          delete updatePayload.id;
+          delete updatePayload.created_at;
+          delete updatePayload.created_by;
+          
+          response = await apiFetch(`/rest/v1/vehicle_types?id=eq.${encodeURIComponent(existing[0].id)}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              Prefer: 'return=representation'
+            },
+            body: JSON.stringify(updatePayload),
+            retry: true
+          });
+        } else {
+          // Name doesn't exist - create new record
+          console.log('📤 Creating vehicle type with new UUID:', effectiveId, vehicleType.id ? `(legacy id: ${vehicleType.id})` : '');
+          response = await apiFetch('/rest/v1/vehicle_types', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Prefer: 'return=representation'
+            },
+            body: JSON.stringify([payload]),
+            retry: true
+          });
+        }
+      } else {
+        throw new Error(`Lookup by name failed: ${lookupRes.status}`);
+      }
+    }
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');
+      console.error('❌ upsertVehicleType response not ok:', response.status, body);
       const error = { message: `Supabase upsert failed (${response.status})`, status: response.status, body };
       throw error;
     }
 
     const data = await response.json();
+    console.log('✅ upsertVehicleType success:', data);
     const row = Array.isArray(data) ? data[0] || null : data;
     return row;
   } catch (error) {
@@ -1206,6 +1391,68 @@ export async function upsertVehicleType(vehicleType) {
     console.error('❌ upsertVehicleType Supabase error:', info);
     lastApiError = info;
     throw new Error(`upsertVehicleType failed: ${info.message || 'Supabase error'} [code:${info.code || 'unknown'}]`);
+  }
+}
+
+/**
+ * Update all vehicles that have a specific vehicle_type to use a new name
+ * Called when renaming a vehicle type to propagate the change
+ */
+export async function updateVehiclesWithVehicleTypeName(oldName, newName, vehicleTypeId) {
+  const client = getSupabaseClient();
+  if (!client) {
+    console.warn('Supabase client not initialized, skipping vehicle type name propagation');
+    return { updated: 0 };
+  }
+
+  try {
+    lastApiError = null;
+    const { organizationId } = await getOrgContextOrThrow(client);
+    
+    // Update vehicles where vehicle_type matches old name OR vehicle_type_id matches
+    // We need to update both fields: vehicle_type and veh_type
+    const now = new Date().toISOString();
+    
+    let updateCount = 0;
+    
+    // Update by old name (text field)
+    if (oldName) {
+      const { data: byName, error: nameError } = await client
+        .from('vehicles')
+        .update({ vehicle_type: newName, veh_type: newName, updated_at: now })
+        .eq('organization_id', organizationId)
+        .or(`vehicle_type.eq.${oldName},veh_type.eq.${oldName}`)
+        .select('id');
+      
+      if (nameError) {
+        console.warn('Error updating vehicles by name:', nameError);
+      } else {
+        updateCount += byName?.length || 0;
+      }
+    }
+    
+    // Update by vehicle_type_id (UUID reference)
+    if (vehicleTypeId) {
+      const { data: byId, error: idError } = await client
+        .from('vehicles')
+        .update({ vehicle_type: newName, veh_type: newName, updated_at: now })
+        .eq('organization_id', organizationId)
+        .eq('vehicle_type_id', vehicleTypeId)
+        .select('id');
+      
+      if (idError) {
+        console.warn('Error updating vehicles by type ID:', idError);
+      } else {
+        updateCount += byId?.length || 0;
+      }
+    }
+    
+    console.log(`✅ Updated ${updateCount} vehicles with new vehicle type name: "${newName}"`);
+    return { updated: updateCount };
+  } catch (error) {
+    console.error('Error updating vehicles with vehicle type name:', error);
+    lastApiError = error;
+    return { updated: 0, error };
   }
 }
 
@@ -1226,6 +1473,265 @@ export async function deleteVehicleType(vehicleTypeId) {
     return true;
   } catch (error) {
     console.error('Error deleting vehicle type:', error);
+    lastApiError = error;
+    throw error;
+  }
+}
+
+// ============================================================================
+// Vehicle Type Images - Supabase Storage
+// ============================================================================
+
+const VEHICLE_IMAGES_BUCKET = 'vehicle-type-images';
+
+/**
+ * Upload an image for a vehicle type to Supabase Storage
+ * @param {string} vehicleTypeId - The vehicle type UUID
+ * @param {File} file - The image file to upload
+ * @param {Object} options - Options like isPrimary, displayName
+ * @returns {Promise<Object>} The created vehicle_type_images record
+ */
+export async function uploadVehicleTypeImage(vehicleTypeId, file, options = {}) {
+  const client = getSupabaseClient();
+  if (!client) throw new Error('Supabase client not initialized');
+
+  try {
+    lastApiError = null;
+    const { organizationId, userId } = await getOrgContextOrThrow(client);
+
+    // Validate file type
+    const allowedTypes = ['image/gif', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error('Invalid file type. Allowed: GIF, JPG, JPEG, PNG');
+    }
+
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new Error('File size must be less than 5MB');
+    }
+
+    // Generate unique filename
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const timestamp = Date.now();
+    const uniqueId = crypto.randomUUID().slice(0, 8);
+    const storagePath = `${organizationId}/${vehicleTypeId}/${timestamp}-${uniqueId}.${ext}`;
+
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await client.storage
+      .from(VEHICLE_IMAGES_BUCKET)
+      .upload(storagePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error('❌ Storage upload error:', uploadError);
+      throw uploadError;
+    }
+
+    console.log('✅ Image uploaded to storage:', uploadData.path);
+
+    // If this is set as primary, unset existing primary images first
+    if (options.isPrimary) {
+      await client
+        .from('vehicle_type_images')
+        .update({ is_primary: false })
+        .eq('vehicle_type_id', vehicleTypeId)
+        .eq('organization_id', organizationId);
+    }
+
+    // Get current max sort_order
+    const { data: existingImages } = await client
+      .from('vehicle_type_images')
+      .select('sort_order')
+      .eq('vehicle_type_id', vehicleTypeId)
+      .eq('organization_id', organizationId)
+      .order('sort_order', { ascending: false })
+      .limit(1);
+
+    const nextSortOrder = (existingImages?.[0]?.sort_order ?? -1) + 1;
+
+    // Create record in vehicle_type_images table
+    const imageRecord = {
+      organization_id: organizationId,
+      vehicle_type_id: vehicleTypeId,
+      storage_path: storagePath,
+      display_name: options.displayName || file.name,
+      is_primary: options.isPrimary || false,
+      sort_order: options.sortOrder ?? nextSortOrder,
+      metadata: {
+        original_name: file.name,
+        content_type: file.type,
+        size: file.size
+      },
+      created_by: userId,
+      updated_by: userId
+    };
+
+    const { data: savedImage, error: saveError } = await client
+      .from('vehicle_type_images')
+      .insert(imageRecord)
+      .select()
+      .single();
+
+    if (saveError) {
+      console.error('❌ Failed to save image record:', saveError);
+      // Try to clean up the uploaded file
+      await client.storage.from(VEHICLE_IMAGES_BUCKET).remove([storagePath]);
+      throw saveError;
+    }
+
+    console.log('✅ Vehicle type image saved:', savedImage);
+    return savedImage;
+  } catch (error) {
+    console.error('Error uploading vehicle type image:', error);
+    lastApiError = error;
+    throw error;
+  }
+}
+
+/**
+ * Fetch all images for a vehicle type
+ * @param {string} vehicleTypeId - The vehicle type UUID
+ * @returns {Promise<Array>} Array of image records with public URLs
+ */
+export async function fetchVehicleTypeImages(vehicleTypeId) {
+  const client = getSupabaseClient();
+  if (!client) return [];
+
+  try {
+    lastApiError = null;
+    const { organizationId } = await getOrgContextOrThrow(client);
+
+    const { data: images, error } = await client
+      .from('vehicle_type_images')
+      .select('*')
+      .eq('vehicle_type_id', vehicleTypeId)
+      .eq('organization_id', organizationId)
+      .order('sort_order', { ascending: true });
+
+    if (error) throw error;
+
+    // Get public URLs for each image
+    return (images || []).map((img) => {
+      const { data: urlData } = client.storage
+        .from(VEHICLE_IMAGES_BUCKET)
+        .getPublicUrl(img.storage_path);
+
+      return {
+        ...img,
+        public_url: urlData?.publicUrl || null
+      };
+    });
+  } catch (error) {
+    console.error('Error fetching vehicle type images:', error);
+    lastApiError = error;
+    return [];
+  }
+}
+
+/**
+ * Delete a vehicle type image
+ * @param {string} imageId - The image record UUID
+ * @returns {Promise<boolean>} True if successful
+ */
+export async function deleteVehicleTypeImage(imageId) {
+  const client = getSupabaseClient();
+  if (!client) throw new Error('Supabase client not initialized');
+
+  try {
+    lastApiError = null;
+    const { organizationId } = await getOrgContextOrThrow(client);
+
+    // First get the image record to find the storage path
+    const { data: image, error: fetchError } = await client
+      .from('vehicle_type_images')
+      .select('storage_path')
+      .eq('id', imageId)
+      .eq('organization_id', organizationId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Delete from storage
+    if (image?.storage_path) {
+      const { error: storageError } = await client.storage
+        .from(VEHICLE_IMAGES_BUCKET)
+        .remove([image.storage_path]);
+
+      if (storageError) {
+        console.warn('⚠️ Failed to delete from storage:', storageError);
+      }
+    }
+
+    // Delete the database record
+    const { error: deleteError } = await client
+      .from('vehicle_type_images')
+      .delete()
+      .eq('id', imageId)
+      .eq('organization_id', organizationId);
+
+    if (deleteError) throw deleteError;
+
+    console.log('✅ Vehicle type image deleted:', imageId);
+    return true;
+  } catch (error) {
+    console.error('Error deleting vehicle type image:', error);
+    lastApiError = error;
+    throw error;
+  }
+}
+
+/**
+ * Update image properties (like is_primary, sort_order, display_name)
+ * @param {string} imageId - The image record UUID
+ * @param {Object} updates - Fields to update
+ * @returns {Promise<Object>} Updated image record
+ */
+export async function updateVehicleTypeImage(imageId, updates) {
+  const client = getSupabaseClient();
+  if (!client) throw new Error('Supabase client not initialized');
+
+  try {
+    lastApiError = null;
+    const { organizationId, userId } = await getOrgContextOrThrow(client);
+
+    // If setting as primary, unset other primaries first
+    if (updates.is_primary) {
+      // Get the vehicle_type_id for this image
+      const { data: img } = await client
+        .from('vehicle_type_images')
+        .select('vehicle_type_id')
+        .eq('id', imageId)
+        .single();
+
+      if (img?.vehicle_type_id) {
+        await client
+          .from('vehicle_type_images')
+          .update({ is_primary: false })
+          .eq('vehicle_type_id', img.vehicle_type_id)
+          .eq('organization_id', organizationId)
+          .neq('id', imageId);
+      }
+    }
+
+    const { data, error } = await client
+      .from('vehicle_type_images')
+      .update({
+        ...updates,
+        updated_by: userId,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', imageId)
+      .eq('organization_id', organizationId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error updating vehicle type image:', error);
     lastApiError = error;
     throw error;
   }

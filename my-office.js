@@ -1,5 +1,5 @@
 // Import API service
-import { setupAPI, apiFetch, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, fetchVehicleTypes, upsertVehicleType, deleteVehicleType, fetchActiveVehicles } from './api-service.js';
+import { setupAPI, apiFetch, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, fetchVehicleTypes, upsertVehicleType, deleteVehicleType, fetchActiveVehicles, uploadVehicleTypeImage, fetchVehicleTypeImages, deleteVehicleTypeImage, updateVehicleTypeImage } from './api-service.js';
 import { wireMainNav } from './navigation.js';
 import { loadServiceTypes, SERVICE_TYPES_STORAGE_KEY } from './service-types-store.js';
 import { loadPolicies, upsertPolicy, deletePolicyById, getActivePolicies, POLICIES_STORAGE_KEY, normalizePolicy } from './policies-store.js';
@@ -111,6 +111,9 @@ class MyOffice {
       console.log('API initialized successfully');
       await this.loadDriversList();
       await this.loadVehicleTypesList();
+      // Now that API is ready, reload fleet from all sources (Supabase + localStorage)
+      await this.loadFleetFromAllSources();
+      this.renderFleetList();
     } catch (error) {
       console.error('Failed to initialize API:', error);
     }
@@ -705,6 +708,9 @@ class MyOffice {
 
     // Company Logo Upload
     this.setupLogoUpload();
+    
+    // Vehicle Type Image Upload
+    this.setupVehicleTypeImageUpload();
   }
 
   setupLogoUpload() {
@@ -857,6 +863,248 @@ class MyOffice {
       } catch (e) {
         console.error('Error loading saved logo:', e);
       }
+    }
+  }
+
+  // ===================================
+  // VEHICLE TYPE IMAGE UPLOAD
+  // ===================================
+
+  setupVehicleTypeImageUpload() {
+    const imagesContainer = document.getElementById('imagesVehicleTypeContent');
+    if (!imagesContainer) return;
+
+    // Delegate click events for upload and delete buttons
+    imagesContainer.addEventListener('click', async (e) => {
+      const target = e.target;
+      
+      // Handle Upload button clicks
+      if (target.matches('.btn-primary') && target.textContent.includes('Upload')) {
+        e.preventDefault();
+        const row = target.closest('tr');
+        if (!row) return;
+        
+        const fileInput = row.querySelector('input[type="file"]');
+        if (!fileInput || !fileInput.files?.length) {
+          alert('Please select an image file first.');
+          return;
+        }
+        
+        await this.handleVehicleTypeImageUpload(fileInput.files[0], row);
+      }
+      
+      // Handle Delete button clicks
+      if (target.matches('.btn-secondary') && target.textContent.includes('Delete')) {
+        e.preventDefault();
+        const row = target.closest('tr');
+        if (!row) return;
+        
+        const imageId = row.dataset?.imageId;
+        if (imageId) {
+          await this.handleVehicleTypeImageDelete(imageId, row);
+        } else {
+          // Just clear the file input if no saved image
+          const fileInput = row.querySelector('input[type="file"]');
+          if (fileInput) fileInput.value = '';
+          const preview = row.querySelector('img');
+          if (preview) {
+            preview.src = '';
+            preview.style.display = 'none';
+          }
+          // Show placeholder
+          const placeholder = row.querySelector('.vehicle-image-placeholder');
+          if (placeholder) placeholder.style.display = 'flex';
+        }
+      }
+    });
+
+    // Preview images when file is selected
+    imagesContainer.addEventListener('change', (e) => {
+      if (e.target.matches('input[type="file"]')) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        
+        const row = e.target.closest('tr');
+        if (!row) return;
+        
+        // Validate file type
+        const allowedTypes = ['image/gif', 'image/jpeg', 'image/jpg', 'image/png'];
+        if (!allowedTypes.includes(file.type)) {
+          alert('Invalid file type. Allowed: GIF, JPG, JPEG, PNG');
+          e.target.value = '';
+          return;
+        }
+        
+        // Validate size (5MB max)
+        if (file.size > 5 * 1024 * 1024) {
+          alert('File size must be less than 5MB');
+          e.target.value = '';
+          return;
+        }
+        
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const previewContainer = row.querySelector('td:nth-child(2) > div');
+          if (previewContainer) {
+            // Hide placeholder, show preview image
+            previewContainer.innerHTML = `<img src="${ev.target.result}" style="width: 120px; height: 120px; object-fit: cover; border: 1px solid #ddd;" />`;
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  async handleVehicleTypeImageUpload(file, row) {
+    const vehicleTypeId = this.activeVehicleTypeId;
+    if (!vehicleTypeId) {
+      alert('Please select a vehicle type first.');
+      return;
+    }
+
+    // Check if it's a valid UUID
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(vehicleTypeId);
+    if (!isUUID) {
+      alert('Please save this vehicle type to Supabase before uploading images.');
+      return;
+    }
+
+    try {
+      const uploadBtn = row.querySelector('.btn-primary');
+      if (uploadBtn) {
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = 'Uploading...';
+      }
+
+      const rowIndex = parseInt(row.querySelector('td:first-child')?.textContent || '1', 10);
+      const isPrimary = rowIndex === 1;
+
+      const savedImage = await uploadVehicleTypeImage(vehicleTypeId, file, {
+        isPrimary,
+        displayName: file.name
+      });
+
+      console.log('✅ Image uploaded:', savedImage);
+
+      // Mark the row with the saved image ID
+      row.dataset.imageId = savedImage.id;
+
+      // Update button state
+      if (uploadBtn) {
+        uploadBtn.textContent = 'Uploaded ✓';
+        uploadBtn.disabled = true;
+      }
+
+      // Reload images list
+      await this.loadVehicleTypeImages();
+
+    } catch (err) {
+      console.error('❌ Image upload failed:', err);
+      alert(`Image upload failed: ${err.message || err}`);
+      
+      const uploadBtn = row.querySelector('.btn-primary');
+      if (uploadBtn) {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Upload >>';
+      }
+    }
+  }
+
+  async handleVehicleTypeImageDelete(imageId, row) {
+    if (!confirm('Delete this image?')) return;
+
+    try {
+      await deleteVehicleTypeImage(imageId);
+      console.log('✅ Image deleted:', imageId);
+
+      // Reset the row
+      delete row.dataset.imageId;
+      const fileInput = row.querySelector('input[type="file"]');
+      if (fileInput) fileInput.value = '';
+      
+      const previewContainer = row.querySelector('td:nth-child(2) > div');
+      if (previewContainer) {
+        previewContainer.innerHTML = `
+          <div style="text-align: center; color: #999;">
+            <div style="font-size: 48px; margin-bottom: 5px;">📷</div>
+            <div style="font-size: 11px; font-weight: 600;">PICTURE<br>COMING<br>SOON</div>
+          </div>
+        `;
+      }
+
+      const uploadBtn = row.querySelector('.btn-primary');
+      if (uploadBtn) {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Upload >>';
+      }
+
+    } catch (err) {
+      console.error('❌ Image delete failed:', err);
+      alert(`Delete failed: ${err.message || err}`);
+    }
+  }
+
+  async loadVehicleTypeImages() {
+    const vehicleTypeId = this.activeVehicleTypeId;
+    if (!vehicleTypeId) return;
+
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(vehicleTypeId);
+    if (!isUUID) return;
+
+    try {
+      const images = await fetchVehicleTypeImages(vehicleTypeId);
+      console.log('📷 Loaded vehicle type images:', images);
+
+      const imagesContainer = document.getElementById('imagesVehicleTypeContent');
+      if (!imagesContainer) return;
+
+      const tbody = imagesContainer.querySelector('tbody');
+      if (!tbody) return;
+
+      const rows = tbody.querySelectorAll('tr');
+      
+      // Reset all rows first
+      rows.forEach((row, idx) => {
+        delete row.dataset.imageId;
+        const previewContainer = row.querySelector('td:nth-child(2) > div');
+        if (previewContainer) {
+          previewContainer.innerHTML = `
+            <div style="text-align: center; color: #999;">
+              <div style="font-size: 48px; margin-bottom: 5px;">📷</div>
+              <div style="font-size: 11px; font-weight: 600;">PICTURE<br>COMING<br>SOON</div>
+            </div>
+          `;
+        }
+        const uploadBtn = row.querySelector('.btn-primary');
+        if (uploadBtn) {
+          uploadBtn.disabled = false;
+          uploadBtn.textContent = 'Upload >>';
+        }
+        const fileInput = row.querySelector('input[type="file"]');
+        if (fileInput) fileInput.value = '';
+      });
+
+      // Populate with saved images
+      images.forEach((img, idx) => {
+        if (idx >= rows.length) return; // Skip if more images than rows
+        
+        const row = rows[idx];
+        row.dataset.imageId = img.id;
+
+        const previewContainer = row.querySelector('td:nth-child(2) > div');
+        if (previewContainer && img.public_url) {
+          previewContainer.innerHTML = `<img src="${img.public_url}" style="width: 120px; height: 120px; object-fit: cover; border: 1px solid #ddd;" />`;
+        }
+
+        const uploadBtn = row.querySelector('.btn-primary');
+        if (uploadBtn) {
+          uploadBtn.textContent = 'Replace';
+        }
+      });
+
+    } catch (err) {
+      console.error('❌ Failed to load vehicle type images:', err);
     }
   }
 
@@ -1147,13 +1395,43 @@ class MyOffice {
   }
 
   selectCompanyAddress(addressData) {
-    const addressLine = addressData.address || addressData.name || '';
     const latitude = Array.isArray(addressData.coordinates) ? addressData.coordinates[1] : null;
     const longitude = Array.isArray(addressData.coordinates) ? addressData.coordinates[0] : null;
 
+    // Parse address components from the full address
+    const fullAddress = addressData.address || addressData.name || '';
     const city = addressData.context?.city || addressData.context?.place || '';
-    const state = addressData.context?.state || '';
+    const stateRaw = addressData.context?.state || '';
     const zip = addressData.context?.zipcode || addressData.context?.postcode || '';
+    
+    // Extract just the street address (first part before city)
+    let streetAddress = fullAddress;
+    if (city && fullAddress.includes(city)) {
+      streetAddress = fullAddress.split(city)[0].replace(/,\s*$/, '').trim();
+    } else if (fullAddress.includes(',')) {
+      // Fallback: take everything before the first comma after the house number
+      const parts = fullAddress.split(',');
+      streetAddress = parts[0].trim();
+    }
+    
+    // Convert state name to abbreviation if needed
+    const stateAbbreviations = {
+      'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
+      'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
+      'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
+      'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+      'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
+      'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+      'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
+      'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+      'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
+      'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY'
+    };
+    let state = stateRaw;
+    if (stateRaw && stateRaw.length > 2) {
+      const abbrev = stateAbbreviations[stateRaw.toLowerCase()];
+      if (abbrev) state = abbrev;
+    }
 
     const addressInput = document.getElementById('companyStreetAddress');
     const cityInput = document.getElementById('companyCity');
@@ -1162,7 +1440,7 @@ class MyOffice {
     const latitudeInput = document.getElementById('companyLatitude');
     const longitudeInput = document.getElementById('companyLongitude');
 
-    if (addressInput) addressInput.value = addressLine;
+    if (addressInput) addressInput.value = streetAddress;
     if (cityInput) cityInput.value = city;
     if (stateInput) stateInput.value = state;
     if (zipInput) zipInput.value = zip;
@@ -2199,7 +2477,7 @@ class MyOffice {
     }
   }
 
-  navigateToResource(resource) {
+  async navigateToResource(resource) {
     this.currentResource = resource || 'drivers';
 
     // Update resource navigation button active state
@@ -2272,6 +2550,8 @@ class MyOffice {
       if (resource === 'affiliates') {
         this.loadAffiliatesList();
       } else if (resource === 'fleet') {
+        // Reload from ALL sources (Supabase + localStorage) to pick up vehicles added from other pages
+        await this.loadFleetFromAllSources();
         this.renderFleetList();
       }
     } else {
@@ -2313,205 +2593,8 @@ class MyOffice {
   }
 
   buildVehicleTypeSeeds() {
-    const seeds = [
-      {
-        id: '1',
-        name: "BLACK SUV (BLACKSUV) (20' PAX VAN)",
-        status: 'active',
-        pricing_basis: 'hours',
-        passenger_capacity: '14',
-        luggage_capacity: '10',
-        color_hex: '#000000',
-        service_type: 'hourly',
-        accessible: false,
-        description: 'High-capacity black SUV configured for larger groups and event shuttles.'
-      },
-      {
-        id: '2',
-        name: 'BLACK SUV (BLACKSUV)',
-        status: 'active',
-        pricing_basis: 'hours',
-        passenger_capacity: '6',
-        luggage_capacity: '6',
-        color_hex: '#1f2933',
-        service_type: 'airport',
-        accessible: false,
-        description: 'Executive black SUV ideal for airport transfers and corporate travel.'
-      },
-      {
-        id: '3',
-        name: '6 Passenger SUV (6_SUV)',
-        status: 'active',
-        pricing_basis: 'hours',
-        passenger_capacity: '6',
-        luggage_capacity: '6',
-        color_hex: '#2c3e50',
-        service_type: 'airport',
-        accessible: false,
-        description: 'Six passenger SUV with premium seating and luggage space for business travelers.'
-      },
-      {
-        id: '4',
-        name: '7 Passenger Suv (7 PASSENGER SUV)',
-        status: 'active',
-        pricing_basis: 'hours',
-        passenger_capacity: '7',
-        luggage_capacity: '8',
-        color_hex: '#3d4852',
-        service_type: 'hourly',
-        accessible: false,
-        description: 'Seven passenger configuration perfect for family travel and roadshows.'
-      },
-      {
-        id: '5',
-        name: '30 Passenger Coach (30_PAX_COACH)',
-        status: 'active',
-        pricing_basis: 'hours',
-        passenger_capacity: '14',
-        luggage_capacity: '10',
-        color_hex: '#4a5568',
-        service_type: 'hourly',
-        accessible: true,
-        description: 'Mid-size coach with onboard amenities for group charters and corporate outings.'
-      },
-      {
-        id: '6',
-        name: 'Fifteen Passenger Sprinter Van (15PAXSPRCH)',
-        status: 'active',
-        pricing_basis: 'hours',
-        passenger_capacity: '14',
-        luggage_capacity: '8',
-        color_hex: '#2d3748',
-        service_type: 'airport',
-        accessible: true,
-        description: 'Sprinter van with perimeter seating and premium lighting for shuttle service.'
-      },
-      {
-        id: '7',
-        name: 'Ford Transit (13 PAX BUS)',
-        status: 'active',
-        pricing_basis: 'hours',
-        passenger_capacity: '12',
-        luggage_capacity: '8',
-        color_hex: '#1a202c',
-        service_type: 'hourly',
-        accessible: true,
-        description: 'Modern Ford Transit with configurable seating and luggage racks.'
-      },
-      {
-        id: '8',
-        name: 'Mercedes Sprinter- Perimeter Seating (SPRINTER_LIMO)',
-        status: 'active',
-        pricing_basis: 'hours',
-        passenger_capacity: '14',
-        luggage_capacity: '6',
-        color_hex: '#111827',
-        service_type: 'hourly',
-        accessible: false,
-        description: 'Luxury Mercedes Sprinter with limo-style perimeter seating and media center.'
-      },
-      {
-        id: '9',
-        name: '14 passenger Mercedes Sprinter par seating (SPRINTER)',
-        status: 'active',
-        pricing_basis: 'hours',
-        passenger_capacity: '14',
-        luggage_capacity: '6',
-        color_hex: '#0f172a',
-        service_type: 'airport',
-        accessible: false,
-        description: 'Passenger configured Sprinter ideal for hospitality and airport shuttle work.'
-      },
-      {
-        id: '10',
-        name: '14 Pax (BLACK_CAR)',
-        status: 'active',
-        pricing_basis: 'hours',
-        passenger_capacity: '14',
-        luggage_capacity: '6',
-        color_hex: '#1f2937',
-        service_type: 'point',
-        accessible: false,
-        description: 'Stretch black car suited for VIP group transfers and special occasions.'
-      },
-      {
-        id: '11',
-        name: '23MidSize Coach (23MIDSIZE2COACH)',
-        status: 'inactive',
-        pricing_basis: 'hours',
-        passenger_capacity: '14',
-        luggage_capacity: '10',
-        color_hex: '#2f3e4e',
-        service_type: 'hourly',
-        accessible: true,
-        description: 'Mid-size coach reserved for seasonal charters and group events.'
-      },
-      {
-        id: '12',
-        name: '24MidSize Coach (25 MID SIZED COACH)',
-        status: 'active',
-        pricing_basis: 'hours',
-        passenger_capacity: '14',
-        luggage_capacity: '10',
-        color_hex: '#374151',
-        service_type: 'hourly',
-        accessible: true,
-        description: 'Comfort coach with reclining seats and onboard WiFi for tours.'
-      },
-      {
-        id: '13',
-        name: '40 PASSENGER COACH (40PAX COACH)',
-        status: 'active',
-        pricing_basis: 'hours',
-        passenger_capacity: '14',
-        luggage_capacity: '10',
-        color_hex: '#4b5563',
-        service_type: 'hourly',
-        accessible: true,
-        description: 'Full-size coach supporting company outings and event transportation.'
-      },
-      {
-        id: '14',
-        name: 'Executive Sedan',
-        status: 'active',
-        pricing_basis: 'hours',
-        passenger_capacity: '4',
-        luggage_capacity: '4',
-        color_hex: '#000000',
-        service_type: 'airport',
-        accessible: false,
-        description: 'Premium sedan for executive transfers and chauffeured service.'
-      },
-      {
-        id: '15',
-        name: 'Navigator (SUV_STRETCH)',
-        status: 'active',
-        pricing_basis: 'hours',
-        passenger_capacity: '8',
-        luggage_capacity: '6',
-        color_hex: '#101418',
-        service_type: 'point',
-        accessible: false,
-        description: 'Stretch Navigator featuring leather seating and media controls.'
-      },
-      {
-        id: '16',
-        name: 'Sedan Stretch (S_STRETCH)',
-        status: 'active',
-        pricing_basis: 'hours',
-        passenger_capacity: '8',
-        luggage_capacity: '6',
-        color_hex: '#1a202c',
-        service_type: 'point',
-        accessible: false,
-        description: 'Classic stretch sedan for weddings, prom, and red carpet events.'
-      }
-    ];
-
-    return seeds.reduce((acc, seed) => {
-      acc[seed.id] = seed;
-      return acc;
-    }, {});
+    // No local seeds - all vehicle types come from Supabase
+    return {};
   }
 
   setupVehicleTypeSelection() {
@@ -2556,9 +2639,12 @@ class MyOffice {
     const btn = document.getElementById('vehicleTypeShowAllBtn');
     if (!btn) return;
 
+    // Initialize button text based on current state
+    btn.textContent = this.vehicleTypeShowAll ? 'Show Active Types' : 'Show All Types';
+
     btn.addEventListener('click', async () => {
       this.vehicleTypeShowAll = !this.vehicleTypeShowAll;
-      btn.textContent = this.vehicleTypeShowAll ? 'Show Active' : 'Show All';
+      btn.textContent = this.vehicleTypeShowAll ? 'Show Active Types' : 'Show All Types';
       await this.loadVehicleTypesList();
     });
   }
@@ -2620,6 +2706,21 @@ class MyOffice {
   }
 
   async commitVehicleTypeRename(vehicleId, newName) {
+    // Check for duplicate name before renaming
+    if (this.isDuplicateVehicleTypeName(newName, vehicleId)) {
+      alert(`A vehicle type named "${newName}" already exists. Please choose a different name.`);
+      // Restore original name in the list
+      const originalName = this.vehicleTypeSeeds?.[vehicleId]?.name || this.vehicleTypeDrafts?.[vehicleId]?.name || 'Untitled';
+      const list = document.getElementById('vehicleTypeList');
+      const item = list?.querySelector(`.vehicle-type-item[data-vehicle-id="${vehicleId}"]`);
+      const nameSpan = item?.querySelector('.vehicle-type-name');
+      if (nameSpan) nameSpan.textContent = originalName;
+      return;
+    }
+    
+    // Get the old name before updating
+    const oldName = this.vehicleTypeSeeds?.[vehicleId]?.name || this.vehicleTypeDrafts?.[vehicleId]?.name || '';
+    
     // Local cache so UI updates immediately
     const existing = this.vehicleTypeSeeds?.[vehicleId] || {};
     this.vehicleTypeSeeds = this.vehicleTypeSeeds || {};
@@ -2653,13 +2754,73 @@ class MyOffice {
         });
         if (!res.ok) {
           console.warn('Vehicle type rename remote failed:', res.status);
+        } else {
+          // Also update all vehicles that have this vehicle type
+          try {
+            const { updateVehiclesWithVehicleTypeName } = await import('./api-service.js');
+            const result = await updateVehiclesWithVehicleTypeName(oldName, newName, vehicleId);
+            if (result.updated > 0) {
+              console.log(`✅ Propagated vehicle type rename to ${result.updated} vehicles`);
+            }
+          } catch (propError) {
+            console.warn('Failed to propagate vehicle type rename to vehicles:', propError);
+          }
         }
       } catch (err) {
         console.warn('Vehicle type rename remote error:', err);
       }
     }
+    
+    // Also update local fleet records if they reference this vehicle type
+    this.updateLocalFleetVehicleType(oldName, newName, vehicleId);
 
     this.refreshVehicleTypeList(vehicleId, newName);
+  }
+
+  /**
+   * Update local fleet records when a vehicle type is renamed
+   * Only updates vehicles that store vehicle type by name (legacy data)
+   * Vehicles with UUID references are handled by vehicleTypeSeeds lookup
+   */
+  updateLocalFleetVehicleType(oldName, newName, vehicleTypeId) {
+    try {
+      const raw = localStorage.getItem('cr_fleet');
+      if (!raw) return;
+      
+      const fleet = JSON.parse(raw);
+      if (!Array.isArray(fleet)) return;
+      
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
+      let updated = 0;
+      fleet.forEach(vehicle => {
+        // Only update vehicles that store vehicle type by name (not UUID)
+        // If it's a UUID, the lookup will happen at render time via vehicleTypeSeeds
+        if (!uuidPattern.test(vehicle.vehicle_type)) {
+          if (vehicle.vehicle_type === oldName) {
+            vehicle.vehicle_type = newName;
+            vehicle.updated_at = new Date().toISOString();
+            updated++;
+          }
+        }
+        if (!uuidPattern.test(vehicle.veh_type)) {
+          if (vehicle.veh_type === oldName) {
+            vehicle.veh_type = newName;
+            vehicle.updated_at = new Date().toISOString();
+            if (!updated) updated++; // Don't double count
+          }
+        }
+      });
+      
+      if (updated > 0) {
+        localStorage.setItem('cr_fleet', JSON.stringify(fleet));
+        // Also update in-memory fleet records
+        this.fleetRecords = fleet;
+        console.log(`✅ Updated ${updated} local fleet vehicles with new vehicle type name`);
+      }
+    } catch (e) {
+      console.warn('Failed to update local fleet vehicle types:', e);
+    }
   }
 
 
@@ -2672,20 +2833,48 @@ class MyOffice {
       const vehicleId = this.activeVehicleTypeId;
       if (!vehicleId) return;
       const draft = this.captureVehicleTypeForm(vehicleId);
+      
+      // Check for duplicate name (different vehicle type with same name)
+      if (this.isDuplicateVehicleTypeName(draft.name, vehicleId)) {
+        alert(`A vehicle type named "${draft.name}" already exists. Please choose a different name.`);
+        return;
+      }
+      
+      // Check if this is an update to an existing vehicle type (has UUID)
+      const isUuid = typeof vehicleId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vehicleId);
+      if (isUuid) {
+        const confirmUpdate = confirm(
+          `⚠️ Overwrite Vehicle Type\n\n` +
+          `You are about to overwrite the Vehicle Type "${draft.name}".\n\n` +
+          `Do you want to continue?`
+        );
+        if (!confirmUpdate) {
+          return;
+        }
+      }
+      
       this.persistVehicleTypeDraft(vehicleId, draft);
+
+      // Update seeds immediately with the draft status so refreshVehicleTypeList sees it
+      this.vehicleTypeSeeds[vehicleId] = { ...this.vehicleTypeSeeds[vehicleId], ...draft };
+      this.vehicleTypeDrafts[vehicleId] = draft;
 
       try {
         if (!this.apiReady) throw new Error('API not ready');
         const saved = await upsertVehicleType(draft);
         if (saved?.id) {
-          this.vehicleTypeSeeds[saved.id] = saved;
-          this.vehicleTypeDrafts[saved.id] = saved;
-          this.refreshVehicleTypeList(saved.id, saved.name);
+          // Preserve the uppercase status from draft when merging with saved
+          this.vehicleTypeSeeds[saved.id] = { ...saved, status: draft.status || saved.status };
+          this.vehicleTypeDrafts[saved.id] = { ...saved, status: draft.status || saved.status };
         }
+        // Refresh the list - this will remove inactive items immediately
+        this.refreshVehicleTypeList(vehicleId, draft.name);
         alert('Vehicle Type saved to Supabase.');
       } catch (error) {
         console.error('Vehicle Type save failed, kept locally:', error);
-        alert('Saved locally. Supabase save failed.');
+        // Still refresh to update the UI based on draft
+        this.refreshVehicleTypeList(vehicleId, draft.name);
+        alert(`Saved locally. Supabase save failed: ${error.message || error}`);
       }
     });
   }
@@ -2814,17 +3003,22 @@ class MyOffice {
       }
     };
 
-    setSelectValue(container.querySelector('[data-vehicle-field="status"]'), data.status, 'active');
+    // Status is stored in uppercase (ACTIVE/INACTIVE) in database, but HTML options are lowercase
+    const statusValue = data.status ? data.status.toString().toLowerCase() : 'active';
+    setSelectValue(container.querySelector('[data-vehicle-field="status"]'), statusValue, 'active');
     setSelectValue(container.querySelector('[data-vehicle-field="pricing_basis"]'), data.pricing_basis, 'hours');
     setSelectValue(container.querySelector('[data-vehicle-field="passenger_capacity"]'), data.passenger_capacity, '2');
     setSelectValue(container.querySelector('[data-vehicle-field="luggage_capacity"]'), data.luggage_capacity, '6');
-    // Associated Service Types (multi-select)
-    const serviceTypeSelect = container.querySelector('[data-vehicle-field="service_type"]');
+    
+    // Associated Service Types (multi-select) - field is data-vehicle-field="service_type_tags"
+    const serviceTypeSelect = container.querySelector('[data-vehicle-field="service_type_tags"]');
     if (serviceTypeSelect) {
       const tagsRaw = Array.isArray(data.service_type_tags)
         ? data.service_type_tags
         : (data.service_type ? [data.service_type] : []);
       const tags = this.normalizeServiceTypeTags(tagsRaw);
+      
+      console.log('📋 Loading service_type_tags for vehicle type:', this.activeVehicleTypeId, 'tags:', tags);
 
       if (serviceTypeSelect instanceof HTMLSelectElement && serviceTypeSelect.multiple) {
         Array.from(serviceTypeSelect.options).forEach((opt) => {
@@ -2862,6 +3056,9 @@ class MyOffice {
     if (primaryAction) {
       primaryAction.textContent = 'Save Vehicle Type';
     }
+
+    // Load images for this vehicle type
+    this.loadVehicleTypeImages();
   }
 
   getVehicleTypeData(vehicleId) {
@@ -2917,12 +3114,8 @@ class MyOffice {
 
     const statusSelect = container.querySelector('[data-vehicle-field="status"]');
     if (statusSelect) {
-      draft.status = statusSelect.value || 'active';
-    }
-
-    const pricingBasis = container.querySelector('[data-vehicle-field="pricing_basis"]');
-    if (pricingBasis) {
-      draft.pricing_basis = pricingBasis.value || 'hours';
+      // Store status in UPPERCASE to match database convention
+      draft.status = (statusSelect.value || 'active').toUpperCase();
     }
 
     const passengerCapacity = container.querySelector('[data-vehicle-field="passenger_capacity"]');
@@ -2940,18 +3133,19 @@ class MyOffice {
       draft.color_hex = colorInput.value.trim();
     }
 
-    const serviceType = container.querySelector('[data-vehicle-field="service_type"]');
-    if (serviceType) {
+    // Handle service_type_tags multi-select
+    const serviceTypeTags = container.querySelector('[data-vehicle-field="service_type_tags"]');
+    if (serviceTypeTags) {
       // Vehicle Types can be associated with one OR MORE service types.
       // We store multiple selections in `service_type_tags` (TEXT[]) and keep `service_type` for legacy compatibility.
-      if (serviceType instanceof HTMLSelectElement && serviceType.multiple) {
-        const selected = Array.from(serviceType.selectedOptions)
+      if (serviceTypeTags instanceof HTMLSelectElement && serviceTypeTags.multiple) {
+        const selected = Array.from(serviceTypeTags.selectedOptions)
           .map((opt) => opt.value)
           .filter((v) => v && v.trim());
         draft.service_type_tags = this.normalizeServiceTypeTags(selected);
         draft.service_type = draft.service_type_tags[0] || '';
       } else {
-        const v = serviceType.value || '';
+        const v = serviceTypeTags.value || '';
         draft.service_type_tags = this.normalizeServiceTypeTags(v ? [v] : []);
         draft.service_type = v;
       }
@@ -3120,6 +3314,7 @@ class MyOffice {
 
     try {
       if (!this.apiReady) throw new Error('API not ready');
+      console.log('📤 Saving vehicle rates payload:', payload);
       const saved = await upsertVehicleType(payload);
       if (saved?.id) {
         this.vehicleTypeSeeds[saved.id] = saved;
@@ -3129,7 +3324,7 @@ class MyOffice {
       alert('Vehicle type rates saved to Supabase.');
     } catch (err) {
       console.error('Vehicle Type rate save failed, kept locally:', err);
-      alert('Saved locally. Supabase save failed.');
+      alert(`Saved locally. Supabase save failed: ${err.message || err}`);
     }
   }
 
@@ -3153,13 +3348,39 @@ class MyOffice {
     }
   }
 
+  /**
+   * Check if a vehicle type name already exists (case-insensitive)
+   * @param {string} name - The name to check
+   * @param {string} excludeId - Optional vehicle ID to exclude (for editing existing types)
+   * @returns {boolean} - True if duplicate exists
+   */
+  isDuplicateVehicleTypeName(name, excludeId = null) {
+    if (!name) return false;
+    const normalizedName = name.trim().toLowerCase();
+    
+    // Check in seeds
+    for (const [id, vt] of Object.entries(this.vehicleTypeSeeds || {})) {
+      if (excludeId && id === excludeId) continue;
+      const vtName = (vt.name || '').trim().toLowerCase();
+      if (vtName === normalizedName) return true;
+    }
+    
+    // Check in drafts (in case of unsaved new types)
+    for (const [id, draft] of Object.entries(this.vehicleTypeDrafts || {})) {
+      if (excludeId && id === excludeId) continue;
+      const draftName = (draft.name || '').trim().toLowerCase();
+      if (draftName === normalizedName) return true;
+    }
+    
+    return false;
+  }
+
   async loadVehicleTypesList() {
     const list = document.querySelector('#vehicleTypeList');
     if (!list) return;
 
     this.loadVehicleTypeDrafts();
     let records = Object.values(this.vehicleTypeSeeds);
-    let derivedFromVehicles = [];
     let remoteRecords = [];
 
     if (this.apiReady) {
@@ -3174,54 +3395,63 @@ class MyOffice {
         }
       }
 
-      // Also derive types from vehicles to prefer the longer list when Supabase types are sparse
-      const vehicles = await fetchActiveVehicles({ includeInactive: true });
-      if (Array.isArray(vehicles) && vehicles.length) {
-        const seen = new Set();
-        derivedFromVehicles = [];
-        vehicles.forEach((veh) => {
-          const name = (veh.veh_type || veh.vehicle_type || veh.veh_title || veh.unit_number || '').trim();
-          if (!name || seen.has(name)) return;
-          seen.add(name);
-          const id = veh.vehicle_type_id || veh.id || name;
-          derivedFromVehicles.push({ id, name, status: veh.status || 'active', source: 'vehicles' });
-        });
-        if (derivedFromVehicles.length) {
-          derivedFromVehicles.forEach((v) => { this.vehicleTypeSeeds[v.id] = v; });
-        }
-      }
+      // NOTE: We no longer derive vehicle types from the vehicles table.
+      // All vehicle types should come from the vehicle_types table in Supabase.
+      // This ensures status filtering works correctly (ACTIVE vs INACTIVE).
     }
 
-    // Pick the longest deterministic list: prefer derived if it is larger than remote; otherwise remote; fallback to seeds
-    const longestList = (derivedFromVehicles.length > remoteRecords.length)
-      ? derivedFromVehicles
-      : (remoteRecords.length ? remoteRecords : records);
+    // Use remote records from Supabase; fallback to seeds only if no remote data
+    const vehicleTypeSource = remoteRecords.length ? remoteRecords : records;
 
-    // Merge duplicates while favoring derived entries (they often carry the richer set)
+    // Merge duplicates - Supabase (remote) data takes precedence
     const unique = new Map();
-    const pushList = (arr, preferVehicles = false) => {
+    const pushList = (arr) => {
       (arr || []).forEach((v) => {
         const id = v.id || v.code || v.name;
         if (!id) return;
-        if (!unique.has(id) || preferVehicles) {
-          unique.set(id, v);
-        }
+        // Always update with the latest data (Supabase wins)
+        unique.set(id, { ...unique.get(id), ...v });
       });
     };
 
-    pushList(longestList, longestList === derivedFromVehicles);
-    pushList(remoteRecords, false);
-    pushList(Object.values(this.vehicleTypeSeeds || {}), false);
+    pushList(Object.values(this.vehicleTypeSeeds || {}));
+    pushList(vehicleTypeSource); // Supabase data wins
+
+    // Apply drafts on top to ensure the latest local changes are reflected (especially status)
+    Object.entries(this.vehicleTypeDrafts || {}).forEach(([id, draft]) => {
+      if (unique.has(id)) {
+        unique.set(id, { ...unique.get(id), ...draft });
+      }
+    });
 
     records = Array.from(unique.values());
+    
+    // Deduplicate by name (case-insensitive) - keep the first occurrence (typically lower ID = older)
+    const seenNames = new Map();
+    records = records.filter((v) => {
+      const normalizedName = (v.name || '').trim().toLowerCase();
+      if (!normalizedName) return true; // Keep items without names
+      if (seenNames.has(normalizedName)) {
+        console.log(`🚨 Removing duplicate vehicle type: "${v.name}" (ID: ${v.id}), keeping ID: ${seenNames.get(normalizedName)}`);
+        return false;
+      }
+      seenNames.set(normalizedName, v.id);
+      return true;
+    });
+    
     records.sort((a, b) => this.normalizeVehicleTypeName(a.name || '').localeCompare(this.normalizeVehicleTypeName(b.name || ''), undefined, { sensitivity: 'base' }));
 
     list.innerHTML = '';
 
     const showAll = !!this.vehicleTypeShowAll;
     const isActive = (v) => {
-      const status = (v?.status ?? (v?.active === false ? 'inactive' : 'active') ?? 'active').toString().toLowerCase();
-      return status !== 'inactive';
+      // Check drafts first for most recent status, then fall back to record data
+      const vehicleId = v?.id || v?.code;
+      const draft = vehicleId ? this.vehicleTypeDrafts[vehicleId] : null;
+      const raw = draft?.status ?? v?.status ?? (v?.active === false ? 'inactive' : null);
+      if (raw === null || raw === undefined || raw === '') return true; // treat missing as active
+      const status = raw.toString().toUpperCase();
+      return status !== 'INACTIVE';
     };
 
     const visible = showAll ? records : records.filter(isActive);
@@ -3269,19 +3499,83 @@ class MyOffice {
   refreshVehicleTypeList(vehicleId, name) {
     const list = document.querySelector('#vehicleTypeList');
     if (!list) return;
+    
+    // Get the vehicle data to check its status
+    const data = this.getVehicleTypeData(vehicleId);
+    const statusRaw = data?.status ?? '';
+    const isInactive = statusRaw.toString().toUpperCase() === 'INACTIVE';
+    const showAll = !!this.vehicleTypeShowAll;
+    
     let item = list.querySelector(`.vehicle-type-item[data-vehicle-id="${vehicleId}"]`);
+    
+    // If vehicle is inactive and we're not showing all, remove it from the list
+    if (isInactive && !showAll) {
+      if (item) {
+        item.remove();
+      }
+      // Select next available item or clear selection
+      const nextItem = list.querySelector('.vehicle-type-item');
+      if (nextItem) {
+        list.querySelectorAll('.vehicle-type-item').forEach(el => el.classList.remove('active'));
+        nextItem.classList.add('active');
+        this.activeVehicleTypeId = nextItem.dataset.vehicleId;
+        this.populateVehicleTypeForm(nextItem.dataset.vehicleId);
+      }
+      return;
+    }
+    
     if (!item) {
       item = document.createElement('div');
       item.className = 'vehicle-type-item';
       item.dataset.vehicleId = vehicleId;
       list.appendChild(item);
+      
+      // Add name span
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'vehicle-type-name';
+      item.appendChild(nameSpan);
     }
+    
     const span = item.querySelector('.vehicle-type-name');
     if (span) span.textContent = name || 'Untitled Vehicle Type';
     else item.textContent = name || 'Untitled Vehicle Type';
+    
+    // Update inactive badge
+    item.classList.toggle('inactive', isInactive);
+    let badge = item.querySelector('.vehicle-type-badge');
+    if (isInactive && !badge) {
+      badge = document.createElement('span');
+      badge.className = 'vehicle-type-badge';
+      badge.textContent = 'Inactive';
+      item.appendChild(badge);
+    } else if (!isInactive && badge) {
+      badge.remove();
+    }
+    
     list.querySelectorAll('.vehicle-type-item').forEach(el => el.classList.remove('active'));
     item.classList.add('active');
     this.populateVehicleTypeForm(vehicleId);
+    
+    // Also refresh all vehicle type dropdowns to reflect updated names
+    this.refreshAllVehicleTypeDropdowns();
+  }
+  
+  /**
+   * Refresh all dropdowns that show vehicle types
+   * Called after vehicle type name changes to update UI everywhere
+   */
+  refreshAllVehicleTypeDropdowns() {
+    // Refresh the Fleet section's vehicle type dropdown
+    const vehicleTypes = Object.values(this.vehicleTypeSeeds || {});
+    this.populateFleetVehicleTypeOptions(vehicleTypes);
+    
+    // Refresh the driver's assigned vehicle dropdown (shows vehicle types in parentheses)
+    this.populateDriverVehicleDropdown(this.currentDriver?.assigned_vehicle_id || null);
+    
+    // Refresh the fleet list to show updated vehicle type names
+    this.renderFleetList();
+    
+    console.log('✅ Refreshed all vehicle type dropdowns and fleet list');
   }
 
   createNewVehicleType() {
@@ -3319,23 +3613,69 @@ class MyOffice {
       alert('Select a vehicle type to delete.');
       return;
     }
+    // Resolve the true DB id for the vehicle type. UI may use code or name as dataset id.
+    let resolvedId = vehicleId;
+    const name = this.vehicleTypeSeeds[vehicleId]?.name || this.vehicleTypeDrafts[vehicleId]?.name || vehicleId || 'this vehicle type';
 
-    const name = this.vehicleTypeSeeds[vehicleId]?.name || this.vehicleTypeDrafts[vehicleId]?.name || 'this vehicle type';
+    // If the vehicleId doesn't look like a UUID or we don't have a matching seed with an id property, try to look up by code or name
+    const looksLikeUUID = (id) => typeof id === 'string' && /^[0-9a-fA-F-]{36}$/.test(id);
+    if (!looksLikeUUID(vehicleId)) {
+      // Search seeds for a record whose id, code, or name matches
+      const candidates = Object.values(this.vehicleTypeSeeds || {});
+      const found = candidates.find(v => v && (v.id === vehicleId || v.code === vehicleId || (v.name || '').trim().toLowerCase() === (vehicleId || '').toString().trim().toLowerCase()));
+      if (found && found.id) {
+        resolvedId = found.id;
+      } else {
+        // Also check drafts
+        const drafts = Object.values(this.vehicleTypeDrafts || {});
+        const foundDraft = drafts.find(v => v && (v.id === vehicleId || v.code === vehicleId || (v.name || '').trim().toLowerCase() === (vehicleId || '').toString().trim().toLowerCase()));
+        if (foundDraft && foundDraft.id) resolvedId = foundDraft.id;
+      }
+    }
     const confirmed = confirm(`Delete ${name}? This cannot be undone.`);
     if (!confirmed) return;
 
     let remoteError = null;
     if (this.apiReady) {
-      try {
-        await deleteVehicleType(vehicleId);
-      } catch (error) {
-        console.error('Vehicle Type delete failed (will still remove locally):', error);
-        remoteError = error;
+      if (!resolvedId) {
+        console.warn('⚠️ Could not resolve a database id for vehicle type:', vehicleId);
+        remoteError = new Error('Could not resolve vehicle type id for remote delete');
+      } else {
+        try {
+          await deleteVehicleType(resolvedId);
+        } catch (error) {
+          console.error('Vehicle Type delete failed (will still remove locally):', error);
+          remoteError = error;
+        }
       }
     }
 
-    delete this.vehicleTypeSeeds[vehicleId];
-    delete this.vehicleTypeDrafts[vehicleId];
+    // Remove any local references that match the dataset id, resolved id, or name
+    try {
+      // remove by key
+      delete this.vehicleTypeSeeds[vehicleId];
+      delete this.vehicleTypeDrafts[vehicleId];
+      // also remove by resolved id if different
+      if (resolvedId && resolvedId !== vehicleId) {
+        delete this.vehicleTypeSeeds[resolvedId];
+        delete this.vehicleTypeDrafts[resolvedId];
+      }
+      // remove any seeds whose name matches
+      Object.keys(this.vehicleTypeSeeds || {}).forEach(k => {
+        const v = this.vehicleTypeSeeds[k];
+        if (v && (v.name || '').trim().toLowerCase() === (name || '').trim().toLowerCase()) {
+          delete this.vehicleTypeSeeds[k];
+        }
+      });
+      Object.keys(this.vehicleTypeDrafts || {}).forEach(k => {
+        const v = this.vehicleTypeDrafts[k];
+        if (v && (v.name || '').trim().toLowerCase() === (name || '').trim().toLowerCase()) {
+          delete this.vehicleTypeDrafts[k];
+        }
+      });
+    } catch (e) {
+      console.warn('⚠️ Error cleaning local vehicle type caches:', e);
+    }
     await this.loadVehicleTypesList();
 
     const list = document.getElementById('vehicleTypeList');
@@ -3362,24 +3702,31 @@ class MyOffice {
     }
 
     if (remoteError) {
-      alert('Vehicle Type removed locally. Supabase delete failed; see console.');
+      // Remote delete failed (likely permissions). Mark the vehicle type as locally INACTIVE
+      // so it will be hidden from the list and won't reappear when we refresh from remote.
+      const draftKey = resolvedId || vehicleId || (name || '').trim();
+      try {
+        this.vehicleTypeDrafts[draftKey] = { ...(this.vehicleTypeDrafts[draftKey] || {}), id: resolvedId || vehicleId, name: name, status: 'INACTIVE' };
+        console.log('⚠️ Remote delete failed — marking vehicle type locally INACTIVE:', draftKey);
+      } catch (e) {
+        console.warn('⚠️ Failed to persist local INACTIVE draft for vehicle type:', e);
+      }
+
+      await this.loadVehicleTypesList();
+      alert('Vehicle Type removed locally (remote delete failed). It has been hidden locally. See console for details.');
     } else {
       alert('Vehicle Type deleted.');
     }
   }
 
-  initializeFleetSection() {
+  async initializeFleetSection() {
     this.populateFleetYearOptions();
     this.populateFleetVehicleTypeOptions(Object.values(this.vehicleTypeSeeds || {}));
     this.populateFleetDriverOptions();
-    this.fleetRecords = this.loadFleetFromStorage();
+    // Load fleet from BOTH Supabase and localStorage (same as dropdown)
+    await this.loadFleetFromAllSources();
     this.removeDemoFleetEntry();
-    if (!this.fleetRecords.length) {
-      this.fleetRecords = this.seedFleetRecords();
-      if (this.fleetRecords.length) {
-        this.persistFleet();
-      }
-    }
+    this.removeSeededVehicles();
     this.renderFleetList();
     this.setupFleetItemSelection();
     this.attachFleetFormHandlers();
@@ -3442,23 +3789,46 @@ class MyOffice {
     const select = document.getElementById('fleetVehicleType');
     if (!select) return;
     const previous = select.value;
+    
+    // Deduplicate by normalized name (case-insensitive)
     const uniqueTypes = new Map();
     const source = Array.isArray(types) && types.length ? types : Object.values(this.vehicleTypeSeeds || {});
+    
     source.forEach((t) => {
       const status = (t.status || '').toUpperCase();
       if (status && status !== 'ACTIVE') return;
+      
       const id = t.id || t.code || t.name;
       if (!id) return;
-      if (!uniqueTypes.has(id)) {
-        uniqueTypes.set(id, { id, name: this.normalizeVehicleTypeName(t.name || t.display_name || id) });
+      
+      const normalizedName = this.normalizeVehicleTypeName(t.name || t.display_name || id);
+      const nameKey = normalizedName.toLowerCase().replace(/[_\s]+/g, ' ').trim();
+      
+      // Only add if we haven't seen this name before (prefer entries with UUID ids)
+      if (!uniqueTypes.has(nameKey)) {
+        uniqueTypes.set(nameKey, { id, name: normalizedName });
+      } else {
+        // If existing entry has non-UUID id and this one has UUID, prefer UUID
+        const existing = uniqueTypes.get(nameKey);
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!isUUID.test(existing.id) && isUUID.test(id)) {
+          uniqueTypes.set(nameKey, { id, name: normalizedName });
+        }
       }
     });
+    
+    // Sort by name
+    const sortedTypes = Array.from(uniqueTypes.values()).sort((a, b) => 
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    );
+    
     select.innerHTML = '';
     const placeholder = document.createElement('option');
     placeholder.value = '';
     placeholder.textContent = 'Select Vehicle Type';
     select.appendChild(placeholder);
-    uniqueTypes.forEach((t) => {
+    
+    sortedTypes.forEach((t) => {
       const option = document.createElement('option');
       option.value = t.id;
       option.textContent = t.name;
@@ -3503,6 +3873,103 @@ class MyOffice {
     }
   }
 
+  /**
+   * Update the assigned driver info display in Fleet form
+   */
+  updateFleetDriverInfoDisplay(driverId) {
+    const infoPanel = document.getElementById('fleetAssignedDriverInfo');
+    const initialsEl = document.getElementById('fleetDriverInitials');
+    const nameEl = document.getElementById('fleetDriverName');
+    const contactEl = document.getElementById('fleetDriverContact');
+    
+    if (!infoPanel) return;
+    
+    if (!driverId) {
+      infoPanel.style.display = 'none';
+      return;
+    }
+    
+    const driver = (this.drivers || []).find(d => d.id === driverId);
+    if (!driver) {
+      infoPanel.style.display = 'none';
+      return;
+    }
+    
+    const firstName = driver.first_name || '';
+    const lastName = driver.last_name || '';
+    const displayName = driver.dispatch_display_name || `${firstName} ${lastName}`.trim() || 'Unnamed Driver';
+    const initials = ((firstName[0] || '') + (lastName[0] || '')).toUpperCase() || '?';
+    const phone = driver.cell_phone || driver.home_phone || '';
+    const email = driver.email || '';
+    const contactParts = [phone, email].filter(Boolean);
+    
+    if (initialsEl) initialsEl.textContent = initials;
+    if (nameEl) nameEl.textContent = displayName;
+    if (contactEl) contactEl.textContent = contactParts.join(' • ');
+    
+    infoPanel.style.display = 'block';
+  }
+
+  /**
+   * Load fleet from BOTH Supabase and localStorage (same source as dropdown)
+   * This ensures Fleet section shows the same vehicles as "Assign Driver to Car" dropdown
+   * localStorage is the primary source - Supabase vehicles are merged in but don't overwrite local edits
+   */
+  async loadFleetFromAllSources() {
+    try {
+      // Load localStorage fleet first (this is the primary/editable source)
+      const localFleet = this.loadFleetFromStorage();
+      const localIds = new Set(localFleet.map(v => v.id));
+      
+      // Use fetchActiveVehicles to get Supabase vehicles
+      const vehicles = await fetchActiveVehicles({ includeInactive: false });
+      
+      // Filter out placeholder vehicles (unit_number starting with "UNIT-" are vehicle type placeholders, not real fleet)
+      const realVehicles = vehicles.filter(v => {
+        const unitNum = (v.unit_number || '').toString();
+        // Exclude auto-generated placeholder vehicles
+        if (unitNum.startsWith('UNIT-')) return false;
+        return true;
+      });
+      
+      // Start with local fleet (preserves edits)
+      this.fleetRecords = [...localFleet];
+      
+      // Add Supabase vehicles that aren't already in local fleet
+      for (const v of realVehicles) {
+        if (!localIds.has(v.id)) {
+          this.fleetRecords.push({
+            id: v.id,
+            unit_number: v.unit_number,
+            status: v.status || (v.veh_active === 'Y' ? 'ACTIVE' : 'INACTIVE'),
+            vehicle_type: v.vehicle_type || v.veh_type,
+            vehicle_type_id: v.vehicle_type_id,
+            veh_type: v.veh_type || v.vehicle_type,
+            year: v.year,
+            make: v.make,
+            model: v.model,
+            color: v.color,
+            license_plate: v.license_plate,
+            vin: v.vin,
+            veh_disp_name: v.veh_disp_name || `${v.unit_number || ''} ${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim(),
+            veh_pax_capacity: v.veh_pax_capacity || v.passenger_capacity,
+            assigned_driver_id: v.assigned_driver_id,
+            organization_id: v.organization_id,
+            created_at: v.created_at,
+            updated_at: v.updated_at
+          });
+        }
+      }
+      
+      // Persist the merged result
+      this.persistFleet();
+      
+    } catch (error) {
+      console.warn('Failed to load fleet from all sources, falling back to localStorage:', error);
+      this.fleetRecords = this.loadFleetFromStorage();
+    }
+  }
+
   loadFleetFromStorage() {
     try {
       const raw = localStorage.getItem(this.fleetStorageKey);
@@ -3523,7 +3990,26 @@ class MyOffice {
   }
 
   seedFleetRecords() {
-    return [];
+    // Seed a sample SUV for drivers who need a vehicle to assign
+    const sampleSuv = {
+      id: 'seed-suv-001',
+      unit_number: 'SUV-01',
+      status: 'ACTIVE',
+      vehicle_type: 'suv',
+      veh_type: 'SUV',
+      year: '2024',
+      make: 'Cadillac',
+      model: 'Escalade',
+      color: 'Black',
+      license_plate: 'LIMO-SUV',
+      vin: '1GYS4CKL4NR000001',
+      veh_disp_name: 'SUV-01 Cadillac Escalade',
+      veh_pax_capacity: 6,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    console.log('🚙 Seeded sample SUV for driver assignment');
+    return [sampleSuv];
   }
 
   removeDemoFleetEntry() {
@@ -3534,6 +4020,23 @@ class MyOffice {
       && r.unit_number !== '101'
     ));
     if (before !== this.fleetRecords.length) {
+      this.persistFleet();
+    }
+  }
+
+  removeSeededVehicles() {
+    // Remove all seeded/demo vehicles (IDs starting with 'seed-')
+    const before = (this.fleetRecords || []).length;
+    this.fleetRecords = (this.fleetRecords || []).filter((r) => {
+      const id = (r.id || '').toString();
+      // Remove any seeded entries
+      if (id.startsWith('seed-')) return false;
+      // Also remove the sample SUV by VIN
+      if (r.vin === '1GYS4CKL4NR000001') return false;
+      return true;
+    });
+    if (before !== this.fleetRecords.length) {
+      console.log(`🗑️ Removed ${before - this.fleetRecords.length} seeded vehicle(s)`);
       this.persistFleet();
     }
   }
@@ -3583,10 +4086,36 @@ class MyOffice {
     item.dataset.fleetId = record.id;
 
     const name = record.veh_disp_name || `${record.make || ''} ${record.model || ''}`.trim() || 'Untitled Vehicle';
-    const unitLabel = record.unit_number ? `Unit #${record.unit_number}` : '';
+    
+    // Get assigned driver info instead of unit number
+    let driverLabel = '';
+    if (record.assigned_driver_id) {
+      const driver = (this.drivers || []).find(d => d.id === record.assigned_driver_id);
+      if (driver) {
+        const driverName = `${driver.first_name || ''} ${driver.last_name || ''}`.trim() || 'Unknown Driver';
+        driverLabel = `🚗 ${driverName}`;
+      } else {
+        driverLabel = '🚗 Driver Assigned';
+      }
+    } else {
+      driverLabel = '<span style="color: #999;">No Driver Assigned</span>';
+    }
+    
     const license = record.license_plate ? `License: ${record.license_plate}` : '';
     const vin = record.vin ? `VIN: ${record.vin}` : '';
-    const type = record.vehicle_type ? `Type: ${record.vehicle_type}` : '';
+    
+    // Look up vehicle type name from ID
+    let typeName = '';
+    if (record.vehicle_type) {
+      const vehicleType = this.vehicleTypeSeeds?.[record.vehicle_type];
+      if (vehicleType && vehicleType.name) {
+        typeName = vehicleType.name;
+      } else {
+        // Fallback: maybe vehicle_type is already the name
+        typeName = record.vehicle_type;
+      }
+    }
+    const type = typeName ? `Type: ${typeName}` : '';
     const year = record.year ? `Year: ${record.year}` : '';
 
     item.innerHTML = `
@@ -3594,7 +4123,10 @@ class MyOffice {
         <div class="resource-item-main">
           <div class="resource-status-badge" style="background: ${this.getFleetStatusColor(record.status)};"></div>
           <div class="resource-item-details">
-            <div class="resource-item-name">${name}${unitLabel ? ` - ${unitLabel}` : ''}</div>
+            <div class="resource-item-name">${name}</div>
+            <div class="resource-item-meta" style="font-weight: 500; color: #333;">
+              ${driverLabel}
+            </div>
             <div class="resource-item-meta">
               ${vin ? `<span>${vin}</span>` : ''}
               ${license ? `<span>${license}</span>` : ''}
@@ -3689,6 +4221,12 @@ class MyOffice {
         driverSelect.appendChild(missing);
       }
       driverSelect.value = driverId;
+      
+      // Update driver info display
+      this.updateFleetDriverInfoDisplay(driverId);
+      
+      // Store original driver ID for change detection
+      driverSelect.dataset.originalDriverId = driverId;
     }
 
     this.applyFleetFeatures(record.features || []);
@@ -3748,18 +4286,28 @@ class MyOffice {
       return el ? el.value.trim() : '';
     };
 
+    const unitNumber = getValue('fleetUnitNumber');
+    const year = getValue('fleetYear');
+    const make = getValue('fleetMake');
+    const model = getValue('fleetModel');
+    const licensePlate = getValue('fleetLicense');
+    
+    // Generate display name from vehicle details
+    const veh_disp_name = [unitNumber, year, make, model].filter(Boolean).join(' ').trim() || licensePlate || 'Vehicle';
+
     return {
       id: this.activeFleetId || crypto.randomUUID(),
-      unit_number: getValue('fleetUnitNumber'),
+      unit_number: unitNumber,
       status: getValue('fleetStatus') || 'ACTIVE',
       vehicle_type: getValue('fleetVehicleType'),
-      year: getValue('fleetYear'),
-      make: getValue('fleetMake'),
-      model: getValue('fleetModel'),
+      year: year,
+      make: make,
+      model: model,
       color: getValue('fleetColor'),
       passengers: getValue('fleetPassengers'),
       vin: getValue('fleetVin'),
-      license_plate: getValue('fleetLicense'),
+      license_plate: licensePlate,
+      veh_disp_name: veh_disp_name,
       registration_expiration: getValue('fleetRegExp'),
       insurance_expiration: getValue('fleetInsExp'),
       insurance_company: getValue('fleetInsCompany'),
@@ -3773,7 +4321,8 @@ class MyOffice {
       garaged_location: getValue('fleetGaragedLocation'),
       assigned_driver_id: getValue('fleetAssignedDriver'),
       features: this.collectFleetFeatures(),
-      internal_notes: getValue('fleetInternalNotes')
+      internal_notes: getValue('fleetInternalNotes'),
+      updated_at: new Date().toISOString()
     };
   }
 
@@ -3786,9 +4335,9 @@ class MyOffice {
     this.clearFleetForm();
   }
 
-  handleFleetSave() {
+  async handleFleetSave() {
     const data = this.getFleetFormData();
-    const requiredFields = ['unit_number', 'status', 'vehicle_type', 'year', 'make', 'model', 'license_plate', 'vin'];
+    const requiredFields = ['status', 'vehicle_type', 'year', 'make', 'model', 'license_plate'];
     const missing = requiredFields.filter((key) => !data[key]);
     if (missing.length) {
       alert(`Please fill in required fields: ${missing.join(', ')}`);
@@ -3796,6 +4345,9 @@ class MyOffice {
     }
 
     const existingIndex = this.fleetRecords.findIndex((r) => r.id === this.activeFleetId);
+    const previousDriverId = existingIndex >= 0 ? this.fleetRecords[existingIndex].assigned_driver_id : null;
+    const newDriverId = data.assigned_driver_id;
+    
     if (existingIndex >= 0) {
       this.fleetRecords[existingIndex] = { ...this.fleetRecords[existingIndex], ...data };
     } else {
@@ -3806,6 +4358,29 @@ class MyOffice {
     this.persistFleet();
     this.renderFleetList();
     this.setActiveFleet(data.id);
+    
+    // Update driver's assigned_vehicle_id when assigning/unassigning from Fleet
+    const vehicleId = data.id;
+    
+    // If driver assignment changed
+    if (newDriverId !== previousDriverId) {
+      try {
+        // Unassign vehicle from previous driver
+        if (previousDriverId) {
+          console.log(`🔄 Unassigning vehicle from previous driver ${previousDriverId}`);
+          await updateDriver(previousDriverId, { assigned_vehicle_id: null });
+        }
+        
+        // Assign vehicle to new driver
+        if (newDriverId) {
+          console.log(`🔄 Assigning vehicle ${vehicleId} to driver ${newDriverId}`);
+          await updateDriver(newDriverId, { assigned_vehicle_id: vehicleId });
+        }
+      } catch (err) {
+        console.warn('Could not sync driver vehicle assignment:', err);
+      }
+    }
+    
     alert('Vehicle saved.');
   }
 
@@ -3836,6 +4411,9 @@ class MyOffice {
     } else {
       this.clearFleetForm();
     }
+    
+    // Also refresh the driver vehicle dropdown to remove deleted vehicle, but preserve current selection
+    this.populateDriverVehicleDropdown(this.currentDriver?.assigned_vehicle_id || null);
   }
 
   setupFleetItemSelection() {
@@ -3850,6 +4428,76 @@ class MyOffice {
         }
       });
       this.fleetSelectionBound = true;
+    }
+    
+    // Add change listener for assigned driver dropdown
+    const driverSelect = document.getElementById('fleetAssignedDriver');
+    if (driverSelect && !driverSelect.dataset.changeListenerBound) {
+      driverSelect.addEventListener('change', async (e) => {
+        const newDriverId = e.target.value;
+        const originalDriverId = driverSelect.dataset.originalDriverId || '';
+        
+        // If driver is changing, show confirmation dialog first
+        if (newDriverId !== originalDriverId && (newDriverId || originalDriverId)) {
+          // Check if the new driver already has a different vehicle assigned
+          if (newDriverId) {
+            try {
+              const allDrivers = await fetchDrivers() || [];
+              const targetDriver = allDrivers.find(d => d.id === newDriverId);
+              
+              if (targetDriver && targetDriver.assigned_vehicle_id && targetDriver.assigned_vehicle_id !== this.activeFleetId) {
+                // Driver already has a different vehicle - get its info
+                let otherVehicleName = 'another vehicle';
+                const otherVehicle = this.fleetRecords.find(v => v.id === targetDriver.assigned_vehicle_id);
+                if (otherVehicle) {
+                  otherVehicleName = otherVehicle.veh_disp_name || 
+                    [otherVehicle.year, otherVehicle.make, otherVehicle.model].filter(Boolean).join(' ');
+                }
+                
+                const driverName = [targetDriver.first_name, targetDriver.last_name].filter(Boolean).join(' ');
+                const confirmed = confirm(
+                  `⚠️ Driver Already Has Vehicle Assigned\n\n` +
+                  `${driverName} is currently assigned to:\n` +
+                  `"${otherVehicleName}"\n\n` +
+                  `Assigning this vehicle will replace their current assignment.\n\n` +
+                  `Click OK to proceed, or Cancel to keep the original assignment.`
+                );
+                
+                if (!confirmed) {
+                  driverSelect.value = originalDriverId;
+                  return;
+                }
+              } else {
+                // Standard confirmation
+                const confirmed = confirm('You are about to change the driver of this vehicle. This change will also update the Driver\'s "Assign Driver to Car" selection.\n\nClick OK to proceed.');
+                if (!confirmed) {
+                  driverSelect.value = originalDriverId;
+                  return;
+                }
+              }
+            } catch (err) {
+              console.warn('Could not check driver vehicle assignments:', err);
+              // Fall through to standard confirmation
+              const confirmed = confirm('You are about to change the driver of this vehicle. This change will also update the Driver\'s "Assign Driver to Car" selection.\n\nClick OK to proceed.');
+              if (!confirmed) {
+                driverSelect.value = originalDriverId;
+                return;
+              }
+            }
+          } else {
+            // Removing driver - simple confirmation
+            const confirmed = confirm('You are about to remove the driver from this vehicle. This will also update the Driver\'s "Assign Driver to Car" selection.\n\nClick OK to proceed.');
+            if (!confirmed) {
+              driverSelect.value = originalDriverId;
+              return;
+            }
+          }
+        }
+        
+        // Update driver info display (warning message no longer needed)
+        this.updateFleetDriverInfoDisplay(newDriverId);
+      });
+      driverSelect.dataset.changeListenerBound = 'true';
     }
   }
 
@@ -4498,6 +5146,8 @@ class MyOffice {
 
     if (this.apiReady) {
       this.loadDriversList(this.currentDriver?.id || null);
+      // Note: Vehicle dropdown will be populated when loadDriverForm is called
+      // Don't call populateDriverVehicleDropdown here as it will be overwritten by loadDriverForm
     }
 
     // Show All checkbox - reload list when toggled
@@ -4515,7 +5165,7 @@ class MyOffice {
     // Add New Driver button
     const addNewDriverBtn = document.getElementById('addNewDriverBtn');
     if (addNewDriverBtn) {
-      addNewDriverBtn.addEventListener('click', () => {
+      addNewDriverBtn.addEventListener('click', async () => {
         this.currentDriver = null;
         const formTitle = document.getElementById('driverFormTitle');
         if (formTitle) formTitle.textContent = 'Add New Driver';
@@ -4523,10 +5173,21 @@ class MyOffice {
         // Clear all form inputs
         const form = document.querySelector('.drivers-form-panel');
         if (form) {
-          form.querySelectorAll('input[type="text"], textarea').forEach(input => input.value = '');
+          form.querySelectorAll('input[type="text"], input[type="email"], input[type="tel"], textarea').forEach(input => input.value = '');
           form.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
           form.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+          // Clear validation errors
+          form.querySelectorAll('.validation-error').forEach(el => el.classList.remove('validation-error'));
         }
+        
+        // Default: Include Cell Phone on Trip Sheets should be checked for new drivers
+        const includePhoneCellCheckbox = document.getElementById('driverIncludePhoneCell');
+        if (includePhoneCellCheckbox) {
+          includePhoneCellCheckbox.checked = true;
+        }
+        
+        // Re-populate vehicle dropdown for new driver
+        await this.populateDriverVehicleDropdown(null);
         
         // Deselect all in list
         const driversListContainer = document.getElementById('driversListContainer');
@@ -4539,6 +5200,15 @@ class MyOffice {
         this.renderDriverContactSummary(null);
       });
     }
+
+    // Create Vehicle popup button
+    const createVehicleBtn = document.getElementById('createVehicleBtn');
+    if (createVehicleBtn) {
+      createVehicleBtn.addEventListener('click', () => this.openCreateVehiclePopup());
+    }
+
+    // Setup vehicle popup modal event handlers
+    this.setupVehiclePopupHandlers();
 
     // Driver list selection (old select dropdown - backward compatibility)
     const driversList = document.querySelector('.drivers-list-select');
@@ -4601,6 +5271,361 @@ class MyOffice {
         }
       });
     }
+
+    // Setup "Add Another Driver" button for affiliate driver associations
+    const addDriverBtn = document.getElementById('addAnotherDriverBtn');
+    if (addDriverBtn) {
+      addDriverBtn.addEventListener('click', () => this.addAffiliateDriverRow());
+    }
+
+    // Initialize the first driver dropdown
+    this.populateAffiliateDriverDropdowns();
+  }
+
+  // Counter for affiliate driver rows
+  affiliateDriverRowCount = 1;
+
+  // Add a new driver dropdown row in the affiliate form
+  addAffiliateDriverRow() {
+    const container = document.getElementById('affAssociatedDriversContainer');
+    if (!container) return;
+
+    const rowIndex = this.affiliateDriverRowCount++;
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'aff-driver-row';
+    rowDiv.style.cssText = 'display: flex; gap: 10px; align-items: center; margin-bottom: 8px;';
+    rowDiv.dataset.rowIndex = rowIndex;
+
+    const select = document.createElement('select');
+    select.id = `affDriverSelect_${rowIndex}`;
+    select.className = 'form-control aff-driver-select';
+    select.style.flex = '1';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'btn btn-secondary btn-small remove-aff-driver-btn';
+    removeBtn.innerHTML = '&times;';
+    removeBtn.title = 'Remove Driver';
+    removeBtn.addEventListener('click', () => {
+      rowDiv.remove();
+      // Show remove buttons on remaining rows if more than one
+      this.updateAffDriverRemoveButtons();
+    });
+
+    rowDiv.appendChild(select);
+    rowDiv.appendChild(removeBtn);
+    container.appendChild(rowDiv);
+
+    // Populate the new dropdown with active drivers
+    this.populateAffiliateDriverDropdown(select);
+
+    // Update remove button visibility
+    this.updateAffDriverRemoveButtons();
+  }
+
+  // Update visibility of remove buttons (hide if only one row)
+  updateAffDriverRemoveButtons() {
+    const container = document.getElementById('affAssociatedDriversContainer');
+    if (!container) return;
+
+    const rows = container.querySelectorAll('.aff-driver-row');
+    rows.forEach((row, index) => {
+      const removeBtn = row.querySelector('.remove-aff-driver-btn');
+      if (removeBtn) {
+        removeBtn.style.display = rows.length > 1 ? 'inline-block' : 'none';
+      }
+    });
+  }
+
+  // Populate all affiliate driver dropdowns
+  async populateAffiliateDriverDropdowns() {
+    const container = document.getElementById('affAssociatedDriversContainer');
+    if (!container) return;
+
+    const selects = container.querySelectorAll('.aff-driver-select');
+    for (const select of selects) {
+      await this.populateAffiliateDriverDropdown(select);
+    }
+  }
+
+  // Populate a single affiliate driver dropdown with active drivers
+  async populateAffiliateDriverDropdown(selectElement) {
+    if (!selectElement) return;
+
+    selectElement.innerHTML = '<option value="">-- Select Driver --</option>';
+
+    try {
+      // Get drivers from cache or fetch
+      let drivers = this.drivers || [];
+      if (drivers.length === 0) {
+        drivers = await fetchDrivers() || [];
+      }
+
+      // Filter to only show active drivers
+      const activeDrivers = drivers.filter(d => {
+        const status = (d.status || 'ACTIVE').toString().toUpperCase();
+        return d.is_active !== false && status !== 'INACTIVE';
+      });
+
+      // Sort by name
+      activeDrivers.sort((a, b) => {
+        const nameA = `${a.first_name || ''} ${a.last_name || ''}`.trim().toLowerCase();
+        const nameB = `${b.first_name || ''} ${b.last_name || ''}`.trim().toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+
+      activeDrivers.forEach(driver => {
+        const option = document.createElement('option');
+        option.value = driver.id;
+        option.textContent = `${driver.first_name || ''} ${driver.last_name || ''}`.trim() || `Driver ${driver.id}`;
+        selectElement.appendChild(option);
+      });
+    } catch (error) {
+      console.error('Error populating affiliate driver dropdown:', error);
+    }
+  }
+
+  // Get selected driver IDs from affiliate form
+  getAffiliateAssociatedDriverIds() {
+    const container = document.getElementById('affAssociatedDriversContainer');
+    if (!container) return [];
+
+    const selects = container.querySelectorAll('.aff-driver-select');
+    const driverIds = [];
+    selects.forEach(select => {
+      if (select.value) {
+        driverIds.push(select.value);
+      }
+    });
+    return driverIds;
+  }
+
+  // Set associated drivers in the affiliate form
+  async setAffiliateAssociatedDrivers(driverIds = []) {
+    const container = document.getElementById('affAssociatedDriversContainer');
+    if (!container) return;
+
+    // Clear existing rows except the first one
+    const existingRows = container.querySelectorAll('.aff-driver-row');
+    existingRows.forEach((row, index) => {
+      if (index > 0) row.remove();
+    });
+
+    // Reset counter
+    this.affiliateDriverRowCount = 1;
+
+    // Populate the first dropdown
+    const firstSelect = container.querySelector('.aff-driver-select');
+    if (firstSelect) {
+      await this.populateAffiliateDriverDropdown(firstSelect);
+      if (driverIds.length > 0) {
+        firstSelect.value = driverIds[0];
+      }
+    }
+
+    // Add additional rows for remaining drivers
+    for (let i = 1; i < driverIds.length; i++) {
+      this.addAffiliateDriverRow();
+      const newSelect = document.getElementById(`affDriverSelect_${this.affiliateDriverRowCount - 1}`);
+      if (newSelect) {
+        newSelect.value = driverIds[i];
+      }
+    }
+
+    this.updateAffDriverRemoveButtons();
+  }
+
+  // Clear affiliate driver associations
+  clearAffiliateDriverAssociations() {
+    const container = document.getElementById('affAssociatedDriversContainer');
+    if (!container) return;
+
+    // Remove all rows except the first
+    const rows = container.querySelectorAll('.aff-driver-row');
+    rows.forEach((row, index) => {
+      if (index > 0) row.remove();
+    });
+
+    // Reset the first dropdown
+    const firstSelect = container.querySelector('.aff-driver-select');
+    if (firstSelect) {
+      firstSelect.value = '';
+    }
+
+    this.affiliateDriverRowCount = 1;
+    this.updateAffDriverRemoveButtons();
+  }
+
+  // Populate the driver's affiliate dropdown with active affiliates
+  async populateDriverAffiliateDropdown() {
+    const selectElement = document.getElementById('driverAffiliateSelect');
+    if (!selectElement) return;
+
+    selectElement.innerHTML = '<option value="">-- No Affiliate --</option>';
+
+    try {
+      // Get affiliates from cache or fetch
+      let affiliates = this.affiliates || [];
+      if (affiliates.length === 0) {
+        affiliates = await fetchAffiliates() || [];
+        // Store for later use in saveDriver
+        this.affiliates = affiliates;
+      }
+
+      // Filter to only show active affiliates
+      const activeAffiliates = affiliates.filter(a => {
+        const status = (a.status || 'ACTIVE').toString().toUpperCase();
+        return status !== 'INACTIVE';
+      });
+
+      // Sort by company name
+      activeAffiliates.sort((a, b) => {
+        const nameA = (a.company_name || '').toLowerCase();
+        const nameB = (b.company_name || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+
+      activeAffiliates.forEach(affiliate => {
+        const option = document.createElement('option');
+        option.value = affiliate.id;
+        option.textContent = affiliate.company_name || `Affiliate ${affiliate.id}`;
+        selectElement.appendChild(option);
+      });
+
+      // Add change listener to auto-populate driver fields from affiliate
+      if (!selectElement.dataset.affiliateListenerAdded) {
+        selectElement.addEventListener('change', (e) => this.onDriverAffiliateChange(e.target.value));
+        selectElement.dataset.affiliateListenerAdded = 'true';
+      }
+    } catch (error) {
+      console.error('Error populating driver affiliate dropdown:', error);
+    }
+  }
+
+  /**
+   * When affiliate is selected in driver form, populate address/phone from affiliate
+   */
+  async onDriverAffiliateChange(affiliateId) {
+    if (!affiliateId) {
+      console.log('🔗 No affiliate selected, skipping auto-fill');
+      return;
+    }
+
+    // Find the affiliate in our cached list
+    let affiliate = (this.affiliates || []).find(a => a.id === affiliateId);
+    
+    // If not cached, try fetching
+    if (!affiliate) {
+      try {
+        const affiliates = await fetchAffiliates();
+        this.affiliates = affiliates || [];
+        affiliate = this.affiliates.find(a => a.id === affiliateId);
+      } catch (err) {
+        console.error('Failed to fetch affiliate:', err);
+        return;
+      }
+    }
+
+    if (!affiliate) {
+      console.warn('⚠️ Affiliate not found:', affiliateId);
+      return;
+    }
+
+    console.log('🔗 Auto-populating driver form from affiliate:', affiliate.company_name || affiliateId);
+
+    // Get the driver form
+    const form = document.querySelector('.drivers-form-panel');
+    if (!form) return;
+
+    // Helper to find field by label text
+    const findFieldByLabel = (labelText) => {
+      const labels = form.querySelectorAll('label');
+      for (const label of labels) {
+        const normalizedLabel = (label.textContent || '').replace(/\*/g, '').trim().toLowerCase();
+        if (normalizedLabel === labelText.toLowerCase()) {
+          const field = label.nextElementSibling;
+          if (field && (field.tagName === 'INPUT' || field.tagName === 'SELECT' || field.tagName === 'TEXTAREA')) {
+            return field;
+          }
+        }
+      }
+      return null;
+    };
+
+    // Auto-fill address fields
+    const addressField = findFieldByLabel('Primary Address');
+    if (addressField && !addressField.value) {
+      addressField.value = affiliate.primary_address || affiliate.address_1 || '';
+    }
+
+    const cityField = findFieldByLabel('City');
+    if (cityField && !cityField.value) {
+      cityField.value = affiliate.city || '';
+    }
+
+    // Find state field (label might be "State/Prov")
+    const stateLabels = form.querySelectorAll('label');
+    for (const label of stateLabels) {
+      const text = (label.textContent || '').toLowerCase();
+      if (text.includes('state')) {
+        const field = label.nextElementSibling;
+        if (field && field.tagName === 'SELECT' && !field.value) {
+          field.value = affiliate.state || '';
+        }
+        break;
+      }
+    }
+
+    // Find zip field (label might be "Add/Zip" or "Zip")
+    for (const label of stateLabels) {
+      const text = (label.textContent || '').toLowerCase();
+      if (text.includes('zip')) {
+        const field = label.nextElementSibling;
+        if (field && field.tagName === 'INPUT' && !field.value) {
+          field.value = affiliate.zip || '';
+        }
+        break;
+      }
+    }
+
+    // Auto-fill phone (Cellular/Mobile)
+    const phoneLabels = form.querySelectorAll('label');
+    for (const label of phoneLabels) {
+      const text = (label.textContent || '').toLowerCase();
+      if (text.includes('cellular') || text.includes('cell') || text.includes('mobile')) {
+        const field = label.nextElementSibling;
+        if (field && field.tagName === 'INPUT' && !field.value) {
+          field.value = affiliate.phone || '';
+        }
+        break;
+      }
+    }
+
+    // Auto-fill email
+    const emailField = findFieldByLabel('E-Mail');
+    if (emailField && !emailField.value) {
+      emailField.value = affiliate.email || '';
+    }
+
+    // Auto-fill fax
+    for (const label of stateLabels) {
+      const text = (label.textContent || '').toLowerCase();
+      if (text === 'fax') {
+        const field = label.nextElementSibling;
+        if (field && field.tagName === 'INPUT' && !field.value) {
+          field.value = affiliate.fax || '';
+        }
+        break;
+      }
+    }
+
+    // Update the hidden affiliate ID field
+    const affiliateIdInput = document.getElementById('driverAffiliateId');
+    if (affiliateIdInput) {
+      affiliateIdInput.value = affiliateId;
+    }
+
+    console.log('✅ Driver form auto-populated from affiliate:', affiliate.company_name);
   }
   
   async saveAffiliate() {
@@ -4646,13 +5671,18 @@ class MyOffice {
         alt_fax_ext: getVal('affAltFaxExt'),
         alt_email: getVal('affAltEmail'),
         alt_send_trip_email: getCheck('affAltSendEmail'),
-        alt_send_trip_sms: getCheck('affAltSendSms')
+        alt_send_trip_sms: getCheck('affAltSendSms'),
+        associated_driver_ids: this.getAffiliateAssociatedDriverIds()
       };
       
       if (!affiliateData.company_name) {
         alert('Company Name is required');
         return;
       }
+
+      // Get the old associated drivers to clear their associations if removed
+      const oldDriverIds = this.currentAffiliate?.associated_driver_ids || [];
+      const newDriverIds = affiliateData.associated_driver_ids || [];
       
       let result;
       if (this.currentAffiliate?.id) {
@@ -4670,8 +5700,36 @@ class MyOffice {
       }
       
       if (result) {
+        const affiliateId = result.id || this.currentAffiliate?.id;
+        const affiliateName = affiliateData.company_name;
+
+        // Update drivers' affiliate_id field
+        // Remove affiliate from drivers that were removed
+        for (const driverId of oldDriverIds) {
+          if (!newDriverIds.includes(driverId)) {
+            try {
+              await updateDriver(driverId, { affiliate_id: null, affiliate_name: null });
+            } catch (e) {
+              console.warn('Could not clear affiliate from driver:', driverId, e);
+            }
+          }
+        }
+
+        // Add affiliate to newly associated drivers
+        for (const driverId of newDriverIds) {
+          try {
+            await updateDriver(driverId, { affiliate_id: affiliateId, affiliate_name: affiliateName });
+          } catch (e) {
+            console.warn('Could not set affiliate on driver:', driverId, e);
+          }
+        }
+
         // Reload the list
         await this.loadAffiliatesList();
+        // Also reload drivers list if on that tab
+        if (this.drivers) {
+          await this.loadDriversList();
+        }
       } else {
         alert('Failed to save affiliate. Check console for details.');
       }
@@ -4716,6 +5774,9 @@ class MyOffice {
           const baseStatus = (driver?.driver_status || driver?.status || 'available').toString().toLowerCase();
           const overrideStatus = overrideMap[String(driver?.id)] || null;
           const mergedStatus = overrideStatus || baseStatus;
+          // Determine if driver is active based on status field (ACTIVE/INACTIVE) and is_active field
+          const employmentStatus = (driver?.status || 'ACTIVE').toString().toUpperCase();
+          const driverIsActive = driver?.is_active !== false && employmentStatus !== 'INACTIVE';
           return {
             ...driver,
             cell_phone: driver?.cell_phone || driver?.mobile_phone || driver?.phone || driver?.phone_number || driver?.primary_phone || '',
@@ -4723,11 +5784,12 @@ class MyOffice {
             other_phone: driver?.other_phone || driver?.pager || driver?.pager_phone || driver?.other_contact || '',
             fax: driver?.fax || driver?.fax_number || driver?.fax_phone || '',
             driver_status: mergedStatus,
-            status: (driver?.status || mergedStatus || 'available').toString().toUpperCase()
+            status: employmentStatus,
+            is_active: driverIsActive
           };
         });
         // Filter by active status unless "Show All" is checked
-        this.drivers = showAll ? normalizedDrivers : normalizedDrivers.filter(d => d.is_active !== false);
+        this.drivers = showAll ? normalizedDrivers : normalizedDrivers.filter(d => d.is_active === true);
         
         // Render to the new container layout (clickable list items)
         const driversListContainer = document.getElementById('driversListContainer');
@@ -4739,7 +5801,7 @@ class MyOffice {
             const driverIdToFocus = selectedDriverId || this.currentDriver?.id || (this.drivers[0]?.id ?? null);
 
             driversListContainer.innerHTML = this.drivers.map((driver, index) => {
-              const isActive = driver.is_active !== false;
+              const isActive = driver.is_active === true;
               const statusClass = isActive ? 'driver-active' : 'driver-inactive';
               const statusIcon = isActive ? '🟢' : '🔴';
               const isSelected = driver.id === driverIdToFocus || (!driverIdToFocus && index === 0);
@@ -4977,6 +6039,10 @@ class MyOffice {
     setCheck('affAltSendEmail', affiliate.alt_send_trip_email);
     setCheck('affAltSendSms', affiliate.alt_send_trip_sms);
 
+    // Load associated drivers
+    const associatedDriverIds = affiliate.associated_driver_ids || [];
+    this.setAffiliateAssociatedDrivers(associatedDriverIds);
+
     console.log('📝 Loaded affiliate form:', affiliate.company_name || affiliate.id);
   }
   
@@ -5004,15 +6070,19 @@ class MyOffice {
     selects.forEach(select => {
       if (select.id === 'affStatus') {
         select.value = 'ACTIVE';
-      } else {
+      } else if (!select.classList.contains('aff-driver-select')) {
+        // Skip driver association dropdowns - they're handled separately
         select.selectedIndex = 0;
       }
     });
+
+    // Clear associated drivers
+    this.clearAffiliateDriverAssociations();
     
     console.log('📝 Affiliate form cleared');
   }
 
-  loadDriverForm(driver) {
+  async loadDriverForm(driver) {
     this.currentDriver = driver;
     const form = document.querySelector('.drivers-form-panel');
     if (!form) return;
@@ -5048,11 +6118,26 @@ class MyOffice {
       statusSelect.value = allowedStatuses.includes(normalizedStatus) ? normalizedStatus : 'available';
     }
 
+    // Apply employment status (ACTIVE/INACTIVE) to dropdown
+    const employmentStatusSelect = document.getElementById('driverEmploymentStatus');
+    if (employmentStatusSelect) {
+      const empStatus = (driver.status || 'ACTIVE').toString().toUpperCase();
+      // Also check is_active field
+      const isActive = driver.is_active !== false && empStatus !== 'INACTIVE';
+      employmentStatusSelect.value = isActive ? 'active' : 'inactive';
+    }
+
     // Populate form fields with driver data
     const fields = form.querySelectorAll('input, select, textarea');
 
     // Reset field values so a previous driver's data does not linger when a field is blank for this driver
+    // EXCLUDE special dropdowns that we set separately (affiliate, vehicle assignment, status dropdowns)
+    const excludedIds = ['driverAffiliateSelect', 'driverAssignedVehicle', 'driverEmploymentStatus', 'driverStatus'];
     fields.forEach((field) => {
+      // Skip excluded fields
+      if (excludedIds.includes(field.id)) {
+        return;
+      }
       if (field.type === 'checkbox') {
         field.checked = false;
       } else if (field.tagName === 'SELECT') {
@@ -5061,6 +6146,24 @@ class MyOffice {
         field.value = '';
       }
     });
+    
+    // Populate affiliate association dropdown AFTER reset
+    await this.populateDriverAffiliateDropdown();
+    const affiliateSelect = document.getElementById('driverAffiliateSelect');
+    const affiliateIdInput = document.getElementById('driverAffiliateId');
+    const affiliateOriginalInput = document.getElementById('driverAffiliateOriginal');
+    
+    if (affiliateSelect) {
+      affiliateSelect.value = driver.affiliate_id || '';
+      console.log('📋 Setting affiliate dropdown to:', driver.affiliate_id || '(none)');
+    }
+    if (affiliateIdInput) {
+      affiliateIdInput.value = driver.affiliate_id || '';
+    }
+    if (affiliateOriginalInput) {
+      affiliateOriginalInput.value = driver.affiliate_id || '';
+    }
+
     const normalizeLabel = (text) => (text || '')
       .replace(/\*/g, '')
       .replace(/[:#']/g, '')
@@ -5132,7 +6235,488 @@ class MyOffice {
       }
     });
 
+    // Populate additional driver fields with IDs
+    const setById = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.value = value ?? '';
+    };
+    const setCheckById = (id, checked) => {
+      const el = document.getElementById(id);
+      if (el) el.checked = Boolean(checked);
+    };
+    
+    // Checkboxes
+    setCheckById('driverSuppressNotifications', driver.suppress_auto_notifications);
+    setCheckById('driverShowCallEmailDispatch', driver.show_call_email_dispatch);
+    setCheckById('driverQuickEditDispatch', driver.quick_edit_dispatch);
+    setCheckById('driverIncludePhoneHome', driver.include_phone_home);
+    // Default cell phone to checked if not explicitly set to false
+    setCheckById('driverIncludePhoneCell', driver.include_phone_cell !== false);
+    setCheckById('driverIncludePhoneOther', driver.include_phone_other);
+    setCheckById('driverIsVip', driver.is_vip);
+    
+    // Text fields
+    setById('driverDispatchDisplayName', driver.dispatch_display_name);
+    setById('driverTripSheetsDisplayName', driver.trip_sheets_display_name);
+    setById('driverAlias', driver.driver_alias);
+    setById('driverGroup', driver.driver_group);
+    setById('driverNotes', driver.driver_notes);
+    setById('driverWebUsername', driver.web_username);
+    setById('driverWebPassword', driver.web_password);
+    
+    // Driver level select
+    const levelSelect = document.getElementById('driverLevel');
+    if (levelSelect) {
+      levelSelect.value = driver.driver_level ?? '0';
+    }
+
+    // Populate and set the assigned vehicle dropdown
+    await this.populateDriverVehicleDropdown(driver.assigned_vehicle_id);
+    
+    // Show assigned vehicle name in bold above dropdown
+    await this.updateAssignedVehicleDisplay(driver.assigned_vehicle_id);
+
     console.log('✅ Driver form loaded:', driver);
+  }
+  
+  /**
+   * Update the bold display of assigned vehicle above the dropdown
+   */
+  async updateAssignedVehicleDisplay(vehicleId) {
+    const displayDiv = document.getElementById('assignedVehicleDisplay');
+    const nameSpan = document.getElementById('assignedVehicleName');
+    
+    if (!displayDiv || !nameSpan) return;
+    
+    if (!vehicleId) {
+      displayDiv.style.display = 'none';
+      nameSpan.textContent = '';
+      return;
+    }
+    
+    // Try to find vehicle name from fleet records or API
+    let vehicleName = '';
+    
+    // Check local fleet first
+    const localFleet = this.fleetRecords || [];
+    const localVehicle = localFleet.find(v => v.id === vehicleId);
+    
+    if (localVehicle) {
+      vehicleName = localVehicle.veh_disp_name || 
+        [localVehicle.year, localVehicle.make, localVehicle.model, localVehicle.license_plate ? `(${localVehicle.license_plate})` : ''].filter(Boolean).join(' ');
+    } else {
+      // Try API
+      try {
+        const vehicles = await fetchActiveVehicles({ includeInactive: true });
+        const vehicle = vehicles?.find(v => v.id === vehicleId);
+        if (vehicle) {
+          vehicleName = vehicle.veh_disp_name || 
+            [vehicle.year, vehicle.make, vehicle.model, vehicle.license_plate ? `(${vehicle.license_plate})` : ''].filter(Boolean).join(' ');
+        }
+      } catch (e) {
+        console.warn('Could not lookup vehicle:', e);
+      }
+    }
+    
+    if (vehicleName) {
+      nameSpan.textContent = vehicleName;
+      displayDiv.style.display = 'block';
+    } else {
+      nameSpan.textContent = `Vehicle ID: ${vehicleId.substring(0, 8)}...`;
+      displayDiv.style.display = 'block';
+    }
+  }
+
+  /**
+   * Populate the "Assign Driver to Car" dropdown with fleet vehicles
+   * Uses local fleet records from Company Resources as primary source
+   * Only shows ACTIVE vehicles (excludes UNIT- placeholder vehicles)
+   */
+  async populateDriverVehicleDropdown(selectedVehicleId = null) {
+    const select = document.getElementById('driverAssignedVehicle');
+    if (!select) return;
+
+    // Helper to check if vehicle is active
+    const isVehicleActive = (v) => {
+      const status = (v.status || v.veh_active || 'ACTIVE').toString().toUpperCase().trim();
+      return ['ACTIVE', 'AVAILABLE', 'Y', 'YES', 'TRUE', '1'].includes(status);
+    };
+    
+    // Helper to check if vehicle is a real fleet vehicle (not a placeholder)
+    const isRealVehicle = (v) => {
+      const unitNum = (v.unit_number || '').toString();
+      // Exclude auto-generated placeholder vehicles (UNIT-xxxx are vehicle type placeholders)
+      if (unitNum.startsWith('UNIT-')) return false;
+      return true;
+    };
+
+    try {
+      // First try to get vehicles from API
+      let vehicles = await fetchActiveVehicles({ includeInactive: false });
+      
+      // Filter to only active, real vehicles from API
+      if (vehicles && vehicles.length > 0) {
+        vehicles = vehicles.filter(v => isVehicleActive(v) && isRealVehicle(v));
+      }
+      
+      // If no API vehicles, use local fleet records from Company Resources
+      if (!vehicles || vehicles.length === 0) {
+        // Load from localStorage (same source as Fleet section)
+        try {
+          const raw = localStorage.getItem('cr_fleet');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              // Filter to only active, real vehicles
+              vehicles = parsed.filter(v => isVehicleActive(v) && isRealVehicle(v));
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to load local fleet:', e);
+        }
+      }
+      
+      // Deduplicate by ID - keep first occurrence of each ID
+      if (Array.isArray(vehicles) && vehicles.length > 0) {
+        const seenIds = new Set();
+        vehicles = vehicles.filter(v => {
+          if (!v.id) return true; // Keep vehicles without IDs
+          if (seenIds.has(v.id)) {
+            console.warn(`⚠️ Removing duplicate vehicle with ID: ${v.id}`);
+            return false;
+          }
+          seenIds.add(v.id);
+          return true;
+        });
+      }
+      
+      // Helper to get vehicle type display name (handle UUID vs name)
+      const getVehicleTypeName = (vehicle) => {
+        let typeName = vehicle.vehicle_type || vehicle.veh_type || '';
+        // If it looks like a UUID, try to look up the actual name
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidPattern.test(typeName)) {
+          // Try to find in vehicle type seeds
+          const vt = this.vehicleTypeSeeds?.[typeName] || 
+                     Object.values(this.vehicleTypeSeeds || {}).find(v => v.id === typeName);
+          if (vt?.name) {
+            typeName = vt.name;
+          } else {
+            // UUID with no matching name - don't show it
+            typeName = '';
+          }
+        }
+        return typeName;
+      };
+      
+      // Clear existing options
+      select.innerHTML = '<option value="">- Not Assigned -</option>';
+
+      if (Array.isArray(vehicles) && vehicles.length > 0) {
+        vehicles.forEach((vehicle) => {
+          const vehicleTypeName = getVehicleTypeName(vehicle);
+          const displayName = [
+            vehicle.unit_number,
+            vehicle.year,
+            vehicle.make,
+            vehicle.model,
+            vehicleTypeName ? `(${vehicleTypeName})` : ''
+          ].filter(Boolean).join(' ');
+          
+          const option = document.createElement('option');
+          option.value = vehicle.id;
+          option.textContent = displayName || vehicle.veh_disp_name || `Vehicle ${vehicle.id}`;
+          select.appendChild(option);
+        });
+      }
+
+      // Set selected value if provided
+      if (selectedVehicleId) {
+        select.value = selectedVehicleId;
+        console.log('📋 After setting select.value:', select.value, '(expected:', selectedVehicleId + ')');
+        
+        // If the vehicle wasn't found in the list (maybe inactive), add it anyway so selection is visible
+        if (select.value !== selectedVehicleId) {
+          console.log('⚠️ Assigned vehicle not in active list, adding it:', selectedVehicleId);
+          // Try to find the vehicle info
+          let vehicleName = `Vehicle ${selectedVehicleId.substring(0, 8)}...`;
+          
+          // Check if we can get more info from API
+          try {
+            const allVehicles = await fetchActiveVehicles({ includeInactive: true });
+            const assignedVehicle = allVehicles?.find(v => v.id === selectedVehicleId);
+            if (assignedVehicle) {
+              const typeName = getVehicleTypeName(assignedVehicle);
+              vehicleName = [
+                assignedVehicle.unit_number,
+                assignedVehicle.year,
+                assignedVehicle.make,
+                assignedVehicle.model,
+                typeName ? `(${typeName})` : '',
+                '(Inactive)'
+              ].filter(Boolean).join(' ');
+            }
+          } catch (e) {
+            console.warn('Could not lookup assigned vehicle details:', e);
+          }
+          
+          const option = document.createElement('option');
+          option.value = selectedVehicleId;
+          option.textContent = vehicleName;
+          select.appendChild(option);
+          select.value = selectedVehicleId;
+        }
+      }
+      
+      // Add change listener to update bold display and check for conflicts when user selects a vehicle
+      if (!select.dataset.displayListenerBound) {
+        select.addEventListener('change', async (e) => {
+          const selectedVehicleId = select.value;
+          const selectedOption = select.options[select.selectedIndex];
+          const displayDiv = document.getElementById('assignedVehicleDisplay');
+          const nameSpan = document.getElementById('assignedVehicleName');
+          
+          // Check if this vehicle is already assigned to another driver
+          if (selectedVehicleId) {
+            try {
+              const allDrivers = await fetchDrivers() || [];
+              const currentDriverId = this.currentDriver?.id;
+              const conflictingDriver = allDrivers.find(d => 
+                d.assigned_vehicle_id === selectedVehicleId && 
+                d.id !== currentDriverId
+              );
+              
+              if (conflictingDriver) {
+                const driverName = [conflictingDriver.first_name, conflictingDriver.last_name].filter(Boolean).join(' ') || 'Unknown Driver';
+                const vehicleName = selectedOption?.textContent || 'this vehicle';
+                
+                const confirmChange = confirm(
+                  `⚠️ Vehicle Already Assigned\n\n` +
+                  `"${vehicleName}" is currently assigned to:\n` +
+                  `${driverName}\n\n` +
+                  `Do you want to reassign this vehicle to the current driver?\n\n` +
+                  `Click OK to reassign, or Cancel to keep the original assignment.`
+                );
+                
+                if (!confirmChange) {
+                  // Revert to previous value
+                  select.value = this.currentDriver?.assigned_vehicle_id || '';
+                  return;
+                }
+                
+                // User confirmed - we'll unassign from the other driver when saving
+                console.log(`⚠️ User confirmed reassigning vehicle from ${driverName} to current driver`);
+              }
+            } catch (err) {
+              console.warn('Could not check for vehicle conflicts:', err);
+            }
+          }
+          
+          // Update the bold display and button color
+          const createVehicleBtn = document.getElementById('createVehicleBtn');
+          if (displayDiv && nameSpan) {
+            if (select.value && selectedOption) {
+              nameSpan.textContent = selectedOption.textContent;
+              displayDiv.style.display = 'block';
+              // Vehicle selected - make button light grey
+              if (createVehicleBtn) {
+                createVehicleBtn.style.background = '#e0e0e0';
+                createVehicleBtn.style.color = '#666';
+                createVehicleBtn.style.border = '1px solid #bdbdbd';
+              }
+            } else {
+              displayDiv.style.display = 'none';
+              nameSpan.textContent = '';
+              // No vehicle selected - make button bright yellow
+              if (createVehicleBtn) {
+                createVehicleBtn.style.background = '#ffeb3b';
+                createVehicleBtn.style.color = '#333';
+                createVehicleBtn.style.border = '1px solid #fbc02d';
+              }
+            }
+          }
+        });
+        select.dataset.displayListenerBound = 'true';
+      }
+      
+      // Set initial button color based on current selection
+      const createVehicleBtn = document.getElementById('createVehicleBtn');
+      if (createVehicleBtn) {
+        if (selectedVehicleId) {
+          createVehicleBtn.style.background = '#e0e0e0';
+          createVehicleBtn.style.color = '#666';
+          createVehicleBtn.style.border = '1px solid #bdbdbd';
+        } else {
+          createVehicleBtn.style.background = '#ffeb3b';
+          createVehicleBtn.style.color = '#333';
+          createVehicleBtn.style.border = '1px solid #fbc02d';
+        }
+      }
+
+      console.log(`✅ Populated driver vehicle dropdown with ${vehicles?.length || 0} vehicles, selected: ${selectedVehicleId || 'none'}`);
+    } catch (err) {
+      console.warn('⚠️ Failed to load vehicles for driver assignment:', err);
+    }
+  }
+
+  /**
+   * Setup vehicle popup modal event handlers
+   */
+  setupVehiclePopupHandlers() {
+    const modal = document.getElementById('createVehicleModal');
+    if (!modal) return;
+
+    const closeBtn = document.getElementById('closeVehicleModalBtn');
+    const cancelBtn = document.getElementById('cancelVehiclePopupBtn');
+    const saveBtn = document.getElementById('saveVehicleFromPopupBtn');
+    const overlay = modal.querySelector('.vehicle-popup-overlay');
+
+    // Close modal handlers
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => this.closeCreateVehiclePopup());
+    }
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => this.closeCreateVehiclePopup());
+    }
+    if (overlay) {
+      overlay.addEventListener('click', () => this.closeCreateVehiclePopup());
+    }
+
+    // Save and close handler
+    if (saveBtn) {
+      saveBtn.addEventListener('click', () => this.saveVehicleFromPopup());
+    }
+
+    // Listen for messages from iframe
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'VEHICLE_SAVED') {
+        console.log('📦 Vehicle saved from popup:', event.data.vehicle);
+        // Refresh the vehicle dropdown
+        this.populateDriverVehicleDropdown(event.data.vehicle?.id || null);
+      }
+    });
+  }
+
+  /**
+   * Open the Create Vehicle popup modal
+   */
+  openCreateVehiclePopup() {
+    const modal = document.getElementById('createVehicleModal');
+    const iframe = document.getElementById('vehicleFormIframe');
+    
+    if (!modal || !iframe) {
+      console.warn('⚠️ Vehicle popup modal elements not found');
+      return;
+    }
+
+    // Set iframe source
+    iframe.src = 'fleet-form-popup.html';
+    
+    // When iframe loads, send the vehicle types data to it
+    iframe.onload = () => {
+      // Get active vehicle types using the same isActive logic as loadVehicleTypesList
+      // Also check vehicleTypeDrafts for the most recent status
+      const isActive = (v) => {
+        const vehicleId = v?.id || v?.code;
+        const draft = vehicleId ? this.vehicleTypeDrafts?.[vehicleId] : null;
+        const raw = draft?.status ?? v?.status ?? (v?.active === false ? 'inactive' : null);
+        if (raw === null || raw === undefined || raw === '') return true;
+        const status = raw.toString().toUpperCase();
+        return status !== 'INACTIVE';
+      };
+      
+      const allTypes = Object.values(this.vehicleTypeSeeds || {});
+      const activeTypes = allTypes.filter(isActive);
+      
+      // Get the currently active driver info (from the driver being edited)
+      const activeDriverId = this.currentDriver?.id || null;
+      const firstName = this.currentDriver?.first_name || this.currentDriver?.firstName || '';
+      const lastName = this.currentDriver?.last_name || this.currentDriver?.lastName || '';
+      const activeDriverName = (firstName + ' ' + lastName).trim();
+      
+      console.log('📤 Sending vehicle types to iframe:', activeTypes.length, 'active of', allTypes.length, 'total');
+      console.log('📤 Auto-assigning to driver:', activeDriverId, activeDriverName);
+      
+      // Send data to iframe
+      iframe.contentWindow.postMessage({
+        type: 'INIT_VEHICLE_FORM',
+        vehicleTypes: activeTypes,
+        activeDriverId: activeDriverId,
+        activeDriverName: activeDriverName
+      }, '*');
+    };
+    
+    // Show modal
+    modal.style.display = 'block';
+    
+    console.log('🚗 Opened Create Vehicle popup');
+  }
+
+  /**
+   * Close the Create Vehicle popup modal
+   */
+  closeCreateVehiclePopup() {
+    const modal = document.getElementById('createVehicleModal');
+    const iframe = document.getElementById('vehicleFormIframe');
+    
+    if (modal) {
+      modal.style.display = 'none';
+    }
+    if (iframe) {
+      iframe.src = '';
+    }
+    
+    console.log('🚗 Closed Create Vehicle popup');
+  }
+
+  /**
+   * Save vehicle from popup and close
+   */
+  async saveVehicleFromPopup() {
+    const iframe = document.getElementById('vehicleFormIframe');
+    
+    if (!iframe || !iframe.contentWindow) {
+      console.warn('⚠️ Vehicle popup iframe not accessible');
+      return;
+    }
+
+    try {
+      // Call the save function in the iframe
+      const iframeWindow = iframe.contentWindow;
+      if (iframeWindow.fleetFormPopup && typeof iframeWindow.fleetFormPopup.save === 'function') {
+        const result = iframeWindow.fleetFormPopup.save();
+        
+        if (result && result.success) {
+          console.log('✅ Vehicle saved successfully:', result.vehicle);
+          
+          // Add to fleetRecords and refresh Fleet list
+          if (result.vehicle) {
+            this.fleetRecords = this.fleetRecords || [];
+            this.fleetRecords.push(result.vehicle);
+            this.persistFleet();
+            this.renderFleetList();
+            console.log('📋 Fleet list updated with new vehicle');
+          }
+          
+          // Refresh the vehicle dropdown with the new vehicle selected
+          await this.populateDriverVehicleDropdown(result.vehicle?.id || null);
+          
+          // Close the popup after a brief delay to show success message
+          setTimeout(() => {
+            this.closeCreateVehiclePopup();
+          }, 500);
+        } else {
+          console.warn('⚠️ Vehicle save failed:', result?.error);
+          // Error message is shown in iframe, don't close popup
+        }
+      } else {
+        console.warn('⚠️ Fleet form popup save function not available');
+        alert('Unable to save vehicle. Please try again.');
+      }
+    } catch (err) {
+      console.error('❌ Error saving vehicle from popup:', err);
+      alert('Error saving vehicle: ' + err.message);
+    }
   }
 
   async saveDriver() {
@@ -5140,6 +6724,55 @@ class MyOffice {
       const form = document.querySelector('.drivers-form-panel');
       if (!form) {
         console.warn('⚠️ Driver form panel not found');
+        return;
+      }
+
+      // CRITICAL: Capture the vehicle dropdown value IMMEDIATELY before any async operations
+      // This prevents race conditions where the dropdown might be reset during async calls
+      const vehicleDropdown = document.getElementById('driverAssignedVehicle');
+      const capturedVehicleId = vehicleDropdown?.value?.trim() || '';
+      const originalVehicleId = this.currentDriver?.assigned_vehicle_id || null;
+      
+      // Store the selected option text as well for logging
+      const selectedOptionText = vehicleDropdown?.options?.[vehicleDropdown.selectedIndex]?.textContent || 'none';
+      console.log('🚗 SAVE START - Vehicle dropdown value:', capturedVehicleId, '| Selected option:', selectedOptionText, '| Original:', originalVehicleId);
+
+      // Validate required fields: cell phone, email, assigned vehicle (only for active drivers)
+      const cellPhone = document.getElementById('driverCellPhone');
+      const email = document.getElementById('driverEmail');
+      const assignedVehicle = document.getElementById('driverAssignedVehicle');
+      // Check employment status (ACTIVE/INACTIVE), not availability status
+      const employmentStatusSelect = document.getElementById('driverEmploymentStatus');
+      const employmentStatus = (employmentStatusSelect?.value || 'active').toLowerCase();
+      const isInactive = employmentStatus === 'inactive';
+
+      const errors = [];
+      
+      if (!cellPhone?.value?.trim()) {
+        errors.push('Cellular Phone is required');
+        cellPhone?.classList.add('validation-error');
+      } else {
+        cellPhone?.classList.remove('validation-error');
+      }
+
+      if (!email?.value?.trim()) {
+        errors.push('Email Address is required');
+        email?.classList.add('validation-error');
+      } else {
+        email?.classList.remove('validation-error');
+      }
+
+      // Only require assigned vehicle for active drivers
+      if (!isInactive && !capturedVehicleId) {
+        console.log('❌ Vehicle validation failed - capturedVehicleId is empty');
+        errors.push('Assign Driver to Car is required - each active driver must be assigned to a vehicle');
+        assignedVehicle?.classList.add('validation-error');
+      } else {
+        assignedVehicle?.classList.remove('validation-error');
+      }
+
+      if (errors.length > 0) {
+        alert('Please fix the following errors before saving:\n\n• ' + errors.join('\n• '));
         return;
       }
 
@@ -5240,10 +6873,12 @@ class MyOffice {
       const overtimeControls = labelControlMap.get('overtime') || [];
       const doubleTimeControls = labelControlMap.get('double time') || [];
 
-      const statusSelect = document.getElementById('driverStatusSelect');
-      const driverStatus = (statusSelect?.value || 'available').toLowerCase();
+      // Get availability status for driver_status field (used for driver availability board)
+      const availabilitySelect = document.getElementById('driverStatusSelect');
+      const driverStatus = (availabilitySelect?.value || 'available').toLowerCase();
 
-      const employmentStatus = (readString('status') || 'ACTIVE').toUpperCase();
+      // Employment status already checked above for validation (isInactive)
+      const employmentStatusUpper = (employmentStatus || 'active').toUpperCase();
 
       const driverData = {
         first_name: requiredFirstName,
@@ -5272,24 +6907,32 @@ class MyOffice {
         other_phone: readString('pager other'),
         other_phone_provider: providerControls[1] ? coalesceString(providerControls[1].value) : null,
         email: readString('email address'),
-        suppress_auto_notifications: readBoolean("don't send auto notifications") || readBoolean('dont send auto notifications'),
-        show_call_email_dispatch: readBoolean('show both call and email on dispatch'),
-        quick_edit_dispatch: readBoolean('quick edit driver info on dispatch'),
-        include_phone_home: readBoolean('home'),
-        include_phone_cell: readBoolean('cell'),
-        include_phone_other: readBoolean('other'),
-        dispatch_display_name: readString('name to display in dispatch'),
-        trip_sheets_display_name: readString('name to display on trip sheets'),
-        driver_level: readString('driver level'),
-        is_vip: readBoolean('vip'),
-        assigned_vehicle_id: readString('assign driver to car'),
-        driver_alias: readString('assign driver to alias'),
-        driver_group: readString('assign driver to group'),
-        driver_notes: readString('driver notes'),
-        web_username: readString('username'),
-        web_password: readString('password'),
-        type: readString('type'),
-        status: employmentStatus,
+        // Use direct ID-based reads for these fields (more reliable than label matching)
+        suppress_auto_notifications: document.getElementById('driverSuppressNotifications')?.checked || false,
+        show_call_email_dispatch: document.getElementById('driverShowCallEmailDispatch')?.checked || false,
+        quick_edit_dispatch: document.getElementById('driverQuickEditDispatch')?.checked || false,
+        include_phone_home: document.getElementById('driverIncludePhoneHome')?.checked || false,
+        include_phone_cell: document.getElementById('driverIncludePhoneCell')?.checked || false,
+        include_phone_other: document.getElementById('driverIncludePhoneOther')?.checked || false,
+        dispatch_display_name: document.getElementById('driverDispatchDisplayName')?.value?.trim() || null,
+        trip_sheets_display_name: document.getElementById('driverTripSheetsDisplayName')?.value?.trim() || null,
+        driver_level: document.getElementById('driverLevel')?.value || '0',
+        is_vip: document.getElementById('driverIsVip')?.checked || false,
+        assigned_vehicle_id: capturedVehicleId || null, // Use captured value from start of save to prevent race conditions
+        driver_alias: document.getElementById('driverAlias')?.value?.trim() || null,
+        driver_group: document.getElementById('driverGroup')?.value?.trim() || null,
+        driver_notes: document.getElementById('driverNotes')?.value?.trim() || null,
+        web_username: document.getElementById('driverWebUsername')?.value?.trim() || null,
+        web_password: document.getElementById('driverWebPassword')?.value?.trim() || null,
+        // Normalize type to match database constraint ('FULL TIME' or 'PART TIME')
+        type: (() => {
+          const rawType = readString('type') || 'full-time';
+          // Convert 'full-time' -> 'FULL TIME', 'part-time' -> 'PART TIME'
+          if (rawType.toLowerCase().includes('part')) return 'PART TIME';
+          return 'FULL TIME';
+        })(),
+        status: employmentStatusUpper,
+        is_active: !isInactive,
         web_access: readString('web access'),
         trip_regular_rate: regularControls[0] ? readNumber('regular', 0) : null,
         trip_overtime_rate: overtimeControls[0] ? readNumber('overtime', 0) : null,
@@ -5303,15 +6946,113 @@ class MyOffice {
         driver_status: driverStatus
       };
 
+      // Handle affiliate association change from dropdown
+      const affiliateSelect = document.getElementById('driverAffiliateSelect');
+      const affiliateOriginalInput = document.getElementById('driverAffiliateOriginal');
+      // Normalize empty strings to null for comparison
+      const newAffiliateId = affiliateSelect?.value || null;
+      const originalAffiliateId = affiliateOriginalInput?.value || this.currentDriver?.affiliate_id || null;
+      
+      console.log('🔍 Affiliate check - new:', newAffiliateId, 'original:', originalAffiliateId, 'affiliates loaded:', this.affiliates?.length);
+      
+      // Check if affiliate is actually being changed (normalize empty strings to null)
+      const normalizedNew = newAffiliateId || null;
+      const normalizedOrig = originalAffiliateId || null;
+      
+      if (normalizedNew !== normalizedOrig) {
+        // Get affiliate names for the warning message
+        let oldAffiliateName = 'None';
+        let newAffiliateName = 'None';
+        
+        // Ensure affiliates are loaded
+        if (!this.affiliates || this.affiliates.length === 0) {
+          console.log('🔄 Loading affiliates for save...');
+          this.affiliates = await fetchAffiliates() || [];
+        }
+        
+        if (normalizedOrig && this.affiliates) {
+          const oldAff = this.affiliates.find(a => a.id === normalizedOrig);
+          if (oldAff) oldAffiliateName = oldAff.company_name || 'Unknown';
+        }
+        if (normalizedNew && this.affiliates) {
+          const newAff = this.affiliates.find(a => a.id === normalizedNew);
+          if (newAff) newAffiliateName = newAff.company_name || 'Unknown';
+        }
+        
+        console.log('🔍 Affiliate names - old:', oldAffiliateName, 'new:', newAffiliateName);
+        
+        const confirmChange = confirm(
+          `⚠️ Affiliate Association Change\n\n` +
+          `You are about to change this driver's affiliate association:\n\n` +
+          `From: ${oldAffiliateName}\n` +
+          `To: ${newAffiliateName}\n\n` +
+          `This will update the affiliate's associated drivers list.\n\n` +
+          `Do you want to continue?`
+        );
+        
+        if (!confirmChange) {
+          // Reset the dropdown to original value
+          if (affiliateSelect) {
+            affiliateSelect.value = normalizedOrig || '';
+          }
+          return;
+        }
+      }
+      
+      // Get the affiliate name for the new association
+      let finalAffiliateName = null;
+      if (normalizedNew && this.affiliates) {
+        const newAff = this.affiliates.find(a => a.id === normalizedNew);
+        if (newAff) finalAffiliateName = newAff.company_name || null;
+      }
+      
+      driverData.affiliate_id = normalizedNew;
+      driverData.affiliate_name = finalAffiliateName;
+      
+      console.log('📋 Driver affiliate_id being saved:', driverData.affiliate_id);
+      console.log('📋 Driver affiliate_name being saved:', driverData.affiliate_name);
+
       const contactEmail = driverData.email || null;
       driverData.cell_phone = driverData.cell_phone || null;
       driverData.home_phone = driverData.home_phone || null;
       driverData.other_phone = driverData.other_phone || null;
       driverData.contact_email = contactEmail;
 
-      const assignedVehicleRaw = readRawString('assign driver to car');
-      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      driverData.assigned_vehicle_id = uuidPattern.test(assignedVehicleRaw) ? assignedVehicleRaw : null;
+      // Use the captured vehicle ID from the start of the save function
+      // IMPORTANT: Supabase assigned_vehicle_id column is UUID type - only UUID format is valid
+      // localStorage-style IDs (vehicle_timestamp) cannot be saved to database
+      const uuidPatternForSave = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const isValidUUID = capturedVehicleId && uuidPatternForSave.test(capturedVehicleId);
+      const vehicleIdToSave = isValidUUID ? capturedVehicleId : null;
+      driverData.assigned_vehicle_id = vehicleIdToSave;
+      
+      // Warn if localStorage vehicle selected - it won't be saved to database
+      if (capturedVehicleId && !isValidUUID) {
+        console.warn('⚠️ Vehicle ID is not a UUID - cannot save to database. Please recreate this vehicle to get a valid ID.');
+        console.log('📋 Driver assigned_vehicle_id: null (localStorage vehicle:', capturedVehicleId, 'is not compatible with database)');
+      } else {
+        console.log('📋 Driver assigned_vehicle_id being saved:', vehicleIdToSave, '(from captured:', capturedVehicleId + ')', isValidUUID ? '✅ Valid UUID' : '❌ No vehicle selected');
+      }
+
+      // If assigning a vehicle, check if it's currently assigned to another driver and unassign it
+      if (driverData.assigned_vehicle_id) {
+        try {
+          const allDrivers = await fetchDrivers() || [];
+          const currentDriverId = this.currentDriver?.id;
+          const conflictingDriver = allDrivers.find(d => 
+            d.assigned_vehicle_id === driverData.assigned_vehicle_id && 
+            d.id !== currentDriverId
+          );
+          
+          if (conflictingDriver) {
+            console.log(`🔄 Unassigning vehicle from driver ${conflictingDriver.id} (${conflictingDriver.first_name} ${conflictingDriver.last_name})`);
+            await updateDriver(conflictingDriver.id, { assigned_vehicle_id: null });
+            console.log(`✅ Vehicle unassigned from previous driver`);
+          }
+        } catch (err) {
+          console.warn('Could not unassign vehicle from previous driver:', err);
+        }
+      }
 
       if (driverData.web_access) {
         driverData.web_access = driverData.web_access.toUpperCase();
@@ -5334,6 +7075,78 @@ class MyOffice {
       }
 
       this.currentDriver = result;
+
+      // Update affiliate associations if affiliate was changed
+      const driverId = result.id;
+      if (normalizedNew !== normalizedOrig) {
+        try {
+          // Remove driver from old affiliate's list
+          if (normalizedOrig) {
+            const oldAffiliate = this.affiliates?.find(a => a.id === normalizedOrig);
+            if (oldAffiliate) {
+              const oldDriverIds = oldAffiliate.associated_driver_ids || [];
+              const updatedOldIds = oldDriverIds.filter(id => id !== driverId);
+              await updateAffiliate(normalizedOrig, { associated_driver_ids: updatedOldIds });
+              console.log(`✅ Removed driver ${driverId} from affiliate ${normalizedOrig}`);
+            }
+          }
+          
+          // Add driver to new affiliate's list
+          if (normalizedNew) {
+            const newAffiliate = this.affiliates?.find(a => a.id === normalizedNew);
+            if (newAffiliate) {
+              const newDriverIds = newAffiliate.associated_driver_ids || [];
+              if (!newDriverIds.includes(driverId)) {
+                newDriverIds.push(driverId);
+                await updateAffiliate(normalizedNew, { associated_driver_ids: newDriverIds });
+                console.log(`✅ Added driver ${driverId} to affiliate ${normalizedNew}`);
+              }
+            }
+          }
+          
+          // Refresh affiliates cache
+          this.affiliates = await fetchAffiliates() || [];
+        } catch (e) {
+          console.warn('Error updating affiliate associations:', e);
+        }
+      }
+
+      // Sync Fleet vehicle's assigned_driver_id with driver's assigned_vehicle_id
+      try {
+        const vehicleId = result.assigned_vehicle_id;
+        
+        // If vehicle assignment changed, update fleet records
+        if (vehicleId !== originalVehicleId) {
+          // Unassign driver from old vehicle in fleet
+          if (originalVehicleId) {
+            const oldFleetVehicle = this.fleetRecords?.find(v => v.id === originalVehicleId);
+            if (oldFleetVehicle) {
+              oldFleetVehicle.assigned_driver_id = null;
+              console.log(`🔄 Unassigned driver from old fleet vehicle ${originalVehicleId}`);
+            }
+          }
+          
+          // Assign driver to new vehicle in fleet
+          if (vehicleId) {
+            const newFleetVehicle = this.fleetRecords?.find(v => v.id === vehicleId);
+            if (newFleetVehicle) {
+              // First, unassign this vehicle from any other driver in fleet
+              this.fleetRecords?.forEach(v => {
+                if (v.assigned_driver_id === driverId && v.id !== vehicleId) {
+                  v.assigned_driver_id = null;
+                }
+              });
+              newFleetVehicle.assigned_driver_id = driverId;
+              console.log(`✅ Assigned driver ${driverId} to fleet vehicle ${vehicleId}`);
+            }
+          }
+          
+          // Persist fleet changes
+          this.persistFleet();
+        }
+      } catch (e) {
+        console.warn('Error syncing fleet vehicle assignment:', e);
+      }
 
       // Sync availability overrides for driver-availability board
       try {
@@ -5362,8 +7175,24 @@ class MyOffice {
 
       const driverIdToSelect = result.id;
       await this.loadDriversList(driverIdToSelect);
-      if (driverIdToSelect) {
-        const updatedDriver = this.drivers.find((d) => d.id === driverIdToSelect) || result;
+      
+      // If driver was set to inactive and Show All is not checked, they won't be in the list
+      // In that case, select the first available driver or clear the form
+      const showAll = document.getElementById('showAllDriversCheckbox')?.checked || false;
+      const driverStillVisible = this.drivers.find((d) => d.id === driverIdToSelect);
+      
+      if (driverStillVisible) {
+        this.renderDriverContactSummary(driverStillVisible);
+      } else if (isInactive && !showAll) {
+        // Driver was set to inactive and is now hidden - select first available driver
+        if (this.drivers.length > 0) {
+          this.loadDriverForm(this.drivers[0]);
+        } else {
+          this.currentDriver = null;
+          this.renderDriverContactSummary(null);
+        }
+      } else if (driverIdToSelect) {
+        const updatedDriver = result;
         this.renderDriverContactSummary(updatedDriver || null);
       }
     } catch (error) {
@@ -5446,17 +7275,32 @@ class MyOffice {
     }
 
     try {
-      await deleteDriver(this.currentDriver.id);
+      const deletedDriverId = this.currentDriver.id;
+      await deleteDriver(deletedDriverId);
       console.log('✅ Driver deleted');
       alert('Driver deleted successfully!');
       
-      // Reload drivers list
+      this.currentDriver = null;
+      
+      // Reload drivers list - this will select the first available driver
       await this.loadDriversList();
       
-      // Clear form
-      const form = document.querySelector('.drivers-form-panel');
-      if (form) form.reset();
-      this.currentDriver = null;
+      // If there are remaining drivers, load the first one
+      if (this.drivers.length > 0) {
+        this.loadDriverForm(this.drivers[0]);
+      } else {
+        // No drivers left - clear form fields
+        const formPanel = document.querySelector('.drivers-form-panel');
+        if (formPanel) {
+          formPanel.querySelectorAll('input').forEach(input => {
+            if (input.type === 'checkbox') input.checked = false;
+            else input.value = '';
+          });
+          formPanel.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
+          formPanel.querySelectorAll('textarea').forEach(ta => ta.value = '');
+        }
+        this.renderDriverContactSummary(null);
+      }
     } catch (error) {
       console.error('❌ Error deleting driver:', error);
       alert('Error deleting driver: ' + error.message);
@@ -5565,7 +7409,7 @@ class MyOffice {
     const container = document.getElementById('editVehicleTypeContent');
     if (!container) return;
 
-    const select = container.querySelector('[data-vehicle-field="service_type"]');
+    const select = container.querySelector('[data-vehicle-field="service_type_tags"]');
     if (!(select instanceof HTMLSelectElement)) return;
 
     // Ensure multi-select capability
@@ -5789,5 +7633,6 @@ class MyOffice {
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  new MyOffice();
+  // Expose instance globally so child iframes can access vehicle types, drivers, etc.
+  window.myOffice = new MyOffice();
 });

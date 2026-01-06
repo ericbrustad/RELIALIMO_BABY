@@ -55,6 +55,18 @@ const SESSION_STORAGE_KEY = 'supabase_session';
 // The official SDK uses this pattern: sb-<project-ref>-auth-token
 const SDK_SESSION_KEY = 'sb-siumiadylwcrkaqsfwkj-auth-token';
 
+// If auth-guard (supabase-js) is present, use it as the single source of truth for refresh.
+async function getSdkSession(options = {}) {
+  try {
+    if (typeof window !== 'undefined' && typeof window.__reliaGetValidSession === 'function') {
+      return await window.__reliaGetValidSession(options);
+    }
+  } catch (e) {
+    console.warn('⚠️ getSdkSession failed:', e);
+  }
+  return null;
+}
+
 function loadStoredSession() {
   try {
     // First check our custom key
@@ -124,7 +136,8 @@ function computeExpiryTimestamp(session) {
   if (!session) return null;
 
   if (typeof session.expires_at === 'number' && Number.isFinite(session.expires_at)) {
-    return session.expires_at;
+    // Supabase SDK sessions typically store expires_at in SECONDS; normalize to milliseconds.
+    return session.expires_at < 1e11 ? session.expires_at * 1000 : session.expires_at;
   }
 
   if (session.expires_in != null) {
@@ -146,12 +159,8 @@ function normalizeSession(session) {
   if (!session) return session;
 
   const normalized = { ...session };
-  const expiresAt = computeExpiryTimestamp(normalized);
 
-  if (expiresAt) {
-    normalized.expires_at = expiresAt;
-  }
-
+  // Ensure user field is present in a consistent place
   if (!normalized.user && normalized.session?.user) {
     normalized.user = normalized.session.user;
   }
@@ -176,7 +185,7 @@ function clearStoredSession() {
   try {
     localStorage.removeItem(SESSION_STORAGE_KEY);
     localStorage.removeItem('supabase_access_token');
-    localStorage.removeItem(SDK_SESSION_KEY);
+    // IMPORTANT: Do not remove the SDK session key here. supabase-js manages it.
   } catch (e) {
     console.warn('⚠️ Failed to clear stored session:', e);
   }
@@ -199,6 +208,14 @@ function sessionNeedsRefresh(session, thresholdMs = 60_000) {
 }
 
 async function performTokenRefresh(currentSession) {
+  // Prefer the SDK-managed refresh to avoid refresh-token rotation races.
+  const sdkSession = await getSdkSession({ force: true, minimumRemainingMs: 0 });
+  if (sdkSession?.access_token) {
+    persistSession(sdkSession);
+    return { success: true, session: sdkSession };
+  }
+
+  // Fallback: legacy REST refresh (kept for pages that don't load auth-guard).
   const refreshToken = currentSession?.refresh_token;
 
   if (!refreshToken || refreshToken.startsWith('offline-')) {
@@ -209,19 +226,24 @@ async function performTokenRefresh(currentSession) {
     const response = await fetch(`${getSupabaseAuthUrl()}/auth/v1/token?grant_type=refresh_token`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'apikey': getSupabaseAnonKey()
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'apikey': getSupabaseAnonKey(),
+        'Accept': 'application/json'
       },
-      body: JSON.stringify({ refresh_token: refreshToken })
+      body: new URLSearchParams({ refresh_token: refreshToken }).toString()
     });
 
     if (!response.ok) {
       const details = await response.text().catch(() => null);
       const message = `Token refresh failed (${response.status})`;
 
-      // If refresh is invalid/expired, clear session so we stop looping and force sign-in
+      // Do NOT clear the SDK key. Let auth-guard decide sign-out behavior.
       if (response.status === 400 || response.status === 401) {
-        clearStoredSession();
+        // Clear only our local cache to prevent tight loops, but keep SDK storage intact.
+        try {
+          localStorage.removeItem(SESSION_STORAGE_KEY);
+          localStorage.removeItem('supabase_access_token');
+        } catch (_) {}
         return { success: false, error: 'refresh-invalid', details };
       }
 
@@ -247,6 +269,18 @@ async function performTokenRefresh(currentSession) {
 
 export async function refreshSessionIfNeeded(options = {}) {
   const { force = false, minimumRemainingMs = 60_000 } = options;
+
+  // If auth-guard is present, delegate refresh logic to it.
+  const sdkSession = await getSdkSession({ force, minimumRemainingMs });
+  if (sdkSession) {
+    // Keep our local cache aligned to whatever the SDK says.
+    try {
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sdkSession));
+      if (sdkSession.access_token) localStorage.setItem('supabase_access_token', sdkSession.access_token);
+    } catch (_) {}
+    return { success: true, refreshed: force, session: sdkSession };
+  }
+
   const session = loadStoredSession();
 
   if (!session) {
@@ -470,24 +504,15 @@ class PostgrestQuery {
     const hasBody = this.method === 'POST' || this.method === 'PATCH';
     const bodyPayload = hasBody ? JSON.stringify(this.body ?? {}) : undefined;
 
-    let attempt = 0;
-    let lastError = null;
-
-    while (attempt < 2) {
-      if (attempt === 0) {
-        await refreshSessionIfNeeded({ minimumRemainingMs: 2 * 60_000 });
-      } else {
-        const refreshOutcome = await refreshSessionIfNeeded({ force: true });
-        if (!refreshOutcome.success) {
-          break;
-        }
-      }
-
-      const token = localStorage.getItem('supabase_access_token') || getSupabaseAnonKey();
+    const buildHeaders = async (forceRefresh = false) => {
+      // Ask auth-guard for a fresh session when available.
+      const sdkSession = await getSdkSession({ force: forceRefresh, minimumRemainingMs: 120_000 });
+      const token = sdkSession?.access_token || localStorage.getItem('supabase_access_token') || loadStoredSession()?.access_token || getSupabaseAnonKey();
 
       const headers = {
         apikey: getSupabaseAnonKey(),
-        Authorization: `Bearer ${token}`
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json'
       };
 
       if (this.expectSingle) {
@@ -502,6 +527,12 @@ class PostgrestQuery {
         headers['Content-Type'] = 'application/json';
       }
 
+      return headers;
+    };
+
+    const doFetch = async (forceRefresh = false) => {
+      const headers = await buildHeaders(forceRefresh);
+
       const response = await fetch(url.toString(), {
         method: this.method,
         headers,
@@ -515,29 +546,39 @@ class PostgrestQuery {
         ? null
         : (isJson ? await response.json().catch(() => null) : await response.text().catch(() => null));
 
-      if (response.ok) {
-        return { data: payload, error: null };
-      }
+      return { response, payload };
+    };
 
-      const message = (payload && typeof payload === 'object' && (payload.message || payload.error_description || payload.error))
+    // First attempt
+    let { response, payload } = await doFetch(false);
+
+    // One retry on jwt expired (force SDK refresh)
+    if (!response.ok && response.status === 401) {
+      const msg = (payload && typeof payload === 'object' && (payload.message || payload.error_description || payload.error))
         ? (payload.message || payload.error_description || payload.error)
-        : `Supabase request failed (${response.status})`;
+        : (typeof payload === 'string' ? payload : '');
 
-      lastError = {
+      if (/jwt expired/i.test(msg || '')) {
+        ({ response, payload } = await doFetch(true));
+      }
+    }
+
+    if (response.ok) {
+      return { data: payload, error: null };
+    }
+
+    const message = (payload && typeof payload === 'object' && (payload.message || payload.error_description || payload.error))
+      ? (payload.message || payload.error_description || payload.error)
+      : `Supabase request failed (${response.status})`;
+
+    return {
+      data: null,
+      error: {
         status: response.status,
         message,
         details: payload
-      };
-
-      if (response.status === 401 && /jwt expired/i.test(message || '') && attempt === 0) {
-        attempt += 1;
-        continue;
       }
-
-      break;
-    }
-
-    return { data: null, error: lastError };
+    };
   }
 
   then(onFulfilled, onRejected) {

@@ -1,0 +1,33 @@
+{
+  "name": "RELIALIMO Driver Portal",
+  "short_name": "Driver Portal",
+  "description": "Mobile app for RELIALIMO drivers to manage trips and update status",
+  "start_url": "/driver-portal.html",
+  "display": "standalone",
+  "background_color": "#0f0f1a",
+  "theme_color": "#1a1a2e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icons/driver-portal-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/driver-portal-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "transportation"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "View Trips",
+      "url": "/driver-portal.html#trips",
+      "description": "View your upcoming trips"
+    }
+  ]
+}

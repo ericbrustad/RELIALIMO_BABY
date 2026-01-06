@@ -3931,6 +3931,52 @@ further assistance.</textarea>
                         </div>
                       </div>
 
+                      <!-- Other Information - Moved above Primary Address -->
+                      <div class="drivers-form-row-3">
+                        <div class="form-group">
+                          <label>Type</label>
+                          <select class="form-control">
+                            <option value="full-time">FULL TIME</option>
+                            <option value="part-time">PART TIME</option>
+                          </select>
+                        </div>
+                        <div class="form-group">
+                          <label>Status</label>
+                          <select id="driverEmploymentStatus" class="form-control">
+                            <option value="active">ACTIVE</option>
+                            <option value="inactive">INACTIVE</option>
+                          </select>
+                        </div>
+                        <div class="form-group">
+                          <label>Web Access</label>
+                          <select class="form-control">
+                            <option value="allow">ALLOW</option>
+                            <option value="deny">DENY</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div class="drivers-form-row-2">
+                        <div class="form-group">
+                          <label>Hire Date</label>
+                          <input type="text" class="form-control" />
+                        </div>
+                        <div class="form-group">
+                          <label>Termination Date</label>
+                          <input type="text" class="form-control" />
+                        </div>
+                      </div>
+
+                      <!-- Affiliate Association -->
+                      <div class="form-group" style="margin-top: 10px; margin-bottom: 15px;">
+                        <label>This Driver is Associated with</label>
+                        <select id="driverAffiliateSelect" class="form-control">
+                          <option value="">-- No Affiliate --</option>
+                        </select>
+                        <input type="hidden" id="driverAffiliateId" value="" />
+                        <input type="hidden" id="driverAffiliateOriginal" value="" />
+                      </div>
+
                       <div class="drivers-form-row">
                         <label>Primary Address</label>
                         <input type="text" class="form-control" />
@@ -4114,6 +4160,9 @@ further assistance.</textarea>
                         <input type="text" class="form-control" />
                       </div>
 
+                      <!-- Other Information Section -->
+                      <h4 class="drivers-section-title" style="margin-top: 20px;">Other Information</h4>
+
                       <!-- Pay Rates -->
                       <h4 class="drivers-section-title" style="margin-top: 20px;">Trip Hourly Pay Rates <a href="#" style="font-size: 12px;">Help</a></h4>
                       <div class="drivers-pay-rates">
@@ -4169,43 +4218,6 @@ further assistance.</textarea>
                           <label>Double Time</label>
                           <input type="text" class="form-control" value="0.00" style="width: 80px;" />
                           <span>/Hr</span>
-                        </div>
-                      </div>
-
-                      <!-- Other Information -->
-                      <h4 class="drivers-section-title" style="margin-top: 20px;">Other Information</h4>
-                      <div class="drivers-form-row-3">
-                        <div class="form-group">
-                          <label>Type</label>
-                          <select class="form-control">
-                            <option value="full-time">FULL TIME</option>
-                            <option value="part-time">PART TIME</option>
-                          </select>
-                        </div>
-                        <div class="form-group">
-                          <label>Status</label>
-                          <select class="form-control">
-                            <option value="active">ACTIVE</option>
-                            <option value="inactive">INACTIVE</option>
-                          </select>
-                        </div>
-                        <div class="form-group">
-                          <label>Web Access</label>
-                          <select class="form-control">
-                            <option value="allow">ALLOW</option>
-                            <option value="deny">DENY</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div class="drivers-form-row-2">
-                        <div class="form-group">
-                          <label>Hire Date</label>
-                          <input type="text" class="form-control" />
-                        </div>
-                        <div class="form-group">
-                          <label>Termination Date</label>
-                          <input type="text" class="form-control" />
                         </div>
                       </div>
 
@@ -4309,15 +4321,18 @@ further assistance.</textarea>
 
                       <div class="drivers-form-row-2">
                         <div class="form-group">
-                          <label>Cellular Phone *</label>
-                          <input type="text" class="form-control" placeholder="Enter number" />
+                          <label>Cellular Phone <span class="required">*</span></label>
+                          <input type="text" class="form-control required-field" id="driverCellPhone" placeholder="Enter number" required />
                         </div>
                         <div class="form-group">
                           <label>Provider</label>
-                          <select class="form-control">
+                          <select class="form-control" id="driverCellProvider">
                             <option value="">-- SELECT --</option>
                             <option value="verizon">Verizon</option>
                             <option value="att">AT&T</option>
+                            <option value="tmobile">T-Mobile</option>
+                            <option value="sprint">Sprint</option>
+                            <option value="other">Other</option>
                           </select>
                         </div>
                       </div>
@@ -4336,21 +4351,21 @@ further assistance.</textarea>
                       </div>
 
                       <div class="drivers-form-row">
-                        <label>Email Address</label>
-                        <input type="email" class="form-control" />
+                        <label>Email Address <span class="required">*</span></label>
+                        <input type="email" class="form-control required-field" id="driverEmail" required />
                       </div>
 
                       <div class="drivers-checkboxes" style="margin-top: 12px;">
                         <label style="display: block; margin-bottom: 8px;">
-                          <input type="checkbox" />
+                          <input type="checkbox" id="driverSuppressNotifications" />
                           <span style="margin-left: 5px; font-size: 12px;">Don't Send Auto Notifications</span>
                         </label>
                         <label style="display: block; margin-bottom: 8px;">
-                          <input type="checkbox" />
+                          <input type="checkbox" id="driverShowCallEmailDispatch" />
                           <span style="margin-left: 5px; font-size: 12px;">Show Both Call And Email On Dispatch</span>
                         </label>
                         <label style="display: block; margin-bottom: 8px;">
-                          <input type="checkbox" />
+                          <input type="checkbox" id="driverQuickEditDispatch" />
                           <span style="margin-left: 5px; font-size: 12px;">Quick Edit Driver Info On Dispatch</span>
                         </label>
                       </div>
@@ -4358,76 +4373,83 @@ further assistance.</textarea>
                       <h4 class="drivers-section-title" style="margin-top: 15px; color: #d9534f;">Include Phone # On Trip Sheets</h4>
                       <div class="drivers-checkboxes">
                         <label style="display: inline-block; margin-right: 15px;">
-                          <input type="checkbox" />
+                          <input type="checkbox" id="driverIncludePhoneHome" />
                           <span style="margin-left: 5px; font-size: 13px;">Home</span>
                         </label>
                         <label style="display: inline-block; margin-right: 15px;">
-                          <input type="checkbox" />
+                          <input type="checkbox" id="driverIncludePhoneCell" checked />
                           <span style="margin-left: 5px; font-size: 13px;">Cell</span>
                         </label>
                         <label style="display: inline-block;">
-                          <input type="checkbox" />
+                          <input type="checkbox" id="driverIncludePhoneOther" />
                           <span style="margin-left: 5px; font-size: 13px;">Other</span>
                         </label>
                       </div>
 
                       <div class="drivers-form-row" style="margin-top: 15px;">
                         <label>Name to Display in Dispatch <a href="#" style="font-size: 12px;">What's this?</a></label>
-                        <input type="text" class="form-control" />
+                        <input type="text" class="form-control" id="driverDispatchDisplayName" />
                       </div>
 
                       <div class="drivers-form-row">
                         <label>Name to Display on Trip Sheets <a href="#" style="font-size: 12px;">What's this?</a></label>
-                        <input type="text" class="form-control" />
+                        <input type="text" class="form-control" id="driverTripSheetsDisplayName" />
                       </div>
 
                       <div class="drivers-form-row">
                         <label>Driver Level</label>
                         <div style="display: flex; align-items: center; gap: 10px;">
-                          <select class="form-control" style="flex: 1;">
-                            <option>Level 0 - Least Experienced</option>
-                            <option>Level 1</option>
-                            <option>Level 2</option>
-                            <option>Level 3</option>
+                          <select class="form-control" id="driverLevel" style="flex: 1;">
+                            <option value="0">Level 0 - Least Experienced</option>
+                            <option value="1">Level 1</option>
+                            <option value="2">Level 2</option>
+                            <option value="3">Level 3</option>
                           </select>
                           <label style="margin: 0;">
-                            <input type="checkbox" />
+                            <input type="checkbox" id="driverIsVip" />
                             <span style="margin-left: 5px; font-size: 13px;">VIP</span>
                           </label>
                         </div>
                       </div>
 
-                      <div class="drivers-form-row">
-                        <label>Assign Driver to Car</label>
-                        <select class="form-control">
-                          <option>- Not Assigned -</option>
-                        </select>
+                      <div class="drivers-form-row driver-car-assignment">
+                        <label>Assign Driver to Car <span class="required">*</span></label>
+                        <div id="assignedVehicleDisplay" style="font-weight: bold; color: #1565c0; padding: 4px 0; display: none;">
+                          🚗 <span id="assignedVehicleName"></span>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                          <select class="form-control required-highlight" id="driverAssignedVehicle" style="flex: 1;">
+                            <option value="">- Not Assigned -</option>
+                          </select>
+                          <button type="button" class="btn btn-small" id="createVehicleBtn" style="white-space: nowrap; padding: 6px 12px; background: #ffeb3b; color: #333; border: 1px solid #fbc02d; font-weight: 600;" title="Create a new vehicle">+ New Vehicle</button>
+                        </div>
+                        <small class="field-hint" style="color: #e65100; font-size: 11px; margin-top: 4px; display: block;">⚠️ Required: Assign this driver to their primary vehicle</small>
                       </div>
 
                       <div class="drivers-form-row">
                         <label>Assign Driver to Alias</label>
-                        <input type="text" class="form-control" placeholder="eric" />
+                        <input type="text" class="form-control" id="driverAlias" />
                       </div>
 
                       <div class="drivers-form-row">
                         <label>Assign Driver to Group</label>
-                        <input type="text" class="form-control" />
+                        <input type="text" class="form-control" id="driverGroup" />
                       </div>
 
                       <div class="drivers-form-row">
                         <label>Driver Notes</label>
-                        <textarea class="form-control" rows="4"></textarea>
+                        <textarea class="form-control" id="driverNotes" rows="4"></textarea>
                       </div>
 
                       <h4 class="drivers-section-title" style="margin-top: 20px;">Web Access</h4>
                       <div class="drivers-form-row-2">
                         <div class="form-group">
                           <label>Username</label>
-                          <input type="text" class="form-control" />
+                          <input type="text" class="form-control" id="driverWebUsername" />
                         </div>
                         <div class="form-group">
                           <label>Password</label>
-                          <input type="password" class="form-control" autocomplete="new-password" />
+                          <input type="password" class="form-control" id="driverWebPassword" autocomplete="new-password" />
                         </div>
                       </div>
 
@@ -4527,6 +4549,18 @@ further assistance.</textarea>
                         <label>Markets Serviced</label>
                         <textarea id="affMarketsServiced" class="form-control" rows="3"></textarea>
                       </div>
+
+                      <!-- Drivers Associated with Affiliate -->
+                      <h4 class="affiliates-section-title" style="margin-top: 25px;">Drivers Associated with Affiliate</h4>
+                      <div id="affAssociatedDriversContainer">
+                        <div class="aff-driver-row" style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                          <select id="affDriverSelect_0" class="form-control aff-driver-select" style="flex: 1;">
+                            <option value="">-- Select Driver --</option>
+                          </select>
+                          <button type="button" class="btn btn-secondary btn-small remove-aff-driver-btn" style="display: none;" title="Remove Driver">&times;</button>
+                        </div>
+                      </div>
+                      <button type="button" id="addAnotherDriverBtn" class="btn btn-secondary btn-small" style="margin-top: 5px;">+ Add Another Driver</button>
 
                       <h4 class="affiliates-section-title" style="margin-top: 25px;">Primary Contact Information</h4>
                       
@@ -4727,7 +4761,7 @@ further assistance.</textarea>
             <div class="resources-list-panel">
               <div class="resources-list-header">
                 <h3>Vehicle Type Listing</h3>
-                <button class="btn btn-secondary btn-small" id="vehicleTypeShowAllBtn">Show All</button>
+                <button class="btn btn-secondary btn-small" id="vehicleTypeShowAllBtn">Show All Types</button>
               </div>
               
               <div class="resources-scrollable-list" id="vehicleTypeList">
@@ -4791,15 +4825,7 @@ further assistance.</textarea>
                   <strong>Vehicle Specific Data</strong>
                 </div>
 
-                <div class="form-row-3">
-                  <div class="form-group">
-                    <label>Reservation Price On</label>
-                    <select class="form-control" data-vehicle-field="pricing_basis">
-                      <option value="hours" selected>Hours</option>
-                      <option value="miles">Miles</option>
-                      <option value="days">Days</option>
-                    </select>
-                  </div>
+                <div class="form-row">
                   <div class="form-group">
                     <label>Passenger Capacity</label>
                     <select class="form-control" data-vehicle-field="passenger_capacity">
@@ -4810,8 +4836,15 @@ further assistance.</textarea>
                     <label>Luggage Capacity</label>
                     <select class="form-control" data-vehicle-field="luggage_capacity">
                       <option value="0">0</option>
-                      <option value="6" selected>6</option>
+                      <option value="1">1</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                      <option value="4">4</option>
+                      <option value="5">5</option>
+                      <option value="6">6</option>
+                      <option value="7">7</option>
                       <option value="8">8</option>
+                      <option value="9">9</option>
                       <option value="10">10</option>
                     </select>
                   </div>
@@ -5394,18 +5427,15 @@ further assistance.</textarea>
 
             <!-- Right: Vehicle Form -->
             <div class="resource-form-panel">
-              <div class="resource-form-header">
-                <h3>Vehicle Information</h3>
-              </div>
               <div class="resource-form-content">
-                <!-- Basic Vehicle Information -->
-                <div class="form-section">
-                  <h4 class="form-section-title">Basic Information</h4>
-                  
+                <!-- Assigned Driver Section (moved to top) -->
+                <div class="form-section" id="fleetAssignedDriverSection">
                   <div class="form-row-2">
                     <div class="form-group">
-                      <label>Unit Number: <span class="required">*</span></label>
-                      <input type="text" class="form-control" id="fleetUnitNumber" placeholder="e.g., 101" />
+                      <label>Assigned Driver:</label>
+                      <select class="form-control" id="fleetAssignedDriver">
+                        <option value="">Not Assigned</option>
+                      </select>
                     </div>
                     <div class="form-group">
                       <label>Status: <span class="required">*</span></label>
@@ -5421,6 +5451,22 @@ further assistance.</textarea>
                     </div>
                   </div>
 
+                  <!-- Assigned Driver Info Display -->
+                  <div id="fleetAssignedDriverInfo" class="assigned-driver-info" style="display: none; background: #f0f7ff; border: 1px solid #c8dff7; border-radius: 6px; padding: 12px; margin-top: 10px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                      <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px;" id="fleetDriverInitials">?</div>
+                      <div style="flex: 1;">
+                        <div style="font-weight: 600; font-size: 14px;" id="fleetDriverName">No driver assigned</div>
+                        <div style="font-size: 12px; color: #666;" id="fleetDriverContact"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-section-divider"></div>
+
+                <!-- Vehicle Details -->
+                <div class="form-section">
                   <div class="form-row-2">
                     <div class="form-group">
                       <label>Vehicle Type: <span class="required">*</span></label>
@@ -5467,7 +5513,7 @@ further assistance.</textarea>
                   
                   <div class="form-row-2">
                     <div class="form-group">
-                      <label>VIN Number: <span class="required">*</span></label>
+                      <label>VIN Number:</label>
                       <input type="text" class="form-control" id="fleetVin" placeholder="17-character VIN" maxlength="17" />
                     </div>
                     <div class="form-group">
@@ -5548,7 +5594,7 @@ further assistance.</textarea>
                 <div class="form-section">
                   <h4 class="form-section-title">Additional Details</h4>
                   
-                  <div class="form-row-2">
+                  <div class="form-row">
                     <div class="form-group">
                       <label>Garaged Location:</label>
                       <select class="form-control" id="fleetGaragedLocation">
@@ -5557,12 +5603,6 @@ further assistance.</textarea>
                         <option value="north">North Branch</option>
                         <option value="south">South Branch</option>
                         <option value="airport">Airport Facility</option>
-                      </select>
-                    </div>
-                    <div class="form-group">
-                      <label>Assigned Driver:</label>
-                      <select class="form-control" id="fleetAssignedDriver">
-                        <option value="">Not Assigned</option>
                       </select>
                     </div>
                   </div>
@@ -7910,7 +7950,104 @@ further assistance.</textarea>
         </div>
     </div>
 
-</script>
+    <!-- Create Vehicle Popup Modal -->
+    <div id="createVehicleModal" class="vehicle-popup-modal" style="display: none;">
+        <div class="vehicle-popup-overlay"></div>
+        <div class="vehicle-popup-container">
+            <div class="vehicle-popup-header">
+                <h2>Create New Vehicle</h2>
+                <button type="button" class="vehicle-popup-close" id="closeVehicleModalBtn">&times;</button>
+            </div>
+            <div class="vehicle-popup-body">
+                <iframe id="vehicleFormIframe" src="" frameborder="0"></iframe>
+            </div>
+            <div class="vehicle-popup-footer">
+                <button type="button" class="btn btn-primary" id="saveVehicleFromPopupBtn">Save & Close</button>
+                <button type="button" class="btn btn-secondary" id="cancelVehiclePopupBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+    /* Create Vehicle Popup Modal Styles */
+    .vehicle-popup-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10000;
+    }
+    .vehicle-popup-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+    }
+    .vehicle-popup-container {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 90%;
+        max-width: 900px;
+        height: 85%;
+        max-height: 700px;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .vehicle-popup-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #fff;
+    }
+    .vehicle-popup-header h2 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+    }
+    .vehicle-popup-close {
+        background: transparent;
+        border: none;
+        color: #fff;
+        font-size: 28px;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+        opacity: 0.8;
+        transition: opacity 0.2s;
+    }
+    .vehicle-popup-close:hover {
+        opacity: 1;
+    }
+    .vehicle-popup-body {
+        flex: 1;
+        overflow: hidden;
+    }
+    .vehicle-popup-body iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+    }
+    .vehicle-popup-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 12px 20px;
+        background: #f5f5f5;
+        border-top: 1px solid #e0e0e0;
+    }
+    </style>
+
     <script src="env.js"></script>
     <script src="CompanySettingsManager.js"></script>
     <script src="CompanySettingsUI.js"></script>

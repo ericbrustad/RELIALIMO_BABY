@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>Driver Portal | RELIALIMO</title>
+  <link rel="manifest" href="driver-portal-manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="driver-portal.css">
+  <!-- Load ENV first so window.ENV is available -->
+  <script src="env.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="screen active">
+      <div class="loading-content">
+        <div class="logo-pulse"><img src="/favicon.ico" alt="Logo" class="favicon-logo"></div>
+        <h1 class="brand-name">RELIA<img src="/favicon.ico" alt="" class="brand-icon">LIMO<span class="trademark">™</span></h1>
+        <p>Driver Portal</p>
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+
+    <!-- Login/Register Screen -->
+    <div id="authScreen" class="screen">
+      <div class="auth-container">
+        <div class="auth-header">
+          <img src="/favicon.ico" alt="Logo" class="auth-logo">
+          <h1 class="brand-name">RELIA<img src="/favicon.ico" alt="" class="brand-icon">LIMO<span class="trademark">™</span></h1>
+          <p>Driver Portal</p>
+        </div>
+
+        <!-- Login Form -->
+        <div id="loginForm" class="auth-form active">
+          <h2>Welcome to Professional</h2>
+          <div class="form-group">
+            <label for="loginEmail">Email</label>
+            <input type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label for="loginPassword">Password</label>
+            <div class="password-wrapper">
+              <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+              <button type="button" class="btn-show-password" data-target="loginPassword" aria-label="Show password">
+                <span class="eye-icon">👁️</span>
+              </button>
+            </div>
+          </div>
+          <button type="button" id="loginBtn" class="btn btn-primary btn-large">
+            Sign In
+          </button>
+          <div class="auth-switch">
+            <span>New driver?</span>
+            <button type="button" id="showRegisterBtn" class="btn-link">Create Account</button>
+          </div>
+        </div>
+
+        <!-- Registration Form (Multi-step) -->
+        <div id="registerForm" class="auth-form">
+          <div class="step-indicator">
+            <div class="step active" data-step="1">1</div>
+            <div class="step" data-step="2">2</div>
+            <div class="step" data-step="3">3</div>
+          </div>
+
+          <!-- Step 1: Personal Info -->
+          <div id="registerStep1" class="register-step active">
+            <h2>About You</h2>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="regFirstName">First Name *</label>
+                <input type="text" id="regFirstName" placeholder="John" required>
+              </div>
+              <div class="form-group">
+                <label for="regLastName">Last Name *</label>
+                <input type="text" id="regLastName" placeholder="Doe" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="regEmail">Email *</label>
+              <input type="email" id="regEmail" placeholder="john@example.com" required>
+            </div>
+            <div class="form-group">
+              <label for="regPhone">Cell Phone *</label>
+              <input type="tel" id="regPhone" placeholder="(555) 123-4567" required>
+            </div>
+            <div class="form-group">
+              <label for="regPassword">Create Password *</label>
+              <div class="password-wrapper">
+                <input type="password" id="regPassword" placeholder="Min 8 characters" required>
+                <button type="button" class="btn-show-password" data-target="regPassword" aria-label="Show password">
+                  <span class="eye-icon">👁️</span>
+                </button>
+              </div>
+            </div>
+            <button type="button" id="regNextStep1" class="btn btn-primary btn-large">
+              Continue →
+            </button>
+          </div>
+
+          <!-- Step 2: Company Info -->
+          <div id="registerStep2" class="register-step">
+            <h2>Your Company</h2>
+            <p class="step-subtitle">Optional - Leave blank if independent</p>
+            <div class="form-group">
+              <label for="regCompanyName">Company Name</label>
+              <input type="text" id="regCompanyName" placeholder="ABC Transportation LLC">
+            </div>
+            <div class="form-group">
+              <label for="regCompanyAddress">Address</label>
+              <input type="text" id="regCompanyAddress" placeholder="123 Main Street">
+            </div>
+            <div class="form-row form-row-3">
+              <div class="form-group">
+                <label for="regCompanyCity">City</label>
+                <input type="text" id="regCompanyCity" placeholder="City">
+              </div>
+              <div class="form-group">
+                <label for="regCompanyState">State</label>
+                <select id="regCompanyState">
+                  <option value="">--</option>
+                  <option value="AL">AL</option><option value="AK">AK</option><option value="AZ">AZ</option>
+                  <option value="AR">AR</option><option value="CA">CA</option><option value="CO">CO</option>
+                  <option value="CT">CT</option><option value="DE">DE</option><option value="FL">FL</option>
+                  <option value="GA">GA</option><option value="HI">HI</option><option value="ID">ID</option>
+                  <option value="IL">IL</option><option value="IN">IN</option><option value="IA">IA</option>
+                  <option value="KS">KS</option><option value="KY">KY</option><option value="LA">LA</option>
+                  <option value="ME">ME</option><option value="MD">MD</option><option value="MA">MA</option>
+                  <option value="MI">MI</option><option value="MN">MN</option><option value="MS">MS</option>
+                  <option value="MO">MO</option><option value="MT">MT</option><option value="NE">NE</option>
+                  <option value="NV">NV</option><option value="NH">NH</option><option value="NJ">NJ</option>
+                  <option value="NM">NM</option><option value="NY">NY</option><option value="NC">NC</option>
+                  <option value="ND">ND</option><option value="OH">OH</option><option value="OK">OK</option>
+                  <option value="OR">OR</option><option value="PA">PA</option><option value="RI">RI</option>
+                  <option value="SC">SC</option><option value="SD">SD</option><option value="TN">TN</option>
+                  <option value="TX">TX</option><option value="UT">UT</option><option value="VT">VT</option>
+                  <option value="VA">VA</option><option value="WA">WA</option><option value="WV">WV</option>
+                  <option value="WI">WI</option><option value="WY">WY</option><option value="DC">DC</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="regCompanyZip">Zip</label>
+                <input type="text" id="regCompanyZip" placeholder="12345">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="regCompanyPhone">Company Phone</label>
+              <input type="tel" id="regCompanyPhone" placeholder="(555) 987-6543">
+            </div>
+            <div class="btn-row">
+              <button type="button" id="regBackStep2" class="btn btn-secondary">← Back</button>
+              <button type="button" id="regNextStep2" class="btn btn-primary">Continue →</button>
+            </div>
+          </div>
+
+          <!-- Step 3: Vehicle Info -->
+          <div id="registerStep3" class="register-step">
+            <h2>Your Vehicle</h2>
+            <div class="form-group">
+              <label for="regVehicleType">Vehicle Type *</label>
+              <select id="regVehicleType" required>
+                <option value="">Select type...</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="regVehicleMake">Make</label>
+                <input type="text" id="regVehicleMake" placeholder="Lincoln">
+              </div>
+              <div class="form-group">
+                <label for="regVehicleModel">Model</label>
+                <input type="text" id="regVehicleModel" placeholder="Navigator">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="regVehicleYear">Year</label>
+                <input type="number" id="regVehicleYear" placeholder="2024" min="1990" max="2030">
+              </div>
+              <div class="form-group">
+                <label for="regVehicleColor">Color</label>
+                <input type="text" id="regVehicleColor" placeholder="Black">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="regVehiclePlate">License Plate *</label>
+              <input type="text" id="regVehiclePlate" placeholder="ABC-1234" required>
+            </div>
+            <div class="form-group">
+              <label for="regVehicleCapacity">Passenger Capacity</label>
+              <select id="regVehicleCapacity">
+                <option value="3">3 passengers</option>
+                <option value="4" selected>4 passengers</option>
+                <option value="5">5 passengers</option>
+                <option value="6">6 passengers</option>
+                <option value="7">7 passengers</option>
+                <option value="8">8+ passengers</option>
+              </select>
+            </div>
+            <div class="btn-row">
+              <button type="button" id="regBackStep3" class="btn btn-secondary">← Back</button>
+              <button type="button" id="regSubmit" class="btn btn-success btn-large">
+                🚀 Create Account
+              </button>
+            </div>
+          </div>
+
+          <div class="auth-switch">
+            <span>Already have an account?</span>
+            <button type="button" id="showLoginBtn" class="btn-link">Sign In</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Dashboard Screen -->
+    <div id="dashboardScreen" class="screen">
+      <!-- Top Header -->
+      <header class="dashboard-header">
+        <div class="header-left">
+          <div class="driver-avatar" id="driverAvatar">JD</div>
+          <div class="driver-info">
+            <span class="driver-name" id="driverName">John Doe</span>
+            <span class="driver-status" id="driverStatusBadge">
+              <span class="status-dot available"></span>
+              Available
+            </span>
+          </div>
+        </div>
+        <button type="button" id="menuBtn" class="btn-icon" aria-label="Menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+      </header>
+
+      <!-- Tab Navigation -->
+      <nav class="tab-nav">
+        <button class="tab active" data-tab="offered">
+          <span class="tab-icon">📨</span>
+          <span class="tab-label">Offered</span>
+          <span class="tab-badge" id="offeredBadge">0</span>
+        </button>
+        <button class="tab" data-tab="upcoming">
+          <span class="tab-icon">📅</span>
+          <span class="tab-label">Upcoming</span>
+          <span class="tab-badge" id="upcomingBadge">0</span>
+        </button>
+        <button class="tab" data-tab="active">
+          <span class="tab-icon">🚗</span>
+          <span class="tab-label">Active</span>
+          <span class="tab-badge" id="activeBadge">0</span>
+        </button>
+      </nav>
+
+      <!-- Tab Content -->
+      <main class="tab-content">
+        <!-- Offered Trips Tab -->
+        <div id="offeredTab" class="tab-panel active">
+          <div class="empty-state" id="offeredEmpty">
+            <div class="empty-icon">📭</div>
+            <h3>No Trip Offers</h3>
+            <p>New trip offers will appear here</p>
+          </div>
+          <div class="trip-list" id="offeredList"></div>
+        </div>
+
+        <!-- Upcoming Trips Tab -->
+        <div id="upcomingTab" class="tab-panel">
+          <div class="empty-state" id="upcomingEmpty">
+            <div class="empty-icon">📆</div>
+            <h3>No Upcoming Trips</h3>
+            <p>Accepted trips will appear here</p>
+          </div>
+          <div class="trip-list" id="upcomingList"></div>
+        </div>
+
+        <!-- Active Trip Tab -->
+        <div id="activeTab" class="tab-panel">
+          <div class="empty-state" id="activeEmpty">
+            <div class="empty-icon">🏁</div>
+            <h3>No Active Trip</h3>
+            <p>Start a trip to see it here</p>
+          </div>
+          <div id="activeTripCard" class="active-trip-card" style="display: none;">
+            <!-- Will be populated by JS -->
+          </div>
+        </div>
+      </main>
+
+      <!-- Quick Actions FAB -->
+      <div class="fab-container">
+        <button type="button" id="fabRefresh" class="fab fab-secondary" aria-label="Refresh">
+          🔄
+        </button>
+      </div>
+    </div>
+
+    <!-- Trip Detail Modal -->
+    <div id="tripDetailModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Trip Details</h2>
+          <button type="button" class="modal-close" id="closeTripDetail">&times;</button>
+        </div>
+        <div class="modal-body" id="tripDetailBody">
+          <!-- Populated by JS -->
+        </div>
+        <div class="modal-footer" id="tripDetailFooter">
+          <!-- Action buttons populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Change Modal -->
+    <div id="statusModal" class="modal">
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h2>Update Status</h2>
+          <button type="button" class="modal-close" id="closeStatusModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="status-options" id="statusOptions">
+            <!-- Populated by JS based on current status -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Post-Trip Modal -->
+    <div id="postTripModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Complete Trip</h2>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="waitTime">Wait Time (minutes)</label>
+            <input type="number" id="waitTime" value="0" min="0">
+          </div>
+          <div class="form-group">
+            <label for="extraStops">Extra Stops</label>
+            <input type="number" id="extraStops" value="0" min="0">
+          </div>
+          <div class="form-group">
+            <label for="tollsParking">Tolls/Parking ($)</label>
+            <input type="number" id="tollsParking" value="0" min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label for="tipAmount">Tip Amount ($)</label>
+            <input type="number" id="tipAmount" value="0" min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label for="driverNotes">Notes</label>
+            <textarea id="driverNotes" rows="3" placeholder="Any notes about the trip..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="submitPostTrip" class="btn btn-success btn-large">
+            ✓ Complete Trip
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Menu Sidebar -->
+    <div id="menuSidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="driver-avatar large" id="sidebarAvatar">JD</div>
+        <div class="driver-name" id="sidebarName">John Doe</div>
+        <div class="driver-email" id="sidebarEmail">john@example.com</div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="sidebar-link" id="menuProfile">
+          <span>👤</span> My Profile
+        </a>
+        <a href="#" class="sidebar-link" id="menuVehicle">
+          <span>🚗</span> My Vehicle
+        </a>
+        <a href="#" class="sidebar-link" id="menuHistory">
+          <span>📋</span> Trip History
+        </a>
+        <a href="#" class="sidebar-link" id="menuEarnings">
+          <span>💰</span> Earnings
+        </a>
+        <hr>
+        <a href="#" class="sidebar-link" id="menuSettings">
+          <span>⚙️</span> Settings
+        </a>
+        <a href="#" class="sidebar-link" id="menuHelp">
+          <span>❓</span> Help & Support
+        </a>
+        <a href="#" class="sidebar-link danger" id="menuLogout">
+          <span>🚪</span> Sign Out
+        </a>
+        <hr>
+        <a href="#" class="sidebar-link danger" id="menuDeleteAccount">
+          <span>🗑️</span> Delete Account (Testing)
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <small>RELIALIMO Driver Portal v1.0</small>
+      </div>
+    </div>
+    <div id="menuOverlay" class="sidebar-overlay"></div>
+
+    <!-- Delete Account Confirmation Modal -->
+    <div id="deleteAccountModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header danger-header">
+          <h2>⚠️ Delete Driver Account</h2>
+        </div>
+        <div class="modal-body">
+          <p style="margin-bottom: 16px;"><strong>This will permanently delete:</strong></p>
+          <ul style="margin: 0 0 16px 20px; line-height: 1.8;">
+            <li>Your driver profile</li>
+            <li>Your registered vehicle(s)</li>
+            <li>All trip assignments</li>
+          </ul>
+          <p style="color: #ff6b6b; font-weight: 600;">This action cannot be undone!</p>
+          <div class="form-group" style="margin-top: 20px;">
+            <label>Type your email to confirm:</label>
+            <input type="email" id="deleteConfirmEmail" placeholder="Enter your email">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="cancelDeleteBtn" class="btn btn-secondary">Cancel</button>
+          <button type="button" id="confirmDeleteBtn" class="btn btn-danger">🗑️ Delete My Account</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script type="module" src="driver-portal.js"></script>
+</body>
+</html>

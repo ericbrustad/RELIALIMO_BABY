@@ -292,8 +292,8 @@
               </div>
             </section>
 
-            <!-- Booking Agent Section -->
-            <section class="panel">
+            <!-- Booking Agent Section (hidden by default, shown when agent present or account requires it) -->
+            <section class="panel" id="bookingAgentSection" style="display: none;">
               <div class="panel-header">
                 <h2 class="panel-title">Booking Agent</h2>
                 <button type="button" id="copyBillingToBookingBtn" class="btn-icon" title="Copy from Billing" style="margin-left: auto; padding: 6px 12px; background: #17a2b8; color: white;">📋 Copy from Billing</button>
@@ -325,6 +325,13 @@
                 </div>
               </div>
             </section>
+
+            <!-- Add Booking Agent Link (shown when section is hidden) -->
+            <div id="addBookingAgentLink" class="add-section-link">
+              <button type="button" id="showBookingAgentBtn" class="btn-link-add">
+                ➕ Add Booking Agent
+              </button>
+            </div>
           </div>
 
           <!-- Middle Column: Trip Details -->
@@ -382,311 +389,305 @@
                   </div>
                 </div>
 
-                <div class="subsection-title" style="margin-top: 20px;">Address</div>
+                <div class="subsection-title" style="margin-top: 20px;">Trip Routing</div>
 
-                <!-- Location Type Icons -->
-                <div class="location-types">
-                  <div class="location-type-option">
-                    <input type="radio" name="locationType" value="stored" id="storedAddress" 
-                           onchange="handleLocationTypeChange('stored')" />
-                    <label for="storedAddress">🏠 Stored Address</label>
+                <!-- Consolidated Routing Panel -->
+                <div class="routing-panel">
+                  <!-- Routing Table (always visible) -->
+                  <div class="stored-routing">
+                    <div class="routing-info-box" id="routingInfoBox">
+                      <table class="address-table" style="width: 100%;">
+                        <thead>
+                          <tr>
+                            <th>Type</th>
+                            <th>Location Name</th>
+                            <th>Address</th>
+                            <th>Time In</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody id="addressTableBody">
+                          <tr class="empty-row">
+                            <td colspan="5" class="empty-message">No stops added. Click a button below to add pick-up, drop-off, or stops.</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                  <div class="location-type-option">
-                    <input type="radio" name="locationType" value="airport" id="airport" 
-                           onchange="handleLocationTypeChange('airport')" />
-                    <label for="airport">✈️ Airport</label>
-                  </div>
-                  <div class="location-type-option">
-                    <input type="radio" name="locationType" value="fbo" id="fbo" 
-                           onchange="handleLocationTypeChange('fbo')" />
-                    <label for="fbo">🛩️ FBO</label>
-                  </div>
-                </div>
 
-                <!-- Location Type Dropdowns (shown when location type selected) -->
-                <div id="storedAddressDropdown" class="location-dropdown" style="display: none;">
-                  <div class="form-group">
-                    <label>Select Stored Address</label>
-                    <select id="storedAddressSelect" class="form-control">
-                      <option value="">Choose an address...</option>
-                      <option value="home">Home Office - 123 Main St</option>
-                      <option value="warehouse">Warehouse - 456 Industrial Ave</option>
-                      <option value="hotel1">Beverly Hills Hotel - 9641 Sunset Blvd</option>
-                      <option value="hotel2">The Ritz-Carlton - 900 W Olympic Blvd</option>
-                    </select>
+                  <!-- Quick Add Buttons -->
+                  <div class="routing-quick-actions">
+                    <button type="button" class="routing-action-btn pickup-btn" id="addPickupBtn" title="Add Pick-up">
+                      <span class="action-icon">📍</span> Pick-up
+                    </button>
+                    <button type="button" class="routing-action-btn dropoff-btn" id="addDropoffBtn" title="Add Drop-off">
+                      <span class="action-icon">🎯</span> Drop-off
+                    </button>
+                    <button type="button" class="routing-action-btn stop-btn" id="addStopBtn" title="Add Stop">
+                      <span class="action-icon">⏸️</span> Stop
+                    </button>
+                    <button type="button" class="routing-action-btn wait-btn" id="addWaitBtn" title="Add Wait">
+                      <span class="action-icon">⏱️</span> Wait
+                    </button>
                   </div>
-                </div>
 
-                <div id="airportDropdown" class="location-dropdown" style="display: none;">
-                  <div class="form-group" style="position: relative;">
-                    <label>Select Airport</label>
-                    <input type="text" id="airportSearch" class="form-control" placeholder="Search airport code or city name (e.g., LAX, Los Angeles)..." autocomplete="off" 
-                           oninput="handleAirportSearch(this.value)" />
-                    <div id="airportSuggestions" class="airport-suggestions"></div>
-                  </div>
-                  <input type="hidden" id="airportSelect" />
-
-                  <!-- Airline and Flight Information (shown when airport selected) -->
-                  <div id="airlineSection" style="display: none;">
-                    <div class="subsection-title" style="margin-top: 15px;">Airline Information</div>
-                    
-                    <div class="form-group" style="position: relative;">
-                      <label>Airline</label>
-                      <input type="text" id="airlineSearch" class="form-control" placeholder="Search airline..." autocomplete="off" 
-                             oninput="handleAirlineSearch(this.value)" />
-                      <div id="airlineSuggestions" class="airline-suggestions"></div>
+                  <!-- Expandable Address Entry Form -->
+                  <div class="address-entry-card" id="addressEntryCard" style="display: none;">
+                    <div class="entry-card-header">
+                      <span class="entry-type-label" id="entryTypeLabel">Adding: Pick-up</span>
+                      <button type="button" class="close-entry-btn" id="closeEntryBtn" title="Close">✕</button>
                     </div>
 
-                    <div class="form-row">
-                      <div class="form-group">
-                        <label>Airline Code</label>
-                        <input type="text" id="airlineCode" class="form-control" placeholder="e.g., AA" readonly />
+                    <!-- Location Type Tabs -->
+                    <div class="location-type-tabs">
+                      <button type="button" class="location-tab active" data-type="search" id="tabSearch">
+                        🔍 Search
+                      </button>
+                      <button type="button" class="location-tab" data-type="stored" id="tabStored">
+                        🏠 Stored
+                      </button>
+                      <button type="button" class="location-tab" data-type="airport" id="tabAirport">
+                        ✈️ Airport
+                      </button>
+                      <button type="button" class="location-tab" data-type="fbo" id="tabFBO">
+                        🛩️ FBO
+                      </button>
+                    </div>
+
+                    <!-- Search/Manual Entry Panel -->
+                    <div class="location-panel" id="panelSearch">
+                      <div class="form-group location-name-group" style="position: relative;">
+                        <label>Location Description / Name</label>
+                        <input type="text" id="locationName" class="form-control location-name" placeholder="Search addresses, businesses, landmarks..." autocomplete="off" />
+                        <div id="locationNameSuggestions" class="location-suggestions"></div>
                       </div>
+
+                      <div class="form-group" style="position: relative; z-index: 100;">
+                        <label>Address 1</label>
+                        <input type="text" id="address1" class="form-control address-input" placeholder="Street address..." />
+                        <div id="addressSuggestions" class="address-suggestions"></div>
+                      </div>
+
                       <div class="form-group">
-                        <label>Airline Name</label>
-                        <input type="text" id="airlineName" class="form-control" placeholder="Full airline name" readonly />
+                        <label>Address 2</label>
+                        <input type="text" id="address2" class="form-control" />
+                      </div>
+
+                      <div class="address-grid">
+                        <div class="form-group">
+                          <label>City</label>
+                          <input type="text" id="city" class="form-control" />
+                        </div>
+                        <div class="form-group">
+                          <label>State</label>
+                          <select id="state" class="form-control">
+                            <option value="">--</option>
+                            <option value="AL">AL</option>
+                            <option value="AK">AK</option>
+                            <option value="AZ">AZ</option>
+                            <option value="AR">AR</option>
+                            <option value="CA">CA</option>
+                            <option value="CO">CO</option>
+                            <option value="CT">CT</option>
+                            <option value="DE">DE</option>
+                            <option value="DC">DC</option>
+                            <option value="FL">FL</option>
+                            <option value="GA">GA</option>
+                            <option value="HI">HI</option>
+                            <option value="ID">ID</option>
+                            <option value="IL">IL</option>
+                            <option value="IN">IN</option>
+                            <option value="IA">IA</option>
+                            <option value="KS">KS</option>
+                            <option value="KY">KY</option>
+                            <option value="LA">LA</option>
+                            <option value="ME">ME</option>
+                            <option value="MD">MD</option>
+                            <option value="MA">MA</option>
+                            <option value="MI">MI</option>
+                            <option value="MN">MN</option>
+                            <option value="MS">MS</option>
+                            <option value="MO">MO</option>
+                            <option value="MT">MT</option>
+                            <option value="NE">NE</option>
+                            <option value="NV">NV</option>
+                            <option value="NH">NH</option>
+                            <option value="NJ">NJ</option>
+                            <option value="NM">NM</option>
+                            <option value="NY">NY</option>
+                            <option value="NC">NC</option>
+                            <option value="ND">ND</option>
+                            <option value="OH">OH</option>
+                            <option value="OK">OK</option>
+                            <option value="OR">OR</option>
+                            <option value="PA">PA</option>
+                            <option value="RI">RI</option>
+                            <option value="SC">SC</option>
+                            <option value="SD">SD</option>
+                            <option value="TN">TN</option>
+                            <option value="TX">TX</option>
+                            <option value="UT">UT</option>
+                            <option value="VT">VT</option>
+                            <option value="VA">VA</option>
+                            <option value="WA">WA</option>
+                            <option value="WV">WV</option>
+                            <option value="WI">WI</option>
+                            <option value="WY">WY</option>
+                          </select>
+                        </div>
+                        <div class="form-group">
+                          <label>Zip</label>
+                          <input type="text" id="zipCode" class="form-control" />
+                        </div>
+                      </div>
+
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Country</label>
+                          <select id="country" class="form-control">
+                            <option value="US">US</option>
+                            <option value="CA">CA</option>
+                            <option value="MX">MX</option>
+                          </select>
+                        </div>
+                        <div class="form-group">
+                          <label>Time In</label>
+                          <input type="time" id="timeIn" class="form-control" />
+                        </div>
+                      </div>
+
+                      <div class="form-group">
+                        <label>Notes</label>
+                        <textarea id="locationNotes" class="form-control" rows="2" placeholder="Location-specific notes..."></textarea>
                       </div>
                     </div>
 
-                    <div class="form-group" style="position: relative;">
-                      <label>Flight Number</label>
-                      <input type="text" id="flightNumber" class="form-control" placeholder="Enter flight number..." autocomplete="off" 
-                             oninput="handleFlightNumberSearch(this.value)" />
-                      <div id="flightSuggestions" class="flight-suggestions"></div>
-                    </div>
-
-                    <div class="form-row">
+                    <!-- Stored Address Panel -->
+                    <div class="location-panel" id="panelStored" style="display: none;">
                       <div class="form-group">
-                        <label>Terminal/Gate</label>
-                        <input type="text" id="terminalGate" class="form-control" placeholder="Terminal/Gate" readonly />
+                        <label>Select Stored Address</label>
+                        <select id="storedAddressSelect" class="form-control">
+                          <option value="">Choose a saved address...</option>
+                        </select>
                       </div>
-                      <div class="form-group">
-                        <label>Flight Status</label>
-                        <input type="text" id="flightStatus" class="form-control" placeholder="Status" readonly />
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Time In</label>
+                          <input type="time" id="storedTimeIn" class="form-control" />
+                        </div>
                       </div>
                     </div>
 
-                    <div class="form-row">
-                      <div class="form-group">
-                        <label>Scheduled Arrival</label>
-                        <input type="text" id="scheduledArrival" class="form-control" placeholder="Scheduled" readonly />
+                    <!-- Airport Panel -->
+                    <div class="location-panel" id="panelAirport" style="display: none;">
+                      <div class="form-group" style="position: relative;">
+                        <label>Airport</label>
+                        <input type="text" id="airportSearch" class="form-control" placeholder="Search airport code or city (e.g., LAX, Los Angeles)..." autocomplete="off" />
+                        <div id="airportSuggestions" class="airport-suggestions"></div>
+                        <input type="hidden" id="airportSelect" />
                       </div>
-                      <div class="form-group">
-                        <label>Estimated Arrival</label>
-                        <input type="text" id="estimatedArrival" class="form-control" placeholder="Estimated" readonly />
+
+                      <div id="airlineSection" style="display: none;">
+                        <div class="form-row">
+                          <div class="form-group" style="position: relative; flex: 2;">
+                            <label>Airline</label>
+                            <input type="text" id="airlineSearch" class="form-control" placeholder="Search airline..." autocomplete="off" />
+                            <div id="airlineSuggestions" class="airline-suggestions"></div>
+                          </div>
+                          <div class="form-group" style="flex: 1;">
+                            <label>Code</label>
+                            <input type="text" id="airlineCode" class="form-control" readonly />
+                          </div>
+                        </div>
+
+                        <div class="form-row">
+                          <div class="form-group" style="position: relative;">
+                            <label>Flight #</label>
+                            <input type="text" id="flightNumber" class="form-control" placeholder="Flight number..." autocomplete="off" />
+                            <div id="flightSuggestions" class="flight-suggestions"></div>
+                          </div>
+                          <div class="form-group">
+                            <label>Terminal/Gate</label>
+                            <input type="text" id="terminalGate" class="form-control" readonly />
+                          </div>
+                        </div>
+
+                        <div class="form-row">
+                          <div class="form-group">
+                            <label>Sched. Arrival</label>
+                            <input type="text" id="scheduledArrival" class="form-control" readonly />
+                          </div>
+                          <div class="form-group">
+                            <label>Est. Arrival</label>
+                            <input type="text" id="estimatedArrival" class="form-control" readonly />
+                          </div>
+                          <div class="form-group">
+                            <label>Status</label>
+                            <input type="text" id="flightStatus" class="form-control" readonly />
+                          </div>
+                        </div>
+
+                        <div class="form-row">
+                          <div class="form-group">
+                            <label>Origin</label>
+                            <input type="text" id="originAirport" class="form-control" readonly />
+                          </div>
+                          <div class="form-group">
+                            <label>Meet Option</label>
+                            <select id="meetOption" class="form-control">
+                              <option value="curbside">Curbside</option>
+                              <option value="baggage">Baggage Claim</option>
+                              <option value="arrivals">Arrivals Hall</option>
+                              <option value="cell-lot">Cell Phone Lot</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <input type="hidden" id="airlineName" />
                       </div>
                     </div>
 
-                    <div class="form-group">
-                      <label>Origin Airport</label>
-                      <input type="text" id="originAirport" class="form-control" placeholder="Origin" readonly />
+                    <!-- FBO Panel -->
+                    <div class="location-panel" id="panelFBO" style="display: none;">
+                      <div class="form-group">
+                        <label>Select FBO</label>
+                        <select id="fboSelect" class="form-control">
+                          <option value="">Choose an FBO...</option>
+                          <option value="signature-msp">Signature Flight Support - MSP</option>
+                          <option value="mercury-air-center">Mercury Air Center - MSP</option>
+                          <option value="north-star">North Star Aviation - MSP</option>
+                          <option value="jetlink-aviation">JetLink Aviation - MSP</option>
+                          <option value="premier-aviation">Premier Aviation Services - MSP</option>
+                        </select>
+                      </div>
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Time In</label>
+                          <input type="time" id="fboTimeIn" class="form-control" />
+                        </div>
+                      </div>
                     </div>
 
-                    <div class="form-group">
-                      <label>Meet Option</label>
-                      <select id="meetOption" class="form-control">
-                        <option value="curbside">Curbside Pickup</option>
-                        <option value="baggage">Baggage Claim</option>
-                        <option value="arrivals">Arrivals Hall</option>
-                        <option value="cell-lot">Cell Phone Lot</option>
-                      </select>
-                    </div>
-
-                    <div class="flight-status-indicator" id="flightStatusIndicator" style="display: none;">
-                      <div class="status-icon">✈️</div>
-                      <div class="status-text">Flight data loaded successfully</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div id="fboDropdown" class="location-dropdown" style="display: none;">
-                  <div class="form-group">
-                    <label>Select FBO - Minneapolis/St Paul Area</label>
-                    <select id="fboSelect" class="form-control" onchange="handleFBOSelection(this.value)">
-                      <option value="">Choose an FBO...</option>
-                      <option value="signature-msp">Signature Flight Support - MSP</option>
-                      <option value="mercury-air-center">Mercury Air Center - MSP</option>
-                      <option value="north-star">North Star Aviation - MSP</option>
-                      <option value="jetlink-aviation">JetLink Aviation - MSP</option>
-                      <option value="premier-aviation">Premier Aviation Services - MSP</option>
-                    </select>
-                  </div>
-                </div>
-
-                <!-- Address Entry Form -->
-                <div class="address-entry">
-                  <div class="form-group location-name-group" style="position: relative;">
-                      <label>Location Description/ Name</label>
-                        <input type="text" id="locationName" class="form-control location-name" placeholder="Search Google Places (name/landmark)..." autocomplete="off" />
-                    <div id="locationNameSuggestions" class="location-suggestions"></div>
-                  </div>
-
-                  <div class="form-group" style="position: relative; z-index: 100;">
-                      <label>Address 1</label>
-                        <input type="text" id="address1" class="form-control address-input" placeholder="Search Google Maps / type address..." />
-                    <div id="addressSuggestions" class="address-suggestions"></div>
-                  </div>
-
-                  <div class="form-group">
-                    <label>Address 2</label>
-                    <input type="text" id="address2" class="form-control" />
-                  </div>
-
-                  <div class="address-grid">
-                    <div class="form-group">
-                      <label>City</label>
-                      <input type="text" id="city" class="form-control" />
-                    </div>
-                    <div class="form-group">
-                      <label>State/Prov</label>
-                      <select id="state" class="form-control">
-                        <option value="">Select state</option>
-                        <option value="AL">AL</option>
-                        <option value="AK">AK</option>
-                        <option value="AZ">AZ</option>
-                        <option value="AR">AR</option>
-                        <option value="CA">CA</option>
-                        <option value="CO">CO</option>
-                        <option value="CT">CT</option>
-                        <option value="DE">DE</option>
-                        <option value="DC">DC</option>
-                        <option value="FL">FL</option>
-                        <option value="GA">GA</option>
-                        <option value="HI">HI</option>
-                        <option value="ID">ID</option>
-                        <option value="IL">IL</option>
-                        <option value="IN">IN</option>
-                        <option value="IA">IA</option>
-                        <option value="KS">KS</option>
-                        <option value="KY">KY</option>
-                        <option value="LA">LA</option>
-                        <option value="ME">ME</option>
-                        <option value="MD">MD</option>
-                        <option value="MA">MA</option>
-                        <option value="MI">MI</option>
-                        <option value="MN">MN</option>
-                        <option value="MS">MS</option>
-                        <option value="MO">MO</option>
-                        <option value="MT">MT</option>
-                        <option value="NE">NE</option>
-                        <option value="NV">NV</option>
-                        <option value="NH">NH</option>
-                        <option value="NJ">NJ</option>
-                        <option value="NM">NM</option>
-                        <option value="NY">NY</option>
-                        <option value="NC">NC</option>
-                        <option value="ND">ND</option>
-                        <option value="OH">OH</option>
-                        <option value="OK">OK</option>
-                        <option value="OR">OR</option>
-                        <option value="PA">PA</option>
-                        <option value="RI">RI</option>
-                        <option value="SC">SC</option>
-                        <option value="SD">SD</option>
-                        <option value="TN">TN</option>
-                        <option value="TX">TX</option>
-                        <option value="UT">UT</option>
-                        <option value="VT">VT</option>
-                        <option value="VA">VA</option>
-                        <option value="WA">WA</option>
-                        <option value="WV">WV</option>
-                        <option value="WI">WI</option>
-                        <option value="WY">WY</option>
-                      </select>
-                    </div>
-                    <div class="form-group">
-                      <label>Zip/Post</label>
-                      <input type="text" id="zipCode" class="form-control" />
+                    <!-- Create Button -->
+                    <div class="entry-card-actions">
+                      <button type="button" class="btn btn-secondary" id="cancelEntryBtn">Cancel</button>
+                      <button type="button" class="btn btn-create" id="createStopBtn">CREATE</button>
                     </div>
                   </div>
 
-                  <div class="form-group">
-                    <label>Country</label>
-                    <select id="country" class="form-control">
-                      <option value="US">United States</option>
-                      <option value="CA">Canada</option>
-                      <option value="MX">Mexico</option>
-                    </select>
-                  </div>
-
-                  <div class="form-group">
-                    <label>Notes</label>
-                    <textarea id="locationNotes" class="form-control" rows="3"></textarea>
-                  </div>
-
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label>Phone Number</label>
-                      <input type="tel" id="locationPhone" class="form-control" placeholder="? + Enter number" />
+                  <!-- Route Metrics (show after 2+ stops) -->
+                  <div id="routeInfo" class="route-info" style="display: none;">
+                    <div class="route-details-inline">
+                      <div class="route-metric">
+                        <span class="route-label">Distance:</span>
+                        <span class="route-value" id="routeDistance">-</span>
+                      </div>
+                      <div class="route-metric">
+                        <span class="route-label">Duration:</span>
+                        <span class="route-value" id="routeDuration">-</span>
+                      </div>
                     </div>
-                    <div class="form-group">
-                      <label>Time In</label>
-                      <input type="time" id="timeIn" class="form-control" />
-                    </div>
-                  </div>
-
-                  <!-- Stop Type Radio Buttons -->
-                  <div class="stop-type-selector">
-                    <label class="radio-option">
-                      <input type="radio" name="stopType" value="pickup" checked />
-                      <span>Pick-up</span>
-                    </label>
-                    <label class="radio-option">
-                      <input type="radio" name="stopType" value="dropoff" />
-                      <span>Drop-off</span>
-                    </label>
-                    <label class="radio-option">
-                      <input type="radio" name="stopType" value="stop" />
-                      <span>Stop</span>
-                    </label>
-                    <label class="radio-option">
-                      <input type="radio" name="stopType" value="wait" />
-                      <span>Wait</span>
-                    </label>
-                    <button id="createStopBtn" type="button" class="btn btn-create btn-create-inline">CREATE</button>
-                  </div>
-                </div>
-
-                <!-- Stored Routing Information -->
-                <div class="stored-routing">
-                  <div class="subsection-title">Pick-up / Drop-off / Stops</div>
-                  <div class="routing-info-box" id="routingInfoBox">
-                    <table class="address-table" style="width: 100%;">
-                      <thead>
-                        <tr>
-                          <th>Type</th>
-                          <th>Location Name</th>
-                          <th>Address</th>
-                          <th>Time In</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody id="addressTableBody">
-                        <!-- Address rows will be added here dynamically -->
-                        <tr class="empty-row">
-                          <td colspan="5" class="empty-message">No addresses added yet. Use the form above to add addresses.</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <!-- Route Information -->
-                <div id="routeInfo" class="route-info" style="display: none;">
-                  <div class="subsection-title" style="margin-top: 20px;">Route Information</div>
-                  <div class="route-details">
-                    <div class="route-detail-row">
-                      <span class="route-label">Distance (miles by car):</span>
-                      <span class="route-value" id="routeDistance">-</span>
-                    </div>
-                    <div class="route-detail-row">
-                      <span class="route-label">Duration:</span>
-                      <span class="route-value" id="routeDuration">-</span>
-                    </div>
-                    <div class="route-detail-row">
-                      <span class="route-label">Directions:</span>
-                      <div id="routeDirections" class="route-directions"></div>
-                    </div>
+                    <div id="routeDirections" class="route-directions" style="display: none;"></div>
                   </div>
                 </div>
 
@@ -964,6 +965,43 @@
 
                 <!-- Action Buttons -->
                 <div class="form-divider"></div>
+
+                <!-- Rate Configuration Summary -->
+                <div class="rate-config-panel" id="rateConfigPanel">
+                  <div class="rate-config-header">
+                    <span class="rate-config-title">📊 Pricing Configuration</span>
+                    <button type="button" class="rate-config-toggle" id="toggleRateConfig" title="Show/Hide rate details">▼</button>
+                  </div>
+                  <div class="rate-config-body" id="rateConfigBody">
+                    <div class="rate-row">
+                      <div class="rate-label">Service Type:</div>
+                      <div class="rate-value" id="rateServiceType">--</div>
+                      <div class="rate-label">Pricing Basis:</div>
+                      <div class="rate-value" id="ratePricingBasis">--</div>
+                    </div>
+                    <div class="rate-row">
+                      <div class="rate-label">Vehicle Type:</div>
+                      <div class="rate-value" id="rateVehicleType">--</div>
+                      <div class="rate-label">Base Rate:</div>
+                      <div class="rate-value" id="rateBaseRate">$0.00</div>
+                    </div>
+                    <div class="rate-row">
+                      <div class="rate-label">Per Hour:</div>
+                      <div class="rate-value" id="ratePerHour">$0.00</div>
+                      <div class="rate-label">Per Mile:</div>
+                      <div class="rate-value" id="ratePerMile">$0.00</div>
+                    </div>
+                    <div class="rate-row">
+                      <div class="rate-label">Min Hours:</div>
+                      <div class="rate-value" id="rateMinHours">0</div>
+                      <div class="rate-label">Gratuity:</div>
+                      <div class="rate-value" id="rateGratuity">0%</div>
+                    </div>
+                    <div class="rate-config-actions">
+                      <button type="button" class="btn btn-small btn-secondary" id="applyRatesBtn">Apply Rates to Costs</button>
+                    </div>
+                  </div>
+                </div>
 
                 <!-- Cost Tabs -->
                 <div class="cost-tabs">
@@ -1886,12 +1924,25 @@
         window.editingStopId = null;
       }
       function handleCreateStop() {
-        console.log('➕ Creating stop...');
+        console.log('➕ handleCreateStop called!');
         
-        // Get form values
-        const stopType = document.querySelector('input[name="stopType"]:checked').value;
+        // Get form values - use currentStopType from routing panel (new UI) or fallback to radio buttons
+        const radioBtn = document.querySelector('input[name="stopType"]:checked');
+        const stopType = radioBtn ? radioBtn.value : (window.reservationFormInstance?.currentStopType || 'pickup');
+        console.log('📋 Stop type:', stopType);
         const locationName = document.getElementById('locationName').value.trim();
         const address1 = document.getElementById('address1').value.trim();
+        console.log('📝 Form values - locationName:', locationName, 'address1:', address1);
+        
+        // Validate - need either location name or address (unless airport or FBO)
+        if (!locationName && !address1 && !airportCode && !fboSelect) {
+          console.log('⚠️ Need location name, address, airport, or FBO');
+          alert('Please enter a location name, address, select an airport, or select an FBO.');
+          return;
+        }
+        console.log('✅ Validation passed, proceeding to create stop');
+        
+        // Get all form values
         const address2 = document.getElementById('address2').value.trim();
         const city = document.getElementById('city').value.trim();
         const state = document.getElementById('state').value.trim();
@@ -1901,26 +1952,50 @@
         const notes = document.getElementById('locationNotes').value.trim();
         const timeIn = document.getElementById('timeIn').value.trim();
         
-        // Get airport info if selected
-        const airportCode = document.getElementById('airportSelect').value;
-        const airlineCode = document.getElementById('airlineCode').value;
-        const flightNumber = document.getElementById('flightNumber').value.trim();
-        const terminalGate = document.getElementById('terminalGate').value.trim();
-        const flightStatus = document.getElementById('flightStatus').value.trim();
+        console.log('📋 All form values:', { locationName, address1, address2, city, state, zipCode, country, phone, notes, timeIn });
         
-        // Get FBO info if selected
-        const fboSelect = document.getElementById('fboSelect').value;
-        let fboInfo = null;
-        if (fboSelect && fboDatabase[fboSelect]) {
-          fboInfo = fboDatabase[fboSelect];
-        }
-
-        // Validate - need either location name or address (unless airport or FBO)
-        if (!locationName && !address1 && !airportCode && !fboSelect) {
-          console.log('⚠️ Need location name, address, airport, or FBO');
-          alert('Please enter a location name, address, select an airport, or select an FBO.');
-          return;
-        }
+        // Build full address
+        let fullAddress = address1;
+        if (address2) fullAddress += `, ${address2}`;
+        if (city) fullAddress += `, ${city}`;
+        if (state) fullAddress += ` ${state}`;
+        if (zipCode) fullAddress += ` ${zipCode}`;
+        if (country) fullAddress += `, ${country}`;
+        
+        console.log('🏗️ Built full address:', fullAddress);
+        
+        // Create / update stop object with ALL details including airport and FBO
+        const isEditing = !!window.editingStopId;
+        const stopId = isEditing ? window.editingStopId : ('stop_' + Date.now());
+        console.log('🆔 Generated stopId:', stopId, 'isEditing:', isEditing);
+        
+        const stopData = {
+          id: stopId,
+          stopType: stopType,
+          locationName: locationName || (fboInfo?.name) || (airportCode ? `Airport: ${airportCode}` : ''),
+          address1: address1 || (fboInfo?.address) || '',
+          address2: address2 || (fboInfo?.address ? '' : ''),
+          city: city || (fboInfo?.city) || '',
+          state: state || (fboInfo?.state) || '',
+          zipCode: zipCode || (fboInfo?.zip) || '',
+          country: country || 'US',
+          phone: phone || (fboInfo?.phone) || '',
+          notes: notes || (fboInfo?.services ? `Services: ${fboInfo.services}` : ''),
+          timeIn: timeIn,
+          fullAddress: fullAddress || (fboInfo ? `${fboInfo.address}, ${fboInfo.city}, ${fboInfo.state} ${fboInfo.zip}` : ''),
+          // Airport info
+          airportCode: airportCode,
+          airline: airlineCode,
+          flightNumber: flightNumber,
+          terminalGate: terminalGate,
+          flightStatus: flightStatus,
+          // FBO info
+          fboId: fboSelect,
+          fboName: fboInfo?.name || '',
+          fboEmail: fboInfo?.email || '',
+          createdAt: new Date().toISOString()
+        };
+        console.log('📦 Created stopData object:', stopData);
 
         // Build full address
         let fullAddress = address1;
@@ -1959,6 +2034,7 @@
           fboEmail: fboInfo?.email || '',
           createdAt: new Date().toISOString()
         };
+        console.log('📦 Created stopData:', stopData);
 
         // Save to global trips array
         if (isEditing) {
@@ -1972,11 +2048,13 @@
 
         // Get table body
         const tableBody = document.getElementById('addressTableBody');
+        console.log('📊 Table body found:', !!tableBody);
         
         // Remove empty row if it exists
         const emptyRow = tableBody.querySelector('.empty-row');
         if (emptyRow) {
           emptyRow.remove();
+          console.log('🗑️ Removed empty row');
         }
 
         // Create or update row with stop type badge
@@ -1984,6 +2062,7 @@
         const row = existingRow || document.createElement('tr');
         row.id = stopId;
         row.dataset.stopId = stopId;
+        console.log('🏗️ Creating/updating table row with ID:', stopId);
         // Store full stop data for reliable save/load
         row.dataset.stopType = stopData.stopType || '';
         row.dataset.locationName = stopData.locationName || '';
@@ -2047,15 +2126,22 @@
             <button class="btn-remove" style="padding: 4px 8px; font-size: 12px; cursor: pointer;" onclick="removeStop('${stopId}')">✕ Remove</button>
           </td>
         `;
+        console.log('📋 Row HTML created:', row.innerHTML.substring(0, 200) + '...');
 
         if (!existingRow) {
           tableBody.appendChild(row);
+          console.log('➕ New row added to table, total rows now:', tableBody.children.length);
+        } else {
+          console.log('🔄 Existing row updated');
         }
-        console.log('✅ Stop added to trip table with airport/FBO info');
+        console.log('🎯 Final row element:', row);
+        console.log('✅ Stop added to trip table with stopType:', stopType);
 
         // Refresh route metrics so distance/duration and quantities stay in sync
         try {
+          console.log('🔄 Refreshing route metrics...');
           window.reservationFormInstance?.updateTripMetricsFromStops?.();
+          console.log('✅ Route metrics refreshed');
         } catch (err) {
           console.warn('⚠️ Failed to refresh route metrics after adding stop:', err);
         }
@@ -2079,7 +2165,16 @@
         document.getElementById('terminalGate').value = '';
         document.getElementById('flightStatus').value = '';
         document.getElementById('fboSelect').value = '';
-        document.querySelector('input[name="stopType"][value="pickup"]').checked = true;
+        console.log('🧹 Form cleared successfully');
+        
+        // Reset stop type radio if it exists, or reset routing panel state
+        const pickupRadio = document.querySelector('input[name="stopType"][value="pickup"]');
+        if (pickupRadio) pickupRadio.checked = true;
+        if (window.reservationFormInstance) window.reservationFormInstance.currentStopType = 'pickup';
+
+        // Close the entry card (new routing panel UI)
+        const entryCard = document.getElementById('addressEntryCard');
+        if (entryCard) entryCard.style.display = 'none';
 
         // Clear edit state
         window.editingStopId = null;
@@ -2100,6 +2195,9 @@
         console.log('✅ Form cleared and ready for next stop');
       }
 
+      // Expose handleCreateStop globally so reservation-form.js can use it
+      window.handleCreateStop = handleCreateStop;
+
       // Edit stop: load saved row data back into the address entry form
       function editStop(stopId) {
         console.log('✏️ Editing stop:', stopId);
@@ -2111,8 +2209,20 @@
         const get = (k) => (row.dataset?.[k] || '').toString();
 
         const stopType = (get('stopType') || 'stop').toLowerCase().trim();
+        
+        // Set stop type via radio buttons if they exist, or via routing panel state
         const typeEl = document.querySelector(`input[name="stopType"][value="${stopType}"]`);
         if (typeEl) typeEl.checked = true;
+        if (window.reservationFormInstance) window.reservationFormInstance.currentStopType = stopType;
+        
+        // Open the entry card for editing (new routing panel UI)
+        const entryCard = document.getElementById('addressEntryCard');
+        const entryLabel = document.getElementById('entryTypeLabel');
+        if (entryCard) entryCard.style.display = 'block';
+        if (entryLabel) {
+          const labels = { pickup: '📍 Editing: Pick-up', dropoff: '🎯 Editing: Drop-off', stop: '⏸️ Editing: Stop', wait: '⏱️ Editing: Wait' };
+          entryLabel.textContent = labels[stopType] || 'Editing Location';
+        }
 
         const setVal = (id, value) => {
           const el = document.getElementById(id);

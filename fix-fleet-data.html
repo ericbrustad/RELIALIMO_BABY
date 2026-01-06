@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fix Fleet Data - Migrate Vehicle IDs to UUID</title>
+  <script src="env.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1000px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .card {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    h1 { color: #333; margin-top: 0; }
+    h2 { color: #555; margin-top: 0; font-size: 18px; }
+    h3 { color: #666; margin-top: 20px; font-size: 16px; }
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+    .btn-primary { background: #2196f3; color: white; }
+    .btn-primary:hover { background: #1976d2; }
+    .btn-success { background: #4caf50; color: white; }
+    .btn-success:hover { background: #388e3c; }
+    .btn-warning { background: #ff9800; color: white; }
+    .btn-warning:hover { background: #f57c00; }
+    .btn-danger { background: #f44336; color: white; }
+    .btn-danger:hover { background: #d32f2f; }
+    .status { padding: 12px; border-radius: 8px; margin-top: 16px; }
+    .status-info { background: #e3f2fd; color: #1565c0; }
+    .status-success { background: #e8f5e9; color: #2e7d32; }
+    .status-warning { background: #fff3e0; color: #e65100; }
+    .status-error { background: #ffebee; color: #c62828; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+    th { background: #f9f9f9; font-weight: 600; }
+    .id-old { color: #e65100; font-family: monospace; font-size: 11px; }
+    .id-new { color: #2e7d32; font-family: monospace; font-size: 11px; }
+    .id-uuid { color: #1565c0; font-family: monospace; font-size: 11px; }
+    .source-local { background: #fff3e0; color: #e65100; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+    .source-supabase { background: #e3f2fd; color: #1565c0; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+    pre {
+      background: #263238;
+      color: #aed581;
+      padding: 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 12px;
+    }
+    .tabs { display: flex; gap: 10px; margin-bottom: 16px; }
+    .tab { padding: 10px 20px; background: #eee; border-radius: 8px 8px 0 0; cursor: pointer; }
+    .tab.active { background: white; font-weight: 600; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🚗 Fix Fleet Data</h1>
+    <p>This utility shows all vehicles from both localStorage and Supabase, and can migrate localStorage vehicle IDs to proper UUIDs.</p>
+    
+    <button class="btn btn-primary" onclick="analyzeFleet()">1. Analyze All Vehicles</button>
+    <button class="btn btn-success" onclick="migrateFleet()" id="migrateBtn" disabled>2. Migrate to UUIDs</button>
+    <button class="btn btn-warning" onclick="syncToLocalStorage()" id="syncBtn">3. Sync Supabase → Local</button>
+    <button class="btn btn-success" onclick="activateAllVehicles()" id="activateBtn">4. Activate All Vehicles</button>
+    <button class="btn btn-danger" onclick="resetFleet()" style="float: right;">Reset Local Fleet</button>
+    
+    <div id="status"></div>
+  </div>
+  
+  <div class="card" id="resultsCard" style="display: none;">
+    <h2>Fleet Analysis Results</h2>
+    <div id="results"></div>
+  </div>
+  
+  <div class="card" id="driverCard" style="display: none;">
+    <h2>Driver Vehicle Assignments</h2>
+    <p>After migration, you may need to re-assign vehicles to drivers in My Office.</p>
+    <div id="driverResults"></div>
+  </div>
+
+  <script>
+    const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const OLD_ID_PATTERN = /^vehicle_\d+$/;
+    
+    let localFleetData = [];
+    let supabaseFleetData = [];
+    let idMapping = new Map(); // old ID -> new UUID
+    
+    function showStatus(message, type = 'info') {
+      const statusDiv = document.getElementById('status');
+      statusDiv.innerHTML = `<div class="status status-${type}">${message}</div>`;
+    }
+    
+    function loadLocalFleet() {
+      try {
+        const raw = localStorage.getItem('cr_fleet');
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        console.error('Failed to load local fleet:', e);
+        return [];
+      }
+    }
+    
+    async function loadSupabaseFleet() {
+      try {
+        const supabaseUrl = window.ENV?.SUPABASE_URL;
+        const supabaseKey = window.ENV?.SUPABASE_ANON_KEY;
+        const orgId = window.ENV?.FORCE_VEHICLE_ORG_ID;
+        
+        if (!supabaseUrl || !supabaseKey) {
+          console.warn('Supabase credentials not found in ENV');
+          return [];
+        }
+        
+        let url = `${supabaseUrl}/rest/v1/vehicles?select=*&order=created_at.desc`;
+        if (orgId) {
+          url += `&organization_id=eq.${orgId}`;
+        }
+        
+        const response = await fetch(url, {
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`
+          }
+        });
+        
+        if (!response.ok) {
+          console.error('Supabase fetch failed:', response.status);
+          return [];
+        }
+        
+        const data = await response.json();
+        console.log('Loaded', data.length, 'vehicles from Supabase');
+        return data || [];
+      } catch (e) {
+        console.error('Failed to load Supabase fleet:', e);
+        return [];
+      }
+    }
+    
+    async function analyzeFleet() {
+      showStatus('Loading vehicles from all sources...', 'info');
+      
+      localFleetData = loadLocalFleet();
+      supabaseFleetData = await loadSupabaseFleet();
+      
+      // Build combined view with source tracking
+      const localIds = new Set(localFleetData.map(v => v.id));
+      const supabaseIds = new Set(supabaseFleetData.map(v => v.id));
+      
+      // Filter out UNIT- placeholder vehicles
+      const filterReal = (v) => {
+        const unit = (v.unit_number || '').toString();
+        return !unit.startsWith('UNIT-');
+      };
+      
+      const realLocalFleet = localFleetData.filter(filterReal);
+      const realSupabaseFleet = supabaseFleetData.filter(filterReal);
+      
+      // Count stats
+      let localNeedsMigration = 0;
+      let localValidUUID = 0;
+      
+      realLocalFleet.forEach(v => {
+        if (UUID_PATTERN.test(v.id || '')) localValidUUID++;
+        else localNeedsMigration++;
+      });
+      
+      // Build table rows for LOCAL vehicles
+      const localRows = realLocalFleet.map((v, i) => {
+        const id = v.id || '';
+        let idStatus = '';
+        let idClass = '';
+        
+        if (!id) {
+          idStatus = '⚠️ No ID';
+          idClass = 'id-old';
+        } else if (UUID_PATTERN.test(id)) {
+          idStatus = '✅ Valid UUID';
+          idClass = 'id-uuid';
+        } else {
+          idStatus = '🔄 Needs Migration';
+          idClass = 'id-old';
+        }
+        
+        // Check if vehicle would pass the isActive filter
+        const statusValue = (v.status || v.veh_active || '').toString().toUpperCase().trim();
+        const isActive = !statusValue || ['ACTIVE', 'AVAILABLE', 'Y', 'YES', 'TRUE', '1'].includes(statusValue);
+        const activeStatus = isActive ? '✅ Active' : '❌ Inactive (' + (v.status || v.veh_active || 'unknown') + ')';
+        
+        const inSupabase = supabaseIds.has(id);
+        const name = v.veh_disp_name || `${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim() || 'Unknown';
+        
+        return `<tr>
+          <td>${i + 1}</td>
+          <td><span class="source-local">Local</span></td>
+          <td>${name}</td>
+          <td>${v.license_plate || '-'}</td>
+          <td class="${idClass}" title="${id}">${id ? id.substring(0, 12) + '...' : '(none)'}</td>
+          <td>${idStatus}</td>
+          <td>${activeStatus}</td>
+          <td>${inSupabase ? '✅' : '❌'}</td>
+        </tr>`;
+      }).join('');
+      
+      // Build table rows for SUPABASE-only vehicles (not in local)
+      const supabaseOnlyVehicles = realSupabaseFleet.filter(v => !localIds.has(v.id));
+      const supabaseRows = supabaseOnlyVehicles.map((v, i) => {
+        const id = v.id || '';
+        const name = v.veh_disp_name || `${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim() || 'Unknown';
+        
+        // Check if vehicle would pass the isActive filter
+        const statusValue = (v.status || v.veh_active || '').toString().toUpperCase().trim();
+        const isActive = !statusValue || ['ACTIVE', 'AVAILABLE', 'Y', 'YES', 'TRUE', '1'].includes(statusValue);
+        const activeStatus = isActive ? '✅ Active' : '❌ Inactive (' + (v.status || v.veh_active || 'unknown') + ')';
+        
+        return `<tr style="background: #f0f7ff;">
+          <td>${realLocalFleet.length + i + 1}</td>
+          <td><span class="source-supabase">Supabase</span></td>
+          <td>${name}</td>
+          <td>${v.license_plate || '-'}</td>
+          <td class="id-uuid" title="${id}">${id ? id.substring(0, 12) + '...' : '(none)'}</td>
+          <td>✅ Valid UUID</td>
+          <td>${activeStatus}</td>
+          <td>✅</td>
+        </tr>`;
+      }).join('');
+      
+      document.getElementById('results').innerHTML = `
+        <h3>Summary</h3>
+        <p><strong>Local Storage:</strong> ${realLocalFleet.length} vehicles (${localValidUUID} valid UUIDs, ${localNeedsMigration} need migration)</p>
+        <p><strong>Supabase:</strong> ${realSupabaseFleet.length} vehicles (${supabaseOnlyVehicles.length} not in local storage)</p>
+        
+        <h3>All Vehicles</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Source</th>
+              <th>Vehicle</th>
+              <th>Plate</th>
+              <th>ID</th>
+              <th>ID Status</th>
+              <th>Active?</th>
+              <th>In DB</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${localRows}
+            ${supabaseRows}
+          </tbody>
+        </table>
+      `;
+      
+      document.getElementById('resultsCard').style.display = 'block';
+      
+      if (localNeedsMigration > 0) {
+        showStatus(`Found ${localNeedsMigration} local vehicle(s) that need UUID migration. Click "Migrate to UUIDs" to fix.`, 'warning');
+        document.getElementById('migrateBtn').disabled = false;
+      } else if (supabaseOnlyVehicles.length > 0) {
+        showStatus(`All local vehicles have valid UUIDs. ${supabaseOnlyVehicles.length} Supabase vehicle(s) can be synced to local storage.`, 'info');
+        document.getElementById('migrateBtn').disabled = true;
+      } else {
+        showStatus('All vehicles have valid UUIDs and are synced!', 'success');
+        document.getElementById('migrateBtn').disabled = true;
+      }
+    }
+    
+    function migrateFleet() {
+      localFleetData = loadLocalFleet();
+      
+      if (localFleetData.length === 0) {
+        showStatus('No local fleet data to migrate.', 'warning');
+        return;
+      }
+      
+      idMapping.clear();
+      let migratedCount = 0;
+      
+      const migratedFleet = localFleetData.map(v => {
+        const oldId = v.id || '';
+        
+        // Already valid UUID - keep it
+        if (UUID_PATTERN.test(oldId)) {
+          return v;
+        }
+        
+        // Generate new UUID
+        const newId = crypto.randomUUID();
+        idMapping.set(oldId, newId);
+        migratedCount++;
+        
+        console.log(`Migrated: ${oldId} -> ${newId}`);
+        
+        return {
+          ...v,
+          id: newId,
+          _old_id: oldId,
+          updated_at: new Date().toISOString()
+        };
+      });
+      
+      // Save migrated fleet
+      localStorage.setItem('cr_fleet', JSON.stringify(migratedFleet));
+      
+      showStatus(`✅ Successfully migrated ${migratedCount} vehicle ID(s) to UUID format! Refresh to verify.`, 'success');
+      document.getElementById('migrateBtn').disabled = true;
+      
+      // Re-analyze to show updated state
+      setTimeout(() => analyzeFleet(), 500);
+    }
+    
+    async function syncToLocalStorage() {
+      showStatus('Syncing Supabase vehicles to local storage...', 'info');
+      
+      const supabaseVehicles = await loadSupabaseFleet();
+      const localFleet = loadLocalFleet();
+      
+      // Filter out UNIT- placeholders
+      const realSupabase = supabaseVehicles.filter(v => {
+        const unit = (v.unit_number || '').toString();
+        return !unit.startsWith('UNIT-');
+      });
+      
+      const localIds = new Set(localFleet.map(v => v.id));
+      let addedCount = 0;
+      
+      // Add Supabase vehicles not in local
+      for (const v of realSupabase) {
+        if (!localIds.has(v.id)) {
+          localFleet.push({
+            id: v.id,
+            unit_number: v.unit_number,
+            status: v.status || 'ACTIVE',
+            vehicle_type: v.vehicle_type || v.veh_type,
+            vehicle_type_id: v.vehicle_type_id,
+            veh_type: v.veh_type || v.vehicle_type,
+            year: v.year,
+            make: v.make,
+            model: v.model,
+            color: v.color,
+            license_plate: v.license_plate,
+            vin: v.vin,
+            veh_disp_name: v.veh_disp_name || `${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim(),
+            veh_pax_capacity: v.veh_pax_capacity,
+            assigned_driver_id: v.assigned_driver_id,
+            organization_id: v.organization_id,
+            created_at: v.created_at,
+            updated_at: v.updated_at
+          });
+          addedCount++;
+        }
+      }
+      
+      localStorage.setItem('cr_fleet', JSON.stringify(localFleet));
+      showStatus(`✅ Synced ${addedCount} vehicle(s) from Supabase to local storage!`, 'success');
+      
+      // Re-analyze
+      setTimeout(() => analyzeFleet(), 500);
+    }
+    
+    function activateAllVehicles() {
+      const localFleet = loadLocalFleet();
+      
+      if (localFleet.length === 0) {
+        showStatus('No local fleet data to update.', 'warning');
+        return;
+      }
+      
+      let activatedCount = 0;
+      
+      const updatedFleet = localFleet.map(v => {
+        const statusValue = (v.status || v.veh_active || '').toString().toUpperCase().trim();
+        const isActive = !statusValue || ['ACTIVE', 'AVAILABLE', 'Y', 'YES', 'TRUE', '1'].includes(statusValue);
+        
+        if (!isActive) {
+          activatedCount++;
+          return {
+            ...v,
+            status: 'ACTIVE',
+            veh_active: 'Y',
+            updated_at: new Date().toISOString()
+          };
+        }
+        return v;
+      });
+      
+      localStorage.setItem('cr_fleet', JSON.stringify(updatedFleet));
+      
+      if (activatedCount > 0) {
+        showStatus(`✅ Activated ${activatedCount} vehicle(s)! Refresh to verify.`, 'success');
+      } else {
+        showStatus('All vehicles are already active!', 'info');
+      }
+      
+      // Re-analyze
+      setTimeout(() => analyzeFleet(), 500);
+    }
+    
+    function resetFleet() {
+      if (!confirm('⚠️ This will DELETE all fleet data from localStorage. Are you sure?')) {
+        return;
+      }
+      if (!confirm('This cannot be undone. Fleet data in Supabase will NOT be affected. Continue?')) {
+        return;
+      }
+      
+      localStorage.removeItem('cr_fleet');
+      showStatus('Local fleet data cleared. Click "Sync Supabase → Local" to reload from database.', 'warning');
+      document.getElementById('resultsCard').style.display = 'none';
+      document.getElementById('driverCard').style.display = 'none';
+    }
+    
+    // Auto-analyze on load
+    window.onload = function() {
+      analyzeFleet();
+    };
+  </script>
+</body>
+</html>

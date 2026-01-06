@@ -101,12 +101,12 @@ export class GoogleMapsService {
 
   mapPlaceToSuggestion(place, source = 'text') {
     return {
-      placeId: place.place_id,
-      description: place.formatted_address || place.name,
-      mainText: place.name || place.formatted_address,
-      secondaryText: place.formatted_address || place.vicinity || '',
+      placeId: place.placeId || place.place_id || place.id,
+      description: place.formatted_address || place.formattedAddress || place.address || place.name,
+      mainText: place.name || place.formatted_address || place.formattedAddress,
+      secondaryText: place.formatted_address || place.formattedAddress || place.address || place.vicinity || '',
       types: place.types,
-      location: place.geometry?.location,
+      location: place.geometry?.location || place.location,
       source,
     };
   }
@@ -202,15 +202,30 @@ export class GoogleMapsService {
    * @returns {Promise<Object>} Detailed place information
    */
   async getPlaceDetails(placeId) {
-    if (!placeId) return null;
+    console.log('🔍 [GoogleMapsService] getPlaceDetails called with placeId:', placeId);
+    
+    if (!placeId) {
+      console.warn('⚠️ [GoogleMapsService] No placeId provided');
+      return null;
+    }
 
     if (this.placeCache.has(placeId)) {
+      console.log('💾 [GoogleMapsService] Returning cached details');
       return this.placeCache.get(placeId);
     }
 
     try {
       const details = await this.fetchPlaceDetails(placeId);
-      if (!details) return null;
+      console.log('📋 [GoogleMapsService] fetchPlaceDetails returned:', details);
+      
+      if (!details) {
+        console.warn('⚠️ [GoogleMapsService] fetchPlaceDetails returned null');
+        return null;
+      }
+
+      console.log('📦 [GoogleMapsService] addressComponentsRaw:', details.addressComponentsRaw);
+      const parsedAddressComponents = this.parseAddressComponents(details.addressComponentsRaw);
+      console.log('✅ [GoogleMapsService] Parsed address components:', parsedAddressComponents);
 
       const parsed = {
         placeId: details.placeId,
@@ -220,7 +235,7 @@ export class GoogleMapsService {
         phone: details.phone,
         website: details.website,
         googleMapsUrl: details.googleMapsUrl,
-        addressComponents: this.parseAddressComponents(details.addressComponentsRaw),
+        addressComponents: parsedAddressComponents,
         businessStatus: details.businessStatus,
         openingHours: details.openingHours,
       };
@@ -642,7 +657,12 @@ export class GoogleMapsService {
    * Places API fetch place details (v1) replacement for legacy getDetails.
    */
   async fetchPlaceDetails(placeId) {
-    if (!this.apiKey || !placeId) return null;
+    console.log('🔍 [GoogleMapsService] fetchPlaceDetails called with:', placeId);
+    
+    if (!this.apiKey || !placeId) {
+      console.warn('⚠️ [GoogleMapsService] Missing apiKey or placeId:', { hasApiKey: !!this.apiKey, placeId });
+      return null;
+    }
 
     const fields = [
       'id',
@@ -657,7 +677,16 @@ export class GoogleMapsService {
       'currentOpeningHours'
     ].join(',');
 
-    const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?fields=${fields}`;
+    // Handle different placeId formats:
+    // - If it already starts with "places/", use it directly as the resource name
+    // - Otherwise, prepend "places/" to create the resource name
+    let resourceName = placeId;
+    if (!placeId.startsWith('places/')) {
+      resourceName = `places/${placeId}`;
+    }
+
+    const url = `https://places.googleapis.com/v1/${resourceName}?fields=${fields}`;
+    console.log('🌐 [GoogleMapsService] Fetching URL:', url);
 
     const resp = await fetch(url, {
       headers: {
@@ -665,13 +694,18 @@ export class GoogleMapsService {
       }
     });
 
+    console.log('📬 [GoogleMapsService] Response status:', resp.status);
+
     if (!resp.ok) {
-      console.warn('[GoogleMapsService] place details response not ok:', resp.status);
+      const errorText = await resp.text();
+      console.error('❌ [GoogleMapsService] place details response not ok:', resp.status, errorText);
       return null;
     }
 
     const p = await resp.json();
-    return {
+    console.log('📋 [GoogleMapsService] Raw API response:', p);
+    
+    const result = {
       placeId: p.id,
       name: p.displayName?.text || p.displayName,
       address: p.formattedAddress,
@@ -687,6 +721,9 @@ export class GoogleMapsService {
       businessStatus: p.businessStatus,
       openingHours: p.currentOpeningHours,
     };
+    
+    console.log('📦 [GoogleMapsService] Mapped result:', result);
+    return result;
   }
 
   buildLocationBias(location) {
@@ -702,3 +739,8 @@ export class GoogleMapsService {
 
 // Export singleton instance
 export const googleMapsService = new GoogleMapsService();
+
+// Also make it available on window for debugging and fallback access
+if (typeof window !== 'undefined') {
+  window.googleMapsService = googleMapsService;
+}

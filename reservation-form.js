@@ -179,6 +179,12 @@ class ReservationForm {
     this.vehicleTypeRates = {};
     this.latestRouteSummary = null;
     
+    // Driver-Vehicle assignment mappings for auto-selection
+    this.driverToVehicleMap = {}; // driver.id -> vehicle.id
+    this.vehicleToDriverMap = {}; // vehicle.id -> driver.id
+    this.driversData = []; // Full driver data with assigned_vehicle_id
+    this.vehiclesData = []; // Full vehicle data with assigned_driver_id
+    
     this.init();
   }
 
@@ -599,8 +605,16 @@ class ReservationForm {
   }
   
   async loadReferenceData() {
-    await this.loadDrivers();
-    await this.loadVehicleTypes();
+    // Load drivers & vehicles in parallel (faster and prevents one failure from blocking the other).
+    const results = await Promise.allSettled([
+      this.loadDrivers(),
+      this.loadVehicleTypes()
+    ]);
+
+    const rejected = results.filter(r => r.status === 'rejected');
+    if (rejected.length) {
+      console.warn('⚠️ One or more reference loads failed:', rejected.map(r => r.reason));
+    }
   }
 
   async loadDrivers() {
@@ -630,20 +644,36 @@ class ReservationForm {
             .filter(isActive)
             .map(d => {
               const name = (d.dispatch_display_name || [d.first_name, d.last_name].filter(Boolean).join(' ')).trim() || 'Unnamed Driver';
-              return { value: d.id || name, label: name };
+              return { value: d.id || name, label: name, assigned_vehicle_id: d.assigned_vehicle_id || null };
             })
         : [];
+    };
+
+    // Build driver-to-vehicle mapping
+    const buildDriverVehicleMap = (list) => {
+      if (!Array.isArray(list)) return;
+      this.driversData = list.filter(isActive);
+      this.driverToVehicleMap = {};
+      this.driversData.forEach(d => {
+        if (d.id && d.assigned_vehicle_id) {
+          this.driverToVehicleMap[d.id] = d.assigned_vehicle_id;
+        }
+      });
+      console.log('[loadDrivers] Built driver-to-vehicle map:', Object.keys(this.driverToVehicleMap).length, 'mappings');
     };
 
     try {
       await setupAPI();
       await this.waitForAuthSession('drivers');
-      let options = buildOptions(await listDriverNames({ limit: 200, offset: 0 }));
+      const driversRaw = await listDriverNames({ limit: 200, offset: 0 });
+      buildDriverVehicleMap(driversRaw);
+      let options = buildOptions(driversRaw);
       let source = 'listDriverNames';
 
       if (!options.length) {
         try {
           const fallbackDrivers = await fetchDrivers();
+          buildDriverVehicleMap(fallbackDrivers);
           const fallbackOptions = buildOptions(fallbackDrivers);
           if (fallbackOptions.length) {
             options = fallbackOptions;
@@ -663,6 +693,7 @@ class ReservationForm {
 
       try {
         const fallbackDrivers = await fetchDrivers();
+        buildDriverVehicleMap(fallbackDrivers);
         const fallbackOptions = buildOptions(fallbackDrivers);
         if (fallbackOptions.length) {
           render(primary, fallbackOptions);
@@ -742,6 +773,10 @@ class ReservationForm {
 
       const activeVehicles = Array.isArray(vehicles) ? vehicles.filter(isActive) : [];
 
+      // Keep active vehicles available for driver->vehicle mapping
+      this.activeVehicles = activeVehicles;
+      this.vehicleIdToVehicle = {};
+      this.activeVehicles.forEach(v => { if (v && v.id) this.vehicleIdToVehicle[v.id] = v; });
       const typeOptionsFromTable = Array.isArray(vehicleTypes) && vehicleTypes.length
         ? vehicleTypes.map(t => ({
             value: t.id,
@@ -1360,10 +1395,13 @@ class ReservationForm {
         createStopBtn.dataset.bound = 'true';
         createStopBtn.addEventListener('click', async (e) => {
           e.preventDefault();
+          console.log('🔘 CREATE button clicked!');
 
           if (typeof window.handleCreateStop === 'function') {
+            console.log('🚀 Calling handleCreateStop...');
             window.handleCreateStop();
           } else {
+            console.log('⚠️ handleCreateStop not available, using fallback');
             await this.createAddressRow();
           }
 
@@ -1387,6 +1425,64 @@ class ReservationForm {
       }
     } else {
       console.warn('⚠️ Element createStopBtn not found, skipping listener');
+    }
+
+    // Auto-select car when a driver with an assigned vehicle is chosen
+    try {
+      const driverSelect = document.getElementById('driverSelect');
+      const carSelect = document.getElementById('carSelect');
+      if (driverSelect && carSelect && !driverSelect.dataset.boundVehicle) {
+        driverSelect.dataset.boundVehicle = 'true';
+        driverSelect.addEventListener('change', (e) => {
+          const driverId = e.target.value;
+          if (!driverId) return;
+          const assignedVehicleId = this.driverToVehicleMap && this.driverToVehicleMap[driverId];
+          if (!assignedVehicleId) {
+            console.log('[driverSelect] No assigned vehicle for driver:', driverId);
+            return;
+          }
+          const veh = this.vehicleIdToVehicle && this.vehicleIdToVehicle[assignedVehicleId];
+          if (!veh) {
+            console.log('[driverSelect] Assigned vehicle not in activeVehicles:', assignedVehicleId);
+            return;
+          }
+
+          // Candidate keys that might match carSelect option values
+          const candidates = [veh.veh_type_id, veh.type_id, veh.veh_type, veh.veh_disp_name, veh.veh_title, veh.veh_model, veh.veh_code, veh.id].filter(Boolean).map(String);
+
+          // Try exact match on option value first
+          let matched = false;
+          for (const c of candidates) {
+            const opt = carSelect.querySelector(`option[value="${c}"]`);
+            if (opt) {
+              carSelect.value = opt.value;
+              matched = true;
+              break;
+            }
+          }
+
+          // Fallback: match by option text (normalized)
+          if (!matched) {
+            const normalize = (s) => (s || '').toString().replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+            const vehLabel = normalize(veh.veh_type || veh.veh_disp_name || veh.veh_title || veh.veh_model || '');
+            for (const opt of Array.from(carSelect.options)) {
+              if (normalize(opt.text) === vehLabel && opt.value) {
+                carSelect.value = opt.value;
+                matched = true;
+                break;
+              }
+            }
+          }
+
+          if (matched) {
+            console.log('[driverSelect] Auto-selected car for driver', driverId, '->', carSelect.value);
+          } else {
+            console.log('[driverSelect] Could not match vehicle type for assigned vehicle', assignedVehicleId, veh);
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('⚠️ Failed to attach driver->vehicle listener:', err);
     }
 
     // Location type radio buttons
@@ -1535,6 +1631,13 @@ class ReservationForm {
     // Passenger + Booking Agent autofill (3+ chars)
     this.setupPassengerDbAutocomplete();
     this.setupBookingAgentDbAutocomplete();
+
+    // Setup consolidated routing panel
+    try {
+      this.setupRoutingPanel();
+    } catch (e) {
+      console.warn('⚠️ setupRoutingPanel failed:', e);
+    }
 
     // Setup address autocomplete for initial stops
     try {
@@ -2215,8 +2318,9 @@ class ReservationForm {
   }
 
   async createAddressRow() {
-    // Get form values
-    const stopType = document.querySelector('input[name="stopType"]:checked').value;
+    // Get form values - use currentStopType from routing panel or fallback to radio buttons
+    const radioBtn = document.querySelector('input[name="stopType"]:checked');
+    const stopType = radioBtn ? radioBtn.value : (this.currentStopType || 'pickup');
     const locationName = document.getElementById('locationName').value || 'N/A';
     const address1 = document.getElementById('address1').value;
     const address2 = document.getElementById('address2').value;
@@ -2323,10 +2427,19 @@ class ReservationForm {
     document.getElementById('city').value = '';
     document.getElementById('state').value = '';
     document.getElementById('zipCode').value = '';
-    document.getElementById('locationNotes').value = '';
-    document.getElementById('locationPhone').value = '';
+    const locationNotes = document.getElementById('locationNotes');
+    if (locationNotes) locationNotes.value = '';
+    const locationPhone = document.getElementById('locationPhone');
+    if (locationPhone) locationPhone.value = '';
     document.getElementById('timeIn').value = '';
-    document.querySelector('input[name="stopType"][value="pickup"]').checked = true;
+    
+    // Reset stop type radio if it exists
+    const pickupRadio = document.querySelector('input[name="stopType"][value="pickup"]');
+    if (pickupRadio) pickupRadio.checked = true;
+
+    // Close the entry card
+    const entryCard = document.getElementById('addressEntryCard');
+    if (entryCard) entryCard.style.display = 'none';
   }
 
   showAddressConfirmation(suggestions, customData) {
@@ -2810,6 +2923,44 @@ class ReservationForm {
       suggestions.classList.remove('active');
       suggestions.innerHTML = '';
     }
+
+    // Hide booking agent section when cleared
+    this.updateBookingAgentVisibility();
+  }
+
+  /**
+   * Show/hide the Booking Agent section based on:
+   * 1. Whether any booking agent fields have data
+   * 2. Whether the billing account has booking agent requirement
+   */
+  updateBookingAgentVisibility(forceShow = false) {
+    const section = document.getElementById('bookingAgentSection');
+    if (!section) return;
+
+    // Check if any booking agent field has data
+    const hasBookingAgentData = ['bookedByFirstName', 'bookedByLastName', 'bookedByPhone', 'bookedByEmail']
+      .some(id => {
+        const el = document.getElementById(id);
+        return el && el.value && el.value.trim().length > 0;
+      });
+
+    // Show if forced, has data, or account requires it
+    const shouldShow = forceShow || hasBookingAgentData || this.accountRequiresBookingAgent;
+    section.style.display = shouldShow ? 'block' : 'none';
+    
+    console.log(`📋 Booking Agent section: ${shouldShow ? 'visible' : 'hidden'} (forceShow=${forceShow}, hasData=${hasBookingAgentData}, accountReq=${this.accountRequiresBookingAgent})`);
+  }
+
+  /**
+   * Show the booking agent section (e.g., when user clicks a button to add one)
+   */
+  showBookingAgentSection() {
+    this.updateBookingAgentVisibility(true);
+    // Focus the first field
+    setTimeout(() => {
+      const firstField = document.getElementById('bookedByFirstName');
+      if (firstField) firstField.focus();
+    }, 100);
   }
 
   copyBillingToPassenger() {
@@ -2836,6 +2987,9 @@ class ReservationForm {
     document.getElementById('bookedByLastName').value = lastName;
     document.getElementById('bookedByPhone').value = phone;
     document.getElementById('bookedByEmail').value = email;
+
+    // Show booking agent section since we now have data
+    this.updateBookingAgentVisibility();
 
     console.log('📋 Copied billing info to booking agent');
   }
@@ -3456,6 +3610,9 @@ class ReservationForm {
     document.getElementById('bookedByPhone').value = account.phone || account.cell_phone || '';
     document.getElementById('bookedByEmail').value = account.email || '';
 
+    // Show the booking agent section since we now have data
+    this.updateBookingAgentVisibility();
+
     // Cross-fill billing fields ONLY if account is marked as billing client
     if (account.is_billing_client) {
       const billingAccountSearch = document.getElementById('billingAccountSearch');
@@ -3689,6 +3846,131 @@ class ReservationForm {
     });
   }
 
+  /**
+   * Setup the consolidated routing panel with quick-add buttons and tabbed entry form
+   */
+  setupRoutingPanel() {
+    const panel = document.querySelector('.routing-panel');
+    if (!panel) return;
+
+    // Current stop type being added
+    this.currentStopType = 'pickup';
+
+    // Quick action buttons
+    const addPickupBtn = document.getElementById('addPickupBtn');
+    const addDropoffBtn = document.getElementById('addDropoffBtn');
+    const addStopBtn = document.getElementById('addStopBtn');
+    const addWaitBtn = document.getElementById('addWaitBtn');
+
+    const openEntryForm = (type) => {
+      this.currentStopType = type;
+      const card = document.getElementById('addressEntryCard');
+      const label = document.getElementById('entryTypeLabel');
+      
+      const labels = {
+        pickup: '📍 Adding: Pick-up',
+        dropoff: '🎯 Adding: Drop-off',
+        stop: '⏸️ Adding: Stop',
+        wait: '⏱️ Adding: Wait'
+      };
+      
+      if (label) label.textContent = labels[type] || 'Adding Location';
+      if (card) {
+        card.style.display = 'block';
+        // Focus the location name field
+        setTimeout(() => {
+          const locationInput = document.getElementById('locationName');
+          if (locationInput) locationInput.focus();
+        }, 100);
+      }
+    };
+
+    if (addPickupBtn) addPickupBtn.addEventListener('click', () => openEntryForm('pickup'));
+    if (addDropoffBtn) addDropoffBtn.addEventListener('click', () => openEntryForm('dropoff'));
+    if (addStopBtn) addStopBtn.addEventListener('click', () => openEntryForm('stop'));
+    if (addWaitBtn) addWaitBtn.addEventListener('click', () => openEntryForm('wait'));
+
+    // Close/Cancel buttons
+    const closeEntryBtn = document.getElementById('closeEntryBtn');
+    const cancelEntryBtn = document.getElementById('cancelEntryBtn');
+
+    const closeEntryForm = () => {
+      const card = document.getElementById('addressEntryCard');
+      if (card) card.style.display = 'none';
+      this.clearAddressEntryForm();
+    };
+
+    if (closeEntryBtn) closeEntryBtn.addEventListener('click', closeEntryForm);
+    if (cancelEntryBtn) cancelEntryBtn.addEventListener('click', closeEntryForm);
+
+    // Location type tabs
+    const tabs = document.querySelectorAll('.location-tab');
+    const panels = {
+      search: document.getElementById('panelSearch'),
+      stored: document.getElementById('panelStored'),
+      airport: document.getElementById('panelAirport'),
+      fbo: document.getElementById('panelFBO')
+    };
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const type = tab.dataset.type;
+        
+        // Update active tab
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        // Show correct panel
+        Object.entries(panels).forEach(([key, panelEl]) => {
+          if (panelEl) panelEl.style.display = key === type ? 'block' : 'none';
+        });
+      });
+    });
+
+    // Airport search handler
+    const airportSearch = document.getElementById('airportSearch');
+    if (airportSearch) {
+      let debounceTimer;
+      airportSearch.addEventListener('input', (e) => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          if (typeof window.handleAirportSearch === 'function') {
+            window.handleAirportSearch(e.target.value);
+          }
+        }, 200);
+      });
+    }
+
+    console.log('✅ Routing panel setup complete');
+  }
+
+  /**
+   * Clear the address entry form fields
+   */
+  clearAddressEntryForm() {
+    const fields = [
+      'locationName', 'address1', 'address2', 'city', 'zipCode', 
+      'locationNotes', 'timeIn', 'airportSearch', 'airlineSearch',
+      'flightNumber', 'storedTimeIn', 'fboTimeIn'
+    ];
+    fields.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    
+    // Reset state dropdown
+    const stateEl = document.getElementById('state');
+    if (stateEl) stateEl.selectedIndex = 0;
+    
+    // Reset country dropdown
+    const countryEl = document.getElementById('country');
+    if (countryEl) countryEl.value = 'US';
+
+    // Hide airline section
+    const airlineSection = document.getElementById('airlineSection');
+    if (airlineSection) airlineSection.style.display = 'none';
+  }
+
   setupNotesTabs() {
     const tabs = document.querySelectorAll('.notes-tab');
     const panels = document.querySelectorAll('.notes-panel');
@@ -3739,10 +4021,35 @@ class ReservationForm {
   async searchLocationPOI(query) {
     try {
       const results = [];
+      const bias = await this.ensureLocalBiasCoords();
 
-      // Google business search (biased to company location if available)
+      // 1. Address autocomplete (includes addresses AND businesses/landmarks)
       try {
-        const bias = await this.ensureLocalBiasCoords();
+        const addressHits = await this.googleMapsService.searchAddresses(query, {
+          locationBias: bias,
+          includeBusinessesAndLandmarks: true,
+          country: 'US'
+        });
+        console.log('📬 Raw address hits from searchAddresses:', addressHits);
+        if (Array.isArray(addressHits)) {
+          results.push(...addressHits.map(hit => {
+            console.log('📍 Mapping hit:', hit);
+            return {
+              name: hit.mainText || hit.description || '',
+              address: hit.secondaryText || hit.description || hit.mainText || '',
+              fullDescription: hit.description || '',
+              category: 'Address',
+              placeId: hit.placeId,
+              context: {}
+            };
+          }));
+        }
+      } catch (e) {
+        console.warn('⚠️ Google address search failed:', e);
+      }
+
+      // 2. Business/establishment search for richer results
+      try {
         const googleHits = await this.googleMapsService.searchBusinesses(query, {
           location: bias ? { latitude: bias.latitude, longitude: bias.longitude } : null,
           radius: 25000, // 25km default local radius
@@ -3753,6 +4060,7 @@ class ReservationForm {
             name: hit.name,
             address: hit.address,
             category: (hit.types || [])[0] || 'Business',
+            placeId: hit.placeId,
             context: {
               city: hit.addressComponents?.city,
               state: hit.addressComponents?.state,
@@ -3796,37 +4104,115 @@ class ReservationForm {
     `).join('');
 
     container.querySelectorAll('.location-suggestion-item').forEach((item, index) => {
-      item.addEventListener('click', () => {
-        this.selectLocationPOI(results[index]);
+      item.addEventListener('click', async () => {
+        console.log('🔘 Clicked suggestion index:', index, 'data:', results[index]);
+        try {
+          await this.selectLocationPOI(results[index]);
+        } catch (e) {
+          console.error('❌ Error in selectLocationPOI:', e);
+        }
       });
     });
 
     container.classList.add('active');
   }
 
-  selectLocationPOI(poiData) {
+  async selectLocationPOI(poiData) {
+    console.log('📍 selectLocationPOI called with:', poiData);
+    console.log('📍 this.googleMapsService:', this.googleMapsService);
+    console.log('📍 this.googleMapsService?.getPlaceDetails:', typeof this.googleMapsService?.getPlaceDetails);
+    
     // Fill location name
     document.getElementById('locationName').value = poiData.name;
     
-    // Auto-fill address fields
-    document.getElementById('address1').value = poiData.address;
+    // If we have a placeId, fetch details to get full address info
+    if (poiData.placeId) {
+      // Try to get the service - it might be on 'this' or globally available
+      const mapsService = this.googleMapsService || window.googleMapsService;
+      console.log('📍 mapsService:', mapsService);
+      
+      if (mapsService?.getPlaceDetails) {
+        try {
+          console.log('🔍 Fetching place details for placeId:', poiData.placeId);
+          const details = await mapsService.getPlaceDetails(poiData.placeId);
+          console.log('📋 Place details received:', details);
+          
+          if (details) {
+            if (details.address) {
+              poiData.address = details.address;
+              console.log('📍 Full address:', details.address);
+            }
+            if (details.addressComponents) {
+              console.log('📦 Address components:', details.addressComponents);
+              poiData.context = {
+                streetNumber: details.addressComponents.streetNumber || '',
+                streetName: details.addressComponents.streetName || '',
+                city: details.addressComponents.city,
+                state: details.addressComponents.state,
+                stateCode: details.addressComponents.state,
+                zipcode: details.addressComponents.postalCode
+              };
+              console.log('📦 Mapped context:', poiData.context);
+            } else {
+              console.warn('⚠️ No address components in place details');
+            }
+          } else {
+            console.warn('⚠️ No details returned from getPlaceDetails');
+          }
+        } catch (e) {
+          console.error('❌ Failed to fetch Google place details for POI:', e);
+        }
+      } else {
+        console.warn('⚠️ getPlaceDetails not available on mapsService');
+      }
+    } else {
+      console.warn('⚠️ No placeId in poiData');
+    }
+    
+    // Build street address from components if available, otherwise parse from formatted address
+    let streetAddress = '';
+    if (poiData.context?.streetNumber || poiData.context?.streetName) {
+      streetAddress = `${poiData.context.streetNumber} ${poiData.context.streetName}`.trim();
+      console.log('🏠 Built street address from components:', streetAddress);
+    } else if (poiData.address) {
+      // Extract street address (first part before comma)
+      streetAddress = poiData.address.split(',')[0].trim();
+      console.log('🏠 Parsed street address from formatted address:', streetAddress);
+    }
+    
+    document.getElementById('address1').value = streetAddress;
     
     if (poiData.context) {
       if (poiData.context.city) {
+        console.log('🏙️ Setting city to:', poiData.context.city);
         document.getElementById('city').value = poiData.context.city;
       }
-      if (poiData.context.state) {
+      if (poiData.context.state || poiData.context.stateCode) {
         const stateInput = document.getElementById('state');
+        const stateCode = poiData.context.stateCode || poiData.context.state;
+        console.log('🗺️ Setting state to:', stateCode);
+        
+        // Try to match by value first, then by text
+        let matched = false;
         const stateOptions = stateInput.querySelectorAll('option');
         stateOptions.forEach(option => {
-          if (option.value === poiData.context.state || option.text === poiData.context.state) {
+          if (option.value.toUpperCase() === stateCode?.toUpperCase() || 
+              option.text.toUpperCase() === stateCode?.toUpperCase()) {
             stateInput.value = option.value;
+            matched = true;
           }
         });
+        if (!matched && stateCode) {
+          // If no match, set value directly (may create new entry)
+          stateInput.value = stateCode;
+        }
       }
       if (poiData.context.zipcode) {
+        console.log('📮 Setting zipCode to:', poiData.context.zipcode);
         document.getElementById('zipCode').value = poiData.context.zipcode;
       }
+    } else {
+      console.warn('⚠️ No context available to populate city/state/zip');
     }
 
     document.getElementById('locationNameSuggestions').classList.remove('active');
@@ -4412,6 +4798,141 @@ class ReservationForm {
         });
       }
     });
+
+    // Setup rate config panel
+    this.setupRateConfigPanel();
+  }
+
+  /**
+   * Setup the rate configuration panel toggle and rate updates
+   */
+  setupRateConfigPanel() {
+    const toggleBtn = document.getElementById('toggleRateConfig');
+    const body = document.getElementById('rateConfigBody');
+
+    if (toggleBtn && body) {
+      toggleBtn.addEventListener('click', () => {
+        const isCollapsed = body.classList.toggle('collapsed');
+        toggleBtn.classList.toggle('collapsed', isCollapsed);
+        toggleBtn.textContent = isCollapsed ? '▶' : '▼';
+      });
+    }
+
+    // Apply rates button
+    const applyRatesBtn = document.getElementById('applyRatesBtn');
+    if (applyRatesBtn) {
+      applyRatesBtn.addEventListener('click', () => {
+        this.applySelectedRatesToCosts();
+      });
+    }
+
+    // Listen for service type and vehicle type changes
+    const serviceTypeEl = document.getElementById('serviceType');
+    const vehicleTypeEl = document.getElementById('vehicleTypeRes');
+
+    if (serviceTypeEl) {
+      serviceTypeEl.addEventListener('change', () => this.updateRateConfigDisplay());
+    }
+    if (vehicleTypeEl) {
+      vehicleTypeEl.addEventListener('change', () => this.updateRateConfigDisplay());
+    }
+
+    // Initial update
+    this.updateRateConfigDisplay();
+  }
+
+  /**
+   * Update the rate configuration display based on selected service and vehicle types
+   */
+  updateRateConfigDisplay() {
+    const serviceTypeEl = document.getElementById('serviceType');
+    const vehicleTypeEl = document.getElementById('vehicleTypeRes');
+
+    const serviceType = serviceTypeEl?.value || '';
+    const vehicleTypeId = vehicleTypeEl?.value || '';
+    const vehicleTypeName = vehicleTypeEl?.options?.[vehicleTypeEl.selectedIndex]?.text || '--';
+
+    // Update display values
+    const setDisplay = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    };
+
+    // Service type display
+    const serviceTypeLabel = serviceTypeEl?.options?.[serviceTypeEl.selectedIndex]?.text || '--';
+    setDisplay('rateServiceType', serviceTypeLabel);
+
+    // Determine pricing basis from service type
+    let pricingBasis = 'Distance';
+    if (serviceType === 'hourly') pricingBasis = 'Hourly';
+    else if (serviceType === 'point-to-point') pricingBasis = 'Distance';
+    else if (serviceType === 'airport-transfer') pricingBasis = 'Flat Rate';
+    setDisplay('ratePricingBasis', pricingBasis);
+
+    // Vehicle type display
+    setDisplay('rateVehicleType', vehicleTypeName);
+
+    // Get rates from vehicle type if available
+    const rates = this.vehicleTypeRates?.[vehicleTypeId] || {};
+    
+    setDisplay('rateBaseRate', this.formatRate(rates.base_rate || rates.baseRate || 0));
+    setDisplay('ratePerHour', this.formatRate(rates.per_hour || rates.hourlyRate || 0));
+    setDisplay('ratePerMile', this.formatRate(rates.per_mile || rates.mileageRate || 0));
+    setDisplay('rateMinHours', rates.min_hours || rates.minimumHours || 0);
+    setDisplay('rateGratuity', `${rates.gratuity || rates.defaultGratuity || 0}%`);
+  }
+
+  /**
+   * Format a rate value as currency
+   */
+  formatRate(value) {
+    const num = parseFloat(value) || 0;
+    return `$${num.toFixed(2)}`;
+  }
+
+  /**
+   * Apply the selected vehicle type rates to the cost form
+   */
+  applySelectedRatesToCosts() {
+    const vehicleTypeEl = document.getElementById('vehicleTypeRes');
+    const vehicleTypeId = vehicleTypeEl?.value || '';
+    const rates = this.vehicleTypeRates?.[vehicleTypeId] || {};
+
+    // Apply to cost fields if they exist
+    const setInputValue = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.value = value;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    };
+
+    // Set rates based on vehicle type
+    const hourlyRate = rates.per_hour || rates.hourlyRate || 0;
+    const mileRate = rates.per_mile || rates.mileageRate || 0;
+    const baseRate = rates.base_rate || rates.baseRate || 0;
+    const gratuity = rates.gratuity || rates.defaultGratuity || 0;
+
+    if (baseRate > 0) setInputValue('flatRate', baseRate);
+    if (hourlyRate > 0) setInputValue('hourRate', hourlyRate);
+    if (gratuity > 0) setInputValue('gratuityQty', gratuity);
+
+    // Recalculate costs
+    this.calculateCosts();
+
+    // Show feedback
+    const applyBtn = document.getElementById('applyRatesBtn');
+    if (applyBtn) {
+      const originalText = applyBtn.textContent;
+      applyBtn.textContent = '✓ Applied!';
+      applyBtn.style.background = '#28a745';
+      applyBtn.style.color = 'white';
+      setTimeout(() => {
+        applyBtn.textContent = originalText;
+        applyBtn.style.background = '';
+        applyBtn.style.color = '';
+      }, 1500);
+    }
   }
 
   initializeCostCalculations() {

@@ -3874,6 +3874,58 @@ body {
   margin-bottom: 8px;
 }
 
+/* Required field indicators */
+.required {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+/* Highlighted required dropdown for driver car assignment */
+.driver-car-assignment {
+  background: rgba(255, 152, 0, 0.12);
+  border: 2px solid #ff9800;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 12px 0;
+}
+
+.driver-car-assignment label {
+  color: #e65100;
+  font-weight: 600;
+}
+
+.required-highlight {
+  border: 2px solid #ff9800 !important;
+  background: rgba(255, 152, 0, 0.08) !important;
+}
+
+.required-highlight:focus {
+  border-color: #f57c00 !important;
+  box-shadow: 0 0 0 3px rgba(255, 152, 0, 0.25) !important;
+}
+
+/* Required field styling */
+.required-field {
+  border-left: 3px solid #dc3545 !important;
+}
+
+.required-field:valid {
+  border-left: 3px solid #28a745 !important;
+}
+
+/* Validation error styling */
+.validation-error {
+  border-color: #dc3545 !important;
+  background: rgba(220, 53, 69, 0.08) !important;
+  animation: shake 0.3s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
 .drivers-pay-rates {
   display: flex;
   gap: 15px;

@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create New Vehicle</title>
+  <link rel="stylesheet" href="global.css">
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #f5f7fa;
+      margin: 0;
+      padding: 20px;
+      font-size: 13px;
+    }
+    .form-container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .form-section {
+      margin-bottom: 24px;
+    }
+    .form-section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin: 0 0 16px 0;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .form-row {
+      margin-bottom: 16px;
+    }
+    .form-row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .form-group label {
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: #444;
+      font-size: 12px;
+    }
+    .form-control {
+      padding: 8px 12px;
+      border: 1px solid #d0d5dd;
+      border-radius: 6px;
+      font-size: 13px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-control:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+    }
+    .required {
+      color: #e53935;
+    }
+    .form-section-divider {
+      height: 1px;
+      background: #e0e0e0;
+      margin: 24px 0;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .features-grid label {
+      font-weight: 400;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+    .status-message {
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .status-message.success {
+      display: block;
+      background: #e8f5e9;
+      border: 1px solid #a5d6a7;
+      color: #2e7d32;
+    }
+    .status-message.error {
+      display: block;
+      background: #ffebee;
+      border: 1px solid #ef9a9a;
+      color: #c62828;
+    }
+    /* Hide form actions since parent handles save/cancel */
+    .form-actions-internal {
+      display: none;
+    }
+  </style>
+  <script src="env.js"></script>
+</head>
+<body>
+  <div class="form-container">
+    <div id="statusMessage" class="status-message"></div>
+    
+    <!-- Vehicle Details -->
+    <div class="form-section">
+      <h4 class="form-section-title">Vehicle Details</h4>
+      
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>Vehicle Type: <span class="required">*</span></label>
+          <select class="form-control" id="fleetVehicleType">
+            <option value="">Select Vehicle Type</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Status: <span class="required">*</span></label>
+          <select class="form-control" id="fleetStatus">
+            <option value="ACTIVE">Active</option>
+            <option value="AVAILABLE">Available</option>
+            <option value="IN_USE">In Use</option>
+            <option value="MAINTENANCE">In Maintenance</option>
+            <option value="OUT_OF_SERVICE">Out of Service</option>
+            <option value="INACTIVE">Inactive</option>
+            <option value="RETIRED">Retired</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>Year: <span class="required">*</span></label>
+          <select class="form-control" id="fleetYear">
+            <option value="">Select Year</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Make: <span class="required">*</span></label>
+          <input type="text" class="form-control" id="fleetMake" placeholder="e.g., Lincoln" />
+        </div>
+      </div>
+
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>Model: <span class="required">*</span></label>
+          <input type="text" class="form-control" id="fleetModel" placeholder="e.g., MKT" />
+        </div>
+        <div class="form-group">
+          <label>Color:</label>
+          <input type="text" class="form-control" id="fleetColor" placeholder="e.g., Black" />
+        </div>
+      </div>
+
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>Passenger Capacity: <span class="required">*</span></label>
+          <input type="number" class="form-control" id="fleetPassengers" placeholder="e.g., 4" min="1" />
+        </div>
+        <div class="form-group">
+          <label>Assigned Driver:</label>
+          <input type="text" class="form-control" id="fleetAssignedDriverDisplay" readonly style="background: #f0f0f0; cursor: not-allowed;" />
+          <input type="hidden" id="fleetAssignedDriver" />
+        </div>
+      </div>
+
+    </div>
+
+    <div class="form-section-divider"></div>
+
+    <!-- Registration & Insurance -->
+    <div class="form-section">
+      <h4 class="form-section-title">Registration & Insurance</h4>
+      
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>VIN Number:</label>
+          <input type="text" class="form-control" id="fleetVin" placeholder="17-character VIN" maxlength="17" />
+        </div>
+        <div class="form-group">
+          <label>License Plate: <span class="required">*</span></label>
+          <input type="text" class="form-control" id="fleetLicense" placeholder="e.g., ABC1234" />
+        </div>
+      </div>
+
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>Registration Expiration:</label>
+          <input type="date" class="form-control" id="fleetRegExp" />
+        </div>
+        <div class="form-group">
+          <label>Insurance Expiration:</label>
+          <input type="date" class="form-control" id="fleetInsExp" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Insurance Company:</label>
+          <input type="text" class="form-control" id="fleetInsCompany" placeholder="Insurance provider name" />
+        </div>
+      </div>
+
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>Policy Number:</label>
+          <input type="text" class="form-control" id="fleetPolicyNumber" placeholder="Insurance policy number" />
+        </div>
+        <div class="form-group">
+          <label>Insurance Contact:</label>
+          <input type="text" class="form-control" id="fleetInsContact" placeholder="Agent name or phone" />
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section-divider"></div>
+
+    <!-- Features & Amenities -->
+    <div class="form-section">
+      <h4 class="form-section-title">Features & Amenities</h4>
+      
+      <div class="features-grid">
+        <label><input type="checkbox" class="fleet-feature" data-value="WiFi" /> <span>WiFi</span></label>
+        <label><input type="checkbox" class="fleet-feature" data-value="Leather Seats" /> <span>Leather Seats</span></label>
+        <label><input type="checkbox" class="fleet-feature" data-value="GPS Tracking" /> <span>GPS Tracking</span></label>
+        <label><input type="checkbox" class="fleet-feature" data-value="Climate Control" /> <span>Climate Control</span></label>
+        <label><input type="checkbox" class="fleet-feature" data-value="Entertainment System" /> <span>Entertainment System</span></label>
+        <label><input type="checkbox" class="fleet-feature" data-value="Mini Bar" /> <span>Mini Bar</span></label>
+        <label><input type="checkbox" class="fleet-feature" data-value="Wheelchair Accessible" /> <span>Wheelchair Accessible</span></label>
+        <label><input type="checkbox" class="fleet-feature" data-value="Pet Friendly" /> <span>Pet Friendly</span></label>
+        <label><input type="checkbox" class="fleet-feature" data-value="Child Seat Available" /> <span>Child Seat Available</span></label>
+      </div>
+    </div>
+
+    <div class="form-section-divider"></div>
+
+    <!-- Internal Notes -->
+    <div class="form-section">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Internal Notes:</label>
+          <textarea class="form-control" id="fleetInternalNotes" rows="3" placeholder="Any internal notes about this vehicle..."></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Vehicle form popup logic
+    (function() {
+      'use strict';
+
+      // Store received data from parent
+      let receivedVehicleTypes = [];
+      let receivedDrivers = [];
+      let activeDriverIdFromParent = null;
+      let activeDriverNameFromParent = '';
+
+      // Initialize on load
+      document.addEventListener('DOMContentLoaded', function() {
+        populateYearOptions();
+        // Vehicle types and drivers will be populated when we receive data from parent
+      });
+
+      // Listen for data from parent window
+      window.addEventListener('message', function(event) {
+        if (event.data && event.data.type === 'INIT_VEHICLE_FORM') {
+          console.log('📥 Received vehicle form data from parent');
+          receivedVehicleTypes = event.data.vehicleTypes || [];
+          receivedDrivers = event.data.drivers || [];
+          activeDriverIdFromParent = event.data.activeDriverId || null;
+          activeDriverNameFromParent = event.data.activeDriverName || '';
+          
+          console.log('📥 Active driver to auto-assign:', activeDriverIdFromParent, activeDriverNameFromParent);
+          console.log('📥 Vehicle types received:', receivedVehicleTypes.length);
+          
+          populateVehicleTypes();
+          setDriverDisplay();
+        }
+      });
+
+      function populateYearOptions() {
+        const yearSelect = document.getElementById('fleetYear');
+        if (!yearSelect) return;
+        const currentYear = new Date().getFullYear();
+        const startYear = currentYear + 1;
+        const minYear = 1990;
+        yearSelect.innerHTML = '<option value="">Select Year</option>';
+        for (let year = startYear; year >= minYear; year--) {
+          const option = document.createElement('option');
+          option.value = String(year);
+          option.textContent = String(year);
+          yearSelect.appendChild(option);
+        }
+      }
+
+      function populateVehicleTypes() {
+        const select = document.getElementById('fleetVehicleType');
+        if (!select) return;
+        
+        // Use vehicle types received from parent via postMessage
+        let types = receivedVehicleTypes || [];
+        
+        console.log('📦 Using vehicle types from parent:', types.length);
+
+        // Sort alphabetically
+        types.sort(function(a, b) {
+          const nameA = (a.name || a.display_name || '').toLowerCase();
+          const nameB = (b.name || b.display_name || '').toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+
+        select.innerHTML = '<option value="">Select Vehicle Type</option>';
+        types.forEach(function(t) {
+          const option = document.createElement('option');
+          option.value = t.id || t.code || t.name;
+          option.textContent = t.name || t.display_name || t.id;
+          select.appendChild(option);
+        });
+        
+        console.log('✅ Populated vehicle types dropdown with', select.options.length - 1, 'types');
+      }
+
+      function setDriverDisplay() {
+        const displayInput = document.getElementById('fleetAssignedDriverDisplay');
+        const hiddenInput = document.getElementById('fleetAssignedDriver');
+        
+        if (displayInput && activeDriverNameFromParent) {
+          displayInput.value = activeDriverNameFromParent;
+        } else if (displayInput) {
+          displayInput.value = 'Not Assigned';
+        }
+        
+        if (hiddenInput && activeDriverIdFromParent) {
+          hiddenInput.value = activeDriverIdFromParent;
+        }
+        
+        console.log('✅ Set driver display:', activeDriverNameFromParent, 'ID:', activeDriverIdFromParent);
+      }
+
+      function showStatus(message, isError) {
+        const statusEl = document.getElementById('statusMessage');
+        if (!statusEl) return;
+        statusEl.className = 'status-message ' + (isError ? 'error' : 'success');
+        statusEl.textContent = message;
+        statusEl.style.display = 'block';
+      }
+
+      function getFormData() {
+        const features = [];
+        document.querySelectorAll('.fleet-feature:checked').forEach(function(cb) {
+          features.push(cb.dataset.value);
+        });
+
+        const make = document.getElementById('fleetMake')?.value || '';
+        const model = document.getElementById('fleetModel')?.value || '';
+        const year = document.getElementById('fleetYear')?.value || '';
+        const vehicleType = document.getElementById('fleetVehicleType')?.value || '';
+        
+        // Build display name like "2024 Lincoln MKT"
+        const displayParts = [year, make, model].filter(Boolean);
+        const vehDispName = displayParts.join(' ') || `Vehicle ${Date.now()}`;
+
+        return {
+          id: crypto.randomUUID(),
+          status: document.getElementById('fleetStatus')?.value || 'ACTIVE',
+          vehicle_type: vehicleType,
+          veh_type: vehicleType, // Alternate field name for compatibility
+          year: year,
+          make: make,
+          model: model,
+          color: document.getElementById('fleetColor')?.value || '',
+          veh_pax_capacity: parseInt(document.getElementById('fleetPassengers')?.value) || 0,
+          passengers: parseInt(document.getElementById('fleetPassengers')?.value) || 0,
+          assigned_driver_id: document.getElementById('fleetAssignedDriver')?.value || '',
+          vin: document.getElementById('fleetVin')?.value || '',
+          license_plate: document.getElementById('fleetLicense')?.value || '',
+          registration_expiration: document.getElementById('fleetRegExp')?.value || '',
+          insurance_expiration: document.getElementById('fleetInsExp')?.value || '',
+          insurance_company: document.getElementById('fleetInsCompany')?.value || '',
+          policy_number: document.getElementById('fleetPolicyNumber')?.value || '',
+          insurance_contact: document.getElementById('fleetInsContact')?.value || '',
+          features: features,
+          internal_notes: document.getElementById('fleetInternalNotes')?.value || '',
+          veh_disp_name: vehDispName,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      }
+
+      function validateForm() {
+        const vehicleType = document.getElementById('fleetVehicleType')?.value;
+        const year = document.getElementById('fleetYear')?.value;
+        const make = document.getElementById('fleetMake')?.value;
+        const model = document.getElementById('fleetModel')?.value;
+        const passengers = document.getElementById('fleetPassengers')?.value;
+        const license = document.getElementById('fleetLicense')?.value;
+
+        if (!vehicleType) return 'Vehicle Type is required';
+        if (!year) return 'Year is required';
+        if (!make) return 'Make is required';
+        if (!model) return 'Model is required';
+        if (!passengers || passengers < 1) return 'Passenger Capacity is required';
+        if (!license) return 'License Plate is required';
+
+        return null;
+      }
+
+      function saveVehicle() {
+        const error = validateForm();
+        if (error) {
+          showStatus(error, true);
+          return { success: false, error: error };
+        }
+
+        const vehicleData = getFormData();
+        
+        // The parent window (my-office.js) handles the actual save to fleetRecords and localStorage
+        // We just return the vehicle data for the parent to save
+        try {
+          showStatus('Vehicle created successfully!', false);
+          
+          // Notify parent window
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({
+              type: 'VEHICLE_SAVED',
+              vehicle: vehicleData
+            }, '*');
+          }
+
+          return { success: true, vehicle: vehicleData };
+        } catch (e) {
+          console.error('Error creating vehicle:', e);
+          showStatus('Error creating vehicle: ' + e.message, true);
+          return { success: false, error: e.message };
+        }
+      }
+
+      // Expose functions to parent window
+      window.fleetFormPopup = {
+        save: saveVehicle,
+        getData: getFormData,
+        validate: validateForm
+      };
+
+    })();
+  </script>
+</body>
+</html>

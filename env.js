@@ -12,7 +12,10 @@ window.ENV = {
 
   // Forced vehicle context (ensures vehicle types/vehicles load under a specific org/user)
   FORCE_VEHICLE_ORG_ID: "54eb6ce7-ba97-4198-8566-6ac075828160",
-  FORCE_VEHICLE_USER_ID: "99d34cd5-a593-4362-9846-db7167276592"
+  FORCE_VEHICLE_USER_ID: "99d34cd5-a593-4362-9846-db7167276592",
+  
+  // Force database operations even on localhost (set to true to always use Supabase)
+  FORCE_DATABASE_ON_LOCALHOST: true
 };
 
 // When a page is embedded (inside index.html iframes), hide its own header to prevent double headers/flashing
