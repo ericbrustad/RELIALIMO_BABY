@@ -49,6 +49,63 @@
         --sidebar-width: 170px;
       }
 
+      /* System Status Indicators */
+      .system-status-bar {
+        display: flex;
+        gap: 8px;
+        padding: 8px 12px;
+        flex-wrap: wrap;
+      }
+      .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .status-indicator:hover {
+        transform: scale(1.05);
+      }
+      .status-indicator.configured {
+        background: rgba(46, 125, 50, 0.15);
+        color: #2e7d32;
+        border: 1px solid rgba(46, 125, 50, 0.3);
+      }
+      .status-indicator.not-configured {
+        background: rgba(198, 40, 40, 0.15);
+        color: #c62828;
+        border: 1px solid rgba(198, 40, 40, 0.3);
+      }
+      .status-indicator.partial {
+        background: rgba(230, 81, 0, 0.15);
+        color: #e65100;
+        border: 1px solid rgba(230, 81, 0, 0.3);
+      }
+      .status-indicator .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+      .status-indicator.configured .status-dot { background: #2e7d32; }
+      .status-indicator.not-configured .status-dot { background: #c62828; }
+      .status-indicator.partial .status-dot { background: #e65100; }
+      
+      html[data-layout="vertical"] .system-status-bar {
+        flex-direction: column;
+        border-top: 1px solid rgba(255,255,255,0.1);
+        margin-top: 10px;
+      }
+      html[data-layout="horizontal"] .system-status-bar {
+        position: absolute;
+        right: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+      }
+
       /* Main section visibility control */
       .app-main-section {
         display: none !important;
@@ -334,6 +391,17 @@
         <div class="header-content">
           <div class="header-left">
             <h1 class="logo">RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" class="logo-bull">LIMO™</h1>
+            <!-- System Status Indicators -->
+            <div class="system-status-bar">
+              <div id="smsStatusIndicator" class="status-indicator not-configured" title="Click to configure SMS" onclick="navigateToSmsSettings()">
+                <span class="status-dot"></span>
+                <span>SMS: Checking...</span>
+              </div>
+              <div id="emailStatusIndicator" class="status-indicator not-configured" title="Click to configure Email" onclick="navigateToEmailSettings()">
+                <span class="status-dot"></span>
+                <span>Email: Checking...</span>
+              </div>
+            </div>
           </div>
           <div class="main-nav">
             <button class="nav-btn" data-section="new-reservation"><span>New Reservation</span><span style="font-size: 24px;">➕</span></button>
@@ -715,6 +783,139 @@
         console.log('[ManualPurge] Cleared all cached reservations. Reloading...');
         location.reload();
       };
+      
+      // System Status Checker - SMS & Email Configuration
+      const SystemStatusChecker = {
+        checkSMSConfig() {
+          const indicator = document.getElementById('smsStatusIndicator');
+          if (!indicator) return;
+          
+          let providers = [];
+          try {
+            const raw = localStorage.getItem('smsProviders');
+            if (raw) providers = JSON.parse(raw);
+          } catch (e) {}
+          
+          const defaultProvider = providers.find(p => p.isDefault) || providers[0];
+          
+          if (!defaultProvider) {
+            indicator.className = 'status-indicator not-configured';
+            indicator.innerHTML = '<span class="status-dot"></span><span>SMS: Not Set</span>';
+            indicator.title = 'Click to configure SMS settings';
+            return;
+          }
+          
+          const hasAccountSid = defaultProvider.accountSid?.startsWith('AC') && defaultProvider.accountSid.length > 10;
+          const hasAuth = defaultProvider.authToken?.length > 10 || (defaultProvider.apiKeySid?.length > 5 && defaultProvider.apiKeySecret?.length > 10);
+          const hasSender = defaultProvider.fromNumber?.length >= 10 || defaultProvider.messagingServiceSid?.startsWith('MG');
+          
+          const checks = [hasAccountSid, hasAuth, hasSender];
+          const validCount = checks.filter(Boolean).length;
+          
+          if (validCount === 3) {
+            indicator.className = 'status-indicator configured';
+            indicator.innerHTML = '<span class="status-dot"></span><span>SMS: ✓</span>';
+            indicator.title = 'SMS is configured correctly';
+          } else if (validCount > 0) {
+            indicator.className = 'status-indicator partial';
+            indicator.innerHTML = `<span class="status-dot"></span><span>SMS: ${validCount}/3</span>`;
+            indicator.title = 'SMS partially configured - click to complete';
+          } else {
+            indicator.className = 'status-indicator not-configured';
+            indicator.innerHTML = '<span class="status-dot"></span><span>SMS: Not Set</span>';
+            indicator.title = 'Click to configure SMS settings';
+          }
+        },
+        
+        checkEmailConfig() {
+          const indicator = document.getElementById('emailStatusIndicator');
+          if (!indicator) return;
+          
+          let settings = null;
+          try {
+            const raw = localStorage.getItem('emailSettings');
+            if (raw) settings = JSON.parse(raw);
+          } catch (e) {}
+          
+          if (!settings) {
+            indicator.className = 'status-indicator not-configured';
+            indicator.innerHTML = '<span class="status-dot"></span><span>Email: Not Set</span>';
+            indicator.title = 'Click to configure Email settings';
+            return;
+          }
+          
+          const hasSmtp = settings.smtpHost?.length > 3;
+          const hasPort = settings.smtpPort > 0;
+          const hasFrom = settings.fromEmail?.includes('@');
+          
+          const checks = [hasSmtp, hasPort, hasFrom];
+          const validCount = checks.filter(Boolean).length;
+          
+          if (validCount === 3) {
+            indicator.className = 'status-indicator configured';
+            indicator.innerHTML = '<span class="status-dot"></span><span>Email: ✓</span>';
+            indicator.title = 'Email is configured correctly';
+          } else if (validCount > 0) {
+            indicator.className = 'status-indicator partial';
+            indicator.innerHTML = `<span class="status-dot"></span><span>Email: ${validCount}/3</span>`;
+            indicator.title = 'Email partially configured - click to complete';
+          } else {
+            indicator.className = 'status-indicator not-configured';
+            indicator.innerHTML = '<span class="status-dot"></span><span>Email: Not Set</span>';
+            indicator.title = 'Click to configure Email settings';
+          }
+        },
+        
+        init() {
+          setTimeout(() => {
+            this.checkSMSConfig();
+            this.checkEmailConfig();
+          }, 500);
+          
+          // Re-check periodically (every 30 seconds)
+          setInterval(() => {
+            this.checkSMSConfig();
+            this.checkEmailConfig();
+          }, 30000);
+          
+          // Re-check on storage changes
+          window.addEventListener('storage', (e) => {
+            if (e.key === 'smsProviders') this.checkSMSConfig();
+            if (e.key === 'emailSettings') this.checkEmailConfig();
+          });
+        }
+      };
+      
+      // Navigate to SMS settings
+      function navigateToSmsSettings() {
+        switchMainSection('office');
+        setTimeout(() => {
+          const officeIframe = document.querySelector('#officeSection iframe');
+          if (officeIframe && officeIframe.contentWindow) {
+            officeIframe.contentWindow.postMessage({
+              action: 'navigateToSystemSettings',
+              page: 'sms-provider'
+            }, '*');
+          }
+        }, 100);
+      }
+      
+      // Navigate to Email settings
+      function navigateToEmailSettings() {
+        switchMainSection('office');
+        setTimeout(() => {
+          const officeIframe = document.querySelector('#officeSection iframe');
+          if (officeIframe && officeIframe.contentWindow) {
+            officeIframe.contentWindow.postMessage({
+              action: 'navigateToSystemSettings',
+              page: 'email-settings'
+            }, '*');
+          }
+        }, 100);
+      }
+      
+      // Initialize status checker on DOM ready
+      document.addEventListener('DOMContentLoaded', () => SystemStatusChecker.init());
     </script>
 
     <!-- Authentication Protection & User Menu -->
