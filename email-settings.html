@@ -33,6 +33,40 @@
       border: 1px solid #ffcc80;
     }
     .config-status .status-icon { font-size: 16px; }
+    
+    /* Toast notification */
+    .toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 16px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 9999;
+      animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .toast.success {
+      background: #2e7d32;
+      color: white;
+    }
+    .toast.error {
+      background: #c62828;
+      color: white;
+    }
+    .toast.warning {
+      background: #e65100;
+      color: white;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
   </style>
 </head>
 <body>
@@ -83,9 +117,24 @@
           <button id="saveSettingsBtn" class="btn primary">💾 Save Settings</button>
           <button id="saveSecureBtn" class="btn primary" style="background:#2e7d32;" title="Save to Supabase & create backup">🔒 Save Secure</button>
           <button id="downloadEnvBtn" class="btn primary" style="background:#1565c0;" title="Download .env file">⬇️ Download .env</button>
-          <button id="testSendBtn" class="btn secondary">Test Send (local)</button>
+          <button id="testSendBtn" class="btn secondary">📧 Test Email API</button>
         </div>
       </header>
+
+      <section class="card">
+        <div class="card-header">
+          <h2>Email Test</h2>
+        </div>
+        <div class="card-body">
+          <label class="form-row">Test Email Address
+            <input id="testEmailInput" type="email" placeholder="test@example.com" />
+          </label>
+          <div class="hint">Uses /api/email-send endpoint with server environment variables for security.</div>
+          <div class="hint" style="color: #f57c00; margin-top: 8px;">
+            <strong>Setup Required:</strong> Deploy email-send.js to Vercel/Netlify or configure local backend server for email testing.
+          </div>
+        </div>
+      </section>
 
       <section class="card">
         <div class="card-header">
@@ -116,6 +165,14 @@
           <label class="form-row checkbox-row">
             <input id="tlsInput" type="checkbox" /> Use TLS/STARTTLS
           </label>
+        </div>
+        <div class="card-footer" style="display: flex; gap: 12px; justify-content: flex-end;">
+          <button id="testEmailFormBtn" class="btn secondary" style="display: flex; align-items: center; gap: 6px;">
+            📧 Send Test Email
+          </button>
+          <button id="saveEmailFormBtn" class="btn primary" style="display: flex; align-items: center; gap: 6px;">
+            💾 Save Email Settings
+          </button>
         </div>
         <div class="hint">Saved locally only. Wire to your email provider backend to send for real.</div>
       </section>
@@ -189,6 +246,204 @@
   <script src="email-settings.js"></script>
   <script src="SecureSettingsManager.js"></script>
   <script>
+    // Toast notification helper
+    function showToast(message, type = 'success') {
+      const existing = document.querySelector('.toast');
+      if (existing) existing.remove();
+      
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => toast.remove(), 3000);
+    }
+    
+    // Direct Email Settings Save/Test (secure API approach)
+    const EmailSettingsDirect = {
+      STORAGE_KEY: 'emailSettings',
+      
+      // Test email via API (secure - uses server env vars)
+      async testEmailAPI() {
+        const testEmail = document.getElementById('testEmailInput')?.value?.trim();
+        if (!testEmail) {
+          showToast('❌ Enter a test email address', 'error');
+          return;
+        }
+        
+        if (!testEmail.includes('@')) {
+          showToast('❌ Enter a valid email address', 'error');
+          return;
+        }
+        
+        const testBtn = document.getElementById('testSendBtn');
+        const originalText = testBtn.textContent;
+        testBtn.disabled = true;
+        testBtn.textContent = '🔄 Sending...';
+        
+        try {
+          const response = await fetch('/api/email-send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: testEmail,
+              subject: 'ReliaLimo Email Test',
+              html: `
+                <h2>Email Test Successful!</h2>
+                <p>If you received this email, your ReliaLimo email configuration is working correctly.</p>
+                <p><strong>Sent at:</strong> ${new Date().toLocaleString()}</p>
+                <p><strong>From:</strong> ReliaLimo Email System</p>
+                <hr>
+                <p style="font-size: 12px; color: #666;">This is an automated test email.</p>
+              `,
+              text: 'ReliaLimo Email Test - If you got this, email sending works! Sent at: ' + new Date().toLocaleString()
+            })
+          });
+          
+          // Check if response is HTML (404 page) instead of JSON
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('text/html')) {
+            throw new Error('API endpoint not available - configure email backend server');
+          }
+          
+          const data = await response.json();
+          
+          if (response.ok && data.ok) {
+            showToast(`✅ Test email sent to ${testEmail}!`, 'success');
+            console.log('Email sent successfully:', data);
+            // Hide any error displays on success
+            const errorDisplays = document.querySelectorAll('.error-display, .test-error');
+            errorDisplays.forEach(el => el.style.display = 'none');
+          } else {
+            console.error('Email API error:', data);
+            showToast(`❌ Email failed: ${data.error || 'Unknown error'}`, 'error');
+          }
+        } catch (error) {
+          console.error('Email test error:', error);
+          
+          // Handle specific error types
+          if (error.message.includes('JSON')) {
+            showToast('❌ API endpoint returned HTML - configure backend server', 'error');
+          } else if (error.message.includes('fetch')) {
+            showToast('❌ Network error - check API endpoint configuration', 'error');
+          } else if (error.message.includes('API endpoint not available')) {
+            showToast('❌ Email API not configured - deploy backend or use SMTP directly', 'error');
+          } else {
+            showToast(`❌ Error: ${error.message}`, 'error');
+          }
+        } finally {
+          testBtn.disabled = false;
+          testBtn.textContent = originalText;
+        }
+      },
+      
+      // Save settings securely (localStorage only - sensitive data via env vars)
+      saveEmailSettings() {
+        const $ = id => document.getElementById(id)?.value?.trim() || '';
+        
+        const settings = {
+          fromName: $('fromNameInput'),
+          fromEmail: $('fromEmailInput'),
+          replyTo: $('replyToInput'),
+          smtpHost: $('smtpHostInput'),
+          smtpPort: parseInt($('smtpPortInput')) || 0,
+          smtpUser: $('smtpUserInput'),
+          smtpPass: $('smtpPassInput'), // Note: This should be managed via env vars in production
+          tls: document.getElementById('tlsInput')?.checked ?? true
+        };
+        
+        // Basic validation
+        if (!settings.fromEmail || !settings.fromEmail.includes('@')) {
+          showToast('❌ Valid From Email is required', 'error');
+          return false;
+        }
+        
+        if (!settings.smtpHost) {
+          showToast('❌ SMTP Host is required', 'error');
+          return false;
+        }
+        
+        if (settings.smtpPort <= 0) {
+          showToast('❌ Valid SMTP Port is required', 'error');
+          return false;
+        }
+        
+        // Save to localStorage
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(settings));
+        
+        // Also save in legacy format for compatibility
+        localStorage.setItem('emailSettingsConfig', JSON.stringify(settings));
+        
+        console.log('[Email] Settings saved:', { ...settings, smtpPass: '***' });
+        
+        // Trigger storage event
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: this.STORAGE_KEY,
+          newValue: JSON.stringify(settings)
+        }));
+        
+        return true;
+      },
+      
+      init() {
+        console.log('[Email] Initializing EmailSettingsDirect...');
+        
+        // Wire up Test Email button
+        const testBtn = document.getElementById('testSendBtn');
+        if (testBtn) {
+          testBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.testEmailAPI();
+          });
+        }
+        
+        // Wire up form Test Email button (duplicate functionality)
+        const testFormBtn = document.getElementById('testEmailFormBtn');
+        if (testFormBtn) {
+          testFormBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.testEmailAPI();
+          });
+        }
+        
+        // Override the save settings button
+        const saveBtn = document.getElementById('saveSettingsBtn');
+        if (saveBtn) {
+          // Remove existing event listeners by cloning the node
+          const newSaveBtn = saveBtn.cloneNode(true);
+          saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+          
+          newSaveBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (this.saveEmailSettings()) {
+              showToast('✅ Email settings saved!', 'success');
+              // Re-check configuration status
+              if (typeof EmailConfigChecker !== 'undefined') {
+                EmailConfigChecker.checkConfiguration();
+              }
+            }
+          });
+        }
+        
+        // Wire up form Save Email Settings button (duplicate functionality)
+        const saveFormBtn = document.getElementById('saveEmailFormBtn');
+        if (saveFormBtn) {
+          saveFormBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (this.saveEmailSettings()) {
+              showToast('✅ Email settings saved!', 'success');
+              // Re-check configuration status
+              if (typeof EmailConfigChecker !== 'undefined') {
+                EmailConfigChecker.checkConfiguration();
+              }
+            }
+          });
+        }
+        
+        console.log('[Email] EmailSettingsDirect initialized');
+      }
+    };
+    
     // Email Config Status Checker
     const EmailConfigChecker = {
       checkConfiguration() {
@@ -243,6 +498,7 @@
     };
     
     document.addEventListener('DOMContentLoaded', () => {
+      EmailSettingsDirect.init();
       EmailConfigChecker.init();
       
       // Save Secure button
@@ -254,32 +510,38 @@
           
           try {
             // First save locally
-            const saveSettingsBtn = document.getElementById('saveSettingsBtn');
-            if (saveSettingsBtn) saveSettingsBtn.click();
+            if (!EmailSettingsDirect.saveEmailSettings()) {
+              saveSecureBtn.disabled = false;
+              saveSecureBtn.textContent = '🔒 Save Secure';
+              return;
+            }
             
-            await new Promise(r => setTimeout(r, 300));
+            await new Promise(r => setTimeout(r, 100));
             
             if (window.SecureSettingsManager) {
               const result = await window.SecureSettingsManager.saveSecurely();
               
               if (result.saved) {
                 if (result.supabase) {
-                  alert('✅ Settings saved securely to Supabase and local backup created.');
+                  showToast('✅ Saved to Supabase + local backup', 'success');
                 } else {
-                  alert('✅ Settings saved to local backup. (Supabase table may need to be created)');
+                  showToast('✅ Saved to local backup', 'success');
                 }
               } else {
-                alert('⚠️ ' + (result.reason || 'Could not save - check configuration'));
+                showToast('⚠️ ' + (result.reason || 'Check configuration'), 'warning');
               }
             } else {
-              alert('❌ SecureSettingsManager not loaded');
+              showToast('✅ Settings saved locally', 'success');
             }
           } catch (e) {
             console.error('Save secure error:', e);
-            alert('❌ Error: ' + e.message);
+            showToast('❌ Error: ' + e.message, 'error');
           } finally {
             saveSecureBtn.disabled = false;
             saveSecureBtn.textContent = '🔒 Save Secure';
+            if (typeof EmailConfigChecker !== 'undefined') {
+              EmailConfigChecker.checkConfiguration();
+            }
           }
         });
       }
@@ -298,8 +560,9 @@
             }
             
             window.SecureSettingsManager.downloadEnvFile();
+            showToast('📥 .env file downloaded', 'success');
           } else {
-            alert('❌ SecureSettingsManager not loaded');
+            showToast('❌ SecureSettingsManager not loaded', 'error');
           }
         });
       }

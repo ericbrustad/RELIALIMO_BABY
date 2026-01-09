@@ -197,7 +197,7 @@
             </label>
           </div>
           <div class="card-footer">
-            <span id="twilioStatus" class="status-text"></span>
+            <span id="twilioStatus" class="status-text" style="display:none;"></span>
           </div>
         </section>
       </main>
@@ -435,7 +435,10 @@
         async handleTestSend() {
           const statusEl = document.getElementById('twilioStatus');
           const testBtn = document.getElementById('testTwilioBtn');
-          if (statusEl) statusEl.textContent = '';
+          if (statusEl) {
+            statusEl.textContent = '';
+            statusEl.style.display = 'none'; // Hide by default
+          }
           
           const $ = id => document.getElementById(id)?.value?.trim() || '';
           
@@ -490,12 +493,16 @@
             
             const json = await res.json();
             if (statusEl) {
-              statusEl.textContent = `✅ Sent! SID: ${json.sid}`;
-              statusEl.style.color = '#2e7d32';
+              // Success - hide the status element instead of showing success message
+              statusEl.style.display = 'none';
+              statusEl.textContent = '';
             }
+            // Show success via toast instead
+            showToast(`✅ SMS sent! SID: ${json.sid}`, 'success');
           } catch (e) {
             console.error('Twilio test send failed', e);
             if (statusEl) {
+              statusEl.style.display = 'block'; // Only show on error
               statusEl.textContent = `❌ Failed: ${e.message}. If CORS blocked, proxy via backend.`;
               statusEl.style.color = '#c62828';
             }

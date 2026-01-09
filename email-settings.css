@@ -26,6 +26,23 @@ body {
 
 .embedded .settings-sidebar { display: none; }
 
+/* Embedded mode adjustments for better iframe display */
+.embedded .email-settings-main {
+  padding: 20px 25px;
+}
+
+.embedded .email-settings-header {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 15px;
+}
+
+.embedded .header-actions {
+  width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
 .settings-nav { padding: 15px 0; }
 
 .settings-nav-item,
@@ -83,11 +100,45 @@ body {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
+  min-width: fit-content;
 }
 
 .btn.primary { background: #1976d2; color: #fff; }
 .btn.secondary { background: #455a64; color: #fff; }
 .btn:hover { opacity: 0.92; }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Responsive button sizing for embedded mode */
+@media (max-width: 768px) {
+  .embedded .btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  
+  .embedded .header-actions {
+    gap: 8px;
+  }
+}
+
+/* Card footer styling */
+.card-footer {
+  padding: 15px 20px;
+  background: #fafafa;
+  border-top: 1px solid #e0e0e0;
+}
+
+/* Embedded mode card footer adjustments */
+.embedded .card-footer {
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.embedded .card-footer .btn {
+  width: 100%;
+  justify-content: center;
+}
 
 .card {
   border: 1px solid #e0e0e0;
