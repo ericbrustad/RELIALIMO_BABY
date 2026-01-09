@@ -7631,7 +7631,10 @@ class MyOffice {
 
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 =======
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
   /**
@@ -7742,6 +7745,9 @@ class MyOffice {
   }
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
@@ -7783,6 +7789,9 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('Office airports system initialized - each airport stored in its own cell in office.Airports');
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
