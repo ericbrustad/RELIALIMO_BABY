@@ -54,6 +54,7 @@
                 <button class="sidebar-subbtn" data-system-setting="system-mapping">System Mapping</button>
                 <button class="sidebar-subbtn" data-system-setting="sms-provider">Sms Provider</button>
                 <button class="sidebar-subbtn" data-system-setting="email-settings">Email Settings</button>
+                <button class="sidebar-subbtn" data-system-setting="portal-links">Portal Links</button>
                 <button class="sidebar-subbtn" data-system-setting="digital-marketing">Digital Marketing</button>
                 <button class="sidebar-subbtn" data-system-setting="utilities">Utilities</button>
               </div>
@@ -2847,6 +2848,9 @@ Bloomington MN 55431
                         </div>
                         
                         <div class="template-list" id="templateList">
+                          <div class="template-item" data-template-id="driver-portal-welcome" style="background: #e3f2fd; border-left: 3px solid #1976d2;">
+                            📧 Driver Portal Welcome
+                          </div>
                           <div class="template-item active" data-template-id="1">
                             A Driver info for affiliat 3 hour off network
                           </div>
@@ -3832,26 +3836,9 @@ further assistance.</textarea>
 
             <!-- System Settings Section -->
             <section id="system-settings-section" class="office-section">
-              <div style="display:flex; gap:8px; padding:0 0 10px 0; align-items:center;">
-                <button class="btn btn-primary" data-sys-settings-src="service-types.html" style="padding:8px 12px; font-size:12px;">Service Types</button>
-                <button class="btn btn-primary" data-sys-settings-src="system-mapping.html" style="padding:8px 12px; font-size:12px;">System Mapping</button>
-                <button class="btn btn-primary" data-sys-settings-src="sms-provider.html" style="padding:8px 12px; font-size:12px;">SMS Provider</button>
-                <button class="btn btn-primary" data-sys-settings-src="email-settings.html" style="padding:8px 12px; font-size:12px;">Email Settings</button>
+              <div style="width: 100%; height: calc(100vh - 160px);">
+                <iframe id="systemSettingsFrame" src="service-types.html" style="width: 100%; height: 100%; border: none;"></iframe>
               </div>
-              <div style="width: 100%; height: calc(100vh - 200px);">
-                <iframe id="systemSettingsFrame" src="email-settings.html" style="width: 100%; height: 100%; border: none;"></iframe>
-              </div>
-              <script>
-                (function setupSystemSettingsNav(){
-                  const frame = document.getElementById('systemSettingsFrame');
-                  document.querySelectorAll('[data-sys-settings-src]').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                      const src = btn.getAttribute('data-sys-settings-src');
-                      if (src && frame) frame.src = src;
-                    });
-                  });
-                })();
-              </script>
             </section>
           </div>
         </div>
@@ -4160,148 +4147,186 @@ further assistance.</textarea>
                         <input type="text" class="form-control" />
                       </div>
 
-                      <!-- Other Information Section -->
-                      <h4 class="drivers-section-title" style="margin-top: 20px;">Other Information</h4>
+                      <!-- Driver Pay Rates Toggle Button -->
+                      <button type="button" id="toggleDriverPayScheduleBtn" class="btn btn-secondary" style="margin-top: 20px; width: 100%; padding: 10px; font-size: 13px; background: #6c757d; color: #fff; border: none; border-radius: 4px; cursor: pointer;">
+                        ▶ Driver Pay Rates and Schedule <span style="color: #ffc107; font-weight: 600;">*inactive</span>
+                      </button>
 
-                      <!-- Pay Rates -->
-                      <h4 class="drivers-section-title" style="margin-top: 20px;">Trip Hourly Pay Rates <a href="#" style="font-size: 12px;">Help</a></h4>
-                      <div class="drivers-pay-rates">
-                        <div class="pay-rate-group">
-                          <label>Regular</label>
-                          <input type="text" class="form-control" value="0.00" style="width: 80px;" />
-                          <span>/Hr</span>
+                      <!-- Collapsible Other Information Section -->
+                      <div id="driverPayScheduleSection" style="display: none;">
+                        
+                        <!-- Driver Assignment & Notes -->
+                        <div class="drivers-form-row" style="margin-top: 15px;">
+                          <label>Assign Driver to Alias</label>
+                          <input type="text" class="form-control" id="driverAlias" />
                         </div>
-                        <div class="pay-rate-group">
-                          <label>Overtime</label>
-                          <input type="text" class="form-control" value="0.00" style="width: 80px;" />
-                          <span>/Hr</span>
+
+                        <div class="drivers-form-row">
+                          <label>Assign Driver to Group</label>
+                          <input type="text" class="form-control" id="driverGroup" />
                         </div>
-                        <div class="pay-rate-group">
-                          <label>Double Time</label>
-                          <input type="text" class="form-control" value="0.00" style="width: 80px;" />
-                          <span>/Hr</span>
+
+                        <div class="drivers-form-row">
+                          <label>Driver Notes</label>
+                          <textarea class="form-control" id="driverNotes" rows="4"></textarea>
+                        </div>
+
+                        <h4 class="drivers-section-title" style="margin-top: 20px;">Web Access</h4>
+                        <div class="drivers-form-row-2">
+                          <div class="form-group">
+                            <label>Username</label>
+                            <input type="text" class="form-control" id="driverWebUsername" />
+                          </div>
+                          <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" class="form-control" id="driverWebPassword" autocomplete="new-password" />
+                          </div>
+                        </div>
+
+                        <!-- Other Information Section -->
+                        <h4 class="drivers-section-title" style="margin-top: 20px;">Other Information</h4>
+
+                        <!-- Pay Rates -->
+                        <h4 class="drivers-section-title" style="margin-top: 20px;">Trip Hourly Pay Rates <a href="#" style="font-size: 12px;">Help</a></h4>
+                        <div class="drivers-pay-rates">
+                          <div class="pay-rate-group">
+                            <label>Regular</label>
+                            <input type="text" class="form-control" value="0.00" style="width: 80px;" />
+                            <span>/Hr</span>
+                          </div>
+                          <div class="pay-rate-group">
+                            <label>Overtime</label>
+                            <input type="text" class="form-control" value="0.00" style="width: 80px;" />
+                            <span>/Hr</span>
+                          </div>
+                          <div class="pay-rate-group">
+                            <label>Double Time</label>
+                            <input type="text" class="form-control" value="0.00" style="width: 80px;" />
+                            <span>/Hr</span>
+                          </div>
+                        </div>
+
+                        <h4 class="drivers-section-title" style="margin-top: 20px;">Travel Time Hourly Pay <a href="#" style="font-size: 12px;">Help</a></h4>
+                        <div class="drivers-pay-rates">
+                          <div class="pay-rate-group">
+                            <label>Regular</label>
+                            <input type="text" class="form-control" value="0.00" style="width: 80px;" />
+                            <span>/Hr</span>
+                          </div>
+                          <div class="pay-rate-group">
+                            <label>Overtime</label>
+                            <input type="text" class="form-control" value="0.00" style="width: 80px;" />
+                            <span>/Hr</span>
+                          </div>
+                          <div class="pay-rate-group">
+                            <label>Double Time</label>
+                            <input type="text" class="form-control" value="0.00" style="width: 80px;" />
+                            <span>/Hr</span>
+                          </div>
+                        </div>
+
+                        <h4 class="drivers-section-title" style="margin-top: 20px;">Passenger Time Hourly Pay <a href="#" style="font-size: 12px;">Help</a></h4>
+                        <div class="drivers-pay-rates">
+                          <div class="pay-rate-group">
+                            <label>Regular</label>
+                            <input type="text" class="form-control" value="0.00" style="width: 80px;" />
+                            <span>/Hr</span>
+                          </div>
+                          <div class="pay-rate-group">
+                            <label>Overtime</label>
+                            <input type="text" class="form-control" value="0.00" style="width: 80px;" />
+                            <span>/Hr</span>
+                          </div>
+                          <div class="pay-rate-group">
+                            <label>Double Time</label>
+                            <input type="text" class="form-control" value="0.00" style="width: 80px;" />
+                            <span>/Hr</span>
+                          </div>
+                        </div>
+
+                        <!-- Driver Work Schedule -->
+                        <h4 class="drivers-section-title" style="margin-top: 20px;">Driver Work Schedule</h4>
+                        <div class="driver-schedule">
+                          <div class="schedule-row" style="display: grid; grid-template-columns: 30px 80px 120px 30px 120px 30px 120px 30px 120px; gap: 5px; align-items: center; margin-bottom: 8px;">
+                            <input type="checkbox" />
+                            <span style="font-size: 13px;">Mon</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                          </div>
+                          <div class="schedule-row" style="display: grid; grid-template-columns: 30px 80px 120px 30px 120px 30px 120px 30px 120px; gap: 5px; align-items: center; margin-bottom: 8px;">
+                            <input type="checkbox" />
+                            <span style="font-size: 13px;">Tue</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                          </div>
+                          <div class="schedule-row" style="display: grid; grid-template-columns: 30px 80px 120px 30px 120px 30px 120px 30px 120px; gap: 5px; align-items: center; margin-bottom: 8px;">
+                            <input type="checkbox" />
+                            <span style="font-size: 13px;">Wed</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                          </div>
+                          <div class="schedule-row" style="display: grid; grid-template-columns: 30px 80px 120px 30px 120px 30px 120px 30px 120px; gap: 5px; align-items: center; margin-bottom: 8px;">
+                            <input type="checkbox" />
+                            <span style="font-size: 13px;">Thu</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                          </div>
+                          <div class="schedule-row" style="display: grid; grid-template-columns: 30px 80px 120px 30px 120px 30px 120px 30px 120px; gap: 5px; align-items: center; margin-bottom: 8px;">
+                            <input type="checkbox" />
+                            <span style="font-size: 13px;">Fri</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                          </div>
+                          <div class="schedule-row" style="display: grid; grid-template-columns: 30px 80px 120px 30px 120px 30px 120px 30px 120px; gap: 5px; align-items: center; margin-bottom: 8px;">
+                            <input type="checkbox" />
+                            <span style="font-size: 13px;">Sat</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                          </div>
+                          <div class="schedule-row" style="display: grid; grid-template-columns: 30px 80px 120px 30px 120px 30px 120px 30px 120px; gap: 5px; align-items: center; margin-bottom: 8px;">
+                            <input type="checkbox" />
+                            <span style="font-size: 13px;">Sun</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                            <span>-</span>
+                            <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
+                          </div>
                         </div>
                       </div>
-
-                      <h4 class="drivers-section-title" style="margin-top: 20px;">Travel Time Hourly Pay <a href="#" style="font-size: 12px;">Help</a></h4>
-                      <div class="drivers-pay-rates">
-                        <div class="pay-rate-group">
-                          <label>Regular</label>
-                          <input type="text" class="form-control" value="0.00" style="width: 80px;" />
-                          <span>/Hr</span>
-                        </div>
-                        <div class="pay-rate-group">
-                          <label>Overtime</label>
-                          <input type="text" class="form-control" value="0.00" style="width: 80px;" />
-                          <span>/Hr</span>
-                        </div>
-                        <div class="pay-rate-group">
-                          <label>Double Time</label>
-                          <input type="text" class="form-control" value="0.00" style="width: 80px;" />
-                          <span>/Hr</span>
-                        </div>
-                      </div>
-
-                      <h4 class="drivers-section-title" style="margin-top: 20px;">Passenger Time Hourly Pay <a href="#" style="font-size: 12px;">Help</a></h4>
-                      <div class="drivers-pay-rates">
-                        <div class="pay-rate-group">
-                          <label>Regular</label>
-                          <input type="text" class="form-control" value="0.00" style="width: 80px;" />
-                          <span>/Hr</span>
-                        </div>
-                        <div class="pay-rate-group">
-                          <label>Overtime</label>
-                          <input type="text" class="form-control" value="0.00" style="width: 80px;" />
-                          <span>/Hr</span>
-                        </div>
-                        <div class="pay-rate-group">
-                          <label>Double Time</label>
-                          <input type="text" class="form-control" value="0.00" style="width: 80px;" />
-                          <span>/Hr</span>
-                        </div>
-                      </div>
-
-                      <!-- Driver Work Schedule -->
-                      <h4 class="drivers-section-title" style="margin-top: 20px;">Driver Work Schedule</h4>
-                      <div class="driver-schedule">
-                        <div class="schedule-row" style="display: grid; grid-template-columns: 30px 80px 120px 30px 120px 30px 120px 30px 120px; gap: 5px; align-items: center; margin-bottom: 8px;">
-                          <input type="checkbox" />
-                          <span style="font-size: 13px;">Mon</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                        </div>
-                        <div class="schedule-row" style="display: grid; grid-template-columns: 30px 80px 120px 30px 120px 30px 120px 30px 120px; gap: 5px; align-items: center; margin-bottom: 8px;">
-                          <input type="checkbox" />
-                          <span style="font-size: 13px;">Tue</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                        </div>
-                        <div class="schedule-row" style="display: grid; grid-template-columns: 30px 80px 120px 30px 120px 30px 120px 30px 120px; gap: 5px; align-items: center; margin-bottom: 8px;">
-                          <input type="checkbox" />
-                          <span style="font-size: 13px;">Wed</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                        </div>
-                        <div class="schedule-row" style="display: grid; grid-template-columns: 30px 80px 120px 30px 120px 30px 120px 30px 120px; gap: 5px; align-items: center; margin-bottom: 8px;">
-                          <input type="checkbox" />
-                          <span style="font-size: 13px;">Thu</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                        </div>
-                        <div class="schedule-row" style="display: grid; grid-template-columns: 30px 80px 120px 30px 120px 30px 120px 30px 120px; gap: 5px; align-items: center; margin-bottom: 8px;">
-                          <input type="checkbox" />
-                          <span style="font-size: 13px;">Fri</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                        </div>
-                        <div class="schedule-row" style="display: grid; grid-template-columns: 30px 80px 120px 30px 120px 30px 120px 30px 120px; gap: 5px; align-items: center; margin-bottom: 8px;">
-                          <input type="checkbox" />
-                          <span style="font-size: 13px;">Sat</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                        </div>
-                        <div class="schedule-row" style="display: grid; grid-template-columns: 30px 80px 120px 30px 120px 30px 120px 30px 120px; gap: 5px; align-items: center; margin-bottom: 8px;">
-                          <input type="checkbox" />
-                          <span style="font-size: 13px;">Sun</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                          <span>-</span>
-                          <select class="form-control" style="font-size: 12px;"><option>-- : --</option></select>
-                        </div>
-                      </div>
+                      <!-- End Collapsible Section -->
                     </div>
 
                     <!-- Right Column -->
@@ -4424,37 +4449,6 @@ further assistance.</textarea>
                           <button type="button" class="btn btn-small" id="createVehicleBtn" style="white-space: nowrap; padding: 6px 12px; background: #ffeb3b; color: #333; border: 1px solid #fbc02d; font-weight: 600;" title="Create a new vehicle">+ New Vehicle</button>
                         </div>
                         <small class="field-hint" style="color: #e65100; font-size: 11px; margin-top: 4px; display: block;">⚠️ Required: Assign this driver to their primary vehicle</small>
-                      </div>
-
-                      <div class="drivers-form-row">
-                        <label>Assign Driver to Alias</label>
-                        <input type="text" class="form-control" id="driverAlias" />
-                      </div>
-
-                      <div class="drivers-form-row">
-                        <label>Assign Driver to Group</label>
-                        <input type="text" class="form-control" id="driverGroup" />
-                      </div>
-
-                      <div class="drivers-form-row">
-                        <label>Driver Notes</label>
-                        <textarea class="form-control" id="driverNotes" rows="4"></textarea>
-                      </div>
-
-                      <h4 class="drivers-section-title" style="margin-top: 20px;">Web Access</h4>
-                      <div class="drivers-form-row-2">
-                        <div class="form-group">
-                          <label>Username</label>
-                          <input type="text" class="form-control" id="driverWebUsername" />
-                        </div>
-                        <div class="form-group">
-                          <label>Password</label>
-                          <input type="password" class="form-control" id="driverWebPassword" autocomplete="new-password" />
-                        </div>
-                      </div>
-
-                      <div style="margin-top: 30px;">
-                        <button class="btn btn-primary btn-large">ADD NEW DRIVER</button>
                       </div>
                     </div>
                   </div>
@@ -4920,332 +4914,124 @@ further assistance.</textarea>
                 <div class="rates-content">
                   <!-- Per Hour Rates -->
                   <div class="rates-section active" id="perHourRates">
-                    <div class="rate-matrix-selector">
-                      <label style="font-weight: 600; margin-right: 10px;">Select Rate Matrix:</label>
-                      <select class="form-control" style="display: inline-block; width: 200px;">
-                        <option>Sedan</option>
-                        <option>SUV</option>
-                        <option>Van</option>
-                      </select>
-                      <a href="#" style="margin-left: 15px; color: #0066cc; font-size: 12px;">Add New Rate Matrix</a>
-                      <a href="#" style="margin-left: 15px; color: #0066cc; font-size: 12px;">Edit rate matrix</a>
-                    </div>
-
-                    <div class="rate-input-section" style="margin-top: 20px;">
+                    <div class="rate-input-section" style="margin-top: 10px;">
+                      <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: #2c3e50;">Hourly Rate Configuration</h4>
                       <div class="form-row-3">
                         <div class="form-group">
-                          <label>As Low</label>
-                          <input type="text" class="form-control" value="0.00" />
-                          <small style="display: block; margin-top: 3px; color: #666;">(Associated with)</small>
-                          <select class="form-control" style="margin-top: 3px; font-size: 11px;">
-                            <option>Per Hour - (Base Rate)</option>
-                          </select>
+                          <label>Rate per Hour ($)</label>
+                          <input type="number" class="form-control" data-rate-field="per-hour-rate" step="0.01" min="0" value="0.00" />
                         </div>
                         <div class="form-group">
-                          <label>Duration</label>
-                          <select class="form-control">
-                            <option>0.00 hr</option>
-                            <option>1.00 hr</option>
-                            <option>2.00 hr</option>
-                            <option>3.00 hr</option>
-                          </select>
+                          <label>Minimum Hours</label>
+                          <input type="number" class="form-control" data-rate-field="per-hour-min" step="0.5" min="0" value="1" />
                         </div>
                         <div class="form-group">
-                          <label>Multiplier</label>
-                          <select class="form-control">
-                            <option>Per Hour - (Base Rate)</option>
-                          </select>
+                          <label>Base Rate / Flat Fee ($)</label>
+                          <input type="number" class="form-control" data-rate-field="per-hour-base" step="0.01" min="0" value="0.00" />
+                          <small style="display: block; margin-top: 3px; color: #666;">One-time fee added to hourly charges</small>
                         </div>
                       </div>
-
-                      <div class="rate-schedule-section" style="margin-top: 20px;">
-                        <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 10px;">Rate Schedule</h4>
-                        <div class="rate-schedule-row" style="display: grid; grid-template-columns: 100px 80px 80px 200px 1fr 80px; gap: 10px; align-items: center; margin-bottom: 8px; padding: 8px; background: #f9f9f9;">
-                          <span style="font-weight: 600; font-size: 12px;">From</span>
-                          <span style="font-weight: 600; font-size: 12px;">To</span>
-                          <span style="font-weight: 600; font-size: 12px; text-align: center;">-</span>
-                          <span style="font-weight: 600; font-size: 12px;">Rate per Hour</span>
-                          <span></span>
-                          <span style="font-weight: 600; font-size: 12px;">Action</span>
+                      <div class="form-row-3" style="margin-top: 15px;">
+                        <div class="form-group">
+                          <label>Overtime Rate ($)</label>
+                          <input type="number" class="form-control" data-rate-field="per-hour-overtime" step="0.01" min="0" value="0.00" />
+                          <small style="display: block; margin-top: 3px; color: #666;">Rate for hours beyond minimum</small>
                         </div>
-                        <div class="rate-schedule-row" style="display: grid; grid-template-columns: 100px 80px 80px 200px 1fr 80px; gap: 10px; align-items: center; margin-bottom: 8px;">
-                          <input type="text" class="form-control" style="font-size: 11px;" />
-                          <input type="text" class="form-control" style="font-size: 11px;" />
-                          <span style="text-align: center; font-size: 12px;">-</span>
-                          <input type="text" class="form-control" style="font-size: 11px;" />
-                          <div style="display: flex; gap: 5px;">
-                            <button class="btn btn-secondary btn-small">Add</button>
-                            <button class="btn btn-secondary btn-small">Cancel</button>
-                          </div>
-                          <span></span>
+                        <div class="form-group">
+                          <label>Gratuity (%)</label>
+                          <input type="number" class="form-control" data-rate-field="per-hour-gratuity" step="1" min="0" max="100" value="20" />
                         </div>
-                      </div>
-
-                      <!-- # of Hours section -->
-                      <div class="rate-schedule-section" style="margin-top: 30px;">
-                        <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 10px; background: #ffeb3b; display: inline-block; padding: 4px 8px;">
-                          # of Hours
-                        </h4>
-                        <div class="hours-schedule-grid" style="display: grid; grid-template-columns: 80px 80px 80px 1fr 100px; gap: 10px; align-items: center; margin-bottom: 8px; padding: 8px; background: #f9f9f9;">
-                          <span style="font-weight: 600; font-size: 12px;">From</span>
-                          <span style="font-weight: 600; font-size: 12px;">To</span>
-                          <span></span>
-                          <span style="font-weight: 600; font-size: 12px;">Rate per Hour</span>
-                          <span style="font-weight: 600; font-size: 12px;">Action</span>
+                        <div class="form-group">
+                          <label>Wait Time ($/hr)</label>
+                          <input type="number" class="form-control" data-rate-field="per-hour-wait" step="0.01" min="0" value="0.00" />
                         </div>
-                        <div class="hours-schedule-grid" style="display: grid; grid-template-columns: 80px 80px 80px 1fr 100px; gap: 10px; align-items: center; margin-bottom: 8px;">
-                          <select class="form-control" style="font-size: 11px;"><option>0</option></select>
-                          <select class="form-control" style="font-size: 11px;"><option>0</option></select>
-                          <span style="text-align: center; font-size: 12px;">-</span>
-                          <select class="form-control" style="font-size: 11px;">
-                            <option>-</option>
-                            <option>00:00</option>
-                            <option>01:00</option>
-                          </select>
-                          <span></span>
-                        </div>
-                      </div>
-
-                      <!-- Peak Rate Schedule -->
-                      <div class="peak-rate-section" style="margin-top: 30px;">
-                        <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 15px;">Peak Rate Schedule</h4>
-                        <table class="peak-rate-table" style="width: 100%; border-collapse: collapse;">
-                          <tbody>
-                            <tr>
-                              <td style="padding: 8px; width: 60px;"><input type="checkbox" /></td>
-                              <td style="padding: 8px; width: 120px; font-size: 12px;">Monday</td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 100px;"><option>-</option></select></td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 100px;"><option>-</option></select></td>
-                              <td style="padding: 8px; text-align: center;">-</td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 120px;"><option>-</option></select></td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 120px;"><option>-</option></select></td>
-                            </tr>
-                            <tr style="background: #f9f9f9;">
-                              <td style="padding: 8px;"><input type="checkbox" /></td>
-                              <td style="padding: 8px; font-size: 12px;">Tuesday</td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 100px;"><option>-</option></select></td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 100px;"><option>-</option></select></td>
-                              <td style="padding: 8px; text-align: center;">-</td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 120px;"><option>-</option></select></td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 120px;"><option>-</option></select></td>
-                            </tr>
-                            <tr>
-                              <td style="padding: 8px;"><input type="checkbox" /></td>
-                              <td style="padding: 8px; font-size: 12px;">Wednesday</td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 100px;"><option>-</option></select></td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 100px;"><option>-</option></select></td>
-                              <td style="padding: 8px; text-align: center;">-</td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 120px;"><option>-</option></select></td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 120px;"><option>-</option></select></td>
-                            </tr>
-                            <tr style="background: #f9f9f9;">
-                              <td style="padding: 8px;"><input type="checkbox" /></td>
-                              <td style="padding: 8px; font-size: 12px;">Thursday</td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 100px;"><option>-</option></select></td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 100px;"><option>-</option></select></td>
-                              <td style="padding: 8px; text-align: center;">-</td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 120px;"><option>-</option></select></td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 120px;"><option>-</option></select></td>
-                            </tr>
-                            <tr>
-                              <td style="padding: 8px;"><input type="checkbox" /></td>
-                              <td style="padding: 8px; font-size: 12px;">Friday</td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 100px;"><option>-</option></select></td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 100px;"><option>-</option></select></td>
-                              <td style="padding: 8px; text-align: center;">-</td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 120px;"><option>-</option></select></td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 120px;"><option>-</option></select></td>
-                            </tr>
-                            <tr style="background: #f9f9f9;">
-                              <td style="padding: 8px;"><input type="checkbox" /></td>
-                              <td style="padding: 8px; font-size: 12px;">Saturday</td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 100px;"><option>-</option></select></td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 100px;"><option>-</option></select></td>
-                              <td style="padding: 8px; text-align: center;">-</td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 120px;"><option>-</option></select></td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 120px;"><option>-</option></select></td>
-                            </tr>
-                            <tr>
-                              <td style="padding: 8px;"><input type="checkbox" /></td>
-                              <td style="padding: 8px; font-size: 12px;">Sunday</td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 100px;"><option>-</option></select></td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 100px;"><option>-</option></select></td>
-                              <td style="padding: 8px; text-align: center;">-</td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 120px;"><option>-</option></select></td>
-                              <td style="padding: 8px;"><select class="form-control" style="font-size: 11px; display: inline-block; width: 120px;"><option>-</option></select></td>
-                            </tr>
-                          </tbody>
-                        </table>
                       </div>
 
                       <div class="form-actions" style="margin-top: 30px;">
-                        <button class="btn btn-primary btn-large" id="vehicleRatesSaveBtn">UPDATE VEHICLE TYPE RATES</button>
+                        <button class="btn btn-primary btn-large" id="vehicleRatesSaveBtn">SAVE HOURLY RATES</button>
                       </div>
                     </div>
                   </div>
 
                   <!-- Per Passenger Rates -->
                   <div class="rates-section" id="perPassengerRates">
-                    <div class="rate-matrix-selector">
-                      <label style="font-weight: 600; margin-right: 10px;">Select Rate Matrix:</label>
-                      <select class="form-control" style="display: inline-block; width: 220px;" data-rate-field="pp-matrix">
-                        <option value="standard">Standard</option>
-                        <option value="event">Event</option>
-                        <option value="shuttle">Shuttle</option>
-                      </select>
-                    </div>
-
-                    <div class="rate-input-section" style="margin-top: 20px;">
+                    <div class="rate-input-section" style="margin-top: 10px;">
+                      <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: #2c3e50;">Per Passenger Rate Configuration</h4>
                       <div class="form-row-3">
                         <div class="form-group">
-                          <label>Base Fare (per passenger)</label>
-                          <input type="text" class="form-control" data-rate-field="pp-base-rate" value="0.00" />
+                          <label>Rate per Passenger ($)</label>
+                          <input type="number" class="form-control" data-rate-field="pp-base-rate" step="0.01" min="0" value="0.00" />
                         </div>
                         <div class="form-group">
                           <label>Minimum Passengers</label>
-                          <input type="number" class="form-control" data-rate-field="pp-min" value="1" />
+                          <input type="number" class="form-control" data-rate-field="pp-min" step="1" min="1" value="1" />
                         </div>
                         <div class="form-group">
                           <label>Maximum Passengers</label>
-                          <input type="number" class="form-control" data-rate-field="pp-max" value="6" />
+                          <input type="number" class="form-control" data-rate-field="pp-max" step="1" min="1" value="10" />
+                        </div>
+                      </div>
+                      <div class="form-row-3" style="margin-top: 15px;">
+                        <div class="form-group">
+                          <label>Base Fare ($)</label>
+                          <input type="number" class="form-control" data-rate-field="pp-base-fare" step="0.01" min="0" value="0.00" />
+                          <small style="display: block; margin-top: 3px; color: #666;">Flat fee before per-passenger charges</small>
+                        </div>
+                        <div class="form-group">
+                          <label>Gratuity (%)</label>
+                          <input type="number" class="form-control" data-rate-field="pp-gratuity" step="1" min="0" max="100" value="20" />
+                        </div>
+                        <div class="form-group">
+                          <label>Extra Passenger Rate ($)</label>
+                          <input type="number" class="form-control" data-rate-field="pp-extra-rate" step="0.01" min="0" value="0.00" />
+                          <small style="display: block; margin-top: 3px; color: #666;">Rate for passengers beyond minimum</small>
                         </div>
                       </div>
 
-                      <div class="rate-schedule-section" style="margin-top: 20px;">
-                        <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 10px;">Passenger Tier Schedule</h4>
-                        <div class="rate-schedule-row" style="display: grid; grid-template-columns: 100px 100px 200px 1fr 120px; gap: 10px; align-items: center; margin-bottom: 8px; padding: 8px; background: #f9f9f9;">
-                          <span style="font-weight: 600; font-size: 12px;">From</span>
-                          <span style="font-weight: 600; font-size: 12px;">To</span>
-                          <span style="font-weight: 600; font-size: 12px;">Rate per Passenger</span>
-                          <span></span>
-                          <span style="font-weight: 600; font-size: 12px; text-align: center;">Action</span>
-                        </div>
-                        <div class="rate-schedule-row pp-tier-row" style="display: grid; grid-template-columns: 100px 100px 200px 1fr 120px; gap: 10px; align-items: center; margin-bottom: 8px;">
-                          <input type="number" class="form-control" data-rate-field="pp-from" style="font-size: 11px;" />
-                          <input type="number" class="form-control" data-rate-field="pp-to" style="font-size: 11px;" />
-                          <input type="text" class="form-control" data-rate-field="pp-rate" style="font-size: 11px;" />
-                          <div></div>
-                          <div style="display: flex; gap: 6px; justify-content: flex-end;">
-                            <button class="btn btn-secondary btn-small" type="button">Add</button>
-                            <button class="btn btn-secondary btn-small" type="button">Reset</button>
-                          </div>
-                        </div>
-                        <div class="rate-schedule-row pp-tier-row" style="display: grid; grid-template-columns: 100px 100px 200px 1fr 120px; gap: 10px; align-items: center; margin-bottom: 8px;">
-                          <input type="number" class="form-control" data-rate-field="pp-from" style="font-size: 11px;" />
-                          <input type="number" class="form-control" data-rate-field="pp-to" style="font-size: 11px;" />
-                          <input type="text" class="form-control" data-rate-field="pp-rate" style="font-size: 11px;" />
-                          <div></div>
-                          <div style="display: flex; gap: 6px; justify-content: flex-end;">
-                            <button class="btn btn-secondary btn-small" type="button">Add</button>
-                            <button class="btn btn-secondary btn-small" type="button">Reset</button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div class="rate-schedule-section" style="margin-top: 20px;">
-                        <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 10px;">Flat Fees</h4>
-                        <div class="rate-schedule-row" style="display: grid; grid-template-columns: 220px 200px 1fr 120px; gap: 10px; align-items: center; margin-bottom: 8px; padding: 8px; background: #f9f9f9;">
-                          <span style="font-weight: 600; font-size: 12px;">Label</span>
-                          <span style="font-weight: 600; font-size: 12px;">Amount</span>
-                          <span></span>
-                          <span style="font-weight: 600; font-size: 12px; text-align: center;">Action</span>
-                        </div>
-                        <div class="rate-schedule-row pp-flat-row" style="display: grid; grid-template-columns: 220px 200px 1fr 120px; gap: 10px; align-items: center; margin-bottom: 8px;">
-                          <input type="text" class="form-control" data-rate-field="pp-flat-label" placeholder="e.g., Meet & Greet" style="font-size: 11px;" />
-                          <input type="text" class="form-control" data-rate-field="pp-flat-amount" value="0.00" style="font-size: 11px;" />
-                          <div></div>
-                          <div style="display: flex; gap: 6px; justify-content: flex-end;">
-                            <button class="btn btn-secondary btn-small" type="button">Add</button>
-                            <button class="btn btn-secondary btn-small" type="button">Reset</button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div class="form-actions" style="margin-top: 24px;">
-                        <button class="btn btn-primary btn-large" id="passengerRatesSaveBtn">UPDATE PASSENGER RATES</button>
+                      <div class="form-actions" style="margin-top: 30px;">
+                        <button class="btn btn-primary btn-large" id="passengerRatesSaveBtn">SAVE PASSENGER RATES</button>
                       </div>
                     </div>
                   </div>
 
                   <!-- Distance Based Rates -->
                   <div class="rates-section" id="distanceRates">
-                    <div class="rate-matrix-selector">
-                      <label style="font-weight: 600; margin-right: 10px;">Select Rate Matrix:</label>
-                      <select class="form-control" style="display: inline-block; width: 220px;" data-rate-field="dist-matrix">
-                        <option value="standard">Standard</option>
-                        <option value="out-of-town">Out of Town</option>
-                        <option value="long-haul">Long Haul</option>
-                      </select>
-                    </div>
-
-                    <div class="rate-input-section" style="margin-top: 20px;">
+                    <div class="rate-input-section" style="margin-top: 10px;">
+                      <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; color: #2c3e50;">Distance Based Rate Configuration</h4>
                       <div class="form-row-3">
                         <div class="form-group">
-                          <label>Base Per Mile</label>
-                          <input type="text" class="form-control" data-rate-field="dist-base" value="0.00" />
+                          <label>Rate per Mile ($)</label>
+                          <input type="number" class="form-control" data-rate-field="dist-base" step="0.01" min="0" value="0.00" />
                         </div>
                         <div class="form-group">
-                          <label>Minimum Fare</label>
-                          <input type="text" class="form-control" data-rate-field="dist-min-fare" value="0.00" />
+                          <label>Minimum Fare ($)</label>
+                          <input type="number" class="form-control" data-rate-field="dist-min-fare" step="0.01" min="0" value="0.00" />
                         </div>
                         <div class="form-group">
                           <label>Included Miles</label>
-                          <input type="number" class="form-control" data-rate-field="dist-included" value="0" />
+                          <input type="number" class="form-control" data-rate-field="dist-included" step="1" min="0" value="0" />
+                          <small style="display: block; margin-top: 3px; color: #666;">Miles included in base fare</small>
+                        </div>
+                      </div>
+                      <div class="form-row-3" style="margin-top: 15px;">
+                        <div class="form-group">
+                          <label>Base Fare ($)</label>
+                          <input type="number" class="form-control" data-rate-field="dist-base-fare" step="0.01" min="0" value="0.00" />
+                          <small style="display: block; margin-top: 3px; color: #666;">Starting flat fee</small>
+                        </div>
+                        <div class="form-group">
+                          <label>Gratuity (%)</label>
+                          <input type="number" class="form-control" data-rate-field="dist-gratuity" step="1" min="0" max="100" value="20" />
+                        </div>
+                        <div class="form-group">
+                          <label>Dead Mile Rate ($)</label>
+                          <input type="number" class="form-control" data-rate-field="dist-dead-mile" step="0.01" min="0" value="0.00" />
+                          <small style="display: block; margin-top: 3px; color: #666;">Rate for empty return miles</small>
                         </div>
                       </div>
 
-                      <div class="rate-schedule-section" style="margin-top: 20px;">
-                        <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 10px;">Distance Tiers</h4>
-                        <div class="rate-schedule-row" style="display: grid; grid-template-columns: 100px 100px 200px 1fr 120px; gap: 10px; align-items: center; margin-bottom: 8px; padding: 8px; background: #f9f9f9;">
-                          <span style="font-weight: 600; font-size: 12px;">From (mi)</span>
-                          <span style="font-weight: 600; font-size: 12px;">To (mi)</span>
-                          <span style="font-weight: 600; font-size: 12px;">Rate per Mile</span>
-                          <span></span>
-                          <span style="font-weight: 600; font-size: 12px; text-align: center;">Action</span>
-                        </div>
-                        <div class="rate-schedule-row distance-tier-row" style="display: grid; grid-template-columns: 100px 100px 200px 1fr 120px; gap: 10px; align-items: center; margin-bottom: 8px;">
-                          <input type="number" class="form-control" data-rate-field="dist-from" style="font-size: 11px;" />
-                          <input type="number" class="form-control" data-rate-field="dist-to" style="font-size: 11px;" />
-                          <input type="text" class="form-control" data-rate-field="dist-rate" style="font-size: 11px;" />
-                          <div></div>
-                          <div style="display: flex; gap: 6px; justify-content: flex-end;">
-                            <button class="btn btn-secondary btn-small" type="button">Add</button>
-                            <button class="btn btn-secondary btn-small" type="button">Reset</button>
-                          </div>
-                        </div>
-                        <div class="rate-schedule-row distance-tier-row" style="display: grid; grid-template-columns: 100px 100px 200px 1fr 120px; gap: 10px; align-items: center; margin-bottom: 8px;">
-                          <input type="number" class="form-control" data-rate-field="dist-from" style="font-size: 11px;" />
-                          <input type="number" class="form-control" data-rate-field="dist-to" style="font-size: 11px;" />
-                          <input type="text" class="form-control" data-rate-field="dist-rate" style="font-size: 11px;" />
-                          <div></div>
-                          <div style="display: flex; gap: 6px; justify-content: flex-end;">
-                            <button class="btn btn-secondary btn-small" type="button">Add</button>
-                            <button class="btn btn-secondary btn-small" type="button">Reset</button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div class="rate-schedule-section" style="margin-top: 20px;">
-                        <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 10px;">Surcharges</h4>
-                        <div class="rate-schedule-row" style="display: grid; grid-template-columns: 220px 200px 1fr 120px; gap: 10px; align-items: center; margin-bottom: 8px; padding: 8px; background: #f9f9f9;">
-                          <span style="font-weight: 600; font-size: 12px;">Label</span>
-                          <span style="font-weight: 600; font-size: 12px;">Amount</span>
-                          <span></span>
-                          <span style="font-weight: 600; font-size: 12px; text-align: center;">Action</span>
-                        </div>
-                        <div class="rate-schedule-row distance-surcharge-row" style="display: grid; grid-template-columns: 220px 200px 1fr 120px; gap: 10px; align-items: center; margin-bottom: 8px;">
-                          <input type="text" class="form-control" data-rate-field="dist-surcharge-label" placeholder="e.g., Toll Recovery" style="font-size: 11px;" />
-                          <input type="text" class="form-control" data-rate-field="dist-surcharge-amount" value="0.00" style="font-size: 11px;" />
-                          <div></div>
-                          <div style="display: flex; gap: 6px; justify-content: flex-end;">
-                            <button class="btn btn-secondary btn-small" type="button">Add</button>
-                            <button class="btn btn-secondary btn-small" type="button">Reset</button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div class="form-actions" style="margin-top: 24px;">
-                        <button class="btn btn-primary btn-large" id="distanceRatesSaveBtn">UPDATE DISTANCE BASED RATES</button>
+                      <div class="form-actions" style="margin-top: 30px;">
+                        <button class="btn btn-primary btn-large" id="distanceRatesSaveBtn">SAVE DISTANCE RATES</button>
                       </div>
                     </div>
                   </div>
@@ -8056,6 +7842,7 @@ further assistance.</textarea>
     <script src="ratetag-selector.js"></script>
     <script src="drag-drop-handler.js"></script>
     <script src="html-editor-view-switcher.js"></script>
+    <script src="email-settings.js"></script>
     <script type="module" src="my-office.js"></script>
   </body>
 </html>

@@ -5,6 +5,95 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SMS Provider - RELIA🐂LIMO™</title>
     <link rel="stylesheet" href="sms-provider.css" />
+    <style>
+      .config-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600;
+        margin-right: 15px;
+      }
+      .config-status.configured {
+        background: #e8f5e9;
+        color: #2e7d32;
+        border: 1px solid #a5d6a7;
+      }
+      .config-status.not-configured {
+        background: #ffebee;
+        color: #c62828;
+        border: 1px solid #ef9a9a;
+      }
+      .config-status.partial {
+        background: #fff3e0;
+        color: #e65100;
+        border: 1px solid #ffcc80;
+      }
+      .config-status .status-icon {
+        font-size: 16px;
+      }
+      .config-details {
+        background: #f5f5f5;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+        font-size: 13px;
+      }
+      .config-details h3 {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+        color: #333;
+      }
+      .config-checklist {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 8px;
+      }
+      .config-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .config-item.valid { color: #2e7d32; }
+      .config-item.invalid { color: #c62828; }
+      .config-item .check { font-size: 14px; }
+      
+      /* Toast notification */
+      .toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 16px 24px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        z-index: 9999;
+        animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      }
+      .toast.success {
+        background: #2e7d32;
+        color: white;
+      }
+      .toast.error {
+        background: #c62828;
+        color: white;
+      }
+      .toast.warning {
+        background: #e65100;
+        color: white;
+      }
+      @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes fadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
+      }
+    </style>
   </head>
   <body>
     <script>
@@ -50,9 +139,21 @@
             <p class="sms-provider-subtitle">Configure outbound texting. Values save locally; wire a backend proxy to avoid CORS.</p>
           </div>
           <div class="header-actions">
-            <button class="btn-add-new" id="saveTwilioBtn">Save Settings</button>
+            <div id="smsConfigStatus" class="config-status">
+              <span class="status-icon">⏳</span>
+              <span class="status-text">Checking...</span>
+            </div>
+            <button class="btn-add-new" id="saveTwilioBtn">💾 Save Settings</button>
+            <button class="btn-add-new" id="saveSecureBtn" style="background:#2e7d32;" title="Save to Supabase & create backup">🔒 Save Secure</button>
+            <button class="btn-add-new" id="downloadEnvBtn" style="background:#1565c0;" title="Download .env file">⬇️ Download .env</button>
             <button class="btn-add-new" id="testTwilioBtn" style="background:#455a64;">Send Test</button>
           </div>
+        </div>
+
+        <!-- Configuration Status Details -->
+        <div id="configDetails" class="config-details" style="display:none;">
+          <h3>📋 Configuration Checklist</h3>
+          <div class="config-checklist" id="configChecklist"></div>
         </div>
 
         <section class="card">
@@ -101,6 +202,382 @@
         </section>
       </main>
     </div>
-    <script src="sms-provider.js"></script>
+    <!-- Note: sms-provider.js removed - using inline direct save handler below -->
+    <script>
+      // SMS Configuration Status Checker
+      const SMSConfigChecker = {
+        checkConfiguration() {
+          const statusEl = document.getElementById('smsConfigStatus');
+          const detailsEl = document.getElementById('configDetails');
+          const checklistEl = document.getElementById('configChecklist');
+          
+          // Get saved providers
+          let providers = [];
+          try {
+            const raw = localStorage.getItem('smsProviders');
+            if (raw) providers = JSON.parse(raw);
+          } catch (e) {}
+          
+          // Also check current form values
+          const accountSid = document.getElementById('twilioAccountSid')?.value?.trim() || '';
+          const authToken = document.getElementById('twilioAuthToken')?.value?.trim() || '';
+          const apiKeySid = document.getElementById('twilioApiKeySid')?.value?.trim() || '';
+          const apiKeySecret = document.getElementById('twilioApiKeySecret')?.value?.trim() || '';
+          const msgSvcSid = document.getElementById('twilioMessagingServiceSid')?.value?.trim() || '';
+          const fromNumber = document.getElementById('twilioFromNumber')?.value?.trim() || '';
+          
+          // Check default provider from storage
+          const defaultProvider = providers.find(p => p.isDefault) || providers[0];
+          
+          // Use form values if present, otherwise fall back to stored values
+          const config = {
+            accountSid: accountSid || defaultProvider?.accountSid || '',
+            authToken: authToken || defaultProvider?.authToken || '',
+            apiKeySid: apiKeySid || defaultProvider?.apiKeySid || '',
+            apiKeySecret: apiKeySecret || defaultProvider?.apiKeySecret || '',
+            msgSvcSid: msgSvcSid || defaultProvider?.messagingServiceSid || '',
+            fromNumber: fromNumber || defaultProvider?.fromNumber || ''
+          };
+          
+          // Validation checks
+          const checks = [
+            { name: 'Account SID', valid: config.accountSid.startsWith('AC') && config.accountSid.length > 10 },
+            { name: 'Auth Token or API Key', valid: config.authToken.length > 10 || (config.apiKeySid.length > 5 && config.apiKeySecret.length > 10) },
+            { name: 'From Number or Messaging Service', valid: config.fromNumber.length >= 10 || config.msgSvcSid.startsWith('MG') }
+          ];
+          
+          const validCount = checks.filter(c => c.valid).length;
+          const totalCount = checks.length;
+          const allValid = validCount === totalCount;
+          const partialValid = validCount > 0 && validCount < totalCount;
+          
+          // Update status badge
+          if (allValid) {
+            statusEl.className = 'config-status configured';
+            statusEl.innerHTML = '<span class="status-icon">✅</span><span class="status-text">SMS Configured</span>';
+          } else if (partialValid) {
+            statusEl.className = 'config-status partial';
+            statusEl.innerHTML = `<span class="status-icon">⚠️</span><span class="status-text">Partial (${validCount}/${totalCount})</span>`;
+          } else {
+            statusEl.className = 'config-status not-configured';
+            statusEl.innerHTML = '<span class="status-icon">❌</span><span class="status-text">Not Configured</span>';
+          }
+          
+          // Show checklist details
+          detailsEl.style.display = 'block';
+          checklistEl.innerHTML = checks.map(c => `
+            <div class="config-item ${c.valid ? 'valid' : 'invalid'}">
+              <span class="check">${c.valid ? '✓' : '✗'}</span>
+              <span>${c.name}</span>
+            </div>
+          `).join('');
+        },
+        
+        init() {
+          // Check on page load
+          setTimeout(() => this.checkConfiguration(), 100);
+          
+          // Re-check when inputs change
+          const inputs = ['twilioAccountSid', 'twilioAuthToken', 'twilioApiKeySid', 
+                          'twilioApiKeySecret', 'twilioMessagingServiceSid', 'twilioFromNumber'];
+          inputs.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+              el.addEventListener('input', () => this.checkConfiguration());
+              el.addEventListener('change', () => this.checkConfiguration());
+            }
+          });
+          
+          // Re-check after save
+          const saveBtn = document.getElementById('saveTwilioBtn');
+          if (saveBtn) {
+            saveBtn.addEventListener('click', () => {
+              setTimeout(() => this.checkConfiguration(), 200);
+            });
+          }
+        }
+      };
+      
+      document.addEventListener('DOMContentLoaded', () => SMSConfigChecker.init());
+    </script>
+    
+    <!-- Secure Settings Manager -->
+    <script src="SecureSettingsManager.js"></script>
+    <script>
+      // Toast notification helper
+      function showToast(message, type = 'success') {
+        // Remove any existing toast
+        const existing = document.querySelector('.toast');
+        if (existing) existing.remove();
+        
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => toast.remove(), 3000);
+      }
+      
+      // Direct SMS Settings Save/Load (works with the simplified form)
+      const SMSSettingsDirect = {
+        STORAGE_KEY: 'smsProviders',
+        
+        // Load settings from localStorage and populate form
+        loadSettings() {
+          try {
+            const raw = localStorage.getItem(this.STORAGE_KEY);
+            if (!raw) {
+              console.log('[SMS] No saved settings found');
+              return;
+            }
+            const providers = JSON.parse(raw);
+            const provider = providers.find(p => p.isDefault) || providers[0];
+            if (!provider) return;
+            
+            const $ = id => document.getElementById(id);
+            if ($('twilioAccountSid')) $('twilioAccountSid').value = provider.accountSid || '';
+            if ($('twilioAuthToken')) $('twilioAuthToken').value = provider.authToken || '';
+            if ($('twilioApiKeySid')) $('twilioApiKeySid').value = provider.apiKeySid || '';
+            if ($('twilioApiKeySecret')) $('twilioApiKeySecret').value = provider.apiKeySecret || '';
+            if ($('twilioMessagingServiceSid')) $('twilioMessagingServiceSid').value = provider.messagingServiceSid || '';
+            if ($('twilioFromNumber')) $('twilioFromNumber').value = provider.fromNumber || '';
+            if ($('twilioStatusCallback')) $('twilioStatusCallback').value = provider.statusCallbackUrl || '';
+            if ($('twilioDeliveryReceipts')) {
+              $('twilioDeliveryReceipts').checked = provider.requestDeliveryReceipts ?? true;
+            }
+            
+            console.log('[SMS] Settings loaded from localStorage:', provider.accountSid ? 'Account SID present' : 'No Account SID');
+          } catch (e) {
+            console.error('[SMS] Error loading settings:', e);
+          }
+        },
+        
+        // Save settings from form to localStorage
+        saveSettings() {
+          const $ = id => document.getElementById(id)?.value?.trim() || '';
+          
+          const provider = {
+            id: 'twilio',
+            name: 'Twilio',
+            type: 'twilio',
+            accountSid: $('twilioAccountSid'),
+            authToken: $('twilioAuthToken'),
+            apiKeySid: $('twilioApiKeySid'),
+            apiKeySecret: $('twilioApiKeySecret'),
+            messagingServiceSid: $('twilioMessagingServiceSid'),
+            fromNumber: $('twilioFromNumber'),
+            statusCallbackUrl: $('twilioStatusCallback'),
+            requestDeliveryReceipts: document.getElementById('twilioDeliveryReceipts')?.checked ?? true,
+            useApiKey: !!$('twilioApiKeySid') && !!$('twilioApiKeySecret'),
+            isDefault: true
+          };
+          
+          // Validate required fields
+          if (!provider.accountSid) {
+            showToast('❌ Account SID is required', 'error');
+            return false;
+          }
+          if (!provider.authToken && !(provider.apiKeySid && provider.apiKeySecret)) {
+            showToast('❌ Auth Token (or API Key) is required', 'error');
+            return false;
+          }
+          
+          // Save to localStorage
+          localStorage.setItem(this.STORAGE_KEY, JSON.stringify([provider]));
+          console.log('[SMS] Settings saved to localStorage:', provider);
+          
+          // Trigger storage event for other tabs/windows
+          window.dispatchEvent(new StorageEvent('storage', {
+            key: this.STORAGE_KEY,
+            newValue: JSON.stringify([provider])
+          }));
+          
+          return true;
+        },
+        
+        init() {
+          console.log('[SMS] Initializing SMSSettingsDirect...');
+          
+          // Load settings on page load
+          this.loadSettings();
+          
+          // Wire up Save Settings button
+          const saveBtn = document.getElementById('saveTwilioBtn');
+          console.log('[SMS] Save button found:', !!saveBtn);
+          
+          if (saveBtn) {
+            saveBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              console.log('[SMS] Save button clicked');
+              
+              if (this.saveSettings()) {
+                showToast('✅ SMS settings saved!', 'success');
+                // Re-check configuration status
+                if (typeof SMSConfigChecker !== 'undefined') {
+                  SMSConfigChecker.checkConfiguration();
+                }
+              }
+            });
+          }
+          
+          // Wire up Test Send button
+          const testBtn = document.getElementById('testTwilioBtn');
+          if (testBtn) {
+            testBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              this.handleTestSend();
+            });
+          }
+          
+          console.log('[SMS] SMSSettingsDirect initialized');
+        },
+        
+        async handleTestSend() {
+          const statusEl = document.getElementById('twilioStatus');
+          const testBtn = document.getElementById('testTwilioBtn');
+          if (statusEl) statusEl.textContent = '';
+          
+          const $ = id => document.getElementById(id)?.value?.trim() || '';
+          
+          const accountSid = $('twilioAccountSid');
+          const authToken = $('twilioAuthToken');
+          const apiKeySid = $('twilioApiKeySid');
+          const apiKeySecret = $('twilioApiKeySecret');
+          const messagingServiceSid = $('twilioMessagingServiceSid');
+          const fromNumber = $('twilioFromNumber');
+          const to = $('twilioTestTo');
+          const body = $('twilioTestBody') || 'Test message from RELIALIMO';
+          
+          if (!accountSid || !(authToken || (apiKeySid && apiKeySecret))) {
+            alert('Provide Account SID and Auth Token (or API Key) to send a test.');
+            return;
+          }
+          if (!to) {
+            alert('Enter a destination number for the test.');
+            return;
+          }
+          if (!messagingServiceSid && !fromNumber) {
+            alert('Provide a Messaging Service SID or From number.');
+            return;
+          }
+          
+          testBtn.disabled = true;
+          testBtn.textContent = 'Sending...';
+          
+          try {
+            const useApiKey = apiKeySid && apiKeySecret;
+            const auth = useApiKey ? `${apiKeySid}:${apiKeySecret}` : `${accountSid}:${authToken}`;
+            
+            const params = new URLSearchParams();
+            params.append('To', to);
+            params.append('Body', body);
+            if (messagingServiceSid) params.append('MessagingServiceSid', messagingServiceSid);
+            else if (fromNumber) params.append('From', fromNumber);
+            
+            const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+              method: 'POST',
+              headers: {
+                'Authorization': 'Basic ' + btoa(auth),
+                'Content-Type': 'application/x-www-form-urlencoded'
+              },
+              body: params
+            });
+            
+            if (!res.ok) {
+              const txt = await res.text();
+              throw new Error(`HTTP ${res.status}: ${txt}`);
+            }
+            
+            const json = await res.json();
+            if (statusEl) {
+              statusEl.textContent = `✅ Sent! SID: ${json.sid}`;
+              statusEl.style.color = '#2e7d32';
+            }
+          } catch (e) {
+            console.error('Twilio test send failed', e);
+            if (statusEl) {
+              statusEl.textContent = `❌ Failed: ${e.message}. If CORS blocked, proxy via backend.`;
+              statusEl.style.color = '#c62828';
+            }
+          } finally {
+            testBtn.disabled = false;
+            testBtn.textContent = 'Send Test';
+          }
+        }
+      };
+      
+      document.addEventListener('DOMContentLoaded', () => {
+        // Initialize direct SMS settings handler
+        SMSSettingsDirect.init();
+        
+        // Save Secure button - saves to Supabase + local backup
+        const saveSecureBtn = document.getElementById('saveSecureBtn');
+        if (saveSecureBtn) {
+          saveSecureBtn.addEventListener('click', async () => {
+            saveSecureBtn.disabled = true;
+            saveSecureBtn.textContent = '🔄 Saving...';
+            
+            try {
+              // First save locally
+              if (!SMSSettingsDirect.saveSettings()) {
+                saveSecureBtn.disabled = false;
+                saveSecureBtn.textContent = '🔒 Save Secure';
+                return;
+              }
+              
+              // Wait a moment, then save securely
+              await new Promise(r => setTimeout(r, 100));
+              
+              if (window.SecureSettingsManager) {
+                const result = await window.SecureSettingsManager.saveSecurely();
+                
+                if (result.saved) {
+                  if (result.supabase) {
+                    showToast('✅ Saved to Supabase + local backup', 'success');
+                  } else {
+                    showToast('✅ Saved to local backup', 'success');
+                  }
+                } else {
+                  showToast('⚠️ ' + (result.reason || 'Check configuration'), 'warning');
+                }
+              } else {
+                showToast('✅ Settings saved locally', 'success');
+              }
+            } catch (e) {
+              console.error('Save secure error:', e);
+              showToast('❌ Error: ' + e.message, 'error');
+            } finally {
+              saveSecureBtn.disabled = false;
+              saveSecureBtn.textContent = '🔒 Save Secure';
+              // Re-check status
+              if (typeof SMSConfigChecker !== 'undefined') {
+                SMSConfigChecker.checkConfiguration();
+              }
+            }
+          });
+        }
+        
+        // Download .env button
+        const downloadEnvBtn = document.getElementById('downloadEnvBtn');
+        if (downloadEnvBtn) {
+          downloadEnvBtn.addEventListener('click', () => {
+            if (window.SecureSettingsManager) {
+              const status = window.SecureSettingsManager.getStatus();
+              
+              if (!status.sms.configured && !status.email.configured) {
+                if (!confirm('No settings are fully configured yet. Download anyway?')) {
+                  return;
+                }
+              }
+              
+              window.SecureSettingsManager.downloadEnvFile();
+              showToast('📥 .env file downloaded', 'success');
+            } else {
+              showToast('❌ SecureSettingsManager not loaded', 'error');
+            }
+          });
+        }
+      });
+    </script>
   </body>
 </html>

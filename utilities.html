@@ -135,6 +135,7 @@
     <li><button id="deleteLocalAccountsBtn" class="btn" style="background:#ef6c00;">Delete Local Accounts</button></li>
     <li><button id="deleteLocalVehiclesBtn" class="btn" style="background:#ef6c00;">Delete Local Vehicles</button></li>
     <li><button id="deleteAllAccountsSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Accounts (Supabase)</button></li>
+    <li><button id="deleteAllAccountsBothBtn" class="btn" style="background:#b71c1c; font-weight:bold;">🗑️ Delete ALL Accounts (Local + Supabase)</button></li>
     <li><button id="deleteAllDriversSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Drivers (Supabase)</button></li>
     <li><button id="deleteAllRatesSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Rate Data (Supabase)</button></li>
     <li><button id="deleteAllVehiclesSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Vehicles (Supabase)</button></li>
@@ -369,8 +370,6 @@ window.getSupabaseClient = getSupabaseClient;
 window.setupAPI = setupAPI;
 window.ensureDriverTablesAndColumns = ensureDriverTablesAndColumns;
 window.driverFieldConfig = driverFieldConfig;
-window.deleteVehicleTypeById = deleteVehicleTypeById;
-window.hydrateVehicleOrgId = hydrateVehicleOrgId;
 window.VEHICLE_FORCE_ORG_ID = VEHICLE_FORCE_ORG_ID;
 window.VEHICLE_FORCE_USER_ID = VEHICLE_FORCE_USER_ID;
 
@@ -527,6 +526,10 @@ async function deleteVehicleTypeById() {
   }
 }
 
+// Expose vehicle functions to window after they're defined
+window.deleteVehicleTypeById = deleteVehicleTypeById;
+window.hydrateVehicleOrgId = hydrateVehicleOrgId;
+
 async function deleteAllReservationsForOrg() {
   const orgId = await getCurrentOrgId() || window.ENV?.SUPABASE_UUID;
   if (!orgId) throw new Error('Unable to determine your organization.');
@@ -627,11 +630,37 @@ if (deleteLocalAccountsBtn) {
     const confirmDelete = confirm('Delete all locally stored accounts (offline cache)?');
     if (!confirmDelete) return;
 
-    const cached = JSON.parse(localStorage.getItem('local_accounts') || '[]');
-    const removedCount = Array.isArray(cached) ? cached.length : 0;
-    localStorage.removeItem('local_accounts');
-    localStorage.removeItem('accounts'); // legacy key cleanup
-    alert(`Cleared ${removedCount} local account${removedCount === 1 ? '' : 's'}.`);
+    // Count all accounts across all storage keys
+    let totalRemoved = 0;
+    const keysToCheck = ['local_accounts', 'dev_accounts', 'relia_accounts', 'accounts'];
+    
+    keysToCheck.forEach(key => {
+      try {
+        const cached = JSON.parse(localStorage.getItem(key) || '[]');
+        if (Array.isArray(cached)) totalRemoved += cached.length;
+        localStorage.removeItem(key);
+        console.log(`🗑️ Removed ${key}`);
+      } catch (e) {
+        console.warn(`⚠️ Failed to remove ${key}:`, e);
+      }
+    });
+    
+    // Also clear related keys
+    localStorage.removeItem('relia_account_draft');
+    localStorage.removeItem('nextAccountNumber');
+    
+    // Clear account address cache keys
+    const addressKeysToDelete = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('relia_account_') && key.endsWith('_addresses')) {
+        addressKeysToDelete.push(key);
+      }
+    }
+    addressKeysToDelete.forEach(key => localStorage.removeItem(key));
+    
+    console.log(`🗑️ Cleared ${totalRemoved} accounts from all local storage`);
+    alert(`Cleared ${totalRemoved} local account${totalRemoved === 1 ? '' : 's'} from all storage.`);
   });
 }
 
@@ -679,6 +708,74 @@ setupDeleteButton('deleteAllAccountsSupabaseBtn', deleteAllAccountsSupabase, 'Ac
 setupDeleteButton('deleteAllDriversSupabaseBtn', deleteAllDriversSupabase, 'Drivers');
 setupDeleteButton('deleteAllRatesSupabaseBtn', deleteAllRatesSupabase, 'Rate Data');
 setupDeleteButton('deleteAllVehiclesSupabaseBtn', deleteAllVehiclesSupabase, 'Vehicles');
+
+// Delete ALL Accounts (Local + Supabase) - comprehensive cleanup
+const deleteAllAccountsBothBtn = document.getElementById('deleteAllAccountsBothBtn');
+if (deleteAllAccountsBothBtn) {
+  deleteAllAccountsBothBtn.onclick = async function() {
+    const confirmFirst = confirm('⚠️ WARNING: This will permanently delete ALL accounts from BOTH local storage AND Supabase database.\n\nThis includes all company accounts. This action CANNOT be undone.\n\nAre you sure you want to proceed?');
+    if (!confirmFirst) return;
+    
+    const confirmSecond = prompt('Type DELETE to confirm removing all accounts:');
+    if (confirmSecond !== 'DELETE') {
+      alert('Deletion cancelled.');
+      return;
+    }
+    
+    deleteAllAccountsBothBtn.disabled = true;
+    deleteAllAccountsBothBtn.textContent = 'Deleting...';
+    
+    let localDeleted = 0;
+    let supabaseDeleted = false;
+    
+    try {
+      // 1. Clear ALL local storage keys for accounts
+      const keysToCheck = ['local_accounts', 'dev_accounts', 'relia_accounts', 'accounts'];
+      keysToCheck.forEach(key => {
+        try {
+          const cached = JSON.parse(localStorage.getItem(key) || '[]');
+          if (Array.isArray(cached)) localDeleted += cached.length;
+          localStorage.removeItem(key);
+          console.log(`🗑️ Removed ${key}`);
+        } catch (e) {
+          console.warn(`⚠️ Failed to remove ${key}:`, e);
+        }
+      });
+      
+      // Also clear related keys
+      localStorage.removeItem('relia_account_draft');
+      localStorage.removeItem('nextAccountNumber');
+      
+      // Clear account address cache keys
+      const addressKeysToDelete = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('relia_account_') && key.endsWith('_addresses')) {
+          addressKeysToDelete.push(key);
+        }
+      }
+      addressKeysToDelete.forEach(key => localStorage.removeItem(key));
+      
+      console.log(`🗑️ Cleared ${localDeleted} accounts from all local storage`);
+      
+      // 2. Delete from Supabase
+      await ensureSupabaseReady();
+      supabaseDeleted = await deleteAllAccountsSupabase();
+      
+      if (supabaseDeleted) {
+        alert(`✅ Successfully deleted ALL accounts!\n\n- Local storage: ${localDeleted} accounts cleared\n- Supabase: All accounts deleted\n\nAll company/account data has been removed.`);
+      } else {
+        alert(`⚠️ Partial deletion:\n\n- Local storage: ${localDeleted} accounts cleared\n- Supabase: Failed to delete (check console)\n\nSome accounts may still exist in the database.`);
+      }
+    } catch (err) {
+      console.error('❌ Error deleting all accounts:', err);
+      alert(`❌ Error during deletion: ${err.message}\n\nLocal accounts cleared: ${localDeleted}`);
+    }
+    
+    deleteAllAccountsBothBtn.disabled = false;
+    deleteAllAccountsBothBtn.textContent = '🗑️ Delete ALL Accounts (Local + Supabase)';
+  };
+}
 
 // Remove Duplicate Affiliates button
 const removeDupBtn = document.getElementById('removeDuplicateAffiliatesBtn');

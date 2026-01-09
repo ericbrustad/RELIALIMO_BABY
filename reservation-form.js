@@ -246,6 +246,22 @@ class ReservationForm {
 
   detectViewMode() {
     try {
+      // Check if user is admin or dispatcher - they should never be in view mode
+      const userRole = this.getUserRole();
+      if (userRole) {
+        const normalizedRole = userRole.toLowerCase();
+        if (normalizedRole === 'admin' || normalizedRole === 'dispatcher' || normalizedRole === 'dispatch') {
+          console.log('👤 [ReservationForm] View mode disabled for', normalizedRole, 'user');
+          return false;
+        }
+      }
+      
+      // Any authenticated staff member should have edit access (not view mode)
+      if (this.isAuthenticatedStaff()) {
+        console.log('👤 [ReservationForm] View mode disabled for authenticated staff');
+        return false;
+      }
+
       const settingValue = this.companySettingsManager?.getSetting?.('enableReservationViewMode');
       if (settingValue === false || settingValue === 'false' || settingValue === '0') {
         return false;
@@ -276,6 +292,76 @@ class ReservationForm {
       }
     } catch (error) {
       console.warn('⚠️ [ReservationForm] detectViewMode error:', error);
+    }
+    return false;
+  }
+
+  /**
+   * Get the current user's role from session/localStorage
+   * Also checks for known admin user IDs
+   */
+  getUserRole() {
+    try {
+      // Known admin user IDs - always have admin access
+      const ADMIN_USER_IDS = [
+        '99d34cd5-a593-4362-9846-db7167276592' // Eric - primary admin
+      ];
+
+      // Check localStorage for session
+      const sessionRaw = localStorage.getItem('supabase_session');
+      if (sessionRaw) {
+        const session = JSON.parse(sessionRaw);
+        const user = session?.user;
+        if (user) {
+          // Check if user ID is in the known admin list
+          if (user.id && ADMIN_USER_IDS.includes(user.id)) {
+            console.log('👤 [ReservationForm] Known admin user detected:', user.id);
+            return 'admin';
+          }
+          
+          // Check role in various locations
+          const role = user.role || user.user_metadata?.role || user.app_metadata?.role;
+          if (role) {
+            return role;
+          }
+          
+          // If user is authenticated (has valid session), treat as staff with edit access
+          // This is a fallback - authenticated users should have edit access
+          if (user.id && session.access_token) {
+            console.log('👤 [ReservationForm] Authenticated user detected, granting edit access:', user.email || user.id);
+            return 'dispatch'; // Give dispatch-level access to authenticated users
+          }
+        }
+      }
+      
+      // Fallback: check window.currentUser if set
+      if (window.currentUser) {
+        if (window.currentUser.id && ADMIN_USER_IDS.includes(window.currentUser.id)) {
+          return 'admin';
+        }
+        return window.currentUser.role || window.currentUser.user_metadata?.role || window.currentUser.app_metadata?.role || null;
+      }
+    } catch (e) {
+      console.warn('⚠️ [ReservationForm] getUserRole error:', e);
+    }
+    return null;
+  }
+
+  /**
+   * Check if the current user is an authenticated staff member
+   */
+  isAuthenticatedStaff() {
+    try {
+      const sessionRaw = localStorage.getItem('supabase_session');
+      if (sessionRaw) {
+        const session = JSON.parse(sessionRaw);
+        // If there's a valid access token and user, they're authenticated staff
+        if (session?.access_token && session?.user?.id) {
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ [ReservationForm] isAuthenticatedStaff error:', e);
     }
     return false;
   }
@@ -848,12 +934,16 @@ class ReservationForm {
       if (vehicleTypeSelect && !vehicleTypeSelect.dataset.boundPricing) {
         vehicleTypeSelect.addEventListener('change', () => {
           this.applyVehicleTypePricing();
+          this.updateRateConfigDisplay();
         });
         vehicleTypeSelect.dataset.boundPricing = 'true';
       }
 
       // Apply rates after initial load if a value is already present
       this.applyVehicleTypePricing();
+      
+      // Update rate config display with vehicle type data
+      this.updateRateConfigDisplay();
 
       console.log(`✅ Loaded ${typeOptions.length} vehicle types (remote:${typeOptionsFromTable.length}, fallback:${typeOptionsFallback.length})`);
     } catch (error) {
@@ -1381,6 +1471,18 @@ class ReservationForm {
         normalizeModeSelection(event.target.value);
       });
     }
+    
+    // Farm Option radio buttons - update eFarm Status when changed
+    const farmOptionRadios = document.querySelectorAll('input[name="farmOption"]');
+    farmOptionRadios.forEach(radio => {
+      radio.addEventListener('change', () => {
+        // Get current status or default to unassigned
+        const statusInput = document.getElementById('eFarmStatus');
+        const currentCanonical = statusInput?.dataset?.canonical || 'unassigned';
+        // Re-trigger updateEFarmStatus to apply correct styling based on selected option
+        this.updateEFarmStatus(currentCanonical);
+      });
+    });
     
     // Copy passenger info button
     safeAddListener('copyPassengerBtn', 'click', () => {
@@ -1927,10 +2029,28 @@ class ReservationForm {
     if (!statusInput) {
       return;
     }
-    const canonical = canonicalizeFarmoutStatus(status) || 'unassigned';
-    const label = formatFarmoutStatus(canonical);
-    statusInput.value = label;
-    statusInput.dataset.canonical = canonical;
+    
+    // Check if farmOption is set to farm-out (radio button)
+    const farmOutRadio = document.querySelector('input[name="farmOption"][value="farm-out"]');
+    const isFarmOut = farmOutRadio?.checked || false;
+    
+    if (isFarmOut) {
+      // Reservation IS in farmout list - green background with status text
+      const canonical = canonicalizeFarmoutStatus(status) || 'unassigned';
+      const label = formatFarmoutStatus(canonical);
+      statusInput.value = label;
+      statusInput.dataset.canonical = canonical;
+      statusInput.style.backgroundColor = 'rgba(34, 197, 94, 0.3)'; // Green opaque
+      statusInput.style.borderColor = '#22c55e';
+      statusInput.style.color = '#166534';
+    } else {
+      // Reservation is NOT in farmout list - blue background, no text
+      statusInput.value = '';
+      statusInput.dataset.canonical = '';
+      statusInput.style.backgroundColor = 'rgba(59, 130, 246, 0.3)'; // Blue opaque
+      statusInput.style.borderColor = '#3b82f6';
+      statusInput.style.color = '#1e40af';
+    }
   }
 
   setFarmoutModeSelect(mode) {
@@ -2614,6 +2734,9 @@ class ReservationForm {
       if (crossFilledBookingFields.length > 0) {
         this.showCrossFillingNotification('billing', 'booking agent', crossFilledBookingFields, account);
       }
+      
+      // Show booking agent section since we have data
+      this.updateBookingAgentVisibility();
     }
 
     this.updateBillingAccountNumberDisplay(account);
@@ -2706,6 +2829,9 @@ class ReservationForm {
       if (crossFilledBookingFields.length > 0) {
         this.showCrossFillingNotification('passenger', 'booking agent', crossFilledBookingFields, account);
       }
+      
+      // Show booking agent section since we have data
+      this.updateBookingAgentVisibility();
     }
   }
 
@@ -2935,6 +3061,7 @@ class ReservationForm {
    */
   updateBookingAgentVisibility(forceShow = false) {
     const section = document.getElementById('bookingAgentSection');
+    const addLink = document.getElementById('addBookingAgentLink');
     if (!section) return;
 
     // Check if any booking agent field has data
@@ -2947,6 +3074,11 @@ class ReservationForm {
     // Show if forced, has data, or account requires it
     const shouldShow = forceShow || hasBookingAgentData || this.accountRequiresBookingAgent;
     section.style.display = shouldShow ? 'block' : 'none';
+    
+    // Hide/show the "Add Booking Agent" link inversely
+    if (addLink) {
+      addLink.style.display = shouldShow ? 'none' : 'block';
+    }
     
     console.log(`📋 Booking Agent section: ${shouldShow ? 'visible' : 'hidden'} (forceShow=${forceShow}, hasData=${hasBookingAgentData}, accountReq=${this.accountRequiresBookingAgent})`);
   }
@@ -4848,7 +4980,7 @@ class ReservationForm {
     const serviceTypeEl = document.getElementById('serviceType');
     const vehicleTypeEl = document.getElementById('vehicleTypeRes');
 
-    const serviceType = serviceTypeEl?.value || '';
+    const serviceTypeCode = serviceTypeEl?.value || '';
     const vehicleTypeId = vehicleTypeEl?.value || '';
     const vehicleTypeName = vehicleTypeEl?.options?.[vehicleTypeEl.selectedIndex]?.text || '--';
 
@@ -4862,24 +4994,72 @@ class ReservationForm {
     const serviceTypeLabel = serviceTypeEl?.options?.[serviceTypeEl.selectedIndex]?.text || '--';
     setDisplay('rateServiceType', serviceTypeLabel);
 
-    // Determine pricing basis from service type
+    // Get pricing type from cached service types
     let pricingBasis = 'Distance';
-    if (serviceType === 'hourly') pricingBasis = 'Hourly';
-    else if (serviceType === 'point-to-point') pricingBasis = 'Distance';
-    else if (serviceType === 'airport-transfer') pricingBasis = 'Flat Rate';
+    if (this._serviceTypesList) {
+      const serviceType = this._serviceTypesList.find(st => st.code === serviceTypeCode);
+      if (serviceType?.pricing_type) {
+        const pt = serviceType.pricing_type.toUpperCase();
+        if (pt === 'HOURS' || pt === 'PER_HOUR' || pt === 'HOURLY') pricingBasis = 'Hourly';
+        else if (pt === 'DISTANCE' || pt === 'PER_MILE') pricingBasis = 'Distance';
+        else if (pt === 'FLAT' || pt === 'FLAT_RATE') pricingBasis = 'Flat Rate';
+        else if (pt === 'PER_PASSENGER') pricingBasis = 'Per Passenger';
+      }
+    } else {
+      // Fallback to code-based detection
+      if (serviceTypeCode === 'hourly') pricingBasis = 'Hourly';
+      else if (serviceTypeCode === 'point-to-point') pricingBasis = 'Distance';
+      else if (serviceTypeCode === 'airport-transfer' || serviceTypeCode === 'from-airport' || serviceTypeCode === 'to-airport') pricingBasis = 'Distance';
+    }
     setDisplay('ratePricingBasis', pricingBasis);
 
     // Vehicle type display
     setDisplay('rateVehicleType', vehicleTypeName);
 
-    // Get rates from vehicle type if available
+    // Get rates from vehicle type - handle multiple rate structures
     const rates = this.vehicleTypeRates?.[vehicleTypeId] || {};
     
-    setDisplay('rateBaseRate', this.formatRate(rates.base_rate || rates.baseRate || 0));
-    setDisplay('ratePerHour', this.formatRate(rates.per_hour || rates.hourlyRate || 0));
-    setDisplay('ratePerMile', this.formatRate(rates.per_mile || rates.mileageRate || 0));
-    setDisplay('rateMinHours', rates.min_hours || rates.minimumHours || 0);
-    setDisplay('rateGratuity', `${rates.gratuity || rates.defaultGratuity || 0}%`);
+    // Extract rates from nested structure (perHour, distance, etc.) or flat structure
+    const getNum = (val) => {
+      const num = parseFloat(val);
+      return Number.isFinite(num) ? num : 0;
+    };
+
+    // Base rate / flat rate - check new simplified structure first
+    const baseRate = getNum(rates.perHour?.baseRate) 
+      || getNum(rates.distance?.baseFare)
+      || getNum(rates.distance?.minimumFare) 
+      || getNum(rates.base_rate) || getNum(rates.baseRate) || getNum(rates.flatRate) || 0;
+    
+    // Hourly rate - check new simplified structure first
+    const perHour = getNum(rates.perHour?.ratePerHour)
+      || getNum(rates.per_hour) || getNum(rates.hourlyRate)
+      || getNum(rates.perHour?.asLow)
+      || getNum(rates.perHour?.rateSchedules?.[0]?.ratePerHour) || 0;
+    
+    // Per mile rate - check new simplified structure first
+    const perMile = getNum(rates.distance?.ratePerMile)
+      || getNum(rates.per_mile) || getNum(rates.mileageRate)
+      || getNum(rates.distance?.basePerMile)
+      || getNum(rates.distance?.tiers?.[0]?.rate) || 0;
+    
+    // Min hours - check new simplified structure first
+    const minHours = getNum(rates.perHour?.minimumHours)
+      || getNum(rates.min_hours) || getNum(rates.minimumHours) || 0;
+    
+    // Gratuity - check per-service gratuity first
+    const gratuity = getNum(rates.perHour?.gratuity) 
+      || getNum(rates.perPassenger?.gratuity)
+      || getNum(rates.distance?.gratuity)
+      || getNum(rates.gratuity) || getNum(rates.defaultGratuity) || 0;
+
+    setDisplay('rateBaseRate', this.formatRate(baseRate));
+    setDisplay('ratePerHour', this.formatRate(perHour));
+    setDisplay('ratePerMile', this.formatRate(perMile));
+    setDisplay('rateMinHours', minHours);
+    setDisplay('rateGratuity', `${gratuity}%`);
+    
+    console.log(`📊 Rate config updated: service=${serviceTypeCode}, vehicle=${vehicleTypeId}, basis=${pricingBasis}`, rates);
   }
 
   /**
@@ -5361,7 +5541,9 @@ class ReservationForm {
           payment_type: paymentTypeValue,
           group_name: groupNameValue,
           passengerCount: parseInt(document.getElementById("numPax")?.value || "1") || 1,
-          grandTotal: grandTotalValue
+          grandTotal: grandTotalValue,
+          farmOption: farmOptionValue,
+          farm_option: farmOptionValue
         });
         
         console.log('📤 Save result:', supabaseResult);
@@ -5446,34 +5628,59 @@ class ReservationForm {
         return;
       }
 
+      // Get the reservation ID - try both id and confirmation_number
       const allReservations = await db.getAllReservations();
       const existingReservation = allReservations.find(r => 
         r.confirmation_number === currentConfNumber ||
         r.id === currentConfNumber
       );
 
-      if (!existingReservation) {
-        alert('Reservation not found.');
-        return;
-      }
-
+      // Even if not found locally, try to delete by confirmation number anyway
+      // (it might exist in Supabase but not in local cache)
       const confirmed = window.confirm('Are you sure you want to DELETE this reservation?');
       if (!confirmed) return;
 
-      // Prefer API delete if available
+      // Delete using both ID and confirmation number for thorough cleanup
+      const deleteId = existingReservation?.id || currentConfNumber;
+      const deleteConf = existingReservation?.confirmation_number || currentConfNumber;
+      
+      console.log('🗑️ Attempting to delete reservation:', { deleteId, deleteConf });
+      
+      // Delete by ID
       if (typeof db.deleteReservation === 'function') {
-        await db.deleteReservation(existingReservation.id || existingReservation.confirmation_number);
+        await db.deleteReservation(deleteId);
+        // Also try by confirmation number if different
+        if (deleteConf && deleteConf !== deleteId) {
+          await db.deleteReservation(deleteConf);
+        }
       } else if (window.apiService?.deleteReservation) {
-        await window.apiService.deleteReservation(existingReservation.id || existingReservation.confirmation_number);
+        await window.apiService.deleteReservation(deleteId);
+        if (deleteConf && deleteConf !== deleteId) {
+          await window.apiService.deleteReservation(deleteConf);
+        }
       }
 
-      // Optionally remove from any local cache
+      // Clear any additional caches
       try {
-        if (existingReservation.id) {
-          await db.removeReservationFromCache?.(existingReservation.id);
-        }
+        // Clear dev_reservations
+        const devReservations = JSON.parse(localStorage.getItem('dev_reservations') || '[]');
+        const cleanedDev = devReservations.filter(r => 
+          r.id !== deleteId && 
+          r.confirmation_number !== deleteConf
+        );
+        localStorage.setItem('dev_reservations', JSON.stringify(cleanedDev));
+        
+        // Clear local_reservations
+        const localReservations = JSON.parse(localStorage.getItem('local_reservations') || '[]');
+        const cleanedLocal = localReservations.filter(r => 
+          r.id !== deleteId && 
+          r.confirmation_number !== deleteConf
+        );
+        localStorage.setItem('local_reservations', JSON.stringify(cleanedLocal));
+        
+        console.log('🗑️ Cleared reservation from all local caches');
       } catch (e) {
-        console.warn('⚠️ Failed to remove from cache:', e);
+        console.warn('⚠️ Failed to clear local caches:', e);
       }
 
       alert('Reservation deleted.');
@@ -6257,6 +6464,9 @@ class ReservationForm {
       const list = await loadServiceTypes({ includeInactive: false, preferRemote: true });
       const active = Array.isArray(list) ? list.filter((s) => s && s.active !== false && s.code) : [];
 
+      // Cache the service types for rate config lookup
+      this._serviceTypesList = active;
+
       // Preserve current selection (especially important when editing an existing reservation)
       const currentValue = select.value;
 
@@ -6279,6 +6489,9 @@ class ReservationForm {
 
       // Restore selection
       if (currentValue) select.value = currentValue;
+
+      // Update rate config display with new service type data
+      this.updateRateConfigDisplay();
 
       // Listen for changes coming from the Service Types admin page
       if (!this._serviceTypesListenersInstalled) {

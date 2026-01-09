@@ -331,6 +331,31 @@ export class UIManager {
     if (!container) return;
 
     let reservations = this.reservationManager.getAllReservations();
+    
+    // CRITICAL: Only show reservations that are explicitly marked for farmout
+    // A reservation must have:
+    // 1. farmOption set to "farm-out" (radio button selected in affiliate field)
+    // AND/OR
+    // 2. Status is farmout_unassigned or farmout_assigned
+    reservations = reservations.filter(r => {
+      // Check if farmOption is set to farm-out (check multiple possible locations)
+      const farmOptionRaw = r.farmOption || r.farm_option || 
+                            r.form_snapshot?.details?.farmOption ||
+                            r.formSnapshot?.details?.farmOption || '';
+      const farmOptionNormalized = normalizeFarmoutKey(farmOptionRaw);
+      const hasFarmOutOption = farmOptionNormalized === 'farm_out' || farmOptionNormalized === 'farmout';
+      
+      // Check if status indicates farmout
+      const status = (r.status || '').toLowerCase().replace(/[\s-]/g, '_');
+      const isFarmoutStatus = status === 'farmout_unassigned' || 
+                              status === 'farmout_assigned' ||
+                              status === 'created_farmout_unassigned' ||
+                              status === 'created_farmout_assigned';
+      
+      // Only include if BOTH conditions are met, or at least the farmOption is set
+      // The farmOption radio button is the primary indicator
+      return hasFarmOutOption || isFarmoutStatus;
+    });
 
     if (this.currentFarmoutReservationFilter !== 'all') {
       reservations = reservations.filter(r => (r.status || 'pending') === this.currentFarmoutReservationFilter);

@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Links</title>
+  <link rel="stylesheet" href="global.css">
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 20px;
+    }
+    
+    .portal-links-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+      font-size: 24px;
+    }
+    
+    .portal-section {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    
+    .portal-section-header {
+      background: #1976d2;
+      color: white;
+      padding: 15px 20px;
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .portal-section-header.customer {
+      background: #388e3c;
+    }
+    
+    .portal-section-body {
+      padding: 20px;
+    }
+    
+    .portal-info {
+      background: #e3f2fd;
+      border-left: 4px solid #1976d2;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    
+    .portal-info.customer {
+      background: #e8f5e9;
+      border-left-color: #388e3c;
+    }
+    
+    .portal-info ul {
+      margin: 10px 0 0 20px;
+      padding: 0;
+    }
+    
+    .portal-info li {
+      margin-bottom: 5px;
+    }
+    
+    .links-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    .links-table th,
+    .links-table td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .links-table th {
+      background: #f5f5f5;
+      font-weight: 600;
+      color: #333;
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+    
+    .links-table tr:hover {
+      background: #f9f9f9;
+    }
+    
+    .links-table tr.inactive {
+      opacity: 0.5;
+    }
+    
+    .portal-link {
+      color: #1976d2;
+      text-decoration: none;
+      word-break: break-all;
+      font-size: 13px;
+    }
+    
+    .portal-link:hover {
+      text-decoration: underline;
+    }
+    
+    .btn-copy {
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    
+    .btn-copy:hover {
+      background: #e0e0e0;
+    }
+    
+    .btn-copy.copied {
+      background: #4caf50;
+      color: white;
+      border-color: #4caf50;
+    }
+    
+    .btn-send-email {
+      background: #1976d2;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 5px;
+      transition: all 0.2s;
+    }
+    
+    .btn-send-email:hover {
+      background: #1565c0;
+    }
+    
+    .btn-delete {
+      background: #f44336;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 5px;
+    }
+    
+    .btn-delete:hover {
+      background: #d32f2f;
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    
+    .status-badge.active {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+    
+    .status-badge.inactive {
+      background: #ffebee;
+      color: #c62828;
+    }
+    
+    .status-badge.pending {
+      background: #fff3e0;
+      color: #ef6c00;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+    
+    .empty-state .icon {
+      font-size: 48px;
+      margin-bottom: 15px;
+    }
+    
+    .refresh-btn {
+      background: white;
+      border: 1px solid white;
+      color: #1976d2;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    
+    .refresh-btn:hover {
+      background: #e3f2fd;
+    }
+    
+    .search-box {
+      padding: 10px 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      width: 300px;
+      font-size: 14px;
+    }
+    
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      align-items: center;
+    }
+    
+    .stats {
+      font-size: 13px;
+      color: #666;
+      margin-left: auto;
+    }
+    
+    .driver-name {
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .driver-email {
+      font-size: 12px;
+      color: #666;
+    }
+    
+    .driver-phone {
+      font-size: 12px;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+  <div class="portal-links-container">
+    <h1>🔗 Portal Links Management</h1>
+    
+    <!-- Driver Portal Section -->
+    <div class="portal-section">
+      <div class="portal-section-header">
+        🚗 Driver Portal Links
+        <button class="refresh-btn" onclick="loadDriverLinks()">🔄 Refresh</button>
+      </div>
+      <div class="portal-section-body">
+        <div class="portal-info">
+          <strong>Driver Portal Access Requirements:</strong>
+          <ul>
+            <li><strong>One-time Login:</strong> Email and password authentication on first access</li>
+            <li><strong>Location Permission:</strong> <em>Required</em> - Drivers must enable location to accept trips</li>
+            <li><strong>SMS Capability:</strong> Drivers can accept/reject trips via SMS responses</li>
+          </ul>
+          <p style="margin-top: 10px; color: #1565c0;">
+            📧 New drivers automatically receive a welcome email with their unique portal link.
+          </p>
+        </div>
+        
+        <div class="toolbar">
+          <input type="text" class="search-box" id="driverSearch" placeholder="Search drivers..." oninput="filterDriverLinks()">
+          <div class="stats" id="driverStats">Loading...</div>
+        </div>
+        
+        <table class="links-table">
+          <thead>
+            <tr>
+              <th>Driver</th>
+              <th>Contact</th>
+              <th>Portal Link</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="driverLinksBody">
+            <tr>
+              <td colspan="5" class="empty-state">
+                <div class="icon">⏳</div>
+                <div>Loading driver portal links...</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    
+    <!-- Customer Portal Section -->
+    <div class="portal-section">
+      <div class="portal-section-header customer">
+        👤 Customer Portal Links
+        <button class="refresh-btn" onclick="loadCustomerLinks()" style="color: #388e3c;">🔄 Refresh</button>
+      </div>
+      <div class="portal-section-body">
+        <div class="portal-info customer">
+          <strong>Customer Portal Access:</strong>
+          <ul>
+            <li>Customers can view their reservations and booking history</li>
+            <li>Each customer with an account gets a unique portal link</li>
+            <li>Login via email and password</li>
+          </ul>
+        </div>
+        
+        <div class="toolbar">
+          <input type="text" class="search-box" id="customerSearch" placeholder="Search customers..." oninput="filterCustomerLinks()">
+          <div class="stats" id="customerStats">Loading...</div>
+        </div>
+        
+        <table class="links-table">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Contact</th>
+              <th>Portal Link</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="customerLinksBody">
+            <tr>
+              <td colspan="5" class="empty-state">
+                <div class="icon">🚧</div>
+                <div>Customer portal links coming soon</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="env.js"></script>
+  <script src="config.js"></script>
+  <script src="supabase-db.js"></script>
+  <script src="email-settings.js"></script>
+  
+  <script>
+    // Portal Links Manager
+    const PortalLinksManager = {
+      drivers: [],
+      customers: [],
+      
+      // Generate driver portal link
+      generateDriverPortalLink(driver) {
+        const baseUrl = window.location.origin;
+        const token = btoa(`${driver.id}:${driver.email || ''}`);
+        return `${baseUrl}/driver-portal.html?token=${token}`;
+      },
+      
+      // Generate customer portal link
+      generateCustomerPortalLink(customer) {
+        const baseUrl = window.location.origin;
+        const token = btoa(`${customer.id}:${customer.email || ''}`);
+        return `${baseUrl}/customer-account.html?token=${token}`;
+      },
+      
+      // Load all driver links
+      async loadDriverLinks() {
+        const tbody = document.getElementById('driverLinksBody');
+        const stats = document.getElementById('driverStats');
+        
+        try {
+          // Get drivers from Supabase
+          const orgId = localStorage.getItem('organization_id');
+          if (!orgId) {
+            tbody.innerHTML = `<tr><td colspan="5" class="empty-state">
+              <div class="icon">⚠️</div>
+              <div>No organization found. Please log in.</div>
+            </td></tr>`;
+            stats.textContent = '0 drivers';
+            return;
+          }
+          
+          const { data: drivers, error } = await window.supabase
+            .from('drivers')
+            .select('*')
+            .eq('organization_id', orgId)
+            .order('first_name', { ascending: true });
+          
+          if (error) throw error;
+          
+          this.drivers = drivers || [];
+          this.renderDriverLinks(this.drivers);
+          
+          const activeCount = this.drivers.filter(d => d.status === 'active' || !d.status).length;
+          stats.textContent = `${this.drivers.length} drivers (${activeCount} active)`;
+          
+        } catch (err) {
+          console.error('Error loading drivers:', err);
+          tbody.innerHTML = `<tr><td colspan="5" class="empty-state">
+            <div class="icon">❌</div>
+            <div>Error loading drivers: ${err.message}</div>
+          </td></tr>`;
+          stats.textContent = 'Error';
+        }
+      },
+      
+      // Render driver links table
+      renderDriverLinks(drivers) {
+        const tbody = document.getElementById('driverLinksBody');
+        
+        if (!drivers || drivers.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="empty-state">
+            <div class="icon">🚗</div>
+            <div>No drivers found. Add drivers in My Office to generate portal links.</div>
+          </td></tr>`;
+          return;
+        }
+        
+        tbody.innerHTML = drivers.map(driver => {
+          const link = this.generateDriverPortalLink(driver);
+          const isActive = driver.status === 'active' || !driver.status;
+          const statusClass = isActive ? 'active' : 'inactive';
+          const rowClass = isActive ? '' : 'inactive';
+          
+          return `
+            <tr class="${rowClass}" data-driver-id="${driver.id}">
+              <td>
+                <div class="driver-name">${driver.first_name || ''} ${driver.last_name || ''}</div>
+              </td>
+              <td>
+                <div class="driver-email">${driver.email || 'No email'}</div>
+                <div class="driver-phone">${driver.phone || driver.cell_phone || 'No phone'}</div>
+              </td>
+              <td>
+                <a href="${link}" target="_blank" class="portal-link" title="Open portal">${link}</a>
+              </td>
+              <td>
+                <span class="status-badge ${statusClass}">${isActive ? 'Active' : 'Inactive'}</span>
+              </td>
+              <td>
+                <button class="btn-copy" onclick="PortalLinksManager.copyLink('${link}', this)">📋 Copy</button>
+                <button class="btn-send-email" onclick="PortalLinksManager.sendWelcomeEmail('${driver.id}')" title="Send welcome email">📧</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      },
+      
+      // Filter driver links
+      filterDriverLinks() {
+        const search = document.getElementById('driverSearch').value.toLowerCase();
+        const filtered = this.drivers.filter(d => {
+          const name = `${d.first_name || ''} ${d.last_name || ''}`.toLowerCase();
+          const email = (d.email || '').toLowerCase();
+          const phone = (d.phone || d.cell_phone || '').toLowerCase();
+          return name.includes(search) || email.includes(search) || phone.includes(search);
+        });
+        this.renderDriverLinks(filtered);
+      },
+      
+      // Copy link to clipboard
+      copyLink(link, btn) {
+        navigator.clipboard.writeText(link).then(() => {
+          btn.classList.add('copied');
+          btn.textContent = '✓ Copied!';
+          setTimeout(() => {
+            btn.classList.remove('copied');
+            btn.textContent = '📋 Copy';
+          }, 2000);
+        }).catch(err => {
+          console.error('Copy failed:', err);
+          alert('Failed to copy link. Please copy manually.');
+        });
+      },
+      
+      // Send welcome email to driver
+      async sendWelcomeEmail(driverId) {
+        const driver = this.drivers.find(d => d.id === driverId);
+        if (!driver) {
+          alert('Driver not found');
+          return;
+        }
+        
+        if (!driver.email) {
+          alert('Driver does not have an email address');
+          return;
+        }
+        
+        if (!confirm(`Send welcome email to ${driver.first_name} ${driver.last_name} (${driver.email})?`)) {
+          return;
+        }
+        
+        try {
+          // Use EmailService if available
+          if (window.EmailService && typeof window.EmailService.sendDriverPortalWelcomeEmail === 'function') {
+            await window.EmailService.sendDriverPortalWelcomeEmail(driver);
+            alert(`Welcome email queued for ${driver.email}`);
+          } else {
+            // Fallback - just show the link
+            const link = this.generateDriverPortalLink(driver);
+            alert(`Email service not available.\n\nPlease manually send this link to ${driver.email}:\n\n${link}`);
+          }
+        } catch (err) {
+          console.error('Error sending email:', err);
+          alert('Error sending email: ' + err.message);
+        }
+      },
+      
+      // Load customer links (placeholder for future)
+      async loadCustomerLinks() {
+        const tbody = document.getElementById('customerLinksBody');
+        const stats = document.getElementById('customerStats');
+        
+        tbody.innerHTML = `<tr><td colspan="5" class="empty-state">
+          <div class="icon">🚧</div>
+          <div>Customer portal links feature coming soon</div>
+        </td></tr>`;
+        stats.textContent = 'Coming soon';
+      },
+      
+      // Filter customer links
+      filterCustomerLinks() {
+        // Placeholder for future implementation
+      }
+    };
+    
+    // Global functions for onclick handlers
+    function loadDriverLinks() {
+      PortalLinksManager.loadDriverLinks();
+    }
+    
+    function loadCustomerLinks() {
+      PortalLinksManager.loadCustomerLinks();
+    }
+    
+    function filterDriverLinks() {
+      PortalLinksManager.filterDriverLinks();
+    }
+    
+    function filterCustomerLinks() {
+      PortalLinksManager.filterCustomerLinks();
+    }
+    
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadDriverLinks();
+      loadCustomerLinks();
+    });
+  </script>
+</body>
+</html>

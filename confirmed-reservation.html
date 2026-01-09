@@ -39,6 +39,20 @@
       .view-mode #editBtn {
         display: inline-block !important;
       }
+      
+      /* Hide view mode banner when not in view mode (admin/dispatch users) */
+      body:not(.view-mode-active) .view-mode-banner {
+        display: none !important;
+      }
+      
+      /* Remove read-only styling when not in view mode */
+      body:not(.view-mode-active) #formContainer input,
+      body:not(.view-mode-active) #formContainer textarea,
+      body:not(.view-mode-active) #formContainer select {
+        background-color: white !important;
+        cursor: auto !important;
+        opacity: 1;
+      }
     </style>
     <script>
       // Hide main navigation if in iframe
@@ -52,20 +66,65 @@
       }
     </script>
     <script type="module">
+      // Known admin user IDs - always have full access
+      const ADMIN_USER_IDS = [
+        '99d34cd5-a593-4362-9846-db7167276592' // Eric - primary admin
+      ];
+
+      // Check if user is admin, dispatcher, or authenticated staff
+      const checkUserAccess = () => {
+        try {
+          const sessionRaw = localStorage.getItem('supabase_session');
+          if (sessionRaw) {
+            const session = JSON.parse(sessionRaw);
+            const user = session?.user;
+            if (user) {
+              // Check if known admin user ID
+              if (user.id && ADMIN_USER_IDS.includes(user.id)) {
+                console.log('👤 Known admin user detected:', user.id);
+                return { isStaff: true, role: 'admin' };
+              }
+              
+              // Check role
+              const role = (user.role || user.user_metadata?.role || user.app_metadata?.role || '').toLowerCase();
+              if (role === 'admin' || role === 'dispatcher' || role === 'dispatch') {
+                return { isStaff: true, role };
+              }
+              
+              // Any authenticated user with valid session is staff
+              if (user.id && session.access_token) {
+                console.log('👤 Authenticated staff user:', user.email || user.id);
+                return { isStaff: true, role: 'staff' };
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Error checking user access:', e);
+        }
+        return { isStaff: false, role: '' };
+      };
+
+      const { isStaff, role } = checkUserAccess();
+      
       const frameElementRef = window.frameElement || null;
       const datasetConf = frameElementRef?.dataset?.confNumber || '';
       const urlConf = new URLSearchParams(window.location.search || '').get('conf');
       const activeConf = datasetConf || urlConf || '';
 
+      // Only set view mode if NOT authenticated staff
       if (frameElementRef) {
-        frameElementRef.dataset.viewMode = 'true';
+        frameElementRef.dataset.viewMode = isStaff ? 'false' : 'true';
         if (activeConf) {
           frameElementRef.dataset.confNumber = activeConf;
         }
       }
 
-      window.RELIA_VIEW_MODE = 'true';
+      window.RELIA_VIEW_MODE = isStaff ? false : 'true';
       window.RELIA_VIEW_CONF = activeConf;
+      
+      if (isStaff) {
+        console.log('👤 [ConfirmedReservation] View mode disabled for', role || 'authenticated', 'user - full read/write access');
+      }
 
       const loadScript = (src, type = 'text/javascript') => new Promise((resolve, reject) => {
         const scriptEl = document.createElement('script');
@@ -172,7 +231,7 @@
         </div>
       </header>
 
-      <!-- View Mode Banner -->
+      <!-- View Mode Banner (hidden for admin/dispatch) -->
       <div class="view-mode-banner">
         This is a confirmed reservation. Click "Edit Reservation" to make changes.
       </div>
@@ -185,8 +244,52 @@
         </div>
       </div>
 
-      <!-- Main Form Section -->
-      <div id="formContainer" class="view-mode" style="padding: 20px;">
+      <!-- Main Form Section (view-mode class applied dynamically) -->
+      <div id="formContainer" style="padding: 20px;">
+      <script>
+        // Apply view-mode class based on user authentication
+        (function() {
+          // Known admin user IDs
+          const ADMIN_USER_IDS = [
+            '99d34cd5-a593-4362-9846-db7167276592' // Eric - primary admin
+          ];
+
+          const checkUserAccess = () => {
+            try {
+              const sessionRaw = localStorage.getItem('supabase_session');
+              if (sessionRaw) {
+                const session = JSON.parse(sessionRaw);
+                const user = session?.user;
+                if (user) {
+                  // Check if known admin
+                  if (user.id && ADMIN_USER_IDS.includes(user.id)) {
+                    return true;
+                  }
+                  // Check role
+                  const role = (user.role || user.user_metadata?.role || user.app_metadata?.role || '').toLowerCase();
+                  if (role === 'admin' || role === 'dispatcher' || role === 'dispatch') {
+                    return true;
+                  }
+                  // Any authenticated user with session
+                  if (user.id && session.access_token) {
+                    return true;
+                  }
+                }
+              }
+            } catch (e) { }
+            return false;
+          };
+          
+          const isStaff = checkUserAccess();
+          const container = document.getElementById('formContainer');
+          if (!isStaff) {
+            container.classList.add('view-mode');
+            document.body.classList.add('view-mode-active');
+          } else {
+            console.log('👤 Authenticated staff user - full read/write mode enabled');
+          }
+        })();
+      </script>
         <!-- Passenger Details Section -->
         <section class="form-section">
           <div class="section-header">

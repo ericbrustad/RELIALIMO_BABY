@@ -223,15 +223,40 @@ export async function saveReservation(reservationData) {
 
 // Delete reservation by id or confirmation number
 export async function deleteReservation(reservationIdOrConf) {
-  // Development mode: also clear localStorage shadow copy
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    try {
-      const existingReservations = JSON.parse(localStorage.getItem('dev_reservations') || '[]');
-      const cleaned = existingReservations.filter(r => (r.id || r.confirmation_number) !== reservationIdOrConf);
-      localStorage.setItem('dev_reservations', JSON.stringify(cleaned));
-    } catch (e) {
-      console.warn('⚠️ Failed to prune dev reservations:', e);
+  console.log('🗑️ deleteReservation called with:', reservationIdOrConf);
+  
+  // Clear ALL localStorage caches (dev_reservations and local_reservations)
+  try {
+    // Clear dev_reservations
+    const devReservations = JSON.parse(localStorage.getItem('dev_reservations') || '[]');
+    const cleanedDev = devReservations.filter(r => 
+      r.id !== reservationIdOrConf && 
+      r.confirmation_number !== reservationIdOrConf
+    );
+    localStorage.setItem('dev_reservations', JSON.stringify(cleanedDev));
+    console.log(`🗑️ Cleaned dev_reservations: ${devReservations.length} → ${cleanedDev.length}`);
+    
+    // Clear local_reservations
+    const localReservations = JSON.parse(localStorage.getItem('local_reservations') || '[]');
+    const cleanedLocal = localReservations.filter(r => 
+      r.id !== reservationIdOrConf && 
+      r.confirmation_number !== reservationIdOrConf
+    );
+    localStorage.setItem('local_reservations', JSON.stringify(cleanedLocal));
+    console.log(`🗑️ Cleaned local_reservations: ${localReservations.length} → ${cleanedLocal.length}`);
+    
+    // Also clear relia_reservations if it exists
+    const reliaReservations = JSON.parse(localStorage.getItem('relia_reservations') || '[]');
+    if (reliaReservations.length) {
+      const cleanedRelia = reliaReservations.filter(r => 
+        r.id !== reservationIdOrConf && 
+        r.confirmation_number !== reservationIdOrConf
+      );
+      localStorage.setItem('relia_reservations', JSON.stringify(cleanedRelia));
+      console.log(`🗑️ Cleaned relia_reservations: ${reliaReservations.length} → ${cleanedRelia.length}`);
     }
+  } catch (e) {
+    console.warn('⚠️ Failed to prune local reservations:', e);
   }
 
   try {
@@ -239,42 +264,106 @@ export async function deleteReservation(reservationIdOrConf) {
     const client = getSupabaseClient();
     if (!client) throw new Error('Supabase client not initialized');
 
-    const { data, error } = await client
+    // Try deleting by ID first (works for UUIDs)
+    let data = null;
+    let deleteError = null;
+    
+    // Attempt delete by ID
+    const { data: dataById, error: errorById } = await client
       .from('reservations')
       .delete()
-      .or(`id.eq.${reservationIdOrConf},confirmation_number.eq.${reservationIdOrConf}`)
+      .eq('id', reservationIdOrConf)
       .select();
+    
+    if (!errorById && dataById && dataById.length > 0) {
+      data = dataById;
+      console.log('🗑️ Deleted by ID:', data);
+    } else {
+      // If not found by ID, try by confirmation_number
+      const { data: dataByConf, error: errorByConf } = await client
+        .from('reservations')
+        .delete()
+        .eq('confirmation_number', reservationIdOrConf)
+        .select();
+      
+      if (!errorByConf && dataByConf && dataByConf.length > 0) {
+        data = dataByConf;
+        console.log('🗑️ Deleted by confirmation_number:', data);
+      } else {
+        deleteError = errorById || errorByConf;
+        console.log('⚠️ Reservation not found in Supabase (may have been dev-only)');
+      }
+    }
 
-    if (error) throw error;
-    logSuccess('Reservation deleted', data);
-    return data;
+    if (data && data.length > 0) {
+      logSuccess('Reservation deleted from Supabase', data);
+    } else {
+      console.log('ℹ️ Reservation was not in Supabase (local-only or already deleted)');
+    }
+    
+    return data || [];
   } catch (error) {
     console.error('❌ deleteReservation error:', error);
+    // Don't show error dialog if it's just "not found" - we already cleared local cache
+    if (error.message?.includes('not found') || error.code === 'PGRST116') {
+      console.log('ℹ️ Reservation was local-only, cleared from cache');
+      return [];
+    }
     return showDatabaseError('Delete Reservation', error);
   }
 }
 
 export async function getAllReservations() {
   try {
-    // Development mode: load from localStorage so localhost saves show in the list
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      try {
-        const devData = JSON.parse(localStorage.getItem('dev_reservations') || '[]');
-        if (Array.isArray(devData) && devData.length) {
-          console.log('🗄️ Loaded dev reservations from localStorage:', devData.length);
-          return devData;
-        }
-      } catch (e) {
-        console.warn('⚠️ Failed to read dev reservations from localStorage:', e);
-      }
-    }
-
+    // Always try to fetch from Supabase first
     await setupAPI();
-    const result = await fetchReservations();
-    if (!result) return [];
-    logSuccess('Fetched reservations', `${result.length} records`);
-    return result;
+    const supabaseResult = await fetchReservations();
+    
+    // Collect any local-only reservations that aren't in Supabase
+    const localReservations = [];
+    
+    // Check dev_reservations
+    try {
+      const devData = JSON.parse(localStorage.getItem('dev_reservations') || '[]');
+      if (Array.isArray(devData) && devData.length) {
+        localReservations.push(...devData);
+      }
+    } catch (e) {
+      console.warn('⚠️ Failed to read dev_reservations:', e);
+    }
+    
+    // fetchReservations already merges local_reservations, so we only need to merge dev_reservations
+    // Deduplicate by id or confirmation_number
+    const supabaseData = supabaseResult || [];
+    const supabaseIds = new Set(supabaseData.map(r => r.id));
+    const supabaseConfNumbers = new Set(supabaseData.map(r => r.confirmation_number));
+    
+    // Only add local reservations that aren't already in Supabase result
+    const uniqueLocalOnly = localReservations.filter(r => 
+      !supabaseIds.has(r.id) && !supabaseConfNumbers.has(r.confirmation_number)
+    );
+    
+    const allReservations = [...supabaseData, ...uniqueLocalOnly];
+    
+    if (allReservations.length > 0) {
+      logSuccess('Fetched reservations', `${supabaseData.length} Supabase + ${uniqueLocalOnly.length} local-only`);
+    }
+    
+    return allReservations;
   } catch (error) {
+    console.error('❌ getAllReservations error:', error);
+    
+    // Fallback to local storage only if Supabase fails
+    try {
+      const devData = JSON.parse(localStorage.getItem('dev_reservations') || '[]');
+      const localData = JSON.parse(localStorage.getItem('local_reservations') || '[]');
+      const combined = [...devData, ...localData];
+      console.log('📋 Fallback: loaded from localStorage only:', combined.length);
+      return combined;
+    } catch (e) {
+      console.warn('⚠️ Failed to read local reservations:', e);
+    }
+    
     showDatabaseError('Fetch Reservations', error);
     return [];
   }
@@ -419,22 +508,73 @@ export async function searchAccountsByCompany(query) {
 }
 
 export async function deleteAccount(accountId) {
+  console.log('🗑️ deleteAccount called with:', accountId);
+  
+  // Clear from ALL localStorage caches first
+  const keysToClean = ['local_accounts', 'dev_accounts', 'relia_accounts', 'accounts'];
+  keysToClean.forEach(key => {
+    try {
+      const accounts = JSON.parse(localStorage.getItem(key) || '[]');
+      const cleaned = accounts.filter(a => 
+        a.id !== accountId && 
+        a.account_number !== accountId &&
+        String(a.id) !== String(accountId) &&
+        String(a.account_number) !== String(accountId)
+      );
+      if (cleaned.length !== accounts.length) {
+        localStorage.setItem(key, JSON.stringify(cleaned));
+        console.log(`🗑️ Cleaned ${key}: ${accounts.length} → ${cleaned.length}`);
+      }
+    } catch (e) {
+      console.warn(`⚠️ Failed to clean ${key}:`, e);
+    }
+  });
+  
   try {
     await setupAPI();
     const client = getSupabaseClient();
     if (!client) throw new Error('No Supabase client');
 
-    // Delete by id OR account_number to handle cases where the selected value is an account number
-    const { error } = await client
+    // Delete by id first
+    let deleted = false;
+    const { data: dataById, error: errorById } = await client
       .from('accounts')
       .delete()
-      .or(`id.eq.${accountId},account_number.eq.${accountId}`);
+      .eq('id', accountId)
+      .select();
+    
+    if (!errorById && dataById && dataById.length > 0) {
+      deleted = true;
+      console.log('🗑️ Deleted account by ID:', dataById);
+    } else {
+      // Try by account_number
+      const { data: dataByNum, error: errorByNum } = await client
+        .from('accounts')
+        .delete()
+        .eq('account_number', accountId)
+        .select();
+      
+      if (!errorByNum && dataByNum && dataByNum.length > 0) {
+        deleted = true;
+        console.log('🗑️ Deleted account by account_number:', dataByNum);
+      }
+    }
 
-    if (error) throw error;
     accountCache = null; // Invalidate cache so lists/searches refresh
-    logSuccess('Account deleted', accountId);
+    
+    if (deleted) {
+      logSuccess('Account deleted from Supabase', accountId);
+    } else {
+      console.log('ℹ️ Account was not in Supabase (local-only or already deleted)');
+    }
     return true;
   } catch (error) {
+    console.error('❌ deleteAccount error:', error);
+    // Don't show error if just "not found" - we already cleared local cache
+    if (error.message?.includes('not found') || error.code === 'PGRST116') {
+      console.log('ℹ️ Account was local-only, cleared from cache');
+      return true;
+    }
     return showDatabaseError('Delete Account', error);
   }
 }

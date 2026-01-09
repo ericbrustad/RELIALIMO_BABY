@@ -6,6 +6,34 @@
   <title>Email Settings - RELIA🐂LIMO™</title>
   <script src="env.js"></script>
   <link rel="stylesheet" href="email-settings.css" />
+  <style>
+    .config-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-right: 10px;
+    }
+    .config-status.configured {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border: 1px solid #a5d6a7;
+    }
+    .config-status.not-configured {
+      background: #ffebee;
+      color: #c62828;
+      border: 1px solid #ef9a9a;
+    }
+    .config-status.partial {
+      background: #fff3e0;
+      color: #e65100;
+      border: 1px solid #ffcc80;
+    }
+    .config-status .status-icon { font-size: 16px; }
+  </style>
 </head>
 <body>
   <script>
@@ -48,7 +76,13 @@
           <p class="email-settings-subtitle">Configure outgoing email and manage HTML templates with trip and rate tags.</p>
         </div>
         <div class="header-actions">
-          <button id="saveSettingsBtn" class="btn primary">Save Settings</button>
+          <div id="emailConfigStatus" class="config-status">
+            <span class="status-icon">⏳</span>
+            <span class="status-text">Checking...</span>
+          </div>
+          <button id="saveSettingsBtn" class="btn primary">💾 Save Settings</button>
+          <button id="saveSecureBtn" class="btn primary" style="background:#2e7d32;" title="Save to Supabase & create backup">🔒 Save Secure</button>
+          <button id="downloadEnvBtn" class="btn primary" style="background:#1565c0;" title="Download .env file">⬇️ Download .env</button>
           <button id="testSendBtn" class="btn secondary">Test Send (local)</button>
         </div>
       </header>
@@ -153,5 +187,123 @@
   </div>
 
   <script src="email-settings.js"></script>
+  <script src="SecureSettingsManager.js"></script>
+  <script>
+    // Email Config Status Checker
+    const EmailConfigChecker = {
+      checkConfiguration() {
+        const statusEl = document.getElementById('emailConfigStatus');
+        if (!statusEl) return;
+        
+        const smtpHost = document.getElementById('smtpHostInput')?.value?.trim() || '';
+        const smtpPort = document.getElementById('smtpPortInput')?.value?.trim() || '';
+        const fromEmail = document.getElementById('fromEmailInput')?.value?.trim() || '';
+        
+        const checks = [
+          { name: 'SMTP Host', valid: smtpHost.length > 3 },
+          { name: 'SMTP Port', valid: parseInt(smtpPort) > 0 },
+          { name: 'From Email', valid: fromEmail.includes('@') }
+        ];
+        
+        const validCount = checks.filter(c => c.valid).length;
+        const allValid = validCount === 3;
+        const partialValid = validCount > 0 && validCount < 3;
+        
+        if (allValid) {
+          statusEl.className = 'config-status configured';
+          statusEl.innerHTML = '<span class="status-icon">✅</span><span class="status-text">Email Configured</span>';
+        } else if (partialValid) {
+          statusEl.className = 'config-status partial';
+          statusEl.innerHTML = `<span class="status-icon">⚠️</span><span class="status-text">Partial (${validCount}/3)</span>`;
+        } else {
+          statusEl.className = 'config-status not-configured';
+          statusEl.innerHTML = '<span class="status-icon">❌</span><span class="status-text">Not Configured</span>';
+        }
+      },
+      
+      init() {
+        setTimeout(() => this.checkConfiguration(), 100);
+        
+        const inputs = ['smtpHostInput', 'smtpPortInput', 'fromEmailInput'];
+        inputs.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.addEventListener('input', () => this.checkConfiguration());
+            el.addEventListener('change', () => this.checkConfiguration());
+          }
+        });
+        
+        const saveBtn = document.getElementById('saveSettingsBtn');
+        if (saveBtn) {
+          saveBtn.addEventListener('click', () => {
+            setTimeout(() => this.checkConfiguration(), 200);
+          });
+        }
+      }
+    };
+    
+    document.addEventListener('DOMContentLoaded', () => {
+      EmailConfigChecker.init();
+      
+      // Save Secure button
+      const saveSecureBtn = document.getElementById('saveSecureBtn');
+      if (saveSecureBtn) {
+        saveSecureBtn.addEventListener('click', async () => {
+          saveSecureBtn.disabled = true;
+          saveSecureBtn.textContent = '🔄 Saving...';
+          
+          try {
+            // First save locally
+            const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+            if (saveSettingsBtn) saveSettingsBtn.click();
+            
+            await new Promise(r => setTimeout(r, 300));
+            
+            if (window.SecureSettingsManager) {
+              const result = await window.SecureSettingsManager.saveSecurely();
+              
+              if (result.saved) {
+                if (result.supabase) {
+                  alert('✅ Settings saved securely to Supabase and local backup created.');
+                } else {
+                  alert('✅ Settings saved to local backup. (Supabase table may need to be created)');
+                }
+              } else {
+                alert('⚠️ ' + (result.reason || 'Could not save - check configuration'));
+              }
+            } else {
+              alert('❌ SecureSettingsManager not loaded');
+            }
+          } catch (e) {
+            console.error('Save secure error:', e);
+            alert('❌ Error: ' + e.message);
+          } finally {
+            saveSecureBtn.disabled = false;
+            saveSecureBtn.textContent = '🔒 Save Secure';
+          }
+        });
+      }
+      
+      // Download .env button
+      const downloadEnvBtn = document.getElementById('downloadEnvBtn');
+      if (downloadEnvBtn) {
+        downloadEnvBtn.addEventListener('click', () => {
+          if (window.SecureSettingsManager) {
+            const status = window.SecureSettingsManager.getStatus();
+            
+            if (!status.sms.configured && !status.email.configured) {
+              if (!confirm('No settings are fully configured yet. Download anyway?')) {
+                return;
+              }
+            }
+            
+            window.SecureSettingsManager.downloadEnvFile();
+          } else {
+            alert('❌ SecureSettingsManager not loaded');
+          }
+        });
+      }
+    });
+  </script>
 </body>
 </html>

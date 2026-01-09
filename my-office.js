@@ -1710,6 +1710,7 @@ class MyOffice {
       'electronic-fax': null,
       'sms-provider': 'sms-provider.html',
       'email-settings': 'email-settings.html',
+      'portal-links': 'portal-links.html',
       'limoanywhere-pay': null,
       'digital-marketing': null,
       'appearance': 'appearance.html',
@@ -3057,8 +3058,63 @@ class MyOffice {
       primaryAction.textContent = 'Save Vehicle Type';
     }
 
+    // Load rates for this vehicle type
+    this.populateVehicleRates(data);
+
     // Load images for this vehicle type
     this.loadVehicleTypeImages();
+  }
+
+  /**
+   * Populate the rate input fields with saved rate data
+   */
+  populateVehicleRates(data) {
+    const rates = data?.rates || data?.metadata?.rates || {};
+    
+    const setFieldValue = (container, fieldName, value) => {
+      const el = container?.querySelector(`[data-rate-field="${fieldName}"]`);
+      if (el) {
+        el.value = value ?? '';
+      }
+    };
+
+    // Per Hour Rates
+    const perHourContainer = document.getElementById('perHourRates');
+    if (perHourContainer) {
+      const perHour = rates.perHour || {};
+      setFieldValue(perHourContainer, 'per-hour-rate', perHour.ratePerHour || 0);
+      setFieldValue(perHourContainer, 'per-hour-min', perHour.minimumHours || 1);
+      setFieldValue(perHourContainer, 'per-hour-base', perHour.baseRate || 0);
+      setFieldValue(perHourContainer, 'per-hour-overtime', perHour.overtimeRate || 0);
+      setFieldValue(perHourContainer, 'per-hour-gratuity', perHour.gratuity || 20);
+      setFieldValue(perHourContainer, 'per-hour-wait', perHour.waitTimeRate || 0);
+    }
+
+    // Per Passenger Rates
+    const perPassengerContainer = document.getElementById('perPassengerRates');
+    if (perPassengerContainer) {
+      const perPassenger = rates.perPassenger || {};
+      setFieldValue(perPassengerContainer, 'pp-base-rate', perPassenger.ratePerPassenger || 0);
+      setFieldValue(perPassengerContainer, 'pp-min', perPassenger.minPassengers || 1);
+      setFieldValue(perPassengerContainer, 'pp-max', perPassenger.maxPassengers || 10);
+      setFieldValue(perPassengerContainer, 'pp-base-fare', perPassenger.baseFare || 0);
+      setFieldValue(perPassengerContainer, 'pp-gratuity', perPassenger.gratuity || 20);
+      setFieldValue(perPassengerContainer, 'pp-extra-rate', perPassenger.extraPassengerRate || 0);
+    }
+
+    // Distance Rates
+    const distanceContainer = document.getElementById('distanceRates');
+    if (distanceContainer) {
+      const distance = rates.distance || {};
+      setFieldValue(distanceContainer, 'dist-base', distance.ratePerMile || 0);
+      setFieldValue(distanceContainer, 'dist-min-fare', distance.minimumFare || 0);
+      setFieldValue(distanceContainer, 'dist-included', distance.includedMiles || 0);
+      setFieldValue(distanceContainer, 'dist-base-fare', distance.baseFare || 0);
+      setFieldValue(distanceContainer, 'dist-gratuity', distance.gratuity || 20);
+      setFieldValue(distanceContainer, 'dist-dead-mile', distance.deadMileRate || 0);
+    }
+
+    console.log('📊 Populated vehicle rates:', rates);
   }
 
   getVehicleTypeData(vehicleId) {
@@ -3172,130 +3228,48 @@ class MyOffice {
       return Number.isFinite(num) ? num : 0;
     };
 
+    const getFieldValue = (container, fieldName) => {
+      const el = container?.querySelector(`[data-rate-field="${fieldName}"]`);
+      return el?.value || '';
+    };
+
+    // Per Hour Rates
     const perHour = {};
     const perHourContainer = document.getElementById('perHourRates');
     if (perHourContainer) {
-      const asLowInput = perHourContainer.querySelector('.rate-input-section input');
-      perHour.asLow = parseNumber(asLowInput?.value || '0');
-
-      const selects = perHourContainer.querySelectorAll('.rate-input-section select');
-      perHour.baseAssociation = selects[0]?.value || '';
-      perHour.duration = selects[1]?.value || '';
-      perHour.multiplier = selects[2]?.value || '';
-
-      const rateSchedules = Array.from(perHourContainer.querySelectorAll('.rate-schedule-row')).map((row) => {
-        const inputs = row.querySelectorAll('input');
-        if (inputs.length < 3) return null;
-        return {
-          from: inputs[0].value,
-          to: inputs[1].value,
-          ratePerHour: inputs[2].value
-        };
-      }).filter(Boolean);
-      perHour.rateSchedules = rateSchedules;
-
-      const hoursGrids = perHourContainer.querySelectorAll('.hours-schedule-grid');
-      if (hoursGrids.length > 1) {
-        const selectsHours = hoursGrids[1].querySelectorAll('select');
-        perHour.hoursRange = {
-          from: selectsHours[0]?.value || '',
-          to: selectsHours[1]?.value || '',
-          ratePerHour: selectsHours[3]?.value || ''
-        };
-      }
-
-      const peakRows = perHourContainer.querySelectorAll('.peak-rate-table tbody tr');
-      perHour.peakSchedule = Array.from(peakRows).map((row) => {
-        const cells = row.querySelectorAll('td');
-        const checkbox = cells[0]?.querySelector('input[type="checkbox"]');
-        const selectsRow = row.querySelectorAll('select');
-        return {
-          day: cells[1]?.textContent?.trim() || '',
-          enabled: Boolean(checkbox?.checked),
-          start1: selectsRow[0]?.value || '',
-          end1: selectsRow[1]?.value || '',
-          start2: selectsRow[2]?.value || '',
-          end2: selectsRow[3]?.value || ''
-        };
-      });
+      perHour.ratePerHour = parseNumber(getFieldValue(perHourContainer, 'per-hour-rate'));
+      perHour.minimumHours = parseNumber(getFieldValue(perHourContainer, 'per-hour-min'));
+      perHour.baseRate = parseNumber(getFieldValue(perHourContainer, 'per-hour-base'));
+      perHour.overtimeRate = parseNumber(getFieldValue(perHourContainer, 'per-hour-overtime'));
+      perHour.gratuity = parseNumber(getFieldValue(perHourContainer, 'per-hour-gratuity'));
+      perHour.waitTimeRate = parseNumber(getFieldValue(perHourContainer, 'per-hour-wait'));
     }
 
+    // Per Passenger Rates
     const perPassenger = {};
     const perPassengerContainer = document.getElementById('perPassengerRates');
     if (perPassengerContainer) {
-      perPassenger.matrix = perPassengerContainer.querySelector('[data-rate-field="pp-matrix"]')?.value || '';
-      perPassenger.baseRate = parseNumber(perPassengerContainer.querySelector('[data-rate-field="pp-base-rate"]')?.value || '0');
-      perPassenger.minPassengers = parseInt(perPassengerContainer.querySelector('[data-rate-field="pp-min"]')?.value || '0', 10) || 0;
-      perPassenger.maxPassengers = parseInt(perPassengerContainer.querySelector('[data-rate-field="pp-max"]')?.value || '0', 10) || 0;
-
-      const tierRows = perPassengerContainer.querySelectorAll('.pp-tier-row');
-      perPassenger.tiers = Array.from(tierRows).map((row) => {
-        const from = row.querySelector('[data-rate-field="pp-from"]')?.value || '';
-        const to = row.querySelector('[data-rate-field="pp-to"]')?.value || '';
-        const rate = row.querySelector('[data-rate-field="pp-rate"]')?.value || '';
-        const hasData = from || to || rate;
-        if (!hasData) {
-          return null;
-        }
-        return {
-          from,
-          to,
-          rate: parseNumber(rate)
-        };
-      }).filter(Boolean);
-
-      const flatRows = perPassengerContainer.querySelectorAll('.pp-flat-row');
-      perPassenger.flatFees = Array.from(flatRows).map((row) => {
-        const label = row.querySelector('[data-rate-field="pp-flat-label"]')?.value?.trim() || '';
-        const amount = row.querySelector('[data-rate-field="pp-flat-amount"]')?.value || '';
-        if (!label && !amount) {
-          return null;
-        }
-        return {
-          label,
-          amount: parseNumber(amount)
-        };
-      }).filter(Boolean);
+      perPassenger.ratePerPassenger = parseNumber(getFieldValue(perPassengerContainer, 'pp-base-rate'));
+      perPassenger.minPassengers = parseInt(getFieldValue(perPassengerContainer, 'pp-min'), 10) || 1;
+      perPassenger.maxPassengers = parseInt(getFieldValue(perPassengerContainer, 'pp-max'), 10) || 10;
+      perPassenger.baseFare = parseNumber(getFieldValue(perPassengerContainer, 'pp-base-fare'));
+      perPassenger.gratuity = parseNumber(getFieldValue(perPassengerContainer, 'pp-gratuity'));
+      perPassenger.extraPassengerRate = parseNumber(getFieldValue(perPassengerContainer, 'pp-extra-rate'));
     }
 
+    // Distance Rates
     const distance = {};
     const distanceContainer = document.getElementById('distanceRates');
     if (distanceContainer) {
-      distance.matrix = distanceContainer.querySelector('[data-rate-field="dist-matrix"]')?.value || '';
-      distance.basePerMile = parseNumber(distanceContainer.querySelector('[data-rate-field="dist-base"]')?.value || '0');
-      distance.minimumFare = parseNumber(distanceContainer.querySelector('[data-rate-field="dist-min-fare"]')?.value || '0');
-      distance.includedMiles = parseNumber(distanceContainer.querySelector('[data-rate-field="dist-included"]')?.value || '0');
-
-      const tierRows = distanceContainer.querySelectorAll('.distance-tier-row');
-      distance.tiers = Array.from(tierRows).map((row) => {
-        const from = row.querySelector('[data-rate-field="dist-from"]')?.value || '';
-        const to = row.querySelector('[data-rate-field="dist-to"]')?.value || '';
-        const rate = row.querySelector('[data-rate-field="dist-rate"]')?.value || '';
-        const hasData = from || to || rate;
-        if (!hasData) {
-          return null;
-        }
-        return {
-          from,
-          to,
-          rate: parseNumber(rate)
-        };
-      }).filter(Boolean);
-
-      const surchargeRows = distanceContainer.querySelectorAll('.distance-surcharge-row');
-      distance.surcharges = Array.from(surchargeRows).map((row) => {
-        const label = row.querySelector('[data-rate-field="dist-surcharge-label"]')?.value?.trim() || '';
-        const amount = row.querySelector('[data-rate-field="dist-surcharge-amount"]')?.value || '';
-        if (!label && !amount) {
-          return null;
-        }
-        return {
-          label,
-          amount: parseNumber(amount)
-        };
-      }).filter(Boolean);
+      distance.ratePerMile = parseNumber(getFieldValue(distanceContainer, 'dist-base'));
+      distance.minimumFare = parseNumber(getFieldValue(distanceContainer, 'dist-min-fare'));
+      distance.includedMiles = parseNumber(getFieldValue(distanceContainer, 'dist-included'));
+      distance.baseFare = parseNumber(getFieldValue(distanceContainer, 'dist-base-fare'));
+      distance.gratuity = parseNumber(getFieldValue(distanceContainer, 'dist-gratuity'));
+      distance.deadMileRate = parseNumber(getFieldValue(distanceContainer, 'dist-dead-mile'));
     }
 
+    console.log('📊 Captured vehicle rates:', { perHour, perPassenger, distance });
     return { perHour, perPassenger, distance };
   }
 
@@ -4369,12 +4343,40 @@ class MyOffice {
         if (previousDriverId) {
           console.log(`🔄 Unassigning vehicle from previous driver ${previousDriverId}`);
           await updateDriver(previousDriverId, { assigned_vehicle_id: null });
+          
+          // Update local drivers cache
+          const prevDriver = this.drivers?.find(d => d.id === previousDriverId);
+          if (prevDriver) {
+            prevDriver.assigned_vehicle_id = null;
+          }
         }
         
         // Assign vehicle to new driver
         if (newDriverId) {
           console.log(`🔄 Assigning vehicle ${vehicleId} to driver ${newDriverId}`);
           await updateDriver(newDriverId, { assigned_vehicle_id: vehicleId });
+          
+          // Update local drivers cache
+          const newDriver = this.drivers?.find(d => d.id === newDriverId);
+          if (newDriver) {
+            newDriver.assigned_vehicle_id = vehicleId;
+          }
+        }
+        
+        // Live update: If the affected driver is currently loaded in the Driver form, update the dropdown
+        const driverVehicleSelect = document.getElementById('driverAssignedVehicle');
+        if (driverVehicleSelect && this.currentDriver) {
+          if (this.currentDriver.id === newDriverId) {
+            // Current driver was just assigned this vehicle
+            driverVehicleSelect.value = vehicleId;
+            this.currentDriver.assigned_vehicle_id = vehicleId;
+            console.log(`🔄 Live updated Driver dropdown to show vehicle ${vehicleId}`);
+          } else if (this.currentDriver.id === previousDriverId) {
+            // Current driver was just unassigned from this vehicle
+            driverVehicleSelect.value = '';
+            this.currentDriver.assigned_vehicle_id = null;
+            console.log(`🔄 Live updated Driver dropdown to show no vehicle (unassigned)`);
+          }
         }
       } catch (err) {
         console.warn('Could not sync driver vehicle assignment:', err);
@@ -5205,6 +5207,21 @@ class MyOffice {
     const createVehicleBtn = document.getElementById('createVehicleBtn');
     if (createVehicleBtn) {
       createVehicleBtn.addEventListener('click', () => this.openCreateVehiclePopup());
+    }
+
+    // Toggle Driver Pay Rates and Schedule section
+    const togglePayScheduleBtn = document.getElementById('toggleDriverPayScheduleBtn');
+    if (togglePayScheduleBtn) {
+      togglePayScheduleBtn.addEventListener('click', () => {
+        const section = document.getElementById('driverPayScheduleSection');
+        if (section) {
+          const isHidden = section.style.display === 'none';
+          section.style.display = isHidden ? 'block' : 'none';
+          togglePayScheduleBtn.innerHTML = isHidden 
+            ? '▼ Driver Pay Rates and Schedule <span style="color: #ffc107; font-weight: 600;">*inactive</span>'
+            : '▶ Driver Pay Rates and Schedule <span style="color: #ffc107; font-weight: 600;">*inactive</span>';
+        }
+      });
     }
 
     // Setup vehicle popup modal event handlers
@@ -7071,7 +7088,26 @@ class MyOffice {
         result = await createDriver(driverData);
         if (!result) throw new Error('Failed to create driver');
         console.log('✅ Driver created:', result);
-        alert('Driver created successfully!');
+        
+        // Send Driver Portal Welcome email for new drivers
+        try {
+          if (window.EmailService?.sendDriverPortalWelcomeEmail) {
+            const emailResult = await window.EmailService.sendDriverPortalWelcomeEmail(result);
+            if (emailResult.success) {
+              console.log('📧 Driver Portal Welcome email queued:', emailResult);
+              alert(`Driver created successfully!\n\n📧 Portal welcome email queued to: ${emailResult.to}\n\nPortal Link: ${emailResult.portalLink}`);
+            } else {
+              console.warn('⚠️ Failed to queue welcome email:', emailResult.error);
+              alert('Driver created successfully!\n\n⚠️ Note: Could not send welcome email - ' + emailResult.error);
+            }
+          } else {
+            console.log('ℹ️ EmailService not available - skipping welcome email');
+            alert('Driver created successfully!');
+          }
+        } catch (emailErr) {
+          console.warn('⚠️ Error sending welcome email:', emailErr);
+          alert('Driver created successfully!\n\n⚠️ Note: Could not send welcome email.');
+        }
       }
 
       this.currentDriver = result;
@@ -7113,16 +7149,17 @@ class MyOffice {
 
       // Sync Fleet vehicle's assigned_driver_id with driver's assigned_vehicle_id
       try {
-        const vehicleId = result.assigned_vehicle_id;
+        const vehicleId = result.assigned_vehicle_id || null;
+        const origVehicle = originalVehicleId || null;
         
         // If vehicle assignment changed, update fleet records
-        if (vehicleId !== originalVehicleId) {
+        if (vehicleId !== origVehicle) {
           // Unassign driver from old vehicle in fleet
-          if (originalVehicleId) {
-            const oldFleetVehicle = this.fleetRecords?.find(v => v.id === originalVehicleId);
+          if (origVehicle) {
+            const oldFleetVehicle = this.fleetRecords?.find(v => v.id === origVehicle);
             if (oldFleetVehicle) {
               oldFleetVehicle.assigned_driver_id = null;
-              console.log(`🔄 Unassigned driver from old fleet vehicle ${originalVehicleId}`);
+              console.log(`🔄 Unassigned driver from old fleet vehicle ${origVehicle}`);
             }
           }
           
@@ -7141,8 +7178,23 @@ class MyOffice {
             }
           }
           
-          // Persist fleet changes
+          // Persist fleet changes to localStorage
           this.persistFleet();
+          
+          // Live update: If Fleet section is visible and the affected vehicle is selected, update the dropdown
+          const fleetDriverSelect = document.getElementById('fleetAssignedDriver');
+          if (fleetDriverSelect && this.activeFleetId) {
+            // If the currently selected fleet vehicle was just assigned/unassigned
+            if (this.activeFleetId === vehicleId) {
+              fleetDriverSelect.value = driverId;
+              this.updateFleetDriverInfoDisplay(driverId);
+              console.log(`🔄 Live updated Fleet dropdown to show driver ${driverId}`);
+            } else if (this.activeFleetId === origVehicle) {
+              fleetDriverSelect.value = '';
+              this.updateFleetDriverInfoDisplay(null);
+              console.log(`🔄 Live updated Fleet dropdown to show no driver (unassigned)`);
+            }
+          }
         }
       } catch (e) {
         console.warn('Error syncing fleet vehicle assignment:', e);
@@ -7629,14 +7681,6 @@ class MyOffice {
       .replace(/'/g, '&#039;');
   }
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
   /**
    * Initialize office.Airports from localStorage and ensure each airport has its own cell
    */
@@ -7744,13 +7788,6 @@ class MyOffice {
     return window.office.Airports.size;
   }
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 }
 
 // Initialize when DOM is ready
@@ -7764,8 +7801,6 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Expose instance globally so child iframes can access vehicle types, drivers, etc.
   window.myOffice = new MyOffice();
-<<<<<<< Updated upstream
-=======
   
   // Initialize airports from localStorage into office.Airports
   window.myOffice.initializeOfficeAirports();
@@ -7788,11 +7823,4 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   
   console.log('Office airports system initialized - each airport stored in its own cell in office.Airports');
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 });

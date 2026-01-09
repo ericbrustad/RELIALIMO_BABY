@@ -2056,7 +2056,8 @@ export async function createReservation(reservationData) {
       rate_type: reservationData.rateType || reservationData.rate_type || null,
       rate_amount: reservationData.grandTotal || reservationData.rate_amount || 0,
       currency: reservationData.currency || 'USD',
-      timezone: reservationData.timezone || null
+      timezone: reservationData.timezone || null,
+      farm_option: reservationData.farm_option || reservationData.farmOption || reservationData.formSnapshot?.details?.farmOption || reservationData.form_snapshot?.details?.farmOption || 'in-house'
     };
 
     // Persist the full form snapshot when provided so reservation details reload correctly
@@ -2147,7 +2148,8 @@ export async function updateReservation(reservationId, reservationData) {
         notes: reservationData.routing?.dispatchNotes || reservationData.notes || undefined,
         rate_amount: reservationData.grandTotal || reservationData.rate_amount || undefined,
         updated_by: userId,
-        form_snapshot: reservationData.form_snapshot || reservationData.formSnapshot || undefined
+        form_snapshot: reservationData.form_snapshot || reservationData.formSnapshot || undefined,
+        farm_option: reservationData.farm_option || reservationData.farmOption || reservationData.formSnapshot?.details?.farmOption || reservationData.form_snapshot?.details?.farmOption || undefined
       })
       .eq('id', reservationId)
       .eq('organization_id', organizationId)
@@ -2184,11 +2186,20 @@ export async function fetchReservations() {
     
     if (error) throw error;
     
-    // Include local reservations for development
+    // Include local reservations for development, but deduplicate
     const localReservations = JSON.parse(localStorage.getItem('local_reservations') || '[]');
-    const allReservations = [...(data || []), ...localReservations];
     
-    console.log(`📊 Loaded ${(data || []).length} Supabase + ${localReservations.length} local reservations`);
+    // Supabase is the source of truth - only include local reservations not in Supabase
+    const supabaseIds = new Set((data || []).map(r => r.id));
+    const supabaseConfNumbers = new Set((data || []).map(r => r.confirmation_number));
+    
+    const uniqueLocalOnly = localReservations.filter(r => 
+      !supabaseIds.has(r.id) && !supabaseConfNumbers.has(r.confirmation_number)
+    );
+    
+    const allReservations = [...(data || []), ...uniqueLocalOnly];
+    
+    console.log(`📊 Loaded ${(data || []).length} Supabase + ${uniqueLocalOnly.length} local-only reservations`);
     return allReservations;
   } catch (error) {
     console.error('Error fetching reservations:', error);
@@ -2415,13 +2426,17 @@ function clearLocalAccountStorage() {
   try {
     const keys = [
       'local_accounts',
+      'dev_accounts',
       'relia_accounts',
+      'accounts',
       'relia_account_draft',
       'nextAccountNumber'
     ];
+    console.log('🗑️ Clearing all local account storage keys:', keys);
     keys.forEach(key => {
       try {
         localStorage.removeItem(key);
+        console.log(`🗑️ Removed ${key}`);
       } catch (e) {
         console.warn(`⚠️ Unable to remove ${key}:`, e);
       }
@@ -2484,14 +2499,24 @@ export async function deleteAllAccountsSupabase() {
         .delete()
         .eq('organization_id', organizationId);
       if (scopedError) throw scopedError;
+      console.log('✅ Deleted accounts for organization:', organizationId);
     }
 
     // Also delete any accounts without an organization_id (cleanup)
-    const { error: nullOrgError } = await client
-      .from('accounts')
-      .delete()
-      .is('organization_id', null);
-    if (nullOrgError) throw nullOrgError;
+    // Use filter for null check since .is() may not be available on REST client
+    try {
+      const { error: nullOrgError } = await client
+        .from('accounts')
+        .delete()
+        .filter('organization_id', 'is', 'null');
+      if (nullOrgError) {
+        console.warn('⚠️ Could not delete null-org accounts:', nullOrgError);
+      } else {
+        console.log('✅ Deleted accounts with null organization_id');
+      }
+    } catch (e) {
+      console.warn('⚠️ Null org cleanup skipped:', e.message);
+    }
 
     clearLocalAccountStorage();
     return true;
@@ -2651,7 +2676,23 @@ export async function saveAccountToSupabase(accountData) {
         updated_at: new Date().toISOString()
       };
       const existingAccounts = JSON.parse(localStorage.getItem('local_accounts') || '[]');
-      existingAccounts.push(localAccount);
+      
+      // Check for duplicate by account_number or id
+      const existingIndex = existingAccounts.findIndex(a => 
+        (a.account_number && a.account_number === localAccount.account_number) ||
+        (a.id && a.id === localAccount.id)
+      );
+      
+      if (existingIndex >= 0) {
+        // Update existing account
+        existingAccounts[existingIndex] = { ...existingAccounts[existingIndex], ...localAccount, updated_at: new Date().toISOString() };
+        console.log('🔄 Updated existing local account:', localAccount.account_number);
+      } else {
+        // Add new account
+        existingAccounts.push(localAccount);
+        console.log('➕ Added new local account:', localAccount.account_number);
+      }
+      
       localStorage.setItem('local_accounts', JSON.stringify(existingAccounts));
       return localAccount;
     }
@@ -2801,9 +2842,20 @@ export async function saveAccountToSupabase(accountData) {
           updated_at: new Date().toISOString()
         };
         
-        // Get existing local accounts
+        // Get existing local accounts and check for duplicates
         const existingAccounts = JSON.parse(localStorage.getItem('local_accounts') || '[]');
-        existingAccounts.push(accountWithId);
+        const existingIndex = existingAccounts.findIndex(a => 
+          (a.account_number && a.account_number === accountWithId.account_number)
+        );
+        
+        if (existingIndex >= 0) {
+          existingAccounts[existingIndex] = { ...existingAccounts[existingIndex], ...accountWithId };
+          console.log('🔄 Updated existing local account:', accountWithId.account_number);
+        } else {
+          existingAccounts.push(accountWithId);
+          console.log('➕ Added new local account:', accountWithId.account_number);
+        }
+        
         localStorage.setItem('local_accounts', JSON.stringify(existingAccounts));
         
         console.log('✅ Account saved locally for development:', accountWithId);
@@ -2834,9 +2886,20 @@ export async function saveAccountToSupabase(accountData) {
         updated_at: new Date().toISOString()
       };
       
-      // Save to local storage
+      // Save to local storage with duplicate prevention
       const existingAccounts = JSON.parse(localStorage.getItem('local_accounts') || '[]');
-      existingAccounts.push(localAccount);
+      const existingIndex = existingAccounts.findIndex(a => 
+        (a.account_number && a.account_number === localAccount.account_number) ||
+        (a.id && a.id === localAccount.id)
+      );
+      
+      if (existingIndex >= 0) {
+        existingAccounts[existingIndex] = { ...existingAccounts[existingIndex], ...localAccount, updated_at: new Date().toISOString() };
+        console.log('🔄 Updated existing local account:', localAccount.account_number);
+      } else {
+        existingAccounts.push(localAccount);
+        console.log('➕ Added new local account:', localAccount.account_number);
+      }
       localStorage.setItem('local_accounts', JSON.stringify(existingAccounts));
       
       console.log('✅ Account saved locally due to authentication issue:', localAccount);
@@ -2872,11 +2935,20 @@ export async function fetchAccounts() {
     
     if (error) throw error;
     
-    // Include local accounts for development
+    // Include local accounts for development, but deduplicate
     const localAccounts = JSON.parse(localStorage.getItem('local_accounts') || '[]');
-    const allAccounts = [...(data || []), ...localAccounts];
     
-    console.log(`✅ Fetched ${(data || []).length} Supabase + ${localAccounts.length} local accounts`);
+    // Supabase is the source of truth - only include local accounts not in Supabase
+    const supabaseIds = new Set((data || []).map(a => a.id));
+    const supabaseAccountNumbers = new Set((data || []).map(a => a.account_number).filter(Boolean));
+    
+    const uniqueLocalOnly = localAccounts.filter(a => 
+      !supabaseIds.has(a.id) && !supabaseAccountNumbers.has(a.account_number)
+    );
+    
+    const allAccounts = [...(data || []), ...uniqueLocalOnly];
+    
+    console.log(`✅ Fetched ${(data || []).length} Supabase + ${uniqueLocalOnly.length} local-only accounts`);
     return allAccounts;
   } catch (error) {
     console.error('❌ Error fetching accounts:', error);
