@@ -54,12 +54,27 @@ app.post('/api/email-send', async (req, res) => {
       });
     }
 
-    console.log('✅ Sending mock email response (configure .env for real emails)');
-    return res.status(200).json({ 
-      ok: true, 
-      id: 'test_' + Date.now(),
-      message: 'Email test successful - configure RESEND_API_KEY in .env for real sending'
+    console.log('📤 Sending real email via Resend API...');
+    
+    // Send real email via Resend API
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ from, to, subject, html, text }),
     });
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('❌ Resend API error:', data);
+      return res.status(response.status).json(data);
+    }
+
+    console.log('✅ Email sent successfully! ID:', data.id);
+    return res.status(200).json({ ok: true, id: data.id });
 
   } catch (e) {
     console.error('❌ Email send error:', e);

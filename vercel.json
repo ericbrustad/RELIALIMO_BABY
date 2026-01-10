@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/email-send.js": {
-      "runtime": "@vercel/node@3.0.7"
+      "runtime": "nodejs18.x"
     }
   }
 }
