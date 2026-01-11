@@ -48,6 +48,40 @@ export const handler = async (req: Request) => {
     const driverJson = await insertResp.json();
     if (!insertResp.ok) return new Response(JSON.stringify({ user: userJson, driver_error: driverJson }), { status: 500 });
 
+    // If an application_id was provided, verify admin and update the application row
+    if (body.application_id && body.admin_user_id) {
+      // Verify admin_user_id has an admin role
+      const rolesResp = await fetch(`${PROJECT_URL.replace(/\/$/, '')}/rest/v1/user_roles?user_id=eq.${body.admin_user_id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SRK}`,
+          'apikey': SRK
+        }
+      });
+      const rolesJson = await rolesResp.json();
+      const hasAdmin = Array.isArray(rolesJson) && rolesJson.some(r => ['admin','dispatch','superadmin'].includes(r.role));
+      if (!hasAdmin) {
+        return new Response(JSON.stringify({ error: 'admin_user_id is not an admin' }), { status: 403 });
+      }
+
+      // Update application status
+      const updateResp = await fetch(`${PROJECT_URL.replace(/\/$/, '')}/rest/v1/driver_applications?id=eq.${body.application_id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SRK}`,
+          'apikey': SRK,
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({ status: 'approved', reviewed_by: body.admin_user_id, reviewed_at: new Date().toISOString(), created_user_id: userId })
+      });
+      const updateJson = await updateResp.json();
+      if (!updateResp.ok) return new Response(JSON.stringify({ user: userJson, driver: driverJson, application_update_error: updateJson }), { status: 500 });
+
+      return new Response(JSON.stringify({ user: userJson, driver: driverJson, application: updateJson }), { status: 200 });
+    }
+
     return new Response(JSON.stringify({ user: userJson, driver: driverJson }), { status: 200 });
   } catch (err) {
     return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
