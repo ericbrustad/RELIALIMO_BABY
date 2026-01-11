@@ -699,6 +699,7 @@ export function getSupabaseClient() {
 }
 
 const DEV_DRIVERS_KEY = 'dev_drivers';
+const DEV_AFFILIATES_KEY = 'dev_affiliates';
 const isDevHost = () => {
   // If FORCE_DATABASE_ON_LOCALHOST is true, never use dev/localStorage mode
   if (window.ENV?.FORCE_DATABASE_ON_LOCALHOST) return false;
@@ -724,6 +725,36 @@ const saveDevDrivers = (drivers) => {
     localStorage.setItem(DEV_DRIVERS_KEY, JSON.stringify(drivers || []));
   } catch (e) {
     console.warn('⚠️ Failed to persist dev drivers:', e);
+  }
+};
+
+// DEV affiliates (fallback when table is missing or for local development)
+const loadDevAffiliates = () => {
+  try {
+    const raw = localStorage.getItem(DEV_AFFILIATES_KEY);
+    if (!raw) {
+      // Return a minimal sample affiliate so dropdown isn't empty
+      const sample = [{
+        id: `dev-aff-${Date.now()}`,
+        company_name: 'Local Test Affiliate',
+        organization_id: (window.ENV?.SUPABASE_UUID || window.ENV?.RELIALIMO_ORG_ID || null),
+        is_active: true
+      }];
+      return sample;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.warn('⚠️ Failed to read dev affiliates:', e);
+    return [];
+  }
+};
+
+const saveDevAffiliates = (affiliates) => {
+  try {
+    localStorage.setItem(DEV_AFFILIATES_KEY, JSON.stringify(affiliates || []));
+  } catch (e) {
+    console.warn('⚠️ Failed to persist dev affiliates:', e);
   }
 };
 
@@ -798,19 +829,105 @@ export async function createDriver(driverData) {
 
     console.log('📤 createDriver payload:', payload);
 
-    const res = await apiFetch('/rest/v1/drivers', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
-      body: JSON.stringify(payload)
-    });
+    // If no id provided, create an auth user first so we can insert driver row tied to auth.users(id)
+    if (!payload.id) {
+      if (!payload.email) {
+        throw new Error('createDriver requires an email when no id is provided');
+      }
+      // Generate a temporary password for signup
+      const tempPassword = 'Temp!' + Math.random().toString(36).slice(2,10) + (Date.now() % 10000);
+      console.log('🔑 Creating auth user for', payload.email);
 
-    if (!res.ok) {
-      const errorBody = await res.text();
-      console.error('❌ createDriver API error:', res.status, errorBody);
-      throw new Error(`createDriver failed: ${res.status} - ${errorBody}`);
+      // Use Supabase Auth REST endpoint (works with anon key) since client.auth may not be implemented
+      const { url, anonKey } = getSupabaseConfig();
+      try {
+        const res = await fetch(`${url.replace(/\/$/, '')}/auth/v1/signup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': anonKey },
+          body: JSON.stringify({ email: payload.email, password: tempPassword })
+        });
+        const body = await res.json();
+        if (!res.ok) {
+          console.error('❌ auth signup failed:', res.status, body);
+
+          // If signups are disabled for this project, fallback to submitting an application
+          const msg = body?.msg || body?.error || body?.error_description || '';
+          if (/signups? not allowed|signup_disabled/i.test(String(msg))) {
+            console.warn('⚠️ Signups disabled — submitting driver application instead');
+
+            const appPayload = {
+              email: payload.email,
+              first_name: payload.first_name || null,
+              last_name: payload.last_name || null,
+              phone: payload.phone || null,
+              affiliate_id: payload.affiliate_id || null,
+              vehicle: payload.vehicle || null,
+              metadata: { source: 'onboarding_form' },
+              status: 'submitted'
+            };
+
+            try {
+              // Prefer client.from if available
+              let appResult = null;
+              if (client && typeof client.from === 'function') {
+                const { data: appData, error: appErr } = await client.from('driver_applications').insert([appPayload]).select().single();
+                if (appErr) throw appErr;
+                appResult = appData;
+              } else {
+                // Fallback to REST insert if client is a thin wrapper
+                const res2 = await apiFetch('/rest/v1/driver_applications', { method: 'POST', body: JSON.stringify(appPayload) });
+                if (!res2.ok) {
+                  const txt = await res2.text();
+                  throw new Error(`driver_applications insert failed: ${res2.status} ${txt}`);
+                }
+                appResult = await res2.json();
+              }
+
+              console.log('✅ Driver application submitted:', appResult);
+              // Return a lightweight sentinel so callers can detect application submission
+              return { _application_submitted: true, application: Array.isArray(appResult) ? appResult[0] : appResult || appPayload };
+            } catch (appInsertErr) {
+              console.error('❌ Failed to submit driver application:', appInsertErr);
+              throw new Error('Signups disabled and application submission failed; please contact support');
+            }
+          }
+
+          // Other auth errors (user exists, etc.)
+          if (body?.msg || body?.error_description || body?.error) {
+            throw new Error(`Auth signup failed: ${body?.msg || body?.error || JSON.stringify(body)}`);
+          }
+          throw new Error(`Auth signup failed with status ${res.status}`);
+        }
+
+        // Response should include user object
+        const userId = body?.user?.id || body?.id || null;
+        if (!userId) {
+          // Some Supabase setups return 'user' or 'id' differently; log body for diagnosis
+          console.error('❌ auth signup response did not include user id:', body);
+          throw new Error('Auth signup did not return user id; check auth setup');
+        }
+
+        payload.id = userId;
+        console.log('✅ Created auth user via REST:', payload.id);
+      } catch (err) {
+        console.error('❌ auth REST signup error:', err);
+        throw err;
+      }
     }
-    const data = await res.json();
-    return Array.isArray(data) ? data[0] || null : data;
+
+    // Insert driver record using Supabase client (ensures RLS checks apply and auth.uid() binding works)
+    const { data: insertData, error: insertError } = await client
+      .from('drivers')
+      .insert([payload])
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('❌ createDriver insert error:', insertError);
+      throw new Error(insertError.message || 'createDriver insert failed');
+    }
+
+    return insertData;
   } catch (error) {
     console.error('Error creating driver:', error);
     lastApiError = error;
@@ -904,11 +1021,17 @@ function normalizeSpaces(value) {
 export async function fetchAffiliates() {
   const client = getSupabaseClient();
   console.log('🔍 fetchAffiliates - client:', client ? 'initialized' : 'NULL');
-  if (!client) return null;
+
+  // If no client, fall back to local affiliates (useful for local dev and when table missing)
+  if (!client) {
+    const dev = loadDevAffiliates();
+    console.log('🔍 fetchAffiliates - no client, returning local affiliates:', dev.length);
+    return dev;
+  }
 
   try {
     lastApiError = null;
-    
+
     // Ensure token is valid before making request
     const isValid = await ensureValidToken(client);
     if (!isValid) {
@@ -918,33 +1041,50 @@ export async function fetchAffiliates() {
       }
       return null;
     }
-    
+
     const { data, error } = await client
       .from('affiliates')
       .select('*')
       .order('company_name', { ascending: true });
 
     console.log('🔍 fetchAffiliates - data:', data?.length, 'error:', error);
-    
+
     // Handle JWT expiration
     if (error && error.status === 401 && error.message?.includes('JWT')) {
       console.warn('⚠️ JWT expired - clearing session');
       localStorage.removeItem('supabase_session');
       localStorage.removeItem('supabase_access_token');
-      // Optionally redirect to login
       if (confirm('Your session has expired. Would you like to log in again?')) {
         window.location.href = 'auth.html';
       }
       return null;
     }
-    
-    if (error) throw error;
+
+    if (error) {
+      lastApiError = error;
+      console.error('Error fetching affiliates:', error);
+      // If table missing (404 / schema cache), fallback to local dev affiliates
+      if (error?.status === 404 || (error?.message && error.message.includes("Could not find the table 'public.affiliates'"))) {
+        const dev = loadDevAffiliates();
+        console.log('🔍 fetchAffiliates - falling back to local affiliates due to missing table:', dev.length);
+        return dev;
+      }
+      return null;
+    }
+
     return data;
   } catch (error) {
     console.error('Error fetching affiliates:', error);
+    // final fallback to local affiliates
+    const dev = loadDevAffiliates();
+    console.log('🔍 fetchAffiliates - using local fallback due to exception:', dev.length);
     lastApiError = error;
-    return null;
+    return dev;
   }
+}
+
+export function getLocalAffiliates() {
+  return loadDevAffiliates();
 }
 
 /**

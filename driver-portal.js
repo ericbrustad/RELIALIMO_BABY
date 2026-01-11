@@ -265,9 +265,33 @@ async function findOrCreateAffiliate(companyName, affiliateInfo) {
   }
 }
 
-// ============================================
-// State Management
-// ============================================
+// Fetch a driver record by portal slug (e.g., driver.relialimo.com/<slug>)
+async function fetchDriverBySlug(slug) {
+  if (!slug) return null;
+  const client = getSupabase();
+  if (!client) {
+    console.warn('[DriverPortal] Supabase client not available for slug lookup');
+    return null;
+  }
+
+  try {
+    // Use maybeSingle() to avoid throwing if not found (depends on supabase client version)
+    const { data, error } = await client.from('drivers').select('*').eq('portal_slug', slug).maybeSingle();
+    if (error) {
+      // Non-fatal: return null if not found
+      console.warn('[DriverPortal] fetchDriverBySlug returned error:', error.message || error);
+      return null;
+    }
+
+    if (!data) return null;
+    console.log('[DriverPortal] fetchDriverBySlug found:', data.id);
+    return data;
+  } catch (err) {
+    console.warn('[DriverPortal] fetchDriverBySlug error:', err?.message || err);
+    return null;
+  }
+}
+
 const state = {
   currentScreen: 'loading',
   driver: null,
@@ -305,6 +329,12 @@ const elements = {
   regBackStep2: document.getElementById('regBackStep2'),
   regBackStep3: document.getElementById('regBackStep3'),
   regSubmit: document.getElementById('regSubmit'),
+
+  // Email verification flow
+  verifyEmailScreen: document.getElementById('verifyEmailScreen'),
+  verifyEmailAddress: document.getElementById('verifyEmailAddress'),
+  verifyResendBtn: document.getElementById('verifyResendBtn'),
+  verifyContinueBtn: document.getElementById('verifyContinueBtn'),
   
   // Dashboard
   driverName: document.getElementById('driverName'),
@@ -336,6 +366,15 @@ const elements = {
   
   statusModal: document.getElementById('statusModal'),
   statusOptions: document.getElementById('statusOptions'),
+
+  // OTP Modal elements
+  otpModal: document.getElementById('otpModal'),
+  otpPhoneDisplay: document.getElementById('otpPhoneDisplay'),
+  otpCodeInput: document.getElementById('otpCodeInput'),
+  otpResendBtn: document.getElementById('otpResendBtn'),
+  otpVerifyBtn: document.getElementById('otpVerifyBtn'),
+  otpMessage: document.getElementById('otpMessage'),
+  otpCloseBtn: document.getElementById('otpCloseBtn'),
   closeStatusModal: document.getElementById('closeStatusModal'),
   
   postTripModal: document.getElementById('postTripModal'),
@@ -412,11 +451,49 @@ async function init() {
           state.driverId = savedDriverId;
           await loadDashboard();
           showScreen('dashboard');
+
+          // If phone not verified, prompt OTP
+          try {
+            if (!state.driver.phone_verified) {
+              const phoneToVerify = state.driver.cell_phone || state.driver.phone || null;
+              if (phoneToVerify) {
+                await requestPhoneOtp(phoneToVerify, state.driverId);
+                showOtpModal(phoneToVerify);
+              }
+            }
+          } catch (otpErr) {
+            console.warn('[DriverPortal] OTP trigger on restore failed:', otpErr);
+          }
+
           return;
         }
       } catch (err) {
         console.warn('[DriverPortal] Failed to restore session:', err);
         localStorage.removeItem('driver_portal_id');
+      }
+    }
+
+    // If no saved session, check for driver slug in the URL path when using the driver subdomain
+    if (!state.driverId && window.location.hostname && window.location.hostname.startsWith('driver.')) {
+      try {
+        const slug = (window.location.pathname || '').split('/').filter(Boolean)[0];
+        if (slug) {
+          console.log('[DriverPortal] Detected driver slug in URL:', slug);
+          const bySlug = await fetchDriverBySlug(slug);
+          if (bySlug) {
+            console.log('[DriverPortal] Resolved driver by slug:', bySlug.id);
+            state.driver = bySlug;
+            state.driverId = String(bySlug.id);
+            localStorage.setItem('driver_portal_id', state.driverId);
+            await loadDashboard();
+            showScreen('dashboard');
+            return;
+          } else {
+            console.warn('[DriverPortal] No driver found for slug:', slug);
+          }
+        }
+      } catch (err) {
+        console.warn('[DriverPortal] Error resolving driver slug:', err);
       }
     }
     
@@ -472,8 +549,103 @@ function setupEventListeners() {
   elements.loginBtn?.addEventListener('click', handleLogin);
   
   // Registration navigation
-  elements.regNextStep1?.addEventListener('click', () => goToRegStep(2));
+  elements.regNextStep1?.addEventListener('click', async () => {
+    // Step 1 now performs email sign-up and shows verification screen
+    if (!validateRegStep(1)) return;
+    const email = document.getElementById('regEmail').value.trim().toLowerCase();
+    const password = document.getElementById('regPassword').value;
+    const firstName = document.getElementById('regFirstName').value.trim();
+    const lastName = document.getElementById('regLastName').value.trim();
+
+    elements.regNextStep1.disabled = true;
+    elements.regNextStep1.textContent = 'Sending verification...';
+
+    try {
+      // Sign up via Supabase
+      const client = getSupabase();
+      if (!client) throw new Error('Auth client not available');
+
+      const { data, error } = await client.auth.signUp({ email, password }, { data: { first_name: firstName, last_name: lastName } });
+      if (error) {
+        console.error('[DriverPortal] signUp error:', error.message || error);
+        showToast(error.message || 'Sign up failed', 'error');
+        return;
+      }
+
+      // Show verification screen
+      elements.verifyEmailAddress.textContent = email;
+      elements.verifyEmailScreen.style.display = 'block';
+      goToRegStep(0); // hide other steps (helper function should handle UI)
+
+      // Save sign-up data locally until verification completes
+      pendingRegistration.email = email;
+      pendingRegistration.password = password;
+      pendingRegistration.firstName = firstName;
+      pendingRegistration.lastName = lastName;
+      pendingRegistration.phone = document.getElementById('regPhone').value.trim();
+
+      showToast('Verification email sent. Check your inbox.', 'info');
+    } catch (err) {
+      console.error('[DriverPortal] signUp flow failed:', err);
+      showToast(err?.message || 'Sign up failed', 'error');
+    } finally {
+      elements.regNextStep1.disabled = false;
+      elements.regNextStep1.textContent = 'Continue →';
+    }
+  });
   elements.regNextStep2?.addEventListener('click', () => goToRegStep(3));
+
+  // Verify screen actions
+  elements.verifyResendBtn?.addEventListener('click', async () => {
+    try {
+      const email = pendingRegistration.email;
+      if (!email) return;
+      // Send magic sign-in link as a resend alternative
+      const client = getSupabase();
+      if (!client) throw new Error('Auth client not available');
+      await client.auth.signInWithOtp({ email });
+      showToast('Sent magic sign-in link to your email. Use that to sign in.', 'info');
+    } catch (err) {
+      console.error('[DriverPortal] Resend verification failed:', err);
+      showToast('Resend failed', 'error');
+    }
+  });
+
+  elements.verifyContinueBtn?.addEventListener('click', async () => {
+    try {
+      const email = pendingRegistration.email;
+      const password = pendingRegistration.password;
+      if (!email || !password) {
+        showToast('No pending signup found', 'error');
+        return;
+      }
+      const client = getSupabase();
+      if (!client) throw new Error('Auth client not available');
+
+      // Attempt a password sign-in which will succeed after email confirm
+      const { data, error } = await client.auth.signInWithPassword({ email, password });
+      if (error) {
+        console.error('[DriverPortal] signIn after verify failed:', error.message || error);
+        showToast(error.message || 'Sign in failed. Make sure you clicked the verification link.', 'error');
+        return;
+      }
+
+      // We are signed in — proceed with onboarding (company & vehicle steps)
+      // Prefill the forms from pendingRegistration
+      document.getElementById('regFirstName').value = pendingRegistration.firstName || '';
+      document.getElementById('regLastName').value = pendingRegistration.lastName || '';
+      document.getElementById('regEmail').value = pendingRegistration.email || '';
+      document.getElementById('regPhone').value = pendingRegistration.phone || '';
+
+      // Move to company info step
+      elements.verifyEmailScreen.style.display = 'none';
+      goToRegStep(2);
+      showToast('Email verified. Continue onboarding.', 'success');
+    } catch (err) {
+      console.error('[DriverPortal] verifyContinue failed:', err);
+      showToast('Verification check failed', 'error');
+    }
+  });
   elements.regBackStep2?.addEventListener('click', () => goToRegStep(1));
   elements.regBackStep3?.addEventListener('click', () => goToRegStep(2));
   elements.regSubmit?.addEventListener('click', handleRegistration);
@@ -723,6 +895,15 @@ function validateRegStep(step) {
   return true;
 }
 
+// Pending registration buffer while user verifies email
+const pendingRegistration = {
+  email: null,
+  password: null,
+  firstName: null,
+  lastName: null,
+  phone: null
+};
+
 async function handleRegistration() {
   const vehicleType = document.getElementById('regVehicleType').value;
   const licensePlate = document.getElementById('regVehiclePlate').value.trim();
@@ -740,6 +921,17 @@ async function handleRegistration() {
   elements.regSubmit.textContent = 'Creating Account...';
   
   try {
+    const client = getSupabase();
+    if (!client) throw new Error('Auth client not available. Please verify your email and sign in.');
+
+    // Ensure the user is signed in (after email verification)
+    const { data: sessionData, error: sessionError } = await client.auth.getSession();
+    if (sessionError) console.warn('[DriverPortal] getSession warning:', sessionError.message || sessionError);
+    const user = (sessionData?.session && sessionData.session.user) || sessionData?.user || null;
+    if (!user) {
+      throw new Error('Please verify your email and sign in before completing onboarding');
+    }
+
     // Get organization ID from ENV
     const organizationId = window.ENV?.FORCE_VEHICLE_ORG_ID || null;
     
@@ -760,15 +952,33 @@ async function handleRegistration() {
     }
     
     // Collect all registration data - use correct field names per schema
+    const firstNameVal = document.getElementById('regFirstName').value.trim();
+    const lastNameVal = document.getElementById('regLastName').value.trim();
+    const emailVal = document.getElementById('regEmail').value.trim().toLowerCase();
+
+    // Ensure we don't already have a driver record for this auth user
+    try {
+      const { data: existing } = await client.from('drivers').select('id').eq('id', user.id).limit(1);
+      if (Array.isArray(existing) && existing.length > 0) {
+        throw new Error('Driver profile already exists for this account. Try signing in.');
+      }
+    } catch (e) {
+      // If the select failed because of permissions or other, continue — the insert will enforce uniqueness
+      console.warn('[DriverPortal] driver existence check warning:', e?.message || e);
+    }
+
     const driverData = {
-      first_name: document.getElementById('regFirstName').value.trim(),
-      last_name: document.getElementById('regLastName').value.trim(),
-      email: document.getElementById('regEmail').value.trim().toLowerCase(),
+      id: user.id, // important for RLS
+      first_name: firstNameVal,
+      last_name: lastNameVal,
+      display_name: `${firstNameVal} ${lastNameVal}`.trim(),
+      email: user.email || emailVal,
       cell_phone: formatPhone(document.getElementById('regPhone').value),
       driver_status: 'available',
       status: 'ACTIVE',
       type: 'FULL TIME',
       organization_id: organizationId,
+      portal_slug: slugify(`${firstNameVal}-${lastNameVal}`) || null,
       // Company info (optional) - use correct schema field names from VALID_DRIVER_COLUMNS
       primary_address: companyInfo.address,
       city: companyInfo.city,
@@ -790,11 +1000,19 @@ async function handleRegistration() {
     
     // Create driver
     const newDriver = await createDriver(driverData);
-    
+
+    // If signups are disabled, createDriver returns {_application_submitted: true, application}
+    if (newDriver && newDriver._application_submitted) {
+      // Notify the applicant and stop further onboarding steps (vehicles, etc.)
+      alert('Thanks — your application has been submitted. Our team will review and create your account. You will receive an email when it is ready.');
+      console.log('[DriverPortal] Driver application submitted:', newDriver.application);
+      return newDriver;
+    }
+
     if (!newDriver || !newDriver.id) {
       throw new Error('Failed to create driver account');
     }
-    
+
     console.log('[DriverPortal] ✅ Driver created:', newDriver.id, 'with affiliate_id:', newDriver.affiliate_id);
     
     // Create vehicle - generate a unit number from license plate or random
@@ -838,6 +1056,19 @@ async function handleRegistration() {
     await loadDashboard();
     showScreen('dashboard');
     showToast('Account created successfully! Welcome!', 'success');
+
+    // Trigger phone verification if needed
+    try {
+      if (newDriver && !newDriver.phone_verified) {
+        const phoneToVerify = newDriver.cell_phone || newDriver.phone || null;
+        if (phoneToVerify) {
+          await requestPhoneOtp(phoneToVerify, newDriver.id);
+          showOtpModal(phoneToVerify);
+        }
+      }
+    } catch (otpErr) {
+      console.warn('[DriverPortal] OTP trigger failed:', otpErr);
+    }
     
   } catch (err) {
     console.error('[DriverPortal] Registration error:', err);
@@ -847,6 +1078,88 @@ async function handleRegistration() {
     elements.regSubmit.textContent = '🚀 Create Account';
   }
 }
+
+// -------------------------------
+// OTP helpers
+// -------------------------------
+function showOtpModal(phone) {
+  if (!elements.otpModal) return;
+  elements.otpPhoneDisplay.innerHTML = `We sent a code to <strong>${phone}</strong>`;
+  elements.otpCodeInput.value = '';
+  elements.otpMessage.textContent = '';
+  elements.otpModal.style.display = 'block';
+}
+
+function hideOtpModal() {
+  if (!elements.otpModal) return;
+  elements.otpModal.style.display = 'none';
+}
+
+async function requestPhoneOtp(phone, userId) {
+  try {
+    const res = await fetch('/api/otp/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, user_id: userId })
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json?.error || 'OTP request failed');
+    elements.otpMessage.textContent = 'OTP sent — check your messages';
+    return true;
+  } catch (err) {
+    console.error('[DriverPortal] requestPhoneOtp failed:', err);
+    elements.otpMessage.textContent = 'Failed to send OTP. Try again later.';
+    return false;
+  }
+}
+
+async function verifyPhoneOtp(code, userId) {
+  try {
+    const res = await fetch('/api/otp/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, code })
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json?.error || 'OTP verify failed');
+    elements.otpMessage.textContent = 'Phone verified!';
+
+    // Update local state / server driver record
+    try {
+      await updateDriver(userId, { phone_verified: true });
+      state.driver = { ...state.driver, phone_verified: true };
+    } catch (e) {
+      console.warn('[DriverPortal] Could not update driver phone_verified locally:', e.message);
+    }
+
+    setTimeout(() => hideOtpModal(), 1200);
+    return true;
+  } catch (err) {
+    console.error('[DriverPortal] verifyPhoneOtp failed:', err);
+    elements.otpMessage.textContent = err?.message || 'Invalid code';
+    return false;
+  }
+}
+
+// OTP modal events
+if (elements.otpResendBtn) elements.otpResendBtn.addEventListener('click', async () => {
+  const phoneText = (elements.otpPhoneDisplay.textContent || '').replace(/We sent a code to\s*/i,'').trim();
+  const phone = phoneText.replace(/[^+0-9]/g,'');
+  if (!phone || !state.driverId) return;
+  elements.otpMessage.textContent = 'Resending...';
+  await requestPhoneOtp(phone, state.driverId);
+});
+
+if (elements.otpVerifyBtn) elements.otpVerifyBtn.addEventListener('click', async () => {
+  const code = elements.otpCodeInput.value.trim();
+  if (!code || !state.driverId) return;
+  elements.otpMessage.textContent = 'Verifying...';
+  await verifyPhoneOtp(code, state.driverId);
+});
+
+if (elements.otpCloseBtn) elements.otpCloseBtn.addEventListener('click', () => hideOtpModal());
+
+
 
 // ============================================
 // Dashboard
@@ -959,16 +1272,15 @@ async function refreshTrips() {
     }
     
     // Filter reservations for this driver
-    // Look at reservation_assignments or driver_id field
+    // Look at reservation_assignments or multiple possible driver fields
     const myTrips = allReservations.filter(res => {
-      // Check if driver is assigned via reservation_assignments
-      if (res.reservation_assignments?.some(a => a.driver_id === state.driverId)) {
+      // Check if driver is assigned via reservation_assignments (support multiple column names)
+      if (res.reservation_assignments?.some(a => a.assigned_driver_user_id === state.driverId || a.assigned_driver_id === state.driverId || a.driver_id === state.driverId)) {
         return true;
       }
-      // Or directly on reservation
-      if (res.driver_id === state.driverId) {
-        return true;
-      }
+      // Or directly on reservation (support multiple possible column names)
+      const directDriverId = res.assigned_driver_user_id || res.driver_id || res.driverId || res.assigned_driver_id;
+      if (directDriverId === state.driverId) return true;
       return false;
     });
     
