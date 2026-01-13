@@ -1,3 +1,11 @@
+(function initializeEmailSettings() {
+  if (typeof window === 'undefined') return;
+  if (window.__RELIALIMO_EMAIL_SETTINGS_INITIALIZED__) {
+    console.warn('[EmailSettings] Duplicate load detected, skipping.');
+    return;
+  }
+  window.__RELIALIMO_EMAIL_SETTINGS_INITIALIZED__ = true;
+
 const STORAGE_SETTINGS_KEY = 'emailSettingsConfig';
 const STORAGE_TEMPLATES_KEY = 'emailTemplates';
 
@@ -111,17 +119,23 @@ function saveSettings() {
 
 function initTagSelects() {
   const tripSelect = $('tripTagSelect');
-  tripTags.forEach(tag => {
-    const opt = document.createElement('option');
-    opt.value = tag; opt.textContent = tag; tripSelect.appendChild(opt);
-  });
+  if (tripSelect) {
+    tripTags.forEach(tag => {
+      const opt = document.createElement('option');
+      opt.value = tag; opt.textContent = tag; tripSelect.appendChild(opt);
+    });
+    tripSelect.addEventListener('change', () => insertTag(tripSelect.value));
+  }
+
   const rateSelect = $('rateTagSelect');
-  rateTags.forEach(tag => {
-    const opt = document.createElement('option');
-    opt.value = tag; opt.textContent = tag; rateSelect.appendChild(opt);
-  });
+  if (rateSelect) {
+    rateTags.forEach(tag => {
+      const opt = document.createElement('option');
+      opt.value = tag; opt.textContent = tag; rateSelect.appendChild(opt);
+    });
+    rateSelect.addEventListener('change', () => insertTag(rateSelect.value));
+  }
   
-  // Add driver tags if select exists
   const driverSelect = $('driverTagSelect');
   if (driverSelect) {
     driverTags.forEach(tag => {
@@ -130,9 +144,6 @@ function initTagSelects() {
     });
     driverSelect.addEventListener('change', () => insertTag(driverSelect.value));
   }
-
-  tripSelect.addEventListener('change', () => insertTag(tripSelect.value));
-  rateSelect.addEventListener('change', () => insertTag(rateSelect.value));
 }
 
 function insertTag(tag) {
@@ -255,17 +266,21 @@ function deleteTemplate(id) {
 
 function renderTagReference() {
   const tripList = $('tripTagList');
-  tripTags.forEach(tag => {
-    const li = document.createElement('li');
-    li.textContent = tag;
-    tripList.appendChild(li);
-  });
+  if (tripList) {
+    tripTags.forEach(tag => {
+      const li = document.createElement('li');
+      li.textContent = tag;
+      tripList.appendChild(li);
+    });
+  }
   const rateList = $('rateTagList');
-  rateTags.forEach(tag => {
-    const li = document.createElement('li');
-    li.textContent = tag;
-    rateList.appendChild(li);
-  });
+  if (rateList) {
+    rateTags.forEach(tag => {
+      const li = document.createElement('li');
+      li.textContent = tag;
+      rateList.appendChild(li);
+    });
+  }
 }
 
 function testSendLocal() {
@@ -408,3 +423,5 @@ function initEmailSettings() {
 }
 
 document.addEventListener('DOMContentLoaded', initEmailSettings);
+
+})();

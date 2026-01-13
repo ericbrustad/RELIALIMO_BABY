@@ -65,6 +65,16 @@ Stores vehicle type definitions.
 | `rates` | JSONB | Rate matrix data |
 | `passenger_capacity` | INTEGER | Passenger capacity |
 | `luggage_capacity` | INTEGER | Luggage capacity |
+**Important:** The application now requires the client to READ and WRITE directly against the base table `public.vehicle_types`. Do not rely on a `vehicle_types_public` view for reads/writes.
+
+If you need to allow authenticated browser sessions to create/update/delete rows, apply the RLS policies in `scripts/sql/vehicle_types_rls.sql` (run in Supabase SQL editor as a privileged user). After applying RLS, verify write access with:
+
+```bash
+# Run from project root (reads env from server/.env or .env)
+npm run test:vehicle-types
+```
+
+If you see permission errors (401/403/403 Forbidden), inspect your RLS policies and ensure the current user exists in `organization_members` or adjust the policy to use JWT claims for `organization_id`.
 
 ### 4. `vehicles` Table (Fleet)
 Stores individual vehicle/fleet information.

@@ -1,0 +1,193 @@
+// driver-onboarding.js
+// Mobile-friendly onboarding with toasts and stepper.
+
+import {
+  createDriver,
+  getAffiliates,
+  fetchAffiliateById,
+  createAffiliate,
+  getVehicleTypes,
+  createFleetVehicle
+} from "./api-service.js";
+
+let driverId = null;
+let affiliateId = null;
+let vehicles = [];
+let pendingDriver = null;
+
+const el = (id) => document.getElementById(id);
+
+function show(id) { el(id).style.display = "block"; }
+function hide(id) { el(id).style.display = "none"; }
+
+// Toasts
+function toast(msg, type = "info") {
+  const box = document.createElement("div");
+  box.className = `toast ${type}`;
+  box.textContent = msg;
+  document.body.appendChild(box);
+  requestAnimationFrame(() => box.classList.add("show"));
+  setTimeout(() => {
+    box.classList.remove("show");
+    setTimeout(() => box.remove(), 250);
+  }, 2500);
+}
+const fail = (m) => toast(m, "error");
+const ok = (m) => toast(m, "success");
+
+// Stepper control
+function setStep(n) {
+  const steps = ["s1","s2","s3","s4"];
+  steps.forEach((id,i) => {
+    const dot = el(id);
+    dot.classList.toggle("active", i < n);
+    dot.classList.toggle("current", i === n-1);
+  });
+}
+
+// =============== STEP 1: DRIVER (collect only) ===============
+el("btnSaveDriver").addEventListener("click", async () => {
+  try {
+    const first_name = el("first_name").value.trim();
+    const last_name  = el("last_name").value.trim();
+    const email      = el("email").value.trim();
+    const phone      = el("phone").value.trim();
+
+    if (!first_name || !last_name || !email || !phone) {
+      return fail("Please fill all driver fields.");
+    }
+
+    pendingDriver = { first_name, last_name, email, phone };
+    ok("Driver info saved");
+
+    hide("step-driver");
+    show("step-affiliate");
+    setStep(2);
+
+    const list = await getAffiliates();
+    const sel = el("affiliate_select");
+    sel.innerHTML = '<option value="">— Select existing company —</option>';
+    list.forEach(a => {
+      const o = document.createElement("option");
+      o.value = a.id;
+      o.textContent = a.company_name;
+      sel.appendChild(o);
+    });
+  } catch (e) {
+    console.error(e);
+    fail(e.message || "Failed to save driver info.");
+  }
+});
+
+// =============== STEP 2: AFFILIATE ===============
+el("btnSaveAffiliate").addEventListener("click", async () => {
+  try {
+    const selectedId = el("affiliate_select").value;
+    const newName = el("affiliate_name").value.trim();
+
+    if (!selectedId && !newName) {
+      return fail("Select a company or enter a new name.");
+    }
+
+    if (selectedId) {
+      affiliateId = selectedId;
+    } else {
+      const created = await createAffiliate({ company_name: newName });
+      affiliateId = created.id;
+    }
+
+    const affiliate = await fetchAffiliateById(affiliateId);
+    if (!affiliate) return fail("Could not load the company you selected.");
+    if (!affiliate.organization_id) return fail("Company is missing organization_id.");
+
+    const driverPayload = {
+      ...pendingDriver,
+      affiliate_id: affiliate.id,
+      organization_id: affiliate.organization_id
+    };
+
+    const driver = await createDriver(driverPayload);
+    driverId = driver?.id;
+    if (!driverId) return fail("Driver create did not return an id.");
+
+    ok("Company saved & driver created.");
+    hide("step-affiliate");
+    show("step-vehicle");
+    setStep(3);
+
+    const types = await getVehicleTypes();
+    const vsel = el("vehicle_type_id");
+    vsel.innerHTML = "";
+    types.forEach(vt => {
+      const o = document.createElement("option");
+      o.value = vt.id;
+      o.textContent = vt.name;
+      vsel.appendChild(o);
+    });
+
+  } catch (e) {
+    console.error(e);
+    fail(e.message || "Failed to save company / create driver.");
+  }
+});
+
+// =============== STEP 3: VEHICLES (add-many) ===============
+function renderVehicles() {
+  const ul = el("vehicles_list");
+  ul.innerHTML = "";
+  vehicles.forEach((v) => {
+    const li = document.createElement("li");
+    li.className = "vehicle-item";
+    li.innerHTML = `
+      <div class="vehicle-main">
+        <div class="vehicle-title">${v.year || ""} ${v.make || ""} ${v.model || ""}</div>
+        <div class="vehicle-sub">${v.color || ""} • Plate ${v.license_plate || ""} • Permit ${v.permit_number || ""}</div>
+      </div>
+    `;
+    ul.appendChild(li);
+  });
+}
+
+el("btnAddVehicle").addEventListener("click", async () => {
+  try {
+    if (!affiliateId) return fail("Please save the company first.");
+
+    const payload = {
+      affiliate_id: affiliateId,
+      vehicle_type_id: el("vehicle_type_id").value,
+      make: el("make").value.trim(),
+      model: el("model").value.trim(),
+      color: el("color").value.trim(),
+      year: Number(el("year").value),
+      license_plate: el("license_plate").value.trim(),
+      permit_number: el("permit_number").value.trim(),
+      vin: el("vin").value.trim() || null,
+      usdot_number: el("usdot_number").value.trim() || null,
+      mn_dot_number: el("mn_dot_number").value.trim() || null
+    };
+
+    if (!payload.make || !payload.model || !payload.year || !payload.license_plate) {
+      return fail("Missing required vehicle fields.");
+    }
+
+    const created = await createFleetVehicle(payload);
+    vehicles.push(created);
+    renderVehicles();
+    ok("Vehicle added");
+
+    ["make","model","color","year","license_plate","permit_number","vin","usdot_number","mn_dot_number"]
+      .forEach(id => el(id).value = "");
+
+  } catch (e) {
+    console.error(e);
+    fail(e.message || "Failed to add vehicle.");
+  }
+});
+
+// =============== STEP 4: FINISH ===============
+el("btnFinish").addEventListener("click", async () => {
+  if (!driverId) return fail("Driver not created.");
+  if (!vehicles.length) return fail("Add at least one vehicle.");
+  ok("Onboarding complete. Ready for activation.");
+  setStep(4);
+});

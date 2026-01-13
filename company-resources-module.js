@@ -419,6 +419,8 @@ export class CompanyResourcesManager {
     return str.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   }
 
+import { fetchVehicleTypes, upsertVehicleType, deleteVehicleType } from './api-service.js';
+
   getSectionConfig(section) {
     const configs = {
       drivers: {
@@ -589,13 +591,41 @@ export class CompanyResourcesManager {
     }
   }
 
-  doDelete() {
+  async doDelete() {
     const selectedId = this.els.tableBody.dataset.selectedId || this.editingId;
     if (!selectedId) {
       alert('Please select an item to delete');
       return;
     }
     if (!confirm('Delete this item?')) return;
+    
+    // Special handling: vehicle-types -> delete via API when available
+    if (this.currentSection === 'vehicle-types') {
+      try {
+        if (window.myOffice && window.myOffice.apiReady) {
+          await deleteVehicleType(selectedId);
+          // Remove from in-memory cache and re-render
+          this.vehicleTypesCache = (this.vehicleTypesCache || []).filter(v => v.id !== selectedId);
+          this.renderCenter();
+          this.refreshAllSelectFields();
+        } else {
+          console.warn('[CompanyResources] API not ready; deleting vehicle type locally as fallback');
+          let items = this.loadItems();
+          items = items.filter(i => i.id !== selectedId);
+          this.saveItems(items);
+        }
+      } catch (err) {
+        console.error('[CompanyResources] Failed to delete vehicle type via API:', err);
+        this._showErrorBanner && this._showErrorBanner('Failed to delete vehicle type', err);
+      }
+
+      this.editingId = null;
+      this.els.tableBody.dataset.selectedId = null;
+      this.renderCenter();
+      this.setFormMode('add');
+      this.renderForm(null);
+      return;
+    }
     
     let items = this.loadItems();
     const itemToDelete = items.find(i => i.id === selectedId);
@@ -619,7 +649,7 @@ export class CompanyResourcesManager {
     this.setFormMode('add');
   }
 
-  doSave() {
+  async doSave() {
     const config = this.getSectionConfig(this.currentSection);
     const newItem = { id: this.editingId || this.uid() };
     config.blocks.forEach(block => {
@@ -631,6 +661,43 @@ export class CompanyResourcesManager {
       });
     });
 
+    // Special handling: vehicle-types -> use API when available (do NOT persist locally)
+    if (this.currentSection === 'vehicle-types') {
+      try {
+        if (window.myOffice && window.myOffice.apiReady) {
+          const saved = await upsertVehicleType(newItem);
+          // Update in-memory cache and re-render
+          this.vehicleTypesCache = Array.isArray(this.vehicleTypesCache) ? this.vehicleTypesCache.slice() : [];
+          const existingIdx = this.vehicleTypesCache.findIndex(v => v.id === (saved && saved.id));
+          if (existingIdx >= 0) this.vehicleTypesCache[existingIdx] = saved;
+          else this.vehicleTypesCache.push(saved);
+          this.renderCenter();
+          this.refreshAllSelectFields();
+        } else {
+          console.warn('[CompanyResources] API not ready; saving vehicle types locally as fallback');
+          let items = this.loadItems();
+          if (this.editingId) {
+            const idx = items.findIndex(i => i.id === this.editingId);
+            if (idx >= 0) items[idx] = newItem;
+          } else {
+            items.push(newItem);
+          }
+          this.saveItems(items);
+        }
+      } catch (err) {
+        console.error('[CompanyResources] Failed to save vehicle type via API:', err);
+        this._showErrorBanner && this._showErrorBanner('Failed to save vehicle type', err);
+      }
+
+      this.editingId = null;
+      this.renderCenter();
+      this.setFormMode('add');
+      this.renderForm(null);
+      this.showSyncNotification('saved');
+      return;
+    }
+
+    // Default (non-vehicle-types) behavior: local storage
     let items = this.loadItems();
     if (this.editingId) {
       const idx = items.findIndex(i => i.id === this.editingId);
@@ -639,6 +706,16 @@ export class CompanyResourcesManager {
       items.push(newItem);
     }
     this.saveItems(items);
+    
+    // Special handling for fleet: sync to Supabase fleet_vehicles table
+    if (this.currentSection === 'fleet') {
+      try {
+        await this.syncFleetVehicleToSupabase(newItem);
+        console.log('✅ Fleet vehicle synced to Supabase:', newItem.id);
+      } catch (err) {
+        console.error('❌ Failed to sync fleet vehicle to Supabase:', err);
+      }
+    }
     
     // Special handling for airports: also save to office.Airports structure
     if (this.currentSection === 'airports' && window.myOffice && newItem.code) {
@@ -683,6 +760,121 @@ export class CompanyResourcesManager {
     return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random();
   }
 
+  /**
+   * Sync a fleet vehicle to the Supabase fleet_vehicles table
+   * Called on every create/edit of a fleet vehicle
+   */
+  async syncFleetVehicleToSupabase(fleetItem) {
+    const SUPABASE_URL = window.ENV?.SUPABASE_URL;
+    const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY;
+    
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      console.warn('[CompanyResources] Supabase not configured, skipping fleet sync');
+      return null;
+    }
+    
+    // Get organization_id from company settings or use default
+    let organizationId = window.ENV?.ORGANIZATION_ID || localStorage.getItem('relia_organization_id');
+    if (!organizationId) {
+      // Fallback: fetch from existing vehicle_types record
+      try {
+        const vtResp = await fetch(`${SUPABASE_URL}/rest/v1/vehicle_types?select=organization_id&limit=1`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        const vtData = await vtResp.json();
+        if (vtData?.[0]?.organization_id) {
+          organizationId = vtData[0].organization_id;
+          localStorage.setItem('relia_organization_id', organizationId);
+        }
+      } catch (e) {
+        console.warn('[CompanyResources] Could not fetch organization_id:', e);
+      }
+    }
+    
+    if (!organizationId) {
+      console.error('[CompanyResources] No organization_id available, cannot sync fleet vehicle');
+      throw new Error('Missing organization_id for fleet vehicle sync');
+    }
+    
+    // Valid status values per schema: 'AVAILABLE','IN_USE','MAINTENANCE','RETIRED','OUT_OF_SERVICE'
+    const validStatuses = ['AVAILABLE', 'IN_USE', 'MAINTENANCE', 'RETIRED', 'OUT_OF_SERVICE'];
+    const status = validStatuses.includes(fleetItem.status) ? fleetItem.status : 'AVAILABLE';
+    
+    // Map local fleet item fields to Supabase fleet_vehicles schema
+    // Note: vehicle_type_id and affiliate_id have FK constraints - only include if valid UUID
+    const isValidUUID = (val) => val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+    
+    const payload = {
+      id: fleetItem.id,
+      organization_id: organizationId,
+      license_plate: fleetItem.plate || null,
+      vin: fleetItem.vin || null,
+      year: fleetItem.year ? parseInt(fleetItem.year, 10) : null,
+      make: fleetItem.make || null,
+      model: fleetItem.model || null,
+      // Only include FK fields if they're valid UUIDs to avoid FK constraint violations
+      vehicle_type_id: isValidUUID(fleetItem.type) ? fleetItem.type : null,
+      assigned_driver_id: isValidUUID(fleetItem.driver) ? fleetItem.driver : null,
+      affiliate_id: isValidUUID(fleetItem.affiliate) ? fleetItem.affiliate : null,
+      status: status,
+      updated_at: new Date().toISOString()
+    };
+    
+    console.log('[CompanyResources] Syncing fleet vehicle to Supabase:', payload);
+    
+    // Upsert to Supabase (insert or update)
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/fleet_vehicles?on_conflict=id`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Prefer': 'resolution=merge-duplicates,return=representation'
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[CompanyResources] Fleet sync error:', response.status, errorText);
+      throw new Error(`Fleet sync failed: ${response.status} ${errorText}`);
+    }
+    
+    const result = await response.json();
+    console.log('[CompanyResources] Fleet sync success:', result);
+    return Array.isArray(result) ? result[0] : result;
+  }
+
+  /**
+   * Sync ALL existing localStorage fleet vehicles to Supabase
+   * Call this once to migrate existing data
+   */
+  async syncAllFleetVehiclesToSupabase() {
+    const fleetItems = JSON.parse(localStorage.getItem('cr_fleet') || '[]');
+    if (!fleetItems.length) {
+      console.log('[CompanyResources] No local fleet vehicles to sync');
+      return { synced: 0, failed: 0 };
+    }
+    
+    console.log(`[CompanyResources] Syncing ${fleetItems.length} fleet vehicles to Supabase...`);
+    let synced = 0;
+    let failed = 0;
+    
+    for (const item of fleetItems) {
+      try {
+        await this.syncFleetVehicleToSupabase(item);
+        synced++;
+        console.log(`✅ Synced fleet vehicle: ${item.plate || item.id}`);
+      } catch (err) {
+        failed++;
+        console.error(`❌ Failed to sync fleet vehicle ${item.plate || item.id}:`, err);
+      }
+    }
+    
+    console.log(`[CompanyResources] Fleet sync complete: ${synced} synced, ${failed} failed`);
+    return { synced, failed };
+  }
+
   populateSelectField(selectEl, dataSource, selectedValue) {
     // Clear existing options
     selectEl.innerHTML = '<option value="">-- Select --</option>';
@@ -715,6 +907,56 @@ export class CompanyResourcesManager {
 
   loadItemsFromSource(dataSource) {
     const config = this.getSectionConfig(dataSource);
+
+    // For vehicle-types, prefer remote API (no local persistence) when available
+    if (dataSource === 'vehicle-types') {
+      // If we have a cached copy from the API, return it immediately
+      if (this.vehicleTypesCache && Array.isArray(this.vehicleTypesCache)) return this.vehicleTypesCache;
+
+      // Kick off remote load if API is ready
+      try {
+        if (window.myOffice && window.myOffice.apiReady) {
+          // Prefer reading from the base table for authenticated users; fall back to view if table read fails (RLS/permissions)
+          (async () => {
+            try {
+              // Try table-first (requires authenticated privileges)
+              const remoteTable = await fetchVehicleTypesTable({ includeInactive: true });
+              if (Array.isArray(remoteTable)) {
+                this.vehicleTypesCache = remoteTable;
+                if (typeof this.renderCenter === 'function') this.renderCenter();
+                if (typeof this.refreshAllSelectFields === 'function') this.refreshAllSelectFields();
+                return;
+              }
+            } catch (errTable) {
+              // Table read failed (likely RLS/permissions) - try public view
+              try {
+                const remoteView = await fetchVehicleTypes({ includeInactive: true });
+                if (Array.isArray(remoteView)) {
+                  this.vehicleTypesCache = remoteView;
+                  if (typeof this.renderCenter === 'function') this.renderCenter();
+                  if (typeof this.refreshAllSelectFields === 'function') this.refreshAllSelectFields();
+                  return;
+                }
+              } catch (errView) {
+                console.warn('[CompanyResources] Failed to load vehicle types from view after table failed:', errView);
+              }
+
+              console.warn('[CompanyResources] Failed to load vehicle types from table (likely permission/RLS issue):', errTable);
+            }
+
+            // If both approaches failed, fallback to local storage if present
+            try {
+              const existing = JSON.parse(localStorage.getItem(config.storageKey) || '[]');
+              this.vehicleTypesCache = Array.isArray(existing) ? existing : [];
+            } catch (e) {
+              this.vehicleTypesCache = [];
+            }
+
+            if (typeof this.renderCenter === 'function') this.renderCenter();
+            if (typeof this.refreshAllSelectFields === 'function') this.refreshAllSelectFields();
+          })();
+    }
+
     return JSON.parse(localStorage.getItem(config.storageKey) || '[]');
   }
 

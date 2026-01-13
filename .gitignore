@@ -5,3 +5,6 @@
 *.env.*
 # secrets
 .env.*.local
+
+# Generated browser env (do NOT commit)
+env.js

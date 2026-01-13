@@ -226,9 +226,8 @@ export class ReservationAddressSearchModule {
         // Populate form fields with address components
         this.populateAddressFields(details);
 
-        // Trigger change event
-        const event = new Event('addressSelected', { bubbles: true });
-        event.detail = details;
+        // Trigger change event (use CustomEvent so `detail` is standardized)
+        const event = new CustomEvent('addressSelected', { bubbles: true, detail: details });
         this.searchInput.dispatchEvent(event);
 
         this.hideSuggestions();

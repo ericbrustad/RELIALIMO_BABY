@@ -33,12 +33,15 @@
               RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" style="width: 30px; height: 30px;">LIMO™
             </h1>
           </div>
-          <div style="display: flex; gap: 10px;">
+          <div style="display: flex; gap: 10px; align-items: center;">
             <button onclick="createNewReservation()" style="padding: 8px 16px; background: rgba(255,255,255,0.3); color: white; border: 1px solid rgba(255,255,255,0.5); border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">➕ New Reservation</button>
             <button onclick="goBackToReservations()" id="closeFormBtn" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px; display: none;">❌ Close</button>
             <button onclick="window.location.href='reservations-list.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">📋 Reservations</button>
             <button onclick="window.location.href='index.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">🏠 Home</button>
             <button onclick="window.location.href='accounts.html'" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 14px;">👤 Accounts</button>
+
+            <!-- Supabase connection status badge (admin-only) -->
+            <span id="supabaseStatusBadge" class="supabase-status-badge admin-only" title="Supabase connection status">Checking Supabase…</span>
           </div>
         </div>
       </header>
@@ -464,23 +467,23 @@
 
                       <div class="form-group" style="position: relative; z-index: 100;">
                         <label>Address 1</label>
-                        <input type="text" id="address1" class="form-control address-input" placeholder="Street address..." />
+                        <input type="text" id="address1" name="address-line1" autocomplete="street-address" class="form-control address-input" placeholder="Street address..." />
                         <div id="addressSuggestions" class="address-suggestions"></div>
                       </div>
 
                       <div class="form-group">
                         <label>Address 2</label>
-                        <input type="text" id="address2" class="form-control" />
+                        <input type="text" id="address2" name="address-line2" autocomplete="address-line2" class="form-control" />
                       </div>
 
                       <div class="address-grid">
                         <div class="form-group">
                           <label>City</label>
-                          <input type="text" id="city" class="form-control" />
+                          <input type="text" id="city" name="address-level2" autocomplete="address-level2" class="form-control" />
                         </div>
                         <div class="form-group">
                           <label>State</label>
-                          <select id="state" class="form-control">
+                          <select id="state" name="address-level1" autocomplete="address-level1" class="form-control">
                             <option value="">--</option>
                             <option value="AL">AL</option>
                             <option value="AK">AK</option>
@@ -537,7 +540,7 @@
                         </div>
                         <div class="form-group">
                           <label>Zip</label>
-                          <input type="text" id="zipCode" class="form-control" />
+                          <input type="text" id="zipCode" name="postal-code" autocomplete="postal-code" class="form-control" />
                         </div>
                       </div>
 
@@ -671,7 +674,7 @@
                     <!-- Create Button -->
                     <div class="entry-card-actions">
                       <button type="button" class="btn btn-secondary" id="cancelEntryBtn">Cancel</button>
-                      <button type="button" class="btn btn-create" id="createStopBtn">CREATE</button>
+                      <button type="button" class="btn btn-create" id="createStopBtn" onclick="console.log('CREATE CLICKED'); if(typeof handleCreateStop==='function'){console.log('Calling local handleCreateStop'); handleCreateStop();}else if(typeof window.handleCreateStop==='function'){console.log('Calling window.handleCreateStop'); window.handleCreateStop();}else{alert('handleCreateStop not found! Check console.'); console.error('handleCreateStop not defined');}">CREATE</button>
                     </div>
                   </div>
 
@@ -1240,9 +1243,9 @@
                   </div>
 
                   <div class="form-group">
-                    <label>Car</label>
+                    <label>Fleet Vehicle</label>
                     <select id="carSelect" class="form-control">
-                      <option value="">-- Loading vehicle types... --</option>
+                      <option value="">-- Loading Fleet Vehicles... --</option>
                     </select>
                   </div>
                 </div>
@@ -1256,9 +1259,9 @@
                   </div>
 
                   <div class="form-group">
-                    <label>Secondary Car</label>
+                    <label>Secondary Fleet Vehicle</label>
                     <select id="secondaryCarSelect" class="form-control">
-                      <option value="">-- Loading vehicle types... --</option>
+                      <option value="">-- Loading Fleet Vehicles... --</option>
                     </select>
                   </div>
                 </div>
@@ -1932,7 +1935,40 @@
         console.log('📋 Stop type:', stopType);
         const locationName = document.getElementById('locationName').value.trim();
         const address1 = document.getElementById('address1').value.trim();
+        
+        // Get airport and FBO fields - these may not exist in all layouts
+        const airportSelectEl = document.getElementById('airportSelect');
+        const airportCode = airportSelectEl ? airportSelectEl.value.trim() : '';
+        const airlineCodeEl = document.getElementById('airlineCode');
+        const airlineCode = airlineCodeEl ? airlineCodeEl.value.trim() : '';
+        const flightNumberEl = document.getElementById('flightNumber');
+        const flightNumber = flightNumberEl ? flightNumberEl.value.trim() : '';
+        const terminalGateEl = document.getElementById('terminalGate');
+        const terminalGate = terminalGateEl ? terminalGateEl.value.trim() : '';
+        const flightStatusEl = document.getElementById('flightStatus');
+        const flightStatus = flightStatusEl ? flightStatusEl.value.trim() : '';
+        const fboSelectEl = document.getElementById('fboSelect');
+        const fboSelect = fboSelectEl ? fboSelectEl.value.trim() : '';
+        
+        // Get FBO info from selected option if available
+        let fboInfo = null;
+        if (fboSelect && fboSelectEl && fboSelectEl.selectedOptions && fboSelectEl.selectedOptions[0]) {
+          const opt = fboSelectEl.selectedOptions[0];
+          fboInfo = {
+            name: opt.dataset.name || opt.textContent || '',
+            address: opt.dataset.address || '',
+            city: opt.dataset.city || '',
+            state: opt.dataset.state || '',
+            zip: opt.dataset.zip || '',
+            phone: opt.dataset.phone || '',
+            email: opt.dataset.email || '',
+            services: opt.dataset.services || ''
+          };
+        }
+        
         console.log('📝 Form values - locationName:', locationName, 'address1:', address1);
+        console.log('✈️ Airport values - code:', airportCode, 'airline:', airlineCode, 'flight:', flightNumber);
+        console.log('🛩️ FBO values - fboSelect:', fboSelect, 'fboInfo:', fboInfo);
         
         // Validate - need either location name or address (unless airport or FBO)
         if (!locationName && !address1 && !airportCode && !fboSelect) {
@@ -1942,15 +1978,23 @@
         }
         console.log('✅ Validation passed, proceeding to create stop');
         
-        // Get all form values
-        const address2 = document.getElementById('address2').value.trim();
-        const city = document.getElementById('city').value.trim();
-        const state = document.getElementById('state').value.trim();
-        const zipCode = document.getElementById('zipCode').value.trim();
-        const country = document.getElementById('country').value.trim();
-        const phone = document.getElementById('locationPhone').value.trim();
-        const notes = document.getElementById('locationNotes').value.trim();
-        const timeIn = document.getElementById('timeIn').value.trim();
+        // Get all form values (with null safety for optional fields)
+        const address2El = document.getElementById('address2');
+        const address2 = address2El ? address2El.value.trim() : '';
+        const cityEl = document.getElementById('city');
+        const city = cityEl ? cityEl.value.trim() : '';
+        const stateEl = document.getElementById('state');
+        const state = stateEl ? stateEl.value.trim() : '';
+        const zipCodeEl = document.getElementById('zipCode');
+        const zipCode = zipCodeEl ? zipCodeEl.value.trim() : '';
+        const countryEl = document.getElementById('country');
+        const country = countryEl ? countryEl.value.trim() : 'US';
+        const phoneEl = document.getElementById('locationPhone');
+        const phone = phoneEl ? phoneEl.value.trim() : '';
+        const notesEl = document.getElementById('locationNotes');
+        const notes = notesEl ? notesEl.value.trim() : '';
+        const timeInEl = document.getElementById('timeIn');
+        const timeIn = timeInEl ? timeInEl.value.trim() : '';
         
         console.log('📋 All form values:', { locationName, address1, address2, city, state, zipCode, country, phone, notes, timeIn });
         
@@ -1960,7 +2004,7 @@
         if (city) fullAddress += `, ${city}`;
         if (state) fullAddress += ` ${state}`;
         if (zipCode) fullAddress += ` ${zipCode}`;
-        if (country) fullAddress += `, ${country}`;
+        if (country && country !== 'US') fullAddress += `, ${country}`;
         
         console.log('🏗️ Built full address:', fullAddress);
         
@@ -1996,45 +2040,6 @@
           createdAt: new Date().toISOString()
         };
         console.log('📦 Created stopData object:', stopData);
-
-        // Build full address
-        let fullAddress = address1;
-        if (address2) fullAddress += `, ${address2}`;
-        if (city) fullAddress += `, ${city}`;
-        if (state) fullAddress += ` ${state}`;
-        if (zipCode) fullAddress += ` ${zipCode}`;
-        if (country) fullAddress += `, ${country}`;
-
-        // Create / update stop object with ALL details including airport and FBO
-        const isEditing = !!window.editingStopId;
-        const stopId = isEditing ? window.editingStopId : ('stop_' + Date.now());
-        const stopData = {
-          id: stopId,
-          stopType: stopType,
-          locationName: locationName || (fboInfo?.name) || (airportCode ? `Airport: ${airportCode}` : ''),
-          address1: address1 || (fboInfo?.address) || '',
-          address2: address2 || (fboInfo?.address ? '' : ''),
-          city: city || (fboInfo?.city) || '',
-          state: state || (fboInfo?.state) || '',
-          zipCode: zipCode || (fboInfo?.zip) || '',
-          country: country || 'US',
-          phone: phone || (fboInfo?.phone) || '',
-          notes: notes || (fboInfo?.services ? `Services: ${fboInfo.services}` : ''),
-          timeIn: timeIn,
-          fullAddress: fullAddress || (fboInfo ? `${fboInfo.address}, ${fboInfo.city}, ${fboInfo.state} ${fboInfo.zip}` : ''),
-          // Airport info
-          airportCode: airportCode,
-          airline: airlineCode,
-          flightNumber: flightNumber,
-          terminalGate: terminalGate,
-          flightStatus: flightStatus,
-          // FBO info
-          fboId: fboSelect,
-          fboName: fboInfo?.name || '',
-          fboEmail: fboInfo?.email || '',
-          createdAt: new Date().toISOString()
-        };
-        console.log('📦 Created stopData:', stopData);
 
         // Save to global trips array
         if (isEditing) {
@@ -2140,31 +2145,45 @@
         // Refresh route metrics so distance/duration and quantities stay in sync
         try {
           console.log('🔄 Refreshing route metrics...');
-          window.reservationFormInstance?.updateTripMetricsFromStops?.();
-          console.log('✅ Route metrics refreshed');
+          console.log('📊 window.reservationFormInstance:', window.reservationFormInstance);
+          console.log('📊 updateTripMetricsFromStops exists:', typeof window.reservationFormInstance?.updateTripMetricsFromStops);
+          
+          if (window.reservationFormInstance && typeof window.reservationFormInstance.updateTripMetricsFromStops === 'function') {
+            console.log('🚀 Calling updateTripMetricsFromStops...');
+            window.reservationFormInstance.updateTripMetricsFromStops()
+              .then(() => console.log('✅ Route metrics calculation complete'))
+              .catch(err => console.error('❌ Route metrics calculation failed:', err));
+          } else {
+            console.warn('⚠️ reservationFormInstance or updateTripMetricsFromStops not available');
+            console.log('📊 Available on window.reservationFormInstance:', Object.keys(window.reservationFormInstance || {}));
+          }
         } catch (err) {
-          console.warn('⚠️ Failed to refresh route metrics after adding stop:', err);
+          console.error('❌ Failed to refresh route metrics after adding stop:', err);
         }
 
-        // Clear the form
-        document.getElementById('locationName').value = '';
-        document.getElementById('address1').value = '';
-        document.getElementById('address2').value = '';
-        document.getElementById('city').value = '';
-        document.getElementById('state').value = '';
-        document.getElementById('zipCode').value = '';
-        document.getElementById('locationNotes').value = '';
-        document.getElementById('locationPhone').value = '';
-        document.getElementById('timeIn').value = '';
-        document.getElementById('airportSearch').value = '';
-        document.getElementById('airportSelect').value = '';
-        document.getElementById('airlineSearch').value = '';
-        document.getElementById('airlineCode').value = '';
-        document.getElementById('airlineName').value = '';
-        document.getElementById('flightNumber').value = '';
-        document.getElementById('terminalGate').value = '';
-        document.getElementById('flightStatus').value = '';
-        document.getElementById('fboSelect').value = '';
+        // Clear the form (with null safety)
+        const clearField = (id) => {
+          const el = document.getElementById(id);
+          if (el) el.value = '';
+        };
+        clearField('locationName');
+        clearField('address1');
+        clearField('address2');
+        clearField('city');
+        clearField('state');
+        clearField('zipCode');
+        clearField('locationNotes');
+        clearField('locationPhone');
+        clearField('timeIn');
+        clearField('airportSearch');
+        clearField('airportSelect');
+        clearField('airlineSearch');
+        clearField('airlineCode');
+        clearField('airlineName');
+        clearField('flightNumber');
+        clearField('terminalGate');
+        clearField('flightStatus');
+        clearField('fboSelect');
         console.log('🧹 Form cleared successfully');
         
         // Reset stop type radio if it exists, or reset routing panel state
@@ -2179,7 +2198,7 @@
         // Clear edit state
         window.editingStopId = null;
 
-        // Show success feedback
+        // Show success feedback on the button
         const createBtn = document.getElementById('createStopBtn');
         const originalText = 'CREATE';
         createBtn.textContent = existingRow ? '✓ Updated!' : '✓ Added!';

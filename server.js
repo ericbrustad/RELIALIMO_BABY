@@ -154,6 +154,140 @@ app.post('/api/sms-send', async (req, res) => {
   }
 });
 
+// --- Server-side vehicle_types write endpoints (proxy using service_role) ---
+
+async function getUserFromToken(token) {
+  if (!token) return null;
+  const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { Authorization: `Bearer ${token}`, apikey: process.env.SUPABASE_ANON_KEY || '' } });
+    if (!r.ok) return null;
+    const data = await r.json();
+    return data;
+  } catch (e) {
+    console.error('getUserFromToken error', e);
+    return null;
+  }
+}
+
+async function supabaseServiceRequest(path, method='GET', body=null, extraHeaders={}) {
+  const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
+  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = `${SUPABASE_URL}/rest/v1${path.startsWith('/')?path:('/'+path)}`;
+  const headers = {
+    'Content-Type': 'application/json',
+    apikey: SERVICE_KEY,
+    Authorization: `Bearer ${SERVICE_KEY}`,
+    ...extraHeaders
+  };
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  const text = await r.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = text; }
+  return { status: r.status, body: data };
+}
+
+// Helper: check org membership via organization_members table
+async function checkOrgMembership(userId, orgId) {
+  const res = await supabaseServiceRequest(`/organization_members?user_id=eq.${encodeURIComponent(userId)}&organization_id=eq.${encodeURIComponent(orgId)}`);
+  if (res.status >= 200 && res.status < 300 && Array.isArray(res.body) && res.body.length > 0) return res.body[0];
+  return null;
+}
+
+// Admin check: environment override or organization_members.role = 'admin'
+function isAdminUser(userId) {
+  const adminList = (process.env.ADMIN_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (adminList.includes(userId)) return true;
+  return false;
+}
+
+app.post('/api/vehicle-types', async (req, res) => {
+  try {
+    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    if (!token) return res.status(401).json({ error: 'Missing Authorization header' });
+
+    const user = await getUserFromToken(token);
+    if (!user || !user.id) return res.status(401).json({ error: 'Invalid user token' });
+
+    const payload = req.body || {};
+    let orgId = payload.organization_id;
+
+    // If no org provided, attempt to infer single org membership
+    if (!orgId) {
+      const mems = await supabaseServiceRequest(`/organization_members?user_id=eq.${encodeURIComponent(user.id)}`);
+      if (mems.status >= 200 && Array.isArray(mems.body) && mems.body.length === 1) {
+        orgId = mems.body[0].organization_id;
+      } else {
+        return res.status(400).json({ error: 'organization_id required when user belongs to multiple organizations' });
+      }
+    }
+
+    // Verify membership
+    const member = await checkOrgMembership(user.id, orgId);
+    if (!member) return res.status(403).json({ error: 'User is not a member of the specified organization' });
+
+    // Create the record using service role
+    const created = await supabaseServiceRequest('/vehicle_types', 'POST', payload);
+    return res.status(created.status).json(created.body);
+  } catch (e) {
+    console.error('POST /api/vehicle-types error', e);
+    return res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+app.patch('/api/vehicle-types/:id', async (req, res) => {
+  try {
+    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    if (!token) return res.status(401).json({ error: 'Missing Authorization header' });
+
+    const user = await getUserFromToken(token);
+    if (!user || !user.id) return res.status(401).json({ error: 'Invalid user token' });
+
+    const id = req.params.id;
+    // Fetch existing record
+    const existing = await supabaseServiceRequest(`/vehicle_types?id=eq.${encodeURIComponent(id)}&select=*`);
+    if (existing.status !== 200 || !Array.isArray(existing.body) || existing.body.length === 0) {
+      return res.status(404).json({ error: 'Vehicle type not found' });
+    }
+    const current = existing.body[0];
+
+    // Check org membership or admin
+    const orgId = current.organization_id;
+    const member = await checkOrgMembership(user.id, orgId);
+    if (!member && !isAdminUser(user.id)) return res.status(403).json({ error: 'Not authorized to modify this vehicle type' });
+
+    // Perform update
+    const updated = await supabaseServiceRequest(`/vehicle_types?id=eq.${encodeURIComponent(id)}`, 'PATCH', req.body, { Prefer: 'return=representation' });
+    return res.status(updated.status).json(updated.body);
+  } catch (e) {
+    console.error('PATCH /api/vehicle-types/:id error', e);
+    return res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+app.delete('/api/vehicle-types/:id', async (req, res) => {
+  try {
+    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    if (!token) return res.status(401).json({ error: 'Missing Authorization header' });
+
+    const user = await getUserFromToken(token);
+    if (!user || !user.id) return res.status(401).json({ error: 'Invalid user token' });
+
+    if (!isAdminUser(user.id)) return res.status(403).json({ error: 'Only administrators can delete vehicle types' });
+
+    const id = req.params.id;
+    const deleted = await supabaseServiceRequest(`/vehicle_types?id=eq.${encodeURIComponent(id)}`, 'DELETE');
+    return res.status(deleted.status).json(deleted.body);
+  } catch (e) {
+    console.error('DELETE /api/vehicle-types/:id error', e);
+    return res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+// Serve static files
+
 // Serve static files
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));

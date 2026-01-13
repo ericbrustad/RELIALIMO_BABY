@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Supabase Debug</title>
+  <script src="env.js"></script>
+</head>
+<body>
+  <h1>Supabase Connection Debug</h1>
+  <pre id="output">Starting...</pre>
+  <script type="module">
+    import { testSupabaseConnection } from './supabase-client.js';
+
+    async function run() {
+      try {
+        document.getElementById('output').textContent = 'Testing connection...';
+        const ok = await testSupabaseConnection();
+        document.getElementById('output').textContent = ok ? '✅ Connection OK' : '❌ Connection FAILED';
+      } catch (err) {
+        document.getElementById('output').textContent = '❌ Error: ' + (err && err.message ? err.message : String(err));
+      }
+    }
+
+    run();
+  </script>
+</body>
+</html>

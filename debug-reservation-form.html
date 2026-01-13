@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Debug: Reservation Form Data Loading</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; max-width: 900px; margin: 0 auto; }
+    h1 { color: #333; }
+    .section { background: #f5f5f5; padding: 15px; margin: 15px 0; border-radius: 8px; }
+    .section h2 { margin-top: 0; font-size: 16px; color: #555; }
+    .status { padding: 10px; border-radius: 4px; margin: 5px 0; }
+    .success { background: #d4edda; color: #155724; }
+    .error { background: #f8d7da; color: #721c24; }
+    .warning { background: #fff3cd; color: #856404; }
+    .info { background: #d1ecf1; color: #0c5460; }
+    pre { background: #333; color: #0f0; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; max-height: 300px; overflow-y: auto; }
+    button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+    button:hover { background: #0056b3; }
+    .test-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+    .test-item { background: white; padding: 15px; border-radius: 4px; border: 1px solid #ddd; }
+    .test-item h3 { margin: 0 0 10px 0; font-size: 14px; }
+    .count { font-size: 24px; font-weight: bold; color: #007bff; }
+    .empty { color: #dc3545; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Reservation Form Data Diagnostic</h1>
+  <p>This page tests whether the data required for the reservation form can be loaded from Supabase.</p>
+  
+  <button onclick="runAllTests()">Run All Tests</button>
+  <button onclick="testGoogle()">Test Google Maps</button>
+  
+  <div id="results"></div>
+
+  <script type="module">
+    import './env.js';
+
+    const SUPABASE_URL = window.ENV?.SUPABASE_URL;
+    const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY;
+    const GOOGLE_API_KEY = window.ENV?.GOOGLE_MAPS_API_KEY;
+
+    const results = document.getElementById('results');
+
+    function log(html, className = 'info') {
+      results.innerHTML += `<div class="status ${className}">${html}</div>`;
+    }
+
+    function logSection(title) {
+      results.innerHTML += `<div class="section"><h2>${title}</h2></div>`;
+    }
+
+    async function fetchTable(table, filter = '') {
+      const url = `${SUPABASE_URL}/rest/v1/${table}?select=*${filter ? '&' + filter : ''}`;
+      const res = await fetch(url, {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+      return await res.json();
+    }
+
+    window.runAllTests = async function() {
+      results.innerHTML = '';
+      
+      // Check environment
+      logSection('📋 Environment Configuration');
+      log(`SUPABASE_URL: ${SUPABASE_URL ? '✅ Set' : '❌ Missing'}`, SUPABASE_URL ? 'success' : 'error');
+      log(`SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY ? '✅ Set (length: ' + SUPABASE_ANON_KEY.length + ')' : '❌ Missing'}`, SUPABASE_ANON_KEY ? 'success' : 'error');
+      log(`GOOGLE_MAPS_API_KEY: ${GOOGLE_API_KEY ? '✅ Set' : '❌ Missing'}`, GOOGLE_API_KEY ? 'success' : 'error');
+
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        log('❌ Cannot continue without Supabase configuration', 'error');
+        return;
+      }
+
+      // Test each table
+      logSection('🗄️ Supabase Table Tests');
+      
+      const tables = [
+        { name: 'vehicle_types', filter: 'status=eq.ACTIVE', label: 'Vehicle Types (ACTIVE)' },
+        { name: 'vehicle_types', filter: '', label: 'Vehicle Types (ALL)' },
+        { name: 'drivers', filter: '', label: 'Drivers' },
+        { name: 'fleet_vehicles', filter: '', label: 'Fleet Vehicles' },
+        { name: 'service_types', filter: '', label: 'Service Types' }
+      ];
+
+      results.innerHTML += '<div class="test-grid">';
+      
+      for (const table of tables) {
+        try {
+          const data = await fetchTable(table.name, table.filter);
+          const count = Array.isArray(data) ? data.length : 0;
+          const className = count > 0 ? '' : 'empty';
+          results.innerHTML += `
+            <div class="test-item">
+              <h3>${table.label}</h3>
+              <div class="count ${className}">${count}</div>
+              <small>${count > 0 ? 'Records found' : 'No records'}</small>
+            </div>
+          `;
+          if (count > 0 && table.name === 'vehicle_types' && table.filter.includes('ACTIVE')) {
+            log(`Active Vehicle Types: ${data.map(d => d.name).join(', ')}`, 'success');
+          }
+        } catch (err) {
+          results.innerHTML += `
+            <div class="test-item">
+              <h3>${table.label}</h3>
+              <div class="count empty">Error</div>
+              <small>${err.message}</small>
+            </div>
+          `;
+        }
+      }
+      
+      results.innerHTML += '</div>';
+
+      // Summary
+      logSection('📊 Summary');
+      log(`
+        <strong>What this means:</strong><br>
+        - If Vehicle Types (ACTIVE) > 0, the Vehicle Type dropdown should populate<br>
+        - If Drivers = 0, the Driver dropdown will show "No drivers found"<br>
+        - If Fleet Vehicles = 0, the Fleet Vehicle dropdown will show "No vehicles found"<br>
+        - If Service Types = 0, the Service Type dropdown will use fallback/default types
+      `, 'info');
+    };
+
+    window.testGoogle = async function() {
+      results.innerHTML = '';
+      logSection('🗺️ Google Maps API Test');
+
+      if (!GOOGLE_API_KEY) {
+        log('❌ Google Maps API key not configured', 'error');
+        return;
+      }
+
+      try {
+        const body = {
+          input: 'JFK Airport New York',
+          sessionToken: 'test_' + Date.now(),
+          languageCode: 'en'
+        };
+
+        const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': GOOGLE_API_KEY,
+            'X-Goog-FieldMask': 'suggestions.placePrediction.placeId,suggestions.placePrediction.text'
+          },
+          body: JSON.stringify(body)
+        });
+
+        const data = await res.json();
+        
+        if (res.ok && data.suggestions?.length > 0) {
+          log('✅ Google Places API is working!', 'success');
+          log(`Found ${data.suggestions.length} suggestions for "JFK Airport New York"`, 'info');
+          log(`<pre>${JSON.stringify(data.suggestions.slice(0, 3), null, 2)}</pre>`, 'info');
+        } else if (data.error) {
+          log(`❌ Google API Error: ${data.error.message || data.error.status}`, 'error');
+          log(`<pre>${JSON.stringify(data.error, null, 2)}</pre>`, 'error');
+        } else {
+          log('⚠️ No suggestions returned', 'warning');
+        }
+      } catch (err) {
+        log(`❌ Request failed: ${err.message}`, 'error');
+      }
+    };
+
+    // Auto-run on load
+    runAllTests();
+  </script>
+</body>
+</html>

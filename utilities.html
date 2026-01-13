@@ -113,41 +113,88 @@
   <div id="authWarning" style="display:none; color:#b71c1c; background:#ffebee; border:1px solid #d32f2f; padding:16px; margin-bottom:24px; border-radius:4px; font-weight:600;">
     <span>⚠️ You are not authenticated. Please log in through the main app to use admin utilities.</span>
   </div>
+  <!-- =============== SETTINGS =============== -->
+  <h3 style="margin-top:0; border-bottom:2px solid #1565c0; padding-bottom:8px;">⚙️ Settings & Appearance</h3>
   <ul>
-    <li><a class="btn" href="appearance.html" target="_top">Appearance</a></li>
-    <li><a class="btn" href="full-site-test-checklist.html" target="_top">Test Checklist</a></li>
-    <li><a class="btn" href="schema-ops-test.html" target="_top" style="background:#00897b;">Schema Ops Test</a></li>
-    <li><a class="btn" href="test-supabase-integration.html" target="_top">Supabase Integration Test</a></li>
-    <li><a class="btn" href="magic-link.html" target="_top" style="background:#7b1fa2;">Magic Link</a></li>
-    <li><a class="btn" href="layout-toggle.html" target="_top" style="background:#4a5568;">Header Layout Toggle</a></li>
+    <li><a class="btn" href="appearance.html" target="_top">🎨 Appearance</a></li>
+    <li><a class="btn" href="layout-toggle.html" target="_top" style="background:#4a5568;">📐 Header Layout Toggle</a></li>
+    <li><a class="btn" href="magic-link.html" target="_top" style="background:#7b1fa2;">🔗 Magic Link</a></li>
+  </ul>
+
+  <!-- =============== DATA SYNC TOOLS =============== -->
+  <h3 style="margin-top:24px; border-bottom:2px solid #00897b; padding-bottom:8px;">🔄 Data Sync & Fix Tools</h3>
+  <ul>
+    <li><a class="btn" href="sync-fleet-vehicles.html" target="_top" style="background:#00897b;">🚐 Sync Fleet Vehicles to Supabase</a></li>
+    <li><a class="btn" href="fix-fleet-data.html" target="_top" style="background:#00897b;">🔧 Fix Fleet Data</a></li>
+  </ul>
+
+  <!-- =============== IMPORT/EXPORT =============== -->
+  <h3 style="margin-top:24px; border-bottom:2px solid #0288d1; padding-bottom:8px;">📥 Import / Export</h3>
+  <ul>
     <li><a class="btn" href="import-export-accounts.html" target="_top" style="background:#0288d1;">📊 Import/Export Accounts</a></li>
     <li><a class="btn" href="import-export-affiliates.html" target="_top" style="background:#7b1fa2;">🤝 Import/Export Affiliates</a></li>
     <li><a class="btn" href="import-export-drivers.html" target="_top" style="background:#7b1fa2;">👥 Import/Export Drivers</a></li>
     <li><a class="btn" href="import-export-vehicles.html" target="_top" style="background:#2d5016;">🚗 Import/Export Vehicles</a></li>
-    <li><button id="removeDuplicateAffiliatesBtn" class="btn" style="background:#ff9800;" onclick="handleRemoveDuplicates()">🔄 Remove Duplicate Affiliates</button></li>
+  </ul>
+
+  <!-- =============== TEST TOOLS =============== -->
+  <h3 style="margin-top:24px; border-bottom:2px solid #f57c00; padding-bottom:8px;">🧪 Test & Diagnostics</h3>
+  <ul>
+    <li><a class="btn" href="full-site-test-checklist.html" target="_top" style="background:#f57c00;">📋 Full Site Test Checklist</a></li>
+    <li><a class="btn" href="test-supabase-integration.html" target="_top" style="background:#f57c00;">🔌 Supabase Integration Test</a></li>
+    <li><a class="btn" href="test-google-search.html" target="_top" style="background:#f57c00;">🗺️ Google Search Test</a></li>
+    <li><a class="btn" href="test-account-search.html" target="_top" style="background:#f57c00;">🔍 Account Search Test</a></li>
+    <li><a class="btn" href="test-duplicate-confirmation.html" target="_top" style="background:#f57c00;">📧 Duplicate Confirmation Test</a></li>
+    <li><a class="btn" href="schema-ops-test.html" target="_top" style="background:#00897b;">🗃️ Schema Ops Test</a></li>
+  </ul>
+
+  <!-- =============== DEBUG TOOLS =============== -->
+  <h3 style="margin-top:24px; border-bottom:2px solid #9c27b0; padding-bottom:8px;">🐛 Debug Tools</h3>
+  <ul>
+    <li><a class="btn" href="debug-supabase.html" target="_top" style="background:#9c27b0;">🔍 Debug Supabase</a></li>
+    <li><a class="btn" href="debug-reservation-form.html" target="_top" style="background:#9c27b0;">📝 Debug Reservation Form</a></li>
+    <li><a class="btn" href="debug-account-creation.html" target="_top" style="background:#9c27b0;">👤 Debug Account Creation</a></li>
+  </ul>
+
+  <!-- =============== SCHEMA & DATABASE =============== -->
+  <h3 style="margin-top:24px; border-bottom:2px solid #4caf50; padding-bottom:8px;">🗄️ Schema & Database Management</h3>
+  <ul>
     <li><button id="ensureAffiliateColumnsBtn" class="btn" style="background:#4caf50;" onclick="ensureAffiliateColumns()">🔧 Ensure Affiliate Columns Exist</button></li>
     <li><button id="ensureDriverSchemaBtn" class="btn" style="background:#4caf50;" onclick="ensureDriverTablesAndColumns()">🔧 Ensure Driver Schema Exists</button></li>
     <li><button id="ensureVehicleSchemaBtn" class="btn" style="background:#4caf50;" onclick="ensureVehicleTablesAndColumns()">🔧 Ensure Vehicle Schema Exists</button></li>
     <li><button id="migrateAddressFieldsBtn" class="btn" style="background:#2196f3;" onclick="migrateAddressFields()">📋 Migrate Address Fields</button></li>
-    <li><button id="deleteAllAffiliatesBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Affiliates</button></li>
-    <li><button id="deleteAllReservationsSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Reservations (Supabase)</button></li>
-    <li><button id="deleteLocalReservationsBtn" class="btn" style="background:#ef6c00;">Delete Local Reservations</button></li>
-    <li><button id="deleteLocalAccountsBtn" class="btn" style="background:#ef6c00;">Delete Local Accounts</button></li>
-    <li><button id="deleteLocalVehiclesBtn" class="btn" style="background:#ef6c00;">Delete Local Vehicles</button></li>
-    <li><button id="deleteAllAccountsSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Accounts (Supabase)</button></li>
+    <li><button id="removeDuplicateAffiliatesBtn" class="btn" style="background:#ff9800;" onclick="handleRemoveDuplicates()">🔄 Remove Duplicate Affiliates</button></li>
+  </ul>
+
+  <!-- =============== DELETE DATA (DANGER ZONE) =============== -->
+  <h3 style="margin-top:24px; border-bottom:2px solid #d32f2f; padding-bottom:8px; color:#d32f2f;">⚠️ Danger Zone - Delete Data</h3>
+  <ul>
+    <li style="margin-bottom:12px;"><strong style="color:#ef6c00;">Local Storage:</strong></li>
+    <li><button id="deleteLocalReservationsBtn" class="btn" style="background:#ef6c00;">🗑️ Delete Local Reservations</button></li>
+    <li><button id="deleteLocalAccountsBtn" class="btn" style="background:#ef6c00;">🗑️ Delete Local Accounts</button></li>
+    <li><button id="deleteLocalVehiclesBtn" class="btn" style="background:#ef6c00;">🗑️ Delete Local Vehicles</button></li>
+    <li style="margin-top:16px; margin-bottom:12px;"><strong style="color:#d32f2f;">Supabase Database:</strong></li>
+    <li><button id="deleteAllReservationsSupabaseBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Reservations (Supabase)</button></li>
+    <li><button id="deleteAllAccountsSupabaseBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Accounts (Supabase)</button></li>
+    <li><button id="deleteAllDriversSupabaseBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Drivers (Supabase)</button></li>
+    <li><button id="deleteAllVehiclesSupabaseBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Vehicles (Supabase)</button></li>
+    <li><button id="deleteAllAffiliatesBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Affiliates (Supabase)</button></li>
+    <li><button id="deleteAllRatesSupabaseBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Rate Data (Supabase)</button></li>
+    <li style="margin-top:16px; margin-bottom:12px;"><strong style="color:#b71c1c;">Both Local + Supabase:</strong></li>
     <li><button id="deleteAllAccountsBothBtn" class="btn" style="background:#b71c1c; font-weight:bold;">🗑️ Delete ALL Accounts (Local + Supabase)</button></li>
-    <li><button id="deleteAllDriversSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Drivers (Supabase)</button></li>
-    <li><button id="deleteAllRatesSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Rate Data (Supabase)</button></li>
-    <li><button id="deleteAllVehiclesSupabaseBtn" class="btn" style="background:#d32f2f;">Delete ALL Vehicles (Supabase)</button></li>
-    <li style="margin-top:18px;"><strong>View Data Lists</strong></li>
-    <li><button id="viewSupabaseReservationsBtn" class="btn" style="background:#1565c0;">View Supabase Reservations</button></li>
-    <li><button id="viewLocalReservationsBtn" class="btn" style="background:#1976d2;">View Local Reservations</button></li>
-    <li><button id="viewSupabaseAccountsBtn" class="btn" style="background:#2e7d32;">View Supabase Accounts</button></li>
-    <li><button id="viewLocalAccountsBtn" class="btn" style="background:#43a047;">View Local Accounts</button></li>
-    <li><button id="viewSupabaseDriversBtn" class="btn" style="background:#6a1b9a;">View Supabase Drivers</button></li>
-    <li><button id="viewLocalDriversBtn" class="btn" style="background:#8e24aa;">View Local Drivers</button></li>
-    <li><button id="viewSupabaseVehiclesBtn" class="btn" style="background:#ff7043;">View Supabase Vehicles</button></li>
-    <li><button id="viewLocalVehiclesBtn" class="btn" style="background:#ff8a65;">View Local Vehicles</button></li>
+  </ul>
+
+  <!-- =============== VIEW DATA =============== -->
+  <h3 style="margin-top:24px; border-bottom:2px solid #1565c0; padding-bottom:8px;">👁️ View Data Lists</h3>
+  <ul>
+    <li><button id="viewSupabaseReservationsBtn" class="btn" style="background:#1565c0;">📅 View Supabase Reservations</button></li>
+    <li><button id="viewLocalReservationsBtn" class="btn" style="background:#1976d2;">📅 View Local Reservations</button></li>
+    <li><button id="viewSupabaseAccountsBtn" class="btn" style="background:#2e7d32;">👤 View Supabase Accounts</button></li>
+    <li><button id="viewLocalAccountsBtn" class="btn" style="background:#43a047;">👤 View Local Accounts</button></li>
+    <li><button id="viewSupabaseDriversBtn" class="btn" style="background:#6a1b9a;">🚗 View Supabase Drivers</button></li>
+    <li><button id="viewLocalDriversBtn" class="btn" style="background:#8e24aa;">🚗 View Local Drivers</button></li>
+    <li><button id="viewSupabaseVehiclesBtn" class="btn" style="background:#ff7043;">🚐 View Supabase Vehicles</button></li>
+    <li><button id="viewLocalVehiclesBtn" class="btn" style="background:#ff8a65;">🚐 View Local Vehicles</button></li>
   </ul>
 
   <div id="dataListOutput" style="margin-top:16px; padding:12px; border:1px solid #ccc; border-radius:6px; background:#fafafa; font-family:monospace; white-space:pre; max-height:420px; overflow:auto;"></div>

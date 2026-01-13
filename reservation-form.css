@@ -318,6 +318,75 @@ body {
   border-bottom: 2px solid #dee2e6;
 }
 
+/* Supabase status badge */
+.supabase-status-badge {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.14);
+  white-space: nowrap;
+  min-width: 140px;
+  text-align: center;
+}
+
+/* Hidden by default for non-admins */
+.supabase-status-badge.admin-only { display: none !important; }
+
+.supabase-status-badge.ok {
+  background: #28a745;
+  border-color: #1e7e34;
+  color: white;
+}
+
+.supabase-status-badge.fail {
+  background: #dc3545;
+  border-color: #b02a37;
+  color: white;
+}
+
+.supabase-status-badge.warn {
+  background: #ffc107;
+  border-color: #d39e00;
+  color: #212529;
+}
+
+/* Embedded (iframe) floating badge */
+.supabase-status-badge.embedded {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 9999;
+  padding: 8px 10px;
+  min-width: 160px;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+}
+
+.supabase-status-badge.embedded .check-now {
+  background: rgba(255,255,255,0.12);
+  border: none;
+  color: inherit;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.supabase-status-badge.embedded .error-info {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .supabase-status-badge.embedded { right: 6px; top: 6px; min-width: 130px; font-size: 12px; }
+}
+
 .billing-tab {
   padding: 8px 16px;
   border: 1px solid #ccc;

@@ -1,5 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getSupabaseCredentials, getSupabaseAuthUrl } from './supabase-config.js';
+import { testSupabaseConnection } from './supabase-client.js';
+import { getLastApiError } from './api-service.js';
 
 let supabase = null;
 
@@ -57,6 +59,7 @@ function renderSkeleton(container) {
       <div class="layout-toggle-inline" aria-label="Layout selector">
         <button type="button" id="inlineLayoutVertical" title="Vertical layout">⬛</button>
         <button type="button" id="inlineLayoutHorizontal" title="Horizontal layout">▬</button>
+        <span id="globalSupabaseBadge" class="supabase-status-badge admin-only inline-badge" title="Supabase connection status">Checking…</span>
       </div>
 
       <button type="button" class="user-menu-toggle" aria-expanded="false" id="userMenuToggle">
@@ -111,7 +114,61 @@ function setMenuState({ email, role, signedIn }) {
   const logoutBtn = document.getElementById('userMenuLogout');
   if (signInBtn) signInBtn.style.display = signedIn ? 'none' : 'flex';
   if (logoutBtn) logoutBtn.style.display = signedIn ? 'flex' : 'none';
+
+  // Show/hide global Supabase badge for admins
+  try {
+    const badge = document.getElementById('globalSupabaseBadge');
+    const isAdmin = (role || '').toString().toLowerCase() === 'admin';
+    if (badge) {
+      badge.classList.toggle('admin-only', !isAdmin);
+      if (isAdmin) {
+        // Wire manual check
+        badge.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          try { await updateGlobalSupabaseBadge(); } catch(_) {}
+        }, { once: false });
+
+        // Initialize status
+        updateGlobalSupabaseBadge().catch(() => {});
+      }
+    }
+  } catch (e) {
+    // non-fatal
+  }
 }
+
+// Update the inline global Supabase badge (admin-only)
+export async function updateGlobalSupabaseBadge() {
+  try {
+    const el = document.getElementById('globalSupabaseBadge');
+    if (!el) return;
+
+    el.classList.remove('ok','fail','warn');
+    el.textContent = 'Checking…';
+
+    try {
+      const ok = await testSupabaseConnection();
+      if (ok) {
+        el.classList.add('ok');
+        const u = (typeof window !== 'undefined' && window.ENV && window.ENV.SUPABASE_URL) ? window.ENV.SUPABASE_URL : 'unknown';
+        try { const host = new URL(u).hostname; el.title = `Supabase: ${host}`; } catch { el.title = `Supabase: ${u}`; }
+        el.textContent = 'Supabase: connected';
+      } else {
+        el.classList.add('fail');
+        el.title = 'Supabase: disconnected';
+        el.textContent = 'Supabase: disconnected';
+      }
+    } catch (err) {
+      el.classList.add('fail');
+      el.title = err && err.message ? err.message : 'Connection error';
+      el.textContent = 'Supabase: error';
+    }
+  } catch (err) {
+    // ignore
+  }
+}
+
 
 function wireInteractions() {
   const toggleBtn = document.getElementById('userMenuToggle');
@@ -175,6 +232,9 @@ function wireInteractions() {
         // ignore
       }
 
+      // Clear global badge interval if set
+      try { if (window._globalSupabaseStatusInterval) { clearInterval(window._globalSupabaseStatusInterval); delete window._globalSupabaseStatusInterval; } } catch(_){}
+
       window.location.href = 'auth.html';
     });
   }
@@ -210,6 +270,9 @@ function wireLayoutToggle() {
 
   if (vertBtn) vertBtn.addEventListener('click', () => setLayout('vertical'));
   if (horzBtn) horzBtn.addEventListener('click', () => setLayout('horizontal'));
+
+  // Also expose a global function to trigger badge update from other UI
+  window.updateGlobalSupabaseBadge = updateGlobalSupabaseBadge;
 }
 
 async function refreshUser() {
@@ -232,6 +295,20 @@ async function refreshUser() {
       role: safeText(getRole(user)),
       signedIn: true
     });
+
+    // If admin, ensure global badge updates periodically
+    try {
+      const isAdmin = (getRole(user) || '').toString().toLowerCase() === 'admin';
+      if (isAdmin) {
+        if (typeof window !== 'undefined') {
+          if (!window._globalSupabaseStatusInterval) {
+            window._globalSupabaseStatusInterval = setInterval(() => {
+              try { if (typeof updateGlobalSupabaseBadge === 'function') updateGlobalSupabaseBadge().catch(()=>{}); } catch(_){}
+            }, 60_000);
+          }
+        }
+      }
+    } catch (_) {}
   } catch {
     setMenuState({ email: '', role: '', signedIn: false });
   }
@@ -258,6 +335,10 @@ async function init() {
     const { anonKey } = getSupabaseCredentials();
     const url = getSupabaseAuthUrl(); // use direct Supabase URL for auth client
     supabase = createClient(url, anonKey);
+
+    // Wire the global badge updater for admin if present now (best-effort)
+    try { if (typeof updateGlobalSupabaseBadge === 'function') updateGlobalSupabaseBadge().catch(()=>{}); } catch(_) {}
+
   } catch {
     supabase = null;
   }

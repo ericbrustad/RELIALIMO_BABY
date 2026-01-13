@@ -3,7 +3,7 @@ import { CostCalculator } from './CostCalculator.js';
 import { googleMapsService } from './GoogleMapsService.js';
 import { AirlineService } from './AirlineService.js';
 import { AffiliateService } from './AffiliateService.js';
-import { fetchDrivers, setupAPI, listDriverNames, listActiveVehiclesLight, listActiveVehicleTypes, fetchVehicleTypes, fetchActiveVehicles } from './api-service.js';
+import { fetchDrivers, setupAPI, listDriverNames, listActiveVehiclesLight, listActiveVehicleTypes, fetchVehicleTypes, fetchActiveVehicles, fetchFleetVehicles } from './api-service.js';
 import './CompanySettingsManager.js';
 import supabaseDb from './supabase-db.js';
 import { wireMainNav } from './navigation.js';
@@ -540,8 +540,10 @@ class ReservationForm {
       await this.checkAuthenticationStatus();
       console.log('✅ Authentication check complete');
 
-      // Wait for Supabase to hydrate a real session before loading org-scoped data
-      await this.waitForAuthSession('loadReferenceData');
+      // Start waiting for Supabase session in background but do NOT block loading reference data
+      // This allows anonymous/public reads (e.g., vehicle_types) to load immediately while session
+      // hydrating continues in parallel.
+      this.waitForAuthSession('loadReferenceData').catch(() => {});
 
       await this.loadReferenceData();
       console.log('✅ Driver/vehicle reference data loaded');
@@ -750,7 +752,8 @@ class ReservationForm {
 
     try {
       await setupAPI();
-      await this.waitForAuthSession('drivers');
+      // Start session hydration in background but do not block driver loading so anon/public reads can work
+      this.waitForAuthSession('drivers').catch(() => {});
       const driversRaw = await listDriverNames({ limit: 200, offset: 0 });
       buildDriverVehicleMap(driversRaw);
       let options = buildOptions(driversRaw);
@@ -815,8 +818,8 @@ class ReservationForm {
     try {
       await setupAPI();
 
-      // Ensure we have a live session so RLS does not zero out the dataset
-      const session = await this.waitForAuthSession('vehicleTypes');
+      // Start session hydration in background but do not block vehicle/vehicle-type loading
+      this.waitForAuthSession('vehicleTypes').catch(() => {});
 
       let vehicles = [];
       try {
@@ -944,6 +947,49 @@ class ReservationForm {
       
       // Update rate config display with vehicle type data
       this.updateRateConfigDisplay();
+
+      // --- Load fleet vehicles and render the "Vehicle Assigned" dropdown ---
+      try {
+        let fleetVehicles = [];
+        try {
+          fleetVehicles = await fetchFleetVehicles();
+        } catch (e) {
+          console.warn('⚠️ fetchFleetVehicles failed, falling back to activeVehicles if available:', e);
+        }
+        if (!Array.isArray(fleetVehicles) || !fleetVehicles.length) {
+          fleetVehicles = Array.isArray(this.activeVehicles) ? this.activeVehicles : [];
+        }
+        this.fleetVehicles = fleetVehicles;
+        this.fleetVehicleIdToVehicle = {};
+        (fleetVehicles || []).forEach(v => { if (v && v.id) this.fleetVehicleIdToVehicle[v.id] = v; });
+
+        const formatFleetLabel = (v) => {
+          if (!v) return 'Unnamed Vehicle';
+          const parts = [];
+          if (v.unit_number) parts.push(v.unit_number);
+          if (v.veh_disp_name) parts.push(v.veh_disp_name);
+          if (v.make || v.model || v.year) parts.push([v.make, v.model, v.year].filter(Boolean).join(' '));
+          if (v.license_plate) parts.push(`(${v.license_plate})`);
+          return parts.join(' ');
+        };
+
+        const fleetOptions = (fleetVehicles || []).map(v => ({ value: v.id, label: formatFleetLabel(v), raw: v }));
+
+        const renderFleet = (el, options, placeholder = '-- Select Fleet Vehicle --') => {
+          if (!el) return;
+          if (!options.length) {
+            el.innerHTML = `<option value="">${placeholder}</option>`;
+            return;
+          }
+          el.innerHTML = `<option value="">${placeholder}</option>` + options.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+        };
+
+        renderFleet(primaryCar, fleetOptions, '-- Select Fleet Vehicle --');
+        renderFleet(secondaryCar, fleetOptions, '-- Select Fleet Vehicle --');
+
+      } catch (fleetErr) {
+        console.warn('⚠️ Failed to load fleet vehicles:', fleetErr);
+      }
 
       console.log(`✅ Loaded ${typeOptions.length} vehicle types (remote:${typeOptionsFromTable.length}, fallback:${typeOptionsFallback.length})`);
     } catch (error) {
@@ -1493,11 +1539,12 @@ class ReservationForm {
     // Bind exactly once to prevent duplicate rows (some browsers fire multiple handlers when mixing inline + JS).
     const createStopBtn = document.getElementById('createStopBtn');
     if (createStopBtn) {
-      if (!createStopBtn.dataset.bound) {
+      // Skip binding if already bound via JS or if there's an inline onclick handler
+      if (!createStopBtn.dataset.bound && !createStopBtn.getAttribute('onclick')) {
         createStopBtn.dataset.bound = 'true';
         createStopBtn.addEventListener('click', async (e) => {
-          e.preventDefault();
-          console.log('🔘 CREATE button clicked!');
+          e.stopPropagation(); // Prevent bubbling but allow default
+          console.log('🔘 CREATE button clicked (JS handler)!');
 
           if (typeof window.handleCreateStop === 'function') {
             console.log('🚀 Calling handleCreateStop...');
@@ -4617,9 +4664,11 @@ class ReservationForm {
     };
 
     const stops = this.getStops();
+    console.log('📍 [updateTripMetricsFromStops] All stops:', stops);
     const stopsWithAddress = Array.isArray(stops)
       ? stops.filter(s => s && (s.fullAddress || s.address || s.address1))
       : [];
+    console.log('📍 [updateTripMetricsFromStops] Stops with address:', stopsWithAddress.length);
 
     // Require a pick-up and a drop-off; intermediate stops are optional
     const pickupStop = stopsWithAddress.find(s => {
@@ -4632,7 +4681,11 @@ class ReservationForm {
       return t === 'dropoff';
     }) || stopsWithAddress[stopsWithAddress.length - 1];
 
+    console.log('📍 [updateTripMetricsFromStops] pickupStop:', pickupStop);
+    console.log('📍 [updateTripMetricsFromStops] dropoffStop:', dropoffStop);
+
     if (!pickupStop || !dropoffStop || pickupStop === dropoffStop) {
+      console.log('⚠️ [updateTripMetricsFromStops] Need both pickup and dropoff, resetting UI');
       resetRouteUi();
       return;
     }
@@ -4644,24 +4697,47 @@ class ReservationForm {
       .map(s => s.fullAddress || s.address || s.address1)
       .filter(Boolean);
 
+    console.log('📍 [updateTripMetricsFromStops] origin:', origin);
+    console.log('📍 [updateTripMetricsFromStops] destination:', destination);
+
     if (!origin || !destination) {
+      console.log('⚠️ [updateTripMetricsFromStops] Missing origin or destination');
       resetRouteUi();
       return;
     }
 
     let summary;
     try {
+      console.log('🚀 [updateTripMetricsFromStops] Calling getRouteSummary...');
+      console.log('📍 [updateTripMetricsFromStops] googleMapsService:', this.googleMapsService);
+      
+      if (!this.googleMapsService) {
+        console.error('❌ [updateTripMetricsFromStops] googleMapsService is not initialized!');
+        resetRouteUi();
+        return;
+      }
+      
+      if (typeof this.googleMapsService.getRouteSummary !== 'function') {
+        console.error('❌ [updateTripMetricsFromStops] getRouteSummary is not a function!');
+        resetRouteUi();
+        return;
+      }
+      
       summary = await this.googleMapsService.getRouteSummary({ origin, destination, waypoints: waypointStops });
+      console.log('📦 [updateTripMetricsFromStops] Route summary:', summary);
     } catch (e) {
-      console.warn('⚠️ Directions lookup failed:', e);
+      console.error('❌ [updateTripMetricsFromStops] Directions lookup failed:', e);
       resetRouteUi();
       return;
     }
 
     if (!summary) {
+      console.log('⚠️ [updateTripMetricsFromStops] No summary returned');
       resetRouteUi();
       return;
     }
+
+    console.log('✅ [updateTripMetricsFromStops] Got route - distance:', summary.distanceText, 'duration:', summary.durationText);
 
     if (routeInfo) routeInfo.style.display = 'block';
 

@@ -5,8 +5,8 @@
 
 export class GoogleMapsService {
   constructor(apiKey = null) {
-    // Get API key from environment
-    this.apiKey = apiKey || this.getGoogleApiKey();
+    // Do not permanently cache API key on construction; allow fallback to env.js set later
+    this.apiKey = apiKey || null;
     this.sessionToken = null;
     this.placesService = null; // legacy (kept for backward compat, no longer initialized)
     this.autocompleteService = null; // legacy (kept for backward compat, no longer initialized)
@@ -16,11 +16,12 @@ export class GoogleMapsService {
     this.placeCache = new Map();
     this.mapsScriptPromise = null;
     this.placesReadyPromise = null;
-    
-    if (!this.apiKey) {
-      console.warn('⚠️ Google Maps API key not configured. Add it to env.js as GOOGLE_MAPS_API_KEY');
+
+    // If key not present at construction, log a warning but continue — the key may appear later
+    if (!this.getGoogleApiKey()) {
+      console.warn('⚠️ Google Maps API key not configured at load time. Add it to env.js as GOOGLE_MAPS_API_KEY');
     }
-    
+
     this.initializeServices();
   }
 
@@ -63,7 +64,9 @@ export class GoogleMapsService {
       return this.geocodingCache.get(cacheKey);
     }
 
-    if (!this.apiKey) {
+    // Prefer an explicitly-set key, but fall back to window.ENV if available
+    const apiKey = this.apiKey || this.getGoogleApiKey();
+    if (!apiKey) {
       console.warn('[GoogleMapsService] No API key set; address search skipped');
       return [];
     }
@@ -388,10 +391,14 @@ export class GoogleMapsService {
   }
 
   async ensurePlacesReady() {
-    if (!this.apiKey) {
-      console.warn('[GoogleMapsService] No API key set; cannot load Places');
+    // Dynamically get API key each time (env.js may load after this service)
+    const apiKey = this.apiKey || this.getGoogleApiKey();
+    if (!apiKey) {
+      console.warn('[GoogleMapsService] No API key set; cannot load Places. Check window.ENV.GOOGLE_MAPS_API_KEY');
       return null;
     }
+    // Cache it once found
+    this.apiKey = apiKey;
 
     if (this.geocoder) {
       return true;
@@ -544,7 +551,11 @@ export class GoogleMapsService {
    * Modern Places autocomplete via Places API (v1) to avoid deprecated AutocompleteService.
    */
   async fetchAutocompleteSuggestions(input, options = {}) {
-    if (!this.apiKey) return [];
+    const apiKey = this.apiKey || this.getGoogleApiKey();
+    if (!apiKey) {
+      console.warn('[GoogleMapsService] No API key set; address search skipped');
+      return [];
+    }
 
     const body = {
       input,
@@ -565,7 +576,7 @@ export class GoogleMapsService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Goog-Api-Key': this.apiKey,
+        'X-Goog-Api-Key': apiKey,
         'X-Goog-FieldMask': 'suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat,suggestions.placePrediction.types'
       },
       body: JSON.stringify(body)
@@ -596,7 +607,11 @@ export class GoogleMapsService {
    * Places API Text Search (v1) replacement for legacy PlacesService text/nearby search.
    */
   async searchTextPlaces(query, options = {}) {
-    if (!this.apiKey) return [];
+    const apiKey = this.apiKey || this.getGoogleApiKey();
+    if (!apiKey) {
+      console.warn('[GoogleMapsService] No API key set; searchTextPlaces skipped');
+      return [];
+    }
     const body = {
       textQuery: query,
       pageSize: 10
@@ -629,7 +644,7 @@ export class GoogleMapsService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Goog-Api-Key': this.apiKey,
+        'X-Goog-Api-Key': apiKey,
         'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.rating,places.userRatingCount,places.businessStatus'
       },
       body: JSON.stringify(body)
@@ -658,9 +673,10 @@ export class GoogleMapsService {
    */
   async fetchPlaceDetails(placeId) {
     console.log('🔍 [GoogleMapsService] fetchPlaceDetails called with:', placeId);
-    
-    if (!this.apiKey || !placeId) {
-      console.warn('⚠️ [GoogleMapsService] Missing apiKey or placeId:', { hasApiKey: !!this.apiKey, placeId });
+    const apiKey = this.apiKey || this.getGoogleApiKey();
+
+    if (!apiKey || !placeId) {
+      console.warn('⚠️ [GoogleMapsService] Missing apiKey or placeId:', { hasApiKey: !!apiKey, placeId });
       return null;
     }
 
@@ -690,7 +706,7 @@ export class GoogleMapsService {
 
     const resp = await fetch(url, {
       headers: {
-        'X-Goog-Api-Key': this.apiKey,
+        'X-Goog-Api-Key': apiKey,
       }
     });
 

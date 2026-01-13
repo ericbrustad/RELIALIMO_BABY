@@ -181,9 +181,9 @@ async function checkRemoteAvailable() {
   }
 
   try {
-    const res = await apiFetch('/rest/v1/service_types?select=id&limit=1');
-    // If the table exists but is empty, PostgREST still returns 200 with []
-    remoteAvailable = !!res && (res.ok || res.status === 401 || res.status === 403);
+    const data = await apiFetch('/service_types?select=id&limit=1');
+    // If the table exists, apiFetch returns parsed JSON (array) or throws on error
+    remoteAvailable = Array.isArray(data);
     return remoteAvailable;
   } catch {
     remoteAvailable = false;
@@ -292,12 +292,8 @@ export async function loadServiceTypes({ includeInactive = true, preferRemote = 
 
   try {
     // IMPORTANT: select=* avoids 400s when columns differ between schemas
-    const res = await apiFetch('/rest/v1/service_types?select=*');
-    if (!res.ok) {
-      return includeInactive ? local : local.filter((s) => s.active);
-    }
-
-    const data = await res.json().catch(() => []);
+    // apiFetch returns parsed JSON directly (not a Response object)
+    const data = await apiFetch('/service_types?select=*');
     const remote = Array.isArray(data) ? data.map(mapRemoteRow) : [];
 
     // If remote exists but empty, keep local (do not auto-write / seed remote)
@@ -316,21 +312,20 @@ export async function loadServiceTypes({ includeInactive = true, preferRemote = 
 }
 
 async function tryRemoteUpsert(url, rows) {
-  const res = await apiFetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Prefer: 'return=representation,resolution=merge-duplicates'
-    },
-    body: JSON.stringify(rows)
-  });
-  if (res.ok) {
-    const data = await res.json().catch(() => []);
+  try {
+    const data = await apiFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation,resolution=merge-duplicates'
+      },
+      body: JSON.stringify(rows)
+    });
+    // apiFetch returns parsed JSON on success
     return Array.isArray(data) ? data.map(mapRemoteRow) : null;
+  } catch (err) {
+    return { status: 'error', bodyText: err.message };
   }
-
-  const bodyText = await res.text().catch(() => '');
-  return { status: res.status, bodyText };
 }
 
 export async function upsertServiceTypes(list, { preferRemote = true } = {}) {
@@ -506,7 +501,7 @@ export async function deleteServiceTypeById(id, { preferRemote = true } = {}) {
   if (!ok) return;
 
   try {
-    await apiFetch(`/rest/v1/service_types?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await apiFetch(`/service_types?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
   } catch {
     // ignore remote failure; local already updated
   }
