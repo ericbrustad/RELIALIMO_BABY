@@ -2807,7 +2807,15 @@ class ReservationForm {
     document.getElementById('billingCompany').value = account.company_name || '';
     document.getElementById('billingFirstName').value = account.first_name || '';
     document.getElementById('billingLastName').value = account.last_name || '';
-    document.getElementById('billingPhone').value = account.phone || account.cell_phone || '';
+    
+    const billingPhoneField = document.getElementById('billingPhone');
+    if (billingPhoneField) {
+      billingPhoneField.value = account.phone || account.cell_phone || '';
+      console.log('✅ Set billing phone to:', billingPhoneField.value);
+    } else {
+      console.warn('⚠️ billingPhone field not found');
+    }
+    
     document.getElementById('billingEmail').value = account.email || '';
     
     console.log('✅ Set billingCompany to:', document.getElementById('billingCompany').value);
@@ -2821,19 +2829,22 @@ class ReservationForm {
       
       let crossFilledFields = [];
       
-      if (!passengerFirstName.value && account.first_name) {
+      if (passengerFirstName && !passengerFirstName.value && account.first_name) {
         passengerFirstName.value = account.first_name;
         crossFilledFields.push('First Name');
       }
-      if (!passengerLastName.value && account.last_name) {
+      if (passengerLastName && !passengerLastName.value && account.last_name) {
         passengerLastName.value = account.last_name;
         crossFilledFields.push('Last Name');
       }
-      if (!passengerPhone.value && account.phone) {
-        passengerPhone.value = account.phone;
+      if (passengerPhone && !passengerPhone.value && (account.phone || account.cell_phone)) {
+        passengerPhone.value = account.phone || account.cell_phone || '';
         crossFilledFields.push('Phone');
+        console.log('✅ Cross-filled passenger phone:', passengerPhone.value);
+      } else if (!passengerPhone) {
+        console.warn('⚠️ passengerPhone element not found during cross-fill');
       }
-      if (!passengerEmail.value && account.email) {
+      if (passengerEmail && !passengerEmail.value && account.email) {
         passengerEmail.value = account.email;
         crossFilledFields.push('Email');
       }
@@ -2888,7 +2899,15 @@ class ReservationForm {
     // Populate Passenger section with selected account
     document.getElementById('passengerFirstName').value = account.first_name || '';
     document.getElementById('passengerLastName').value = account.last_name || '';
-    document.getElementById('passengerPhone').value = account.phone || account.cell_phone || '';
+    
+    const passengerPhoneField = document.getElementById('passengerPhone');
+    if (passengerPhoneField) {
+      passengerPhoneField.value = account.phone || account.cell_phone || '';
+      console.log('✅ Set passenger phone to:', passengerPhoneField.value);
+    } else {
+      console.warn('⚠️ passengerPhone field not found');
+    }
+    
     document.getElementById('passengerEmail').value = account.email || '';
 
     // Cross-fill billing fields ONLY if account is marked as billing client
@@ -2902,28 +2921,31 @@ class ReservationForm {
       
       let crossFilledFields = [];
       
-      if (!billingAccountSearch.value) {
+      if (billingAccountSearch && !billingAccountSearch.value) {
         const acctNum = account.account_number || account.id;
         billingAccountSearch.value = acctNum;
         crossFilledFields.push('Account Search');
       }
-      if (!billingCompany.value && account.company_name) {
+      if (billingCompany && !billingCompany.value && account.company_name) {
         billingCompany.value = account.company_name;
         crossFilledFields.push('Company');
       }
-      if (!billingFirstName.value && account.first_name) {
+      if (billingFirstName && !billingFirstName.value && account.first_name) {
         billingFirstName.value = account.first_name;
         crossFilledFields.push('First Name');
       }
-      if (!billingLastName.value && account.last_name) {
+      if (billingLastName && !billingLastName.value && account.last_name) {
         billingLastName.value = account.last_name;
         crossFilledFields.push('Last Name');
       }
-      if (!billingPhone.value && account.phone) {
-        billingPhone.value = account.phone;
+      if (billingPhone && !billingPhone.value && (account.phone || account.cell_phone)) {
+        billingPhone.value = account.phone || account.cell_phone || '';
         crossFilledFields.push('Phone');
+        console.log('✅ Cross-filled billing phone:', billingPhone.value);
+      } else if (!billingPhone) {
+        console.warn('⚠️ billingPhone element not found during cross-fill');
       }
-      if (!billingEmail.value && account.email) {
+      if (billingEmail && !billingEmail.value && account.email) {
         billingEmail.value = account.email;
         crossFilledFields.push('Email');
       }

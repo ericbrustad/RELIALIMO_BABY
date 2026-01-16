@@ -620,11 +620,11 @@ export class FarmoutAutomationService {
 
   /**
    * Build prioritized driver list based on:
-   * 1. Driver rating (10 = best, goes first)
+   * 1. Driver rating (10 = best, goes first) - when enabled
    * 2. Service area match
    * 3. Vehicle type match
    * 4. For on-demand: available drivers first
-   * 5. Alphabetical order for same rating
+   * 5. Alphabetical order for same rating/priority
    */
   buildDriverPriorityList(job, reservation) {
     const allDrivers = this.driverTracker.getAllDrivers?.() || this.driverTracker.getAvailableDrivers?.() || [];
@@ -657,35 +657,47 @@ export class FarmoutAutomationService {
       return true;
     });
     
+    // Check if driver rating priority is enabled via farmout automation settings toggle
+    const ratingPriorityEnabled = this.settings.enableDriverRatingPriority !== false;
+    
     // Score and sort drivers
     const scoredDrivers = eligibleDrivers.map(driver => {
       let score = 0;
       
-      // Rating score (0-100) - rating 10 = 100, rating 1 = 10
-      const rating = driver.driver_rating || driver.rating || 5;
-      score += rating * 10;
+      // Get driver rating (1-10, default 5)
+      const rating = Math.max(1, Math.min(10, parseInt(driver.driver_rating || driver.rating || 5)));
       
-      // Service area match (+50)
-      const serviceAreas = driver.service_areas || [];
-      if (Array.isArray(serviceAreas) && pickupCity) {
-        const matchesArea = serviceAreas.some(area => 
-          pickupCity.toLowerCase().includes(area.toLowerCase()) ||
-          area.toLowerCase().includes(pickupCity.toLowerCase())
-        );
-        if (matchesArea) score += 50;
+      // Apply rating to score ONLY if rating priority is enabled
+      if (ratingPriorityEnabled) {
+        // Rating contributes the most significant part of the score (1000-10000)
+        score += rating * 1000;
       }
       
-      // Vehicle type match (+30)
-      const preferredVehicles = driver.preferred_vehicle_types || [];
-      if (Array.isArray(preferredVehicles) && vehicleType) {
-        const matchesVehicle = preferredVehicles.some(v => 
-          v.toLowerCase() === vehicleType.toLowerCase()
-        );
-        if (matchesVehicle) score += 30;
+      // Service area match bonus
+      if (this.settings.enableServiceAreaMatching !== false) {
+        const serviceAreas = driver.service_areas || [];
+        if (Array.isArray(serviceAreas) && pickupCity) {
+          const matchesArea = serviceAreas.some(area => 
+            pickupCity.toLowerCase().includes(area.toLowerCase()) ||
+            area.toLowerCase().includes(pickupCity.toLowerCase())
+          );
+          if (matchesArea) score += 500;
+        }
       }
       
-      // If on-demand, prioritize available drivers (+100)
-      if (isOnDemand && this.settings.prioritizeAvailableForOnDemand) {
+      // Vehicle type match bonus
+      if (this.settings.enableVehicleTypeMatching !== false) {
+        const preferredVehicles = driver.preferred_vehicle_types || [];
+        if (Array.isArray(preferredVehicles) && vehicleType) {
+          const matchesVehicle = preferredVehicles.some(v => 
+            v.toLowerCase() === vehicleType.toLowerCase()
+          );
+          if (matchesVehicle) score += 300;
+        }
+      }
+      
+      // On-demand priority for available drivers
+      if (isOnDemand && this.settings.prioritizeAvailableForOnDemand !== false) {
         if (driver.availability_status === 'available' || driver.status === 'available') {
           score += 100;
         }
@@ -694,19 +706,30 @@ export class FarmoutAutomationService {
       return { driver, score, rating };
     });
     
-    // Sort by score (desc), then rating (desc), then name (asc)
+    // Sort drivers: 
+    // 1. By score (highest first) - includes rating if enabled
+    // 2. By rating (highest first, 10->1) - for same-score drivers when rating priority enabled
+    // 3. Alphabetically by name (A->Z) - for drivers with same rating
     scoredDrivers.sort((a, b) => {
+      // Primary: Score (includes rating bonus if enabled)
       if (b.score !== a.score) return b.score - a.score;
-      if (b.rating !== a.rating) return b.rating - a.rating;
-      const nameA = (a.driver.name || a.driver.first_name || '').toLowerCase();
-      const nameB = (b.driver.name || b.driver.first_name || '').toLowerCase();
+      
+      // Secondary: Direct rating comparison (10->1) when rating priority enabled
+      if (ratingPriorityEnabled && b.rating !== a.rating) {
+        return b.rating - a.rating;
+      }
+      
+      // Tertiary: Alphabetical by name (A->Z)
+      const nameA = (a.driver.name || a.driver.first_name || '').toLowerCase().trim();
+      const nameB = (b.driver.name || b.driver.first_name || '').toLowerCase().trim();
       return nameA.localeCompare(nameB);
     });
     
     job.prioritizedDriverList = scoredDrivers.map(s => s.driver);
     job.currentDriverIndex = 0;
     
-    this.logAutomationEvent(job.reservationId, `Found ${job.prioritizedDriverList.length} eligible drivers. ${isOnDemand ? '(On-demand priority)' : ''}`);
+    const ratingInfo = ratingPriorityEnabled ? ' (Rating priority: ENABLED)' : ' (Rating priority: OFF)';
+    this.logAutomationEvent(job.reservationId, `Found ${job.prioritizedDriverList.length} eligible drivers.${ratingInfo} ${isOnDemand ? '(On-demand priority)' : ''}`);
   }
 
   sendNextOffer(job) {
@@ -819,9 +842,13 @@ export class FarmoutAutomationService {
                        `${driver.first_name || ''} ${driver.last_name || ''}`.trim() || 'Driver';
     const driverPhone = driver.phone || driver.cell_phone || driver.mobile;
     
+    const ratingInfo = this.settings.enableDriverRatingPriority !== false 
+      ? `(Rating: ${driver.driver_rating || 5}/10)` 
+      : '(Rating priority OFF)';
+    
     this.logAutomationEvent(
       job.reservationId,
-      `🏠 Offer sent to ${driverName} (Rating: ${driver.driver_rating || 5}/10)${driverPhone ? ` - ${driverPhone}` : ''}`
+      `🏠 Offer sent to ${driverName} ${ratingInfo}${driverPhone ? ` - ${driverPhone}` : ''}`
     );
     
     // Store offer in Supabase (primary) and localStorage (fallback)

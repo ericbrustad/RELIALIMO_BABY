@@ -1,35 +1,27 @@
 {
   "version": 2,
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
+    }
+  ],
   "routes": [
     {
-      "src": "/driver/(.+)",
-      "dest": "/driver-portal.html?driver_id=$1",
-      "status": 200
+      "src": "/api/(.*)",
+      "dest": "/server.js"
     },
     {
-      "src": "/portal/(.+)",
-      "dest": "/driver-portal.html?driver_id=$1",
-      "status": 200
+      "src": "/driver/([^/]+)",
+      "dest": "/driver-portal.html?driver_id=$1"
     },
     {
-      "src": "^/$",
-      "dest": "/landing.html"
+      "src": "/portal/([^/]+)",
+      "dest": "/driver-portal.html?driver_id=$1"
     },
     {
-      "src": "/debug-urls.html",
-      "dest": "/debug-urls.html"
-    },
-    {
-      "src": "/test-(.*).html",
-      "dest": "/test-$1.html"
-    },
-    {
-      "src": "/driver-portal.html",
-      "dest": "/driver-portal.html"
-    },
-    {
-      "src": "/(.*\\..+)",
-      "dest": "/$1"
+      "src": "/([a-f0-9\\-]{8,})",
+      "dest": "/driver-portal.html?driver_id=$1"
     },
     {
       "src": "/(.*)",

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete Specific Reservations - RELIALIMO</title>
+    <script src="env.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .delete-btn { background: #dc3545; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+        .delete-btn:hover { background: #c82333; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        .reservation-info { border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🗑️ Delete Specific Reservations</h1>
+    
+    <div id="results">
+        <p>Loading reservation data...</p>
+    </div>
+    
+    <script type="module">
+        import supabaseDb from './supabase-db.js';
+        
+        const targetConfNumbers = ['22456', '22441'];
+        const results = document.getElementById('results');
+        
+        async function findAndDeleteReservations() {
+            try {
+                console.log('🔍 Searching for reservations:', targetConfNumbers);
+                
+                // First try to get all reservations to find these
+                const allReservations = await supabaseDb.getAllReservations();
+                console.log('📋 Found total reservations:', allReservations.length);
+                
+                const foundReservations = allReservations.filter(res => 
+                    targetConfNumbers.includes(String(res.confirmation_number))
+                );
+                
+                console.log('🎯 Target reservations found:', foundReservations.length);
+                
+                if (foundReservations.length === 0) {
+                    // Try local storage fallback
+                    const localReservations = JSON.parse(localStorage.getItem('relia_reservations') || '[]');
+                    const localFound = localReservations.filter(res => 
+                        targetConfNumbers.includes(String(res.confirmation_number))
+                    );
+                    
+                    if (localFound.length > 0) {
+                        results.innerHTML = '<h2>Found in Local Storage:</h2>' + 
+                            localFound.map(res => `
+                                <div class="reservation-info">
+                                    <strong>Conf #${res.confirmation_number}</strong><br>
+                                    Passenger: ${res.passenger_name || 'N/A'}<br>
+                                    Location: ${res.pickup_location || 'N/A'}<br>
+                                    <button class="delete-btn" onclick="deleteLocalReservation('${res.confirmation_number}')">Delete This Reservation</button>
+                                </div>
+                            `).join('') +
+                            '<button class="delete-btn" onclick="deleteAllTargetLocal()">Delete Both Reservations</button>';
+                    } else {
+                        results.innerHTML = '<p class="error">❌ Reservations 22456 and 22441 not found in database or local storage</p>';
+                    }
+                    return;
+                }
+                
+                // Show found reservations with delete options
+                results.innerHTML = '<h2>Found Reservations:</h2>' + 
+                    foundReservations.map(res => `
+                        <div class="reservation-info">
+                            <strong>Conf #${res.confirmation_number}</strong><br>
+                            ID: ${res.id}<br>
+                            Passenger: ${res.passenger_name || 'N/A'}<br>
+                            Location: ${res.pickup_location || 'N/A'}<br>
+                            <button class="delete-btn" onclick="deleteReservation('${res.id}', '${res.confirmation_number}')">Delete This Reservation</button>
+                        </div>
+                    `).join('') +
+                    '<button class="delete-btn" onclick="deleteAllTargets()">Delete Both Reservations</button>';
+                    
+            } catch (error) {
+                console.error('❌ Error finding reservations:', error);
+                results.innerHTML = '<p class="error">❌ Error: ' + error.message + '</p>';
+            }
+        }
+        
+        // Delete individual reservation
+        window.deleteReservation = async function(id, confNumber) {
+            try {
+                console.log(`🗑️ Deleting reservation ${confNumber} (ID: ${id})`);
+                await supabaseDb.deleteReservation(id);
+                results.innerHTML += `<p class="success">✅ Deleted reservation ${confNumber}</p>`;
+                // Refresh the search
+                setTimeout(() => findAndDeleteReservations(), 1000);
+            } catch (error) {
+                console.error('❌ Delete failed:', error);
+                results.innerHTML += `<p class="error">❌ Failed to delete ${confNumber}: ${error.message}</p>`;
+            }
+        };
+        
+        // Delete all target reservations
+        window.deleteAllTargets = async function() {
+            try {
+                const allReservations = await supabaseDb.getAllReservations();
+                const foundReservations = allReservations.filter(res => 
+                    targetConfNumbers.includes(String(res.confirmation_number))
+                );
+                
+                for (const res of foundReservations) {
+                    console.log(`🗑️ Deleting reservation ${res.confirmation_number}`);
+                    await supabaseDb.deleteReservation(res.id);
+                }
+                
+                results.innerHTML += `<p class="success">✅ Deleted ${foundReservations.length} reservations</p>`;
+                setTimeout(() => findAndDeleteReservations(), 1000);
+            } catch (error) {
+                console.error('❌ Bulk delete failed:', error);
+                results.innerHTML += `<p class="error">❌ Bulk delete failed: ${error.message}</p>`;
+            }
+        };
+        
+        // Local storage deletion functions
+        window.deleteLocalReservation = function(confNumber) {
+            try {
+                let localReservations = JSON.parse(localStorage.getItem('relia_reservations') || '[]');
+                localReservations = localReservations.filter(res => 
+                    String(res.confirmation_number) !== String(confNumber)
+                );
+                localStorage.setItem('relia_reservations', JSON.stringify(localReservations));
+                results.innerHTML += `<p class="success">✅ Deleted local reservation ${confNumber}</p>`;
+                setTimeout(() => findAndDeleteReservations(), 1000);
+            } catch (error) {
+                results.innerHTML += `<p class="error">❌ Failed to delete local ${confNumber}: ${error.message}</p>`;
+            }
+        };
+        
+        window.deleteAllTargetLocal = function() {
+            try {
+                let localReservations = JSON.parse(localStorage.getItem('relia_reservations') || '[]');
+                const originalCount = localReservations.length;
+                localReservations = localReservations.filter(res => 
+                    !targetConfNumbers.includes(String(res.confirmation_number))
+                );
+                const deletedCount = originalCount - localReservations.length;
+                localStorage.setItem('relia_reservations', JSON.stringify(localReservations));
+                results.innerHTML += `<p class="success">✅ Deleted ${deletedCount} local reservations</p>`;
+                setTimeout(() => findAndDeleteReservations(), 1000);
+            } catch (error) {
+                results.innerHTML += `<p class="error">❌ Bulk local delete failed: ${error.message}</p>`;
+            }
+        };
+        
+        // Start the search
+        findAndDeleteReservations();
+    </script>
+</body>
+</html>

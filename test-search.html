@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Search Autofill - RELIALIMO</title>
+    <script src="env.js"></script>
+    <script type="module">
+        import supabaseDb from './supabase-db.js';
+        
+        window.testSearch = async function() {
+            const query = document.getElementById('searchInput').value;
+            const results = document.getElementById('results');
+            
+            if (!query || query.length < 2) {
+                results.innerHTML = '<p>Enter at least 2 characters</p>';
+                return;
+            }
+            
+            try {
+                console.log('🔍 Testing search for:', query);
+                const accounts = await supabaseDb.searchAccounts(query);
+                console.log('✅ Search results:', accounts);
+                
+                if (accounts.length === 0) {
+                    results.innerHTML = '<p style="color: orange;">No accounts found</p>';
+                } else {
+                    results.innerHTML = '<h3>Found ' + accounts.length + ' accounts:</h3>' +
+                        accounts.map(acc => `
+                            <div style="border: 1px solid #ccc; padding: 10px; margin: 5px;">
+                                <strong>ID:</strong> ${acc.id}<br>
+                                <strong>Name:</strong> ${acc.name || 'N/A'}<br>
+                                <strong>Company:</strong> ${acc.company_name || 'N/A'}<br>
+                                <strong>Email:</strong> ${acc.email || 'N/A'}<br>
+                                <strong>Phone:</strong> ${acc.phone || 'N/A'}
+                            </div>
+                        `).join('');
+                }
+            } catch (error) {
+                console.error('❌ Search error:', error);
+                results.innerHTML = '<p style="color: red;">Search failed: ' + error.message + '</p>';
+            }
+        };
+    </script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        input { padding: 10px; width: 300px; font-size: 16px; }
+        button { padding: 10px 20px; font-size: 16px; margin-left: 10px; }
+        #results { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Search Autofill Test</h1>
+    
+    <div>
+        <input type="text" id="searchInput" placeholder="Search accounts (try 'Erix', 'peters', etc.)" onkeyup="if(event.key==='Enter') testSearch()">
+        <button onclick="testSearch()">Search</button>
+    </div>
+    
+    <div id="results">
+        <p>Enter a search term to test account search functionality</p>
+        <p><strong>Available test accounts:</strong></p>
+        <ul>
+            <li>Erix Coach and Car Transportation</li>
+            <li>peters barn</li>
+            <li>wixxy wood wood</li>
+        </ul>
+    </div>
+</body>
+</html>

@@ -1,5 +1,5 @@
 // Import API service
-import { setupAPI, apiFetch, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, fetchVehicleTypes, upsertVehicleType, deleteVehicleType, fetchActiveVehicles, uploadVehicleTypeImage, fetchVehicleTypeImages, deleteVehicleTypeImage, updateVehicleTypeImage, updateFleetVehicle } from './api-service.js';
+import { setupAPI, apiFetch, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, fetchVehicleTypes, upsertVehicleType, deleteVehicleType, fetchActiveVehicles, fetchFleetVehicles, uploadVehicleTypeImage, fetchVehicleTypeImages, deleteVehicleTypeImage, updateVehicleTypeImage, updateFleetVehicle } from './api-service.js';
 import { wireMainNav } from './navigation.js';
 import { loadServiceTypes, SERVICE_TYPES_STORAGE_KEY } from './service-types-store.js';
 import { getSupabaseConfig } from './config.js';
@@ -1917,6 +1917,7 @@ class MyOffice {
       'electronic-fax': null,
       'sms-provider': 'sms-provider.html',
       'email-settings': 'email-settings.html',
+      'farmout-automation': 'farmout-settings.html',
       'portal-links': 'portal-links.html',
       'limoanywhere-pay': null,
       'digital-marketing': null,
@@ -8299,12 +8300,17 @@ class MyOffice {
    * Update the bold display of assigned vehicle above the dropdown
    */
   async updateAssignedVehicleDisplay(vehicleId) {
+    console.log('🔍 updateAssignedVehicleDisplay called with vehicleId:', vehicleId);
     const displayDiv = document.getElementById('assignedVehicleDisplay');
     const nameSpan = document.getElementById('assignedVehicleName');
     
-    if (!displayDiv || !nameSpan) return;
+    if (!displayDiv || !nameSpan) {
+      console.warn('⚠️ Display elements not found:', { displayDiv: !!displayDiv, nameSpan: !!nameSpan });
+      return;
+    }
     
     if (!vehicleId) {
+      console.log('ℹ️ No vehicle ID, hiding display');
       displayDiv.style.display = 'none';
       nameSpan.textContent = '';
       return;
@@ -8316,18 +8322,59 @@ class MyOffice {
     // Check local fleet first
     const localFleet = this.fleetRecords || [];
     const localVehicle = localFleet.find(v => v.id === vehicleId);
+    console.log('🔍 Local fleet search - records:', localFleet.length, 'found vehicle:', !!localVehicle);
     
     if (localVehicle) {
-      vehicleName = localVehicle.veh_disp_name || 
-        [localVehicle.year, localVehicle.make, localVehicle.model, localVehicle.license_plate ? `(${localVehicle.license_plate})` : ''].filter(Boolean).join(' ');
+      console.log('✅ Found vehicle in local fleet:', localVehicle);
+      // Build display using veh_title and license_plate
+      const vehTitle = localVehicle.veh_title || '';  // Don't use veh_disp_name as fallback
+      const licensePlate = localVehicle.license_plate || '';
+      
+      if (vehTitle && licensePlate) {
+        vehicleName = `${vehTitle} [${licensePlate}]`;
+      } else if (vehTitle) {
+        vehicleName = vehTitle;
+      } else if (licensePlate) {
+        vehicleName = `Vehicle [${licensePlate}]`;
+      } else {
+        // Fallback to veh_disp_name, make/model/year, or unit_number if no title/plate available
+        vehicleName = localVehicle.veh_disp_name || [localVehicle.year, localVehicle.make, localVehicle.model].filter(Boolean).join(' ') || localVehicle.unit_number;
+      }
+      console.log('🎯 Built vehicle name from local fleet:', vehicleName);
     } else {
-      // Try API
+      // Try API - check both fleet_vehicles and regular vehicles tables
       try {
-        const vehicles = await fetchActiveVehicles({ includeInactive: true });
+        // First try fleet_vehicles table
+        let vehicles = [];
+        try {
+          vehicles = await fetchFleetVehicles({ includeInactive: true });
+          console.log('🔍 Looking for vehicle in fleet_vehicles:', vehicleId);
+        } catch (err) {
+          console.warn('Could not fetch from fleet_vehicles, trying vehicles table:', err);
+          vehicles = await fetchActiveVehicles({ includeInactive: true });
+          console.log('🔍 Looking for vehicle in vehicles table:', vehicleId);
+        }
+        
         const vehicle = vehicles?.find(v => v.id === vehicleId);
         if (vehicle) {
-          vehicleName = vehicle.veh_disp_name || 
-            [vehicle.year, vehicle.make, vehicle.model, vehicle.license_plate ? `(${vehicle.license_plate})` : ''].filter(Boolean).join(' ');
+          console.log('✅ Found vehicle:', vehicle);
+          // Build display using veh_title and license_plate
+          const vehTitle = vehicle.veh_title || '';  // Don't use veh_disp_name as fallback
+          const licensePlate = vehicle.license_plate || '';
+          
+          if (vehTitle && licensePlate) {
+            vehicleName = `${vehTitle} [${licensePlate}]`;
+          } else if (vehTitle) {
+            vehicleName = vehTitle;
+          } else if (licensePlate) {
+            vehicleName = `Vehicle [${licensePlate}]`;
+          } else {
+            // Fallback to veh_disp_name, make/model/year, or unit_number if no title/plate available
+            vehicleName = vehicle.veh_disp_name || [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(' ') || vehicle.unit_number;
+          }
+          console.log('🎯 Built vehicle name from API:', vehicleName);
+        } else {
+          console.warn('❌ Vehicle not found in any table:', vehicleId);
         }
       } catch (e) {
         console.warn('Could not lookup vehicle:', e);
@@ -8335,9 +8382,11 @@ class MyOffice {
     }
     
     if (vehicleName) {
+      console.log('✅ Setting vehicle display to:', vehicleName);
       nameSpan.textContent = vehicleName;
       displayDiv.style.display = 'block';
     } else {
+      console.warn('⚠️ No vehicle name found, showing ID fallback');
       nameSpan.textContent = `Vehicle ID: ${vehicleId.substring(0, 8)}...`;
       displayDiv.style.display = 'block';
     }
@@ -8367,12 +8416,23 @@ class MyOffice {
     };
 
     try {
-      // First try to get vehicles from API
-      let vehicles = await fetchActiveVehicles({ includeInactive: false });
+      // Try to get vehicles from fleet_vehicles table first (primary source)
+      let vehicles = [];
       
-      // Filter to only active, real vehicles from API
+      try {
+        vehicles = await fetchFleetVehicles({ includeInactive: false });
+        console.log('📋 Fetched vehicles from fleet_vehicles:', vehicles?.length || 0);
+      } catch (err) {
+        console.warn('Could not fetch from fleet_vehicles, trying regular vehicles table:', err);
+        // Fallback to regular vehicles table
+        vehicles = await fetchActiveVehicles({ includeInactive: false });
+        console.log('📋 Fetched vehicles from vehicles table:', vehicles?.length || 0);
+      }
+      
+      // Filter to only active, real vehicles
       if (vehicles && vehicles.length > 0) {
         vehicles = vehicles.filter(v => isVehicleActive(v) && isRealVehicle(v));
+        console.log('📋 After filtering active/real vehicles:', vehicles?.length || 0);
       }
       
       // If no API vehicles, use local fleet records from Company Resources
@@ -8429,13 +8489,34 @@ class MyOffice {
       select.innerHTML = '<option value="">- Not Assigned -</option>';
 
       if (Array.isArray(vehicles) && vehicles.length > 0) {
-        vehicles.forEach((vehicle) => {
+        console.log('📋 Populating dropdown with vehicles:', vehicles.length);
+        vehicles.forEach((vehicle, index) => {
           const option = document.createElement('option');
           option.value = vehicle.id;
-          // Use veh_disp_name as primary display
-          option.textContent = vehicle.veh_disp_name || vehicle.unit_number || `Vehicle ${vehicle.id}`;
+          
+          // Build display using veh_title and license_plate from fleet_vehicles
+          const vehTitle = vehicle.veh_title || '';  // Don't use veh_disp_name as fallback
+          const licensePlate = vehicle.license_plate || '';
+          
+          let displayText = '';
+          if (vehTitle && licensePlate) {
+            displayText = `${vehTitle} [${licensePlate}]`;
+          } else if (vehTitle) {
+            displayText = vehTitle;
+          } else if (licensePlate) {
+            displayText = `Vehicle [${licensePlate}]`;
+          } else {
+            // Fallback to veh_disp_name, unit_number, or ID if neither title nor plate available
+            displayText = vehicle.veh_disp_name || vehicle.unit_number || `Vehicle ${vehicle.id}`;
+          }
+          
+          console.log(`📋 Vehicle ${index + 1}: ${displayText} (ID: ${vehicle.id})`);
+          option.textContent = displayText;
           select.appendChild(option);
         });
+        console.log('✅ Dropdown populated with', vehicles.length, 'vehicles');
+      } else {
+        console.warn('⚠️ No vehicles available for dropdown');
       }
 
       // Set selected value if provided
@@ -8449,20 +8530,46 @@ class MyOffice {
           // Try to find the vehicle info
           let vehicleName = `Vehicle ${selectedVehicleId.substring(0, 8)}...`;
           
-          // Check if we can get more info from API
+          // Check if we can get more info from fleet_vehicles or vehicles API
           try {
-            const allVehicles = await fetchActiveVehicles({ includeInactive: true });
+            // First try fleet_vehicles table
+            let allVehicles = [];
+            try {
+              allVehicles = await fetchFleetVehicles({ includeInactive: true });
+              console.log('🔍 Looking for inactive vehicle in fleet_vehicles:', selectedVehicleId);
+            } catch (err) {
+              console.warn('Could not fetch from fleet_vehicles, trying vehicles table:', err);
+              allVehicles = await fetchActiveVehicles({ includeInactive: true });
+              console.log('🔍 Looking for inactive vehicle in vehicles table:', selectedVehicleId);
+            }
             const assignedVehicle = allVehicles?.find(v => v.id === selectedVehicleId);
             if (assignedVehicle) {
-              const typeName = getVehicleTypeName(assignedVehicle);
-              vehicleName = [
-                assignedVehicle.unit_number,
-                assignedVehicle.year,
-                assignedVehicle.make,
-                assignedVehicle.model,
-                typeName ? `(${typeName})` : '',
-                '(Inactive)'
-              ].filter(Boolean).join(' ');
+              // Build display using veh_title and license_plate
+              const vehTitle = assignedVehicle.veh_title || '';  // Don't use veh_disp_name as fallback
+              const licensePlate = assignedVehicle.license_plate || '';
+              
+              if (vehTitle && licensePlate) {
+                vehicleName = `${vehTitle} [${licensePlate}] (Inactive)`;
+              } else if (vehTitle) {
+                vehicleName = `${vehTitle} (Inactive)`;
+              } else if (licensePlate) {
+                vehicleName = `Vehicle [${licensePlate}] (Inactive)`;
+              } else {
+                // Fallback to veh_disp_name or original logic if no title/plate
+                if (assignedVehicle.veh_disp_name) {
+                  vehicleName = `${assignedVehicle.veh_disp_name} (Inactive)`;
+                } else {
+                  const typeName = getVehicleTypeName(assignedVehicle);
+                  vehicleName = [
+                    assignedVehicle.unit_number,
+                    assignedVehicle.year,
+                    assignedVehicle.make,
+                    assignedVehicle.model,
+                    typeName ? `(${typeName})` : '',
+                    '(Inactive)'
+                  ].filter(Boolean).join(' ');
+                }
+              }
             }
           } catch (e) {
             console.warn('Could not lookup assigned vehicle details:', e);

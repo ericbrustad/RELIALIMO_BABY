@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔍 RELIALIMO Supabase Connection Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .debug-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .warning { background: #fff3cd; border-color: #ffeaa7; color: #856404; }
+        .error { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .info { background: #d1ecf1; border-color: #bee5eb; color: #0c5460; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .logo { text-align: center; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <img src="https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/reliabull_Trans.png" 
+                 alt="RELIALIMO" 
+                 style="height: 120px; width: auto;">
+        </div>
+        
+        <h1>🔍 Supabase Connection Debug Tool</h1>
+        <p>This page tests Supabase connectivity and diagnoses reservation loading issues.</p>
+
+        <div class="debug-section info">
+            <h2>🌐 Environment Check</h2>
+            <div id="envCheck">Running checks...</div>
+            <button onclick="checkEnvironment()">Recheck Environment</button>
+        </div>
+
+        <div class="debug-section info">
+            <h2>🔐 Authentication Status</h2>
+            <div id="authStatus">Checking authentication...</div>
+            <button onclick="checkAuth()">Check Authentication</button>
+        </div>
+
+        <div class="debug-section info">
+            <h2>🏢 Organization Context</h2>
+            <div id="orgStatus">Checking organization...</div>
+            <button onclick="checkOrganization()">Check Organization</button>
+        </div>
+
+        <div class="debug-section info">
+            <h2>📋 Reservations Test</h2>
+            <div id="reservationsTest">Ready to test...</div>
+            <button onclick="testReservations()">Test Reservations Loading</button>
+        </div>
+
+        <div class="debug-section info">
+            <h2>🔍 Raw API Test</h2>
+            <div id="rawApiTest">Ready to test raw API...</div>
+            <button onclick="testRawApi()">Test Raw Supabase API</button>
+        </div>
+    </div>
+
+    <!-- Load env.js first -->
+    <script src="./env.js"></script>
+    
+    <script type="module">
+        import { setupAPI, getSupabaseClient, fetchReservations } from './api-service.js';
+        import { getSupabaseConfig } from './config.js';
+
+        window.debugFunctions = {
+            setupAPI,
+            getSupabaseClient,
+            fetchReservations,
+            getSupabaseConfig
+        };
+
+        // Auto-run checks on load
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                checkEnvironment();
+                checkAuth();
+                checkOrganization();
+            }, 500);
+        });
+
+        window.checkEnvironment = function() {
+            const result = document.getElementById('envCheck');
+            let html = '<h3>Environment Variables:</h3>';
+            
+            try {
+                const env = window.ENV || {};
+                const config = window.debugFunctions.getSupabaseConfig();
+                
+                html += `<pre>window.ENV exists: ${!!window.ENV}
+SUPABASE_URL: ${env.SUPABASE_URL ? '✅ ' + env.SUPABASE_URL : '❌ Missing'}
+SUPABASE_ANON_KEY: ${env.SUPABASE_ANON_KEY ? '✅ Present (masked)' : '❌ Missing'}
+ORGANIZATION_ID: ${env.ORGANIZATION_ID || '❌ Missing'}
+Current URL: ${window.location.href}
+User Agent: ${navigator.userAgent}
+Config Result: ${JSON.stringify(config, null, 2)}</pre>`;
+                
+                result.innerHTML = html;
+                result.className = 'debug-section ' + (config.url && config.anonKey ? 'success' : 'error');
+            } catch (error) {
+                result.innerHTML = `<pre>Error checking environment: ${error.message}</pre>`;
+                result.className = 'debug-section error';
+            }
+        };
+
+        window.checkAuth = async function() {
+            const result = document.getElementById('authStatus');
+            result.innerHTML = 'Checking authentication...';
+            
+            try {
+                await window.debugFunctions.setupAPI();
+                const client = window.debugFunctions.getSupabaseClient();
+                
+                if (!client) {
+                    result.innerHTML = '<pre>❌ Supabase client not initialized</pre>';
+                    result.className = 'debug-section error';
+                    return;
+                }
+
+                const { data: { user }, error: userError } = await client.auth.getUser();
+                
+                let html = '<h3>Authentication Status:</h3><pre>';
+                html += `User: ${user ? '✅ ' + user.id : '❌ Not authenticated'}
+Email: ${user?.email || 'N/A'}
+Role: ${user?.role || 'N/A'}
+Error: ${userError?.message || 'None'}</pre>`;
+                
+                result.innerHTML = html;
+                result.className = 'debug-section ' + (user ? 'success' : 'warning');
+            } catch (error) {
+                result.innerHTML = `<pre>❌ Auth check failed: ${error.message}</pre>`;
+                result.className = 'debug-section error';
+            }
+        };
+
+        window.checkOrganization = async function() {
+            const result = document.getElementById('orgStatus');
+            result.innerHTML = 'Checking organization context...';
+            
+            try {
+                const env = window.ENV || {};
+                const orgId = env.ORGANIZATION_ID;
+                
+                if (!orgId) {
+                    result.innerHTML = '<pre>❌ No ORGANIZATION_ID in environment</pre>';
+                    result.className = 'debug-section error';
+                    return;
+                }
+
+                await window.debugFunctions.setupAPI();
+                const client = window.debugFunctions.getSupabaseClient();
+                
+                const { data: { user } } = await client.auth.getUser();
+                let html = '<h3>Organization Context:</h3><pre>';
+                html += `Organization ID: ${orgId}
+Environment Org: ✅ Present`;
+
+                if (user) {
+                    const { data: membership, error: membershipError } = await client
+                        .from('organization_members')
+                        .select('organization_id')
+                        .eq('user_id', user.id)
+                        .single();
+                    
+                    html += `
+User Membership: ${membership?.organization_id ? '✅ ' + membership.organization_id : '❌ Not found'}
+Membership Match: ${membership?.organization_id === orgId ? '✅ Matches' : '❌ Mismatch'}
+Membership Error: ${membershipError?.message || 'None'}`;
+                } else {
+                    html += `
+User Membership: ⚠️ No user authenticated`;
+                }
+                
+                html += '</pre>';
+                result.innerHTML = html;
+                result.className = 'debug-section ' + (orgId ? 'success' : 'error');
+            } catch (error) {
+                result.innerHTML = `<pre>❌ Organization check failed: ${error.message}</pre>`;
+                result.className = 'debug-section error';
+            }
+        };
+
+        window.testReservations = async function() {
+            const result = document.getElementById('reservationsTest');
+            result.innerHTML = 'Testing reservations loading...';
+            
+            try {
+                await window.debugFunctions.setupAPI();
+                const reservations = await window.debugFunctions.fetchReservations();
+                
+                let html = '<h3>Reservations Load Test:</h3><pre>';
+                html += `Status: ✅ Success
+Count: ${Array.isArray(reservations) ? reservations.length : 'Not an array'}
+Type: ${typeof reservations}
+Sample: ${JSON.stringify(reservations?.slice(0, 2), null, 2)}</pre>`;
+                
+                result.innerHTML = html;
+                result.className = 'debug-section ' + (Array.isArray(reservations) && reservations.length > 0 ? 'success' : 'warning');
+            } catch (error) {
+                result.innerHTML = `<pre>❌ Reservations test failed: ${error.message}
+Stack: ${error.stack}</pre>`;
+                result.className = 'debug-section error';
+            }
+        };
+
+        window.testRawApi = async function() {
+            const result = document.getElementById('rawApiTest');
+            result.innerHTML = 'Testing raw Supabase API...';
+            
+            try {
+                const env = window.ENV || {};
+                const url = `${env.SUPABASE_URL}/rest/v1/reservations?select=*&limit=5`;
+                const headers = {
+                    'apikey': env.SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${env.SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json'
+                };
+
+                const response = await fetch(url, { headers });
+                const data = await response.text();
+                
+                let html = '<h3>Raw API Test:</h3><pre>';
+                html += `URL: ${url}
+Status: ${response.status} ${response.statusText}
+Headers Present: ${Object.keys(headers).join(', ')}
+Response: ${data}</pre>`;
+                
+                result.innerHTML = html;
+                result.className = 'debug-section ' + (response.ok ? 'success' : 'error');
+            } catch (error) {
+                result.innerHTML = `<pre>❌ Raw API test failed: ${error.message}</pre>`;
+                result.className = 'debug-section error';
+            }
+        };
+    </script>
+</body>
+</html>

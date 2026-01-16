@@ -245,19 +245,8 @@ class DispatchGrid {
   }
 
   addReservationMarkers() {
-    // Sample reservation data with coordinates
-    const reservations = [
-      {
-        conf: '22456',
-        pickup: { lat: 44.8820, lng: -93.2218, name: 'MSP Airport Terminal 1' },
-        dropoff: { lat: 45.0500, lng: -93.3200, name: '4456 Queensland Lane North' }
-      },
-      {
-        conf: '22441',
-        pickup: { lat: 44.8820, lng: -93.2218, name: 'MSP Airport Terminal 1' },
-        dropoff: { lat: 44.7678, lng: -93.2777, name: '650 Parkside Cir, Burnsville' }
-      }
-    ];
+    // Sample reservation data with coordinates - now empty
+    const reservations = [];
 
     reservations.forEach(res => {
       // Pickup marker (green)

@@ -391,13 +391,15 @@ export async function listActiveVehiclesLight({ limit, offset } = {}) {
   }
 }
 export async function fetchActiveVehicles({ includeInactive = false } = {}) {
+  // Include veh_title and license_plate in the select fields
+  const selectFields = 'select=id,veh_disp_name,unit_number,make,model,year,license_plate,status,veh_type,veh_title,color,vin';
   const statusFilter = includeInactive ? '' : '&status=in.(ACTIVE,AVAILABLE,IN_USE)';
   try {
-    return await request(`/vehicles?order=veh_disp_name.asc${statusFilter}`);
+    return await request(`/vehicles?${selectFields}&order=veh_disp_name.asc${statusFilter}`);
   } catch (err) {
     // Fallback when veh_disp_name doesn't exist: order by make/model
     if (/veh_disp_name/i.test(err.message) || /veh_disp_name does not exist/i.test(err.message)) {
-      return await request(`/vehicles?order=make.asc,model.asc,year.desc${statusFilter}`);
+      return await request(`/vehicles?${selectFields}&order=make.asc,model.asc,year.desc${statusFilter}`);
     }
     throw err;
   }
