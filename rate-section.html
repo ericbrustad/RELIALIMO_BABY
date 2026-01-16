@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rate Section</title>
+  <link rel="stylesheet" href="rate-section.css">
+</head>
+<body>
+  <div class="rate-section-container">
+    <!-- Rate Table -->
+    <div class="rate-tab-content active" id="primaryTab">
+      <div class="rate-table">
+        <!-- Header -->
+        <div class="rate-row header">
+          <div class="rate-cell">Charge</div>
+          <div class="rate-cell">Qty</div>
+          <div class="rate-cell">Rate</div>
+          <div class="rate-cell">Total</div>
+        </div>
+
+        <!-- Flat Rate -->
+        <div class="rate-row">
+          <div class="rate-cell">Flat Rate</div>
+          <div class="rate-cell">
+            <input type="number" id="flatQty" class="rate-input" value="1" min="0" step="1">
+          </div>
+          <div class="rate-cell currency-cell">
+            <span class="currency-symbol">$</span>
+            <input type="number" id="flatRate" class="rate-input currency-input" data-rate-field="flat" value="0" min="0" step="0.01">
+          </div>
+          <div class="rate-cell currency-cell">
+            <span class="currency-symbol">$</span>
+            <input type="number" id="flatTotal" class="rate-input currency-input" value="0.00" readonly>
+          </div>
+        </div>
+
+        <!-- Per Hour (route duration from Google Maps) -->
+        <div class="rate-row">
+          <div class="rate-cell">Per Hour</div>
+          <div class="rate-cell">
+            <input type="number" id="hourQty" class="rate-input" value="0" min="0" step="0.5">
+          </div>
+          <div class="rate-cell currency-cell">
+            <span class="currency-symbol">$</span>
+            <input type="number" id="hourRate" class="rate-input currency-input" data-rate-field="hour" value="0" min="0" step="0.01">
+          </div>
+          <div class="rate-cell currency-cell">
+            <span class="currency-symbol">$</span>
+            <input type="number" id="hourTotal" class="rate-input currency-input" value="0.00" readonly>
+          </div>
+        </div>
+
+        <!-- Per Hour (per trip - uses PU to DO time duration) -->
+        <div class="rate-row">
+          <div class="rate-cell">Per Hour (per trip)</div>
+          <div class="rate-cell">
+            <input type="number" id="hourTripQty" class="rate-input" value="0" min="0" step="0.5">
+          </div>
+          <div class="rate-cell currency-cell">
+            <span class="currency-symbol">$</span>
+            <input type="number" id="hourTripRate" class="rate-input currency-input" data-rate-field="hourTrip" value="0" min="0" step="0.01">
+          </div>
+          <div class="rate-cell currency-cell">
+            <span class="currency-symbol">$</span>
+            <input type="number" id="hourTripTotal" class="rate-input currency-input" value="0.00" readonly>
+          </div>
+        </div>
+
+        <!-- Per Passenger -->
+        <div class="rate-row">
+          <div class="rate-cell">Per Passenger</div>
+          <div class="rate-cell">
+            <input type="number" id="passQty" class="rate-input" value="0" min="0" step="1">
+          </div>
+          <div class="rate-cell currency-cell">
+            <span class="currency-symbol">$</span>
+            <input type="number" id="passRate" class="rate-input currency-input" data-rate-field="pass" value="0" min="0" step="0.01">
+          </div>
+          <div class="rate-cell currency-cell">
+            <span class="currency-symbol">$</span>
+            <input type="number" id="passTotal" class="rate-input currency-input" value="0.00" readonly>
+          </div>
+        </div>
+
+        <!-- Per Mile -->
+        <div class="rate-row">
+          <div class="rate-cell">Per Mile</div>
+          <div class="rate-cell">
+            <input type="number" id="mileQty" class="rate-input" value="0" min="0" step="0.1">
+          </div>
+          <div class="rate-cell currency-cell">
+            <span class="currency-symbol">$</span>
+            <input type="number" id="mileRate" class="rate-input currency-input" data-rate-field="mile" value="0" min="0" step="0.01">
+          </div>
+          <div class="rate-cell currency-cell">
+            <span class="currency-symbol">$</span>
+            <input type="number" id="mileTotal" class="rate-input currency-input" value="0.00" readonly>
+          </div>
+        </div>
+
+        <!-- Subtotal Row -->
+        <div class="rate-row subtotal-row">
+          <div class="rate-cell" colspan="3"><strong>Subtotal</strong></div>
+          <div class="rate-cell"></div>
+          <div class="rate-cell"></div>
+          <div class="rate-cell">
+            <span id="subtotal" class="subtotal-value">$0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Additional Rates Section (from Rate Management) -->
+      <div id="additionalRatesSection" style="display: none;">
+        <div class="section-divider">
+          <span>Additional Rates & Fees</span>
+        </div>
+        <div class="rate-table" id="additionalRatesTable">
+          <!-- Additional rates will be dynamically added here -->
+        </div>
+      </div>
+
+      <!-- Summary Section -->
+      <div class="rate-summary">
+        <div class="summary-row grand-total">
+          <span class="label">Grand Total (USD)</span>
+          <span class="value" id="grandTotal">$0.00</span>
+        </div>
+      </div>
+
+      <!-- Payments -->
+      <div class="payments-row">
+        <span class="label">Payments/Deposits</span>
+        <span class="value" id="paymentsAmount">$0.00</span>
+      </div>
+
+      <div class="balance-due">
+        <span class="label">Balance Due</span>
+        <span class="value" id="balanceDue">$0.00</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="rate-section.js"></script>
+</body>
+</html>

@@ -760,6 +760,44 @@ body {
   border-left: 3px solid rgba(251, 188, 5, 0.6);
 }
 
+/* Collapsible panel styles */
+.panel.collapsible .panel-header {
+  user-select: none;
+}
+
+.panel.collapsible.collapsed .form-section {
+  display: none;
+}
+
+.panel.collapsible .panel-toggle-btn {
+  transition: transform 0.2s ease;
+}
+
+.panel.collapsible.collapsed .panel-toggle-btn {
+  transform: rotate(-90deg);
+}
+
+/* Phone/Email validation styles */
+.form-control.invalid {
+  border-color: #dc3545 !important;
+  background-color: #fff5f5 !important;
+}
+
+.form-control.valid {
+  border-color: #28a745 !important;
+}
+
+.validation-message {
+  font-size: 11px;
+  color: #dc3545;
+  margin-top: 2px;
+  display: none;
+}
+
+.form-control.invalid + .validation-message {
+  display: block;
+}
+
 /* Add Section Link */
 .add-section-link {
   padding: 8px 12px;
@@ -1198,18 +1236,19 @@ textarea.form-control {
 .location-suggestions {
   position: absolute;
   background: white;
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  max-height: 200px;
+  border: 2px solid #007bff;
+  border-radius: 6px;
+  max-height: 350px;
   overflow-y: auto;
   width: 100%;
+  min-width: 350px;
   z-index: 5000;
   display: none;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  margin-top: 0;
-  top: 0;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  margin-top: 2px;
+  top: 100%;
   left: 0;
-  padding-top: 2px;
+  padding: 4px 0;
 }
 
 .suggestions-dropdown.active,
@@ -1219,35 +1258,61 @@ textarea.form-control {
 
 .suggestion-item,
 .location-suggestion-item {
-  padding: 8px 10px;
-  font-size: 12px;
+  padding: 12px 15px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #e8e8e8;
+  transition: background 0.15s ease;
+}
+
+.suggestion-item:last-child,
+.location-suggestion-item:last-child {
+  border-bottom: none;
 }
 
 .suggestion-item:hover,
 .location-suggestion-item:hover {
-  background: #f8f9fa;
+  background: linear-gradient(135deg, #e3f2fd, #f0f7ff);
+}
+
+.suggestion-item strong {
+  color: #007bff;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.suggestion-item .company-tag {
+  display: inline-block;
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 8px;
 }
 
 .location-suggestion-item .poi-name {
-  font-weight: 600;
+  font-weight: 700;
   color: #333;
   display: block;
+  font-size: 14px;
 }
 
 .location-suggestion-item .poi-address {
-  font-size: 11px;
-  color: #666;
+  font-size: 13px;
+  color: #555;
   display: block;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .location-suggestion-item .poi-category {
-  font-size: 10px;
+  font-size: 11px;
   color: #4a90e2;
   display: inline-block;
-  margin-top: 2px;
+  margin-top: 4px;
+  font-weight: 600;
 }
 
 /* Status Indicator */
@@ -1278,18 +1343,19 @@ textarea.form-control {
 .affiliate-suggestions {
   position: absolute;
   background: white;
-  border: 1px solid #ccc;
-  border-top: none;
-  border-radius: 0 0 3px 3px;
-  max-height: 200px;
+  border: 2px solid #007bff;
+  border-radius: 6px;
+  max-height: 350px;
   overflow-y: auto;
   width: calc(100% - 70px);
+  min-width: 350px;
   z-index: 1000;
   display: none;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  margin-top: -1px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  margin-top: 2px;
   top: 100%;
   left: 0;
+  padding: 4px 0;
 }
 
 .affiliate-suggestions.active {
@@ -1297,34 +1363,41 @@ textarea.form-control {
 }
 
 .affiliate-suggestion-item {
-  padding: 8px 10px;
-  font-size: 12px;
+  padding: 12px 15px;
+  font-size: 14px;
   cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #e8e8e8;
+  transition: background 0.15s ease;
+}
+
+.affiliate-suggestion-item:last-child {
+  border-bottom: none;
 }
 
 .affiliate-suggestion-item:hover {
-  background: #f8f9fa;
+  background: linear-gradient(135deg, #e3f2fd, #f0f7ff);
 }
 
 .affiliate-company {
-  font-weight: 600;
+  font-weight: 700;
   color: #333;
   display: block;
+  font-size: 15px;
 }
 
 .affiliate-contact {
-  font-size: 11px;
-  color: #666;
+  font-size: 13px;
+  color: #555;
   display: block;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .affiliate-location {
-  font-size: 10px;
+  font-size: 12px;
   color: #4a90e2;
   display: inline-block;
-  margin-top: 2px;
+  margin-top: 4px;
+  font-weight: 600;
 }
 
 /* Icon Buttons */
@@ -1787,16 +1860,17 @@ textarea.form-control {
 .flight-suggestions {
   position: absolute;
   background: white;
-  border: 1px solid #ccc;
-  border-top: none;
-  border-radius: 0 0 3px 3px;
-  max-height: 200px;
+  border: 2px solid #007bff;
+  border-radius: 6px;
+  max-height: 350px;
   overflow-y: auto;
   width: 100%;
+  min-width: 300px;
   z-index: 1000;
   display: none;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  margin-top: -1px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  margin-top: 2px;
+  padding: 4px 0;
 }
 
 .airline-suggestions.active,
@@ -1842,15 +1916,16 @@ body.view-mode .address-entry-card {
 
 .airline-suggestion-item,
 .flight-suggestion-item {
-  padding: 10px 12px;
+  padding: 12px 15px;
   cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
-  transition: background 0.2s;
+  border-bottom: 1px solid #e8e8e8;
+  transition: background 0.15s ease;
+  font-size: 14px;
 }
 
 .airline-suggestion-item:hover,
 .flight-suggestion-item:hover {
-  background: #f8f9fa;
+  background: linear-gradient(135deg, #e3f2fd, #f0f7ff);
 }
 
 .airline-suggestion-item:last-child,
@@ -1862,16 +1937,17 @@ body.view-mode .address-entry-card {
 .airport-suggestions {
   position: absolute;
   background: white;
-  border: 1px solid #ccc;
-  border-top: none;
-  border-radius: 0 0 3px 3px;
-  max-height: 280px;
+  border: 2px solid #007bff;
+  border-radius: 6px;
+  max-height: 400px;
   overflow-y: auto;
   width: 100%;
+  min-width: 350px;
   z-index: 1000;
   display: none;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  margin-top: -1px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  margin-top: 2px;
+  padding: 4px 0;
 }
 
 .airport-suggestions.active {
@@ -1879,17 +1955,17 @@ body.view-mode .address-entry-card {
 }
 
 .airport-suggestion-item {
-  padding: 10px 12px;
+  padding: 12px 15px;
   cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
-  transition: background 0.2s;
+  border-bottom: 1px solid #e8e8e8;
+  transition: background 0.15s ease;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .airport-suggestion-item:hover {
-  background: #e8f4f8;
+  background: linear-gradient(135deg, #e3f2fd, #f0f7ff);
 }
 
 .airport-suggestion-item:last-child {
@@ -1900,37 +1976,38 @@ body.view-mode .address-entry-card {
   display: inline-block;
   background: #0066cc;
   color: white;
-  padding: 3px 8px;
-  border-radius: 3px;
+  padding: 4px 10px;
+  border-radius: 4px;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 14px;
   width: fit-content;
 }
 
 .airport-name {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   color: #222;
 }
 
 .airport-city {
-  font-size: 11px;
-  color: #666;
+  font-size: 13px;
+  color: #555;
 }
 
 .airline-code {
   display: inline-block;
   background: #e9ecef;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-weight: 600;
-  font-size: 11px;
-  margin-right: 8px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 13px;
+  margin-right: 10px;
   color: #495057;
 }
 
 .airline-name {
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 500;
   color: #333;
 }
 

@@ -9,6 +9,7 @@ import {
   getVehicleTypes,
   createFleetVehicle
 } from "./api-service.js";
+import { setupPhoneEmailValidation, isValidPhone, isValidEmail, formatPhone } from './validation-utils.js';
 
 let driverId = null;
 let affiliateId = null;
@@ -45,6 +46,9 @@ function setStep(n) {
   });
 }
 
+// Setup phone and email validation on the driver form
+setupPhoneEmailValidation(['phone'], ['email']);
+
 // =============== STEP 1: DRIVER (collect only) ===============
 el("btnSaveDriver").addEventListener("click", async () => {
   try {
@@ -56,8 +60,16 @@ el("btnSaveDriver").addEventListener("click", async () => {
     if (!first_name || !last_name || !email || !phone) {
       return fail("Please fill all driver fields.");
     }
+    
+    // Validate email and phone
+    if (!isValidEmail(email)) {
+      return fail("Please enter a valid email address.");
+    }
+    if (!isValidPhone(phone)) {
+      return fail("Please enter a valid phone number (10+ digits).");
+    }
 
-    pendingDriver = { first_name, last_name, email, phone };
+    pendingDriver = { first_name, last_name, email, phone: formatPhone(phone) };
     ok("Driver info saved");
 
     hide("step-driver");

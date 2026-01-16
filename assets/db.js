@@ -338,8 +338,32 @@ export const db = {
   },
   
   getNextAccountNumber() {
-    const nextNum = localStorage.getItem(STORAGE_KEYS.NEXT_ACCOUNT_NUMBER);
-    return nextNum ? parseInt(nextNum) : 30000;
+    // Get company settings for account start number
+    try {
+      const settingsRaw = localStorage.getItem('relia_company_settings');
+      const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
+      const accountStartNumber = parseInt(settings.accountStartNumber, 10) || 30000;
+      const lastUsedAccountNumber = parseInt(settings.lastUsedAccountNumber, 10) || null;
+      
+      // Get the stored next number from legacy storage
+      const legacyNextNum = localStorage.getItem(STORAGE_KEYS.NEXT_ACCOUNT_NUMBER);
+      const legacyNum = legacyNextNum ? parseInt(legacyNextNum) : null;
+      
+      // Use the highest of: accountStartNumber, lastUsedAccountNumber + 1, or legacyNum
+      let nextNum = accountStartNumber;
+      if (lastUsedAccountNumber !== null && !isNaN(lastUsedAccountNumber)) {
+        nextNum = Math.max(nextNum, lastUsedAccountNumber + 1);
+      }
+      if (legacyNum !== null && !isNaN(legacyNum)) {
+        nextNum = Math.max(nextNum, legacyNum);
+      }
+      
+      return nextNum;
+    } catch (e) {
+      console.warn('Error reading company settings for account number:', e);
+      const nextNum = localStorage.getItem(STORAGE_KEYS.NEXT_ACCOUNT_NUMBER);
+      return nextNum ? parseInt(nextNum) : 30000;
+    }
   },
   
   setNextAccountNumber(num) {

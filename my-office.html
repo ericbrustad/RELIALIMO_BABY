@@ -3863,6 +3863,7 @@ further assistance.</textarea>
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 15px;">
                 <h2 style="font-size: 16px; font-weight: 600; margin: 0; color: #333;">Drivers</h2>
                 <div style="display: flex; gap: 10px;">
+                  <button id="driversRefreshBtn" class="btn btn-secondary" style="padding: 8px 16px; font-size: 13px;" title="Refresh from database">🔄 Refresh</button>
                   <button id="deleteDriverBtn" class="btn btn-danger" style="padding: 8px 16px; font-size: 13px; background: #d9534f; color: #fff; border: none;">🗑️ Delete Driver</button>
                   <button id="addNewDriverBtn" class="btn btn-primary" style="padding: 8px 16px; font-size: 13px;">+ Add New Driver</button>
                 </div>
@@ -4422,13 +4423,19 @@ further assistance.</textarea>
                       </div>
 
                       <div class="drivers-form-row">
-                        <label>Driver Level</label>
+                        <label>Driver Level (10 = Best)</label>
                         <div style="display: flex; align-items: center; gap: 10px;">
                           <select class="form-control" id="driverLevel" style="flex: 1;">
-                            <option value="0">Level 0 - Least Experienced</option>
-                            <option value="1">Level 1</option>
+                            <option value="1">Level 1 - Least Experienced</option>
                             <option value="2">Level 2</option>
                             <option value="3">Level 3</option>
+                            <option value="4">Level 4</option>
+                            <option value="5" selected>Level 5 - Average</option>
+                            <option value="6">Level 6</option>
+                            <option value="7">Level 7</option>
+                            <option value="8">Level 8</option>
+                            <option value="9">Level 9</option>
+                            <option value="10">Level 10 - Best</option>
                           </select>
                           <label style="margin: 0;">
                             <input type="checkbox" id="driverIsVip" />
@@ -4911,6 +4918,28 @@ further assistance.</textarea>
                   </div>
                 </div>
 
+                <!-- Saved Rate Schemes Panel -->
+                <div class="saved-schemes-panel" style="background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 15px; margin: 15px 0;">
+                  <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                    <div class="form-group" style="flex: 1; min-width: 200px; margin: 0;">
+                      <label style="font-size: 12px; font-weight: 600; margin-bottom: 5px; display: block;">Saved Rate Schemes</label>
+                      <select class="form-control" id="savedSchemesDropdown" style="font-size: 13px;">
+                        <option value="">-- Select a saved scheme --</option>
+                      </select>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: flex-end; padding-top: 20px;">
+                      <button class="btn btn-primary btn-small" id="applySchemeBtn" title="Apply selected scheme to this vehicle" disabled>📥 Apply</button>
+                      <button class="btn btn-secondary btn-small" id="editSchemeBtn" title="Edit selected scheme" disabled>✏️ Edit</button>
+                      <button class="btn btn-danger btn-small" id="deleteSchemeBtn" title="Delete selected scheme" disabled>🗑️ Delete</button>
+                      <span style="border-left: 1px solid #ccc; height: 28px; margin: 0 5px;"></span>
+                      <button class="btn btn-success btn-small" id="saveNewSchemeBtn" title="Save current rates as a new scheme">💾 Save New Scheme</button>
+                    </div>
+                  </div>
+                  <div id="schemeInfoPanel" style="margin-top: 10px; font-size: 12px; color: #666; display: none;">
+                    <span id="schemeInfoText"></span>
+                  </div>
+                </div>
+
                 <div class="rates-content">
                   <!-- Per Hour Rates -->
                   <div class="rates-section active" id="perHourRates">
@@ -5027,6 +5056,75 @@ further assistance.</textarea>
                           <label>Dead Mile Rate ($)</label>
                           <input type="number" class="form-control" data-rate-field="dist-dead-mile" step="0.01" min="0" value="0.00" />
                           <small style="display: block; margin-top: 3px; color: #666;">Rate for empty return miles</small>
+                        </div>
+                      </div>
+
+                      <!-- Tiered Distance Formula -->
+                      <div class="tiered-formula-section" style="margin-top: 25px; padding: 20px; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+                          <h4 style="font-size: 14px; font-weight: 600; margin: 0; color: #2c3e50;">
+                            📐 Tiered Distance Formula
+                          </h4>
+                          <label class="toggle-switch" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="enableTieredFormula" data-rate-field="dist-tiered-enabled" style="width: 18px; height: 18px;" />
+                            <span style="font-size: 13px; font-weight: 500;">Enable Formula</span>
+                          </label>
+                        </div>
+                        
+                        <div class="formula-preview" style="background: #fff; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-family: monospace; font-size: 12px; color: #555; border: 1px dashed #ccc;">
+                          <strong>Formula:</strong> C(D) = <span id="formulaMultiplier">1.27</span> × (<span id="formulaTier1Rate">7.87</span> × min(D, <span id="formulaTier1Max">3</span>) + <span id="formulaTier2Rate">3.50</span> × min(max(D - <span id="formulaTier1MaxRef">3</span>, 0), <span id="formulaTier2Range">7</span>) + <span id="formulaTier3Rate">3.25</span> × max(D - <span id="formulaTier3Start">10</span>, 0))
+                        </div>
+
+                        <div class="tiered-formula-fields" id="tieredFormulaFields">
+                          <div class="form-row-3">
+                            <div class="form-group">
+                              <label>Overall Multiplier</label>
+                              <input type="number" class="form-control formula-field" data-rate-field="dist-formula-multiplier" id="distFormulaMultiplier" step="0.01" min="0" value="1.27" />
+                              <small style="display: block; margin-top: 3px; color: #666;">Applied to total (e.g., 1.27 = 27% markup)</small>
+                            </div>
+                            <div class="form-group">
+                              <label>Tier 1 Rate ($/mile)</label>
+                              <input type="number" class="form-control formula-field" data-rate-field="dist-formula-tier1-rate" id="distFormulaTier1Rate" step="0.01" min="0" value="7.87" />
+                              <small style="display: block; margin-top: 3px; color: #666;">Rate for first miles</small>
+                            </div>
+                            <div class="form-group">
+                              <label>Tier 1 Max Miles</label>
+                              <input type="number" class="form-control formula-field" data-rate-field="dist-formula-tier1-max" id="distFormulaTier1Max" step="1" min="0" value="3" />
+                              <small style="display: block; margin-top: 3px; color: #666;">Miles at Tier 1 rate</small>
+                            </div>
+                          </div>
+                          <div class="form-row-3" style="margin-top: 15px;">
+                            <div class="form-group">
+                              <label>Tier 2 Rate ($/mile)</label>
+                              <input type="number" class="form-control formula-field" data-rate-field="dist-formula-tier2-rate" id="distFormulaTier2Rate" step="0.01" min="0" value="3.50" />
+                              <small style="display: block; margin-top: 3px; color: #666;">Rate for middle miles</small>
+                            </div>
+                            <div class="form-group">
+                              <label>Tier 2 Range (miles)</label>
+                              <input type="number" class="form-control formula-field" data-rate-field="dist-formula-tier2-range" id="distFormulaTier2Range" step="1" min="0" value="7" />
+                              <small style="display: block; margin-top: 3px; color: #666;">Additional miles at Tier 2</small>
+                            </div>
+                            <div class="form-group">
+                              <label>Tier 3 Rate ($/mile)</label>
+                              <input type="number" class="form-control formula-field" data-rate-field="dist-formula-tier3-rate" id="distFormulaTier3Rate" step="0.01" min="0" value="3.25" />
+                              <small style="display: block; margin-top: 3px; color: #666;">Rate for remaining miles</small>
+                            </div>
+                          </div>
+
+                          <!-- Formula Calculator/Preview -->
+                          <div class="formula-calculator" style="margin-top: 20px; padding: 15px; background: #e8f4fd; border-radius: 6px; border: 1px solid #b8d4e8;">
+                            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                              <div class="form-group" style="margin: 0; flex: 0 0 auto;">
+                                <label style="font-size: 12px; margin-bottom: 3px;">Test Distance (miles)</label>
+                                <input type="number" class="form-control" id="testDistanceInput" step="0.1" min="0" value="15" style="width: 100px;" />
+                              </div>
+                              <button type="button" class="btn btn-secondary btn-small" id="calculateFormulaBtn" style="margin-top: 18px;">Calculate</button>
+                              <div style="margin-top: 18px; font-size: 14px;">
+                                <strong>Result:</strong> <span id="formulaResult" style="color: #0066cc; font-weight: 600;">$0.00</span>
+                              </div>
+                            </div>
+                            <div id="formulaBreakdown" style="margin-top: 10px; font-size: 11px; color: #555; font-family: monospace;"></div>
+                          </div>
                         </div>
                       </div>
 
@@ -5208,6 +5306,7 @@ further assistance.</textarea>
               </div>
               <div class="resource-actions">
                 <button class="btn btn-primary btn-large" id="fleetAddBtn">+ Add New Vehicle</button>
+                <button class="btn btn-secondary" id="fleetRefreshBtn" style="margin-left: 8px;" title="Refresh from database">🔄 Refresh</button>
               </div>
             </div>
 
@@ -6038,223 +6137,218 @@ further assistance.</textarea>
             <div class="stored-rates-panel">
               <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 15px; padding: 15px; border-bottom: 1px solid #ddd;">Stored Rates</h3>
               
-              <!-- Search Options -->
+              <!-- Filter by Type -->
               <div style="padding: 15px; border-bottom: 1px solid #ddd;">
-                <div style="font-weight: 600; font-size: 13px; margin-bottom: 10px;">Search By</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                  <div>
-                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 5px;">
-                      <input type="radio" name="searchType" value="fixed" checked />
-                      <span>Fixed Rate</span>
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
-                      <input type="radio" name="searchType" value="percentage" />
-                      <span>Percentage Rate</span>
-                    </label>
-                  </div>
-                  <div>
-                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 5px;">
-                      <input type="radio" name="searchType" value="multiplier" />
-                      <span>Multiplier Rate</span>
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
-                      <input type="radio" name="searchType" value="percentage2" />
-                      <span>Percentage Rate</span>
-                    </label>
-                  </div>
-                </div>
-                <div style="margin-top: 15px;">
-                  <button class="btn btn-secondary" style="width: 100px;">GO</button>
+                <div style="font-weight: 600; font-size: 13px; margin-bottom: 10px;">Filter by Type</div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                    <input type="radio" name="rateFilterType" value="all" checked onchange="window.myOffice.filterStoredRates('all')" />
+                    <span>All</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                    <input type="radio" name="rateFilterType" value="fixed" onchange="window.myOffice.filterStoredRates('fixed')" />
+                    <span>Fixed</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                    <input type="radio" name="rateFilterType" value="percentage" onchange="window.myOffice.filterStoredRates('percentage')" />
+                    <span>Percentage</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                    <input type="radio" name="rateFilterType" value="multiplier" onchange="window.myOffice.filterStoredRates('multiplier')" />
+                    <span>Multiplier</span>
+                  </label>
                 </div>
               </div>
 
               <!-- Stored Rates List -->
-              <div style="padding: 15px;">
-                <div style="font-weight: 600; font-size: 13px; margin-bottom: 10px;">Stored Rates</div>
-                <select multiple class="form-control" style="height: 300px; font-size: 13px;">
-                  <option>Base Rate</option>
-                  <option>Airport Fee</option>
-                  <option>Peak Hour Surcharge</option>
-                  <option>Fuel Surcharge</option>
-                  <option>Weekend Rate</option>
-                </select>
+              <div style="padding: 15px; flex: 1;">
+                <div id="storedRatesList" style="border: 1px solid #ddd; border-radius: 4px; max-height: 400px; overflow-y: auto;">
+                  <!-- Rates will be populated here -->
+                  <div style="padding: 20px; text-align: center; color: #888; font-size: 13px;">No rates configured yet</div>
+                </div>
               </div>
 
               <!-- Action Buttons -->
               <div style="padding: 15px; display: flex; flex-direction: column; gap: 10px;">
-                <button class="btn btn-secondary btn-large" style="background: #ffebee; color: #c62828; border: 1px solid #ef5350;">Delete</button>
-                <button class="btn btn-secondary btn-large">Edit</button>
-                <button class="btn btn-primary btn-large">Add New Rate</button>
-                <button class="btn btn-secondary btn-large" style="background: #e3f2fd; color: #1976d2; border: 1px solid #64b5f6;">Configure Rate Order</button>
-                <button class="btn btn-secondary btn-large" style="background: #e3f2fd; color: #1976d2; border: 1px solid #64b5f6;">Configure Rate Grouping</button>
+                <button class="btn btn-primary btn-large" onclick="window.myOffice.addNewRate()">+ Add New Rate</button>
+                <button class="btn btn-secondary btn-large" id="editRateBtn" onclick="window.myOffice.editSelectedRate()" disabled>Edit</button>
+                <button class="btn btn-secondary btn-large" id="deleteRateBtn" onclick="window.myOffice.deleteSelectedRate()" style="background: #ffebee; color: #c62828; border: 1px solid #ef5350;" disabled>Delete</button>
               </div>
             </div>
 
             <!-- Right Panel: Rate Configuration -->
             <div class="rate-config-panel">
+              <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 20px;">Rate Configuration</h3>
+              
               <!-- Rate Type Tabs -->
               <div class="rate-type-tabs">
                 <button class="rate-type-tab active" data-rate-type="fixed">Fixed Rate</button>
-                <button class="rate-type-tab" data-rate-type="multiplier">Multiplier Rate</button>
                 <button class="rate-type-tab" data-rate-type="percentage">Percentage Rate</button>
+                <button class="rate-type-tab" data-rate-type="multiplier">Multiplier Rate</button>
               </div>
 
               <!-- Rate Form Content -->
               <div class="rate-form-content">
                 <!-- Fixed Rate Form -->
                 <div class="rate-form active" id="fixedRateForm">
-                  <div class="form-row">
+                  <input type="hidden" id="fixedRateId" />
+                  <div class="form-row-2" style="margin-bottom: 15px;">
                     <div class="form-group">
-                      <label>Rate Group:</label>
-                      <select class="form-control">
-                        <option value="">Select Rate Group</option>
-                        <option value="standard">Standard Rates</option>
-                        <option value="premium">Premium Rates</option>
-                        <option value="airport">Airport Rates</option>
-                        <option value="special">Special Rates</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div class="form-row-2">
-                    <div class="form-group">
-                      <label>Rate Name:</label>
-                      <input type="text" class="form-control" placeholder="Enter rate name" />
+                      <label>Rate Name: <span style="color: red;">*</span></label>
+                      <input type="text" class="form-control" id="fixedRateName" placeholder="e.g., Base Rate, Airport Fee" />
                     </div>
                     <div class="form-group">
-                      <label>Default Amt:</label>
-                      <input type="text" class="form-control" placeholder="0.00" value="0.00" />
+                      <label>Amount ($): <span style="color: red;">*</span></label>
+                      <input type="number" class="form-control" id="fixedRateAmount" placeholder="0.00" step="0.01" min="0" value="0.00" />
                     </div>
                   </div>
-
-                  <div class="form-row">
+                  <div class="form-row" style="margin-bottom: 15px;">
                     <div class="form-group">
-                      <label>Rate Group Description:</label>
-                      <textarea class="form-control" rows="5" placeholder="Enter description..."></textarea>
+                      <label>Description:</label>
+                      <textarea class="form-control" id="fixedRateDescription" rows="3" placeholder="Optional description..."></textarea>
                     </div>
                   </div>
-
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label>Status:</label>
-                      <select class="form-control">
-                        <option value="ACTIVE" selected>ACTIVE</option>
-                        <option value="INACTIVE">INACTIVE</option>
-                      </select>
+                  <div class="form-row-2" style="margin-bottom: 15px;">
+                    <div class="form-group" style="flex: 2;">
+                      <label>Apply To: <span style="font-size: 11px; color: #666;">(select multiple)</span></label>
+                      <div class="multi-select-container" id="fixedRateApplyToContainer">
+                        <div class="multi-select-group">
+                          <label class="multi-select-label">Pricing Basis:</label>
+                          <div class="multi-select-options" id="fixedRateApplyTo">
+                            <label class="multi-select-option"><input type="checkbox" value="all" checked> All Trips</label>
+                            <label class="multi-select-option"><input type="checkbox" value="flat"> Flat Rate</label>
+                            <label class="multi-select-option"><input type="checkbox" value="hourly"> Hourly</label>
+                            <label class="multi-select-option"><input type="checkbox" value="passenger"> Per Passenger</label>
+                            <label class="multi-select-option"><input type="checkbox" value="mileage"> Per Mile</label>
+                          </div>
+                        </div>
+                        <div class="multi-select-group">
+                          <label class="multi-select-label">Service Types:</label>
+                          <div class="multi-select-options" id="fixedRateServiceTypes">
+                            <!-- Populated dynamically -->
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-
-                  <div class="form-row">
-                    <div style="display: flex; gap: 20px; align-items: center;">
-                      <label style="display: flex; align-items: center; gap: 8px; font-weight: 400;">
-                        <input type="checkbox" checked style="width: auto; margin: 0;" />
-                        <span style="color: #d32f2f; font-weight: 600;">Primary Rate</span>
-                      </label>
-                      <label style="display: flex; align-items: center; gap: 8px; font-weight: 400;">
-                        <input type="checkbox" style="width: auto; margin: 0;" />
-                        <span>This is a VAT rate</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div style="text-align: center; color: #666; font-size: 12px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
-                    Complete Required Fields
-                  </div>
-                </div>
-
-                <!-- Multiplier Rate Form -->
-                <div class="rate-form" id="multiplierRateForm">
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label>Rate Group:</label>
-                      <select class="form-control">
-                        <option value="">Select Rate Group</option>
-                        <option value="standard">Standard Rates</option>
-                        <option value="premium">Premium Rates</option>
-                        <option value="airport">Airport Rates</option>
-                        <option value="special">Special Rates</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div class="form-row-2">
-                    <div class="form-group">
-                      <label>Rate Name:</label>
-                      <input type="text" class="form-control" placeholder="Enter rate name" />
-                    </div>
-                    <div class="form-group">
-                      <label>Multiplier:</label>
-                      <input type="text" class="form-control" placeholder="1.00" value="1.00" />
-                    </div>
-                  </div>
-
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label>Rate Group Description:</label>
-                      <textarea class="form-control" rows="5" placeholder="Enter description..."></textarea>
-                    </div>
-                  </div>
-
-                  <div class="form-row">
                     <div class="form-group">
                       <label>Status:</label>
-                      <select class="form-control">
-                        <option value="ACTIVE" selected>ACTIVE</option>
-                        <option value="INACTIVE">INACTIVE</option>
+                      <select class="form-control" id="fixedRateStatus">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
                       </select>
                     </div>
                   </div>
-
-                  <div style="text-align: center; color: #666; font-size: 12px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
-                    Complete Required Fields
+                  <div class="form-actions" style="margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="window.myOffice.saveRate('fixed')">Save Rate</button>
+                    <button class="btn btn-secondary" onclick="window.myOffice.clearRateForm('fixed')">Clear</button>
                   </div>
                 </div>
 
                 <!-- Percentage Rate Form -->
                 <div class="rate-form" id="percentageRateForm">
-                  <div class="form-row">
+                  <input type="hidden" id="percentageRateId" />
+                  <div class="form-row-2" style="margin-bottom: 15px;">
                     <div class="form-group">
-                      <label>Rate Group:</label>
-                      <select class="form-control">
-                        <option value="">Select Rate Group</option>
-                        <option value="standard">Standard Rates</option>
-                        <option value="premium">Premium Rates</option>
-                        <option value="airport">Airport Rates</option>
-                        <option value="special">Special Rates</option>
-                      </select>
+                      <label>Rate Name: <span style="color: red;">*</span></label>
+                      <input type="text" class="form-control" id="percentageRateName" placeholder="e.g., Gratuity, Tax" />
+                    </div>
+                    <div class="form-group">
+                      <label>Percentage (%): <span style="color: red;">*</span></label>
+                      <input type="number" class="form-control" id="percentageRateValue" placeholder="0" step="0.1" min="0" max="100" value="0" />
                     </div>
                   </div>
-
-                  <div class="form-row-2">
+                  <div class="form-row" style="margin-bottom: 15px;">
                     <div class="form-group">
-                      <label>Rate Name:</label>
-                      <input type="text" class="form-control" placeholder="Enter rate name" />
-                    </div>
-                    <div class="form-group">
-                      <label>Percentage:</label>
-                      <input type="text" class="form-control" placeholder="0.00" value="0.00" />
+                      <label>Description:</label>
+                      <textarea class="form-control" id="percentageRateDescription" rows="3" placeholder="Optional description..."></textarea>
                     </div>
                   </div>
-
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label>Rate Group Description:</label>
-                      <textarea class="form-control" rows="5" placeholder="Enter description..."></textarea>
+                  <div class="form-row-2" style="margin-bottom: 15px;">
+                    <div class="form-group" style="flex: 2;">
+                      <label>Apply To: <span style="font-size: 11px; color: #666;">(select multiple)</span></label>
+                      <div class="multi-select-container" id="percentageRateApplyToContainer">
+                        <div class="multi-select-group">
+                          <label class="multi-select-label">Pricing Basis:</label>
+                          <div class="multi-select-options" id="percentageRateApplyTo">
+                            <label class="multi-select-option"><input type="checkbox" value="subtotal" checked> Subtotal</label>
+                            <label class="multi-select-option"><input type="checkbox" value="flat"> Flat Rate Only</label>
+                            <label class="multi-select-option"><input type="checkbox" value="hourly"> Hourly Rate Only</label>
+                            <label class="multi-select-option"><input type="checkbox" value="all"> All Charges</label>
+                          </div>
+                        </div>
+                        <div class="multi-select-group">
+                          <label class="multi-select-label">Service Types:</label>
+                          <div class="multi-select-options" id="percentageRateServiceTypes">
+                            <!-- Populated dynamically -->
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-
-                  <div class="form-row">
                     <div class="form-group">
                       <label>Status:</label>
-                      <select class="form-control">
-                        <option value="ACTIVE" selected>ACTIVE</option>
-                        <option value="INACTIVE">INACTIVE</option>
+                      <select class="form-control" id="percentageRateStatus">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
                       </select>
                     </div>
                   </div>
+                  <div class="form-actions" style="margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="window.myOffice.saveRate('percentage')">Save Rate</button>
+                    <button class="btn btn-secondary" onclick="window.myOffice.clearRateForm('percentage')">Clear</button>
+                  </div>
+                </div>
 
-                  <div style="text-align: center; color: #666; font-size: 12px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
-                    Complete Required Fields
+                <!-- Multiplier Rate Form -->
+                <div class="rate-form" id="multiplierRateForm">
+                  <input type="hidden" id="multiplierRateId" />
+                  <div class="form-row-2" style="margin-bottom: 15px;">
+                    <div class="form-group">
+                      <label>Rate Name: <span style="color: red;">*</span></label>
+                      <input type="text" class="form-control" id="multiplierRateName" placeholder="e.g., Peak Hours, Holiday" />
+                    </div>
+                    <div class="form-group">
+                      <label>Multiplier: <span style="color: red;">*</span></label>
+                      <input type="number" class="form-control" id="multiplierRateValue" placeholder="1.0" step="0.1" min="0.1" value="1.0" />
+                    </div>
+                  </div>
+                  <div class="form-row" style="margin-bottom: 15px;">
+                    <div class="form-group">
+                      <label>Description:</label>
+                      <textarea class="form-control" id="multiplierRateDescription" rows="3" placeholder="Optional description..."></textarea>
+                    </div>
+                  </div>
+                  <div class="form-row-2" style="margin-bottom: 15px;">
+                    <div class="form-group" style="flex: 2;">
+                      <label>Apply To: <span style="font-size: 11px; color: #666;">(select multiple)</span></label>
+                      <div class="multi-select-container" id="multiplierRateApplyToContainer">
+                        <div class="multi-select-group">
+                          <label class="multi-select-label">Pricing Basis:</label>
+                          <div class="multi-select-options" id="multiplierRateApplyTo">
+                            <label class="multi-select-option"><input type="checkbox" value="subtotal" checked> Subtotal</label>
+                            <label class="multi-select-option"><input type="checkbox" value="flat"> Flat Rate Only</label>
+                            <label class="multi-select-option"><input type="checkbox" value="hourly"> Hourly Rate Only</label>
+                            <label class="multi-select-option"><input type="checkbox" value="all"> All Base Charges</label>
+                          </div>
+                        </div>
+                        <div class="multi-select-group">
+                          <label class="multi-select-label">Service Types:</label>
+                          <div class="multi-select-options" id="multiplierRateServiceTypes">
+                            <!-- Populated dynamically -->
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label>Status:</label>
+                      <select class="form-control" id="multiplierRateStatus">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-actions" style="margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="window.myOffice.saveRate('multiplier')">Save Rate</button>
+                    <button class="btn btn-secondary" onclick="window.myOffice.clearRateForm('multiplier')">Clear</button>
                   </div>
                 </div>
               </div>
@@ -7754,6 +7848,37 @@ further assistance.</textarea>
         </div>
     </div>
 
+    <!-- Save Rate Scheme Modal -->
+    <div id="saveRateSchemeModal" class="rate-scheme-modal" style="display: none;">
+        <div class="rate-scheme-modal-overlay"></div>
+        <div class="rate-scheme-modal-container">
+            <div class="rate-scheme-modal-header">
+                <h2>💾 Save Rate Scheme</h2>
+                <button type="button" class="rate-scheme-modal-close" id="closeSaveRateSchemeModalBtn">&times;</button>
+            </div>
+            <div class="rate-scheme-modal-body">
+                <p style="margin-bottom: 15px; color: #666;">Save the current rate configuration as a reusable template that can be applied to other vehicle types.</p>
+                <div class="form-group">
+                    <label for="rateSchemeNameInput">Scheme Name <span style="color: red;">*</span></label>
+                    <input type="text" class="form-control" id="rateSchemeNameInput" placeholder="e.g., Standard Sedan Rate, Airport Transfer Rate" />
+                </div>
+                <div class="form-group" style="margin-top: 15px;">
+                    <label>Rate Type</label>
+                    <select class="form-control" id="rateSchemeTypeSelect">
+                        <option value="PER_HOUR">Per Hour Rates</option>
+                        <option value="PER_PASSENGER">Per Passenger Rates</option>
+                        <option value="DISTANCE">Distance Based Rates</option>
+                    </select>
+                </div>
+                <div id="saveRateSchemeError" style="color: #c62828; font-size: 12px; margin-top: 10px; display: none;"></div>
+            </div>
+            <div class="rate-scheme-modal-footer">
+                <button type="button" class="btn btn-primary" id="confirmSaveRateSchemeBtn">Save Rate Scheme</button>
+                <button type="button" class="btn btn-secondary" id="cancelSaveRateSchemeBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <style>
     /* Create Vehicle Popup Modal Styles */
     .vehicle-popup-modal {
@@ -7831,6 +7956,86 @@ further assistance.</textarea>
         padding: 12px 20px;
         background: #f5f5f5;
         border-top: 1px solid #e0e0e0;
+    }
+
+    /* Rate Scheme Modal Styles */
+    .rate-scheme-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10001;
+    }
+    .rate-scheme-modal-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+    }
+    .rate-scheme-modal-container {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 90%;
+        max-width: 500px;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .rate-scheme-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+        color: #fff;
+    }
+    .rate-scheme-modal-header h2 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+    }
+    .rate-scheme-modal-close {
+        background: transparent;
+        border: none;
+        color: #fff;
+        font-size: 28px;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+        opacity: 0.8;
+        transition: opacity 0.2s;
+    }
+    .rate-scheme-modal-close:hover {
+        opacity: 1;
+    }
+    .rate-scheme-modal-body {
+        padding: 20px;
+        max-height: 60vh;
+        overflow-y: auto;
+    }
+    .rate-scheme-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 12px 20px;
+        background: #f5f5f5;
+        border-top: 1px solid #e0e0e0;
+    }
+    .rates-tab-header {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 10px 0;
+        border-bottom: 1px solid #e0e0e0;
     }
     </style>
 

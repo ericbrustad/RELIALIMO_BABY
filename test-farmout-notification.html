@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Farmout Notification System</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #f5f5f5; 
+        }
+        .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+        }
+        button { 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            padding: 12px 24px; 
+            border-radius: 4px; 
+            margin: 5px; 
+            cursor: pointer; 
+            font-size: 14px; 
+        }
+        button:hover { background: #0056b3; }
+        .log { 
+            background: #f8f9fa; 
+            border: 1px solid #dee2e6; 
+            padding: 15px; 
+            margin: 10px 0; 
+            border-radius: 4px; 
+            max-height: 300px; 
+            overflow-y: auto; 
+            font-family: monospace; 
+            font-size: 12px; 
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .info { color: #007bff; }
+        .warning { color: #ffc107; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚗 Farmout Notification System Test</h1>
+        <p>Test the complete notification system with realistic farmout offer scenarios.</p>
+        
+        <div>
+            <button onclick="testNewOffer()">🆕 Test New Offer Notification</button>
+            <button onclick="testOfferAccepted()">✅ Test Offer Accepted</button>
+            <button onclick="testOfferDeclined()">❌ Test Offer Declined</button>
+            <button onclick="testTripStart()">🚗 Test Trip Started</button>
+            <button onclick="testTripComplete()">🏁 Test Trip Complete</button>
+            <button onclick="testUrgentNotification()">🚨 Test Urgent Alert</button>
+        </div>
+        
+        <div>
+            <button onclick="testSmsTemplates()">📱 Test SMS Templates</button>
+            <button onclick="testCompleteFlow()">🔄 Test Complete Flow</button>
+            <button onclick="clearLog()">🗑️ Clear Log</button>
+        </div>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        let logDiv = document.getElementById('log');
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = type;
+            div.innerHTML = `[${timestamp}] ${message}`;
+            logDiv.appendChild(div);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLog() {
+            logDiv.innerHTML = '';
+            log('Log cleared', 'info');
+        }
+        
+        // Test farmout offer sent event
+        function testNewOffer() {
+            log('🆕 Triggering farmout offer sent event...', 'info');
+            
+            const mockOffer = {
+                reservationId: 'TEST-' + Date.now(),
+                driverId: '1fef5163-c078-4a9d-ad78-be7220b8e316', // Eric's actual driver ID
+                driverName: 'Eric Brustad',
+                offerDetails: {
+                    pickupAddress: '2450 Louisiana Street, Houston, TX 77006',
+                    dropoffAddress: '1400 McKinney Street, Houston, TX 77010',
+                    pickupTime: '8:15 PM',
+                    driverPay: 31.50,
+                    grandTotal: 45.00,
+                    duration: '15 mins',
+                    distance: '3.2 miles',
+                    passengerFirstName: 'Sarah',
+                    paxCount: 2,
+                    vehicleType: 'Sedan',
+                    notes: 'Test farmout offer - call when arrived'
+                }
+            };
+            
+            window.dispatchEvent(new CustomEvent('farmoutOfferSent', {
+                detail: mockOffer
+            }));
+            
+            log(`Offer sent to ${mockOffer.driverName} - $${mockOffer.offerDetails.driverPay}`, 'success');
+        }
+        
+        // Test offer acceptance
+        function testOfferAccepted() {
+            log('✅ Testing offer accepted notification...', 'info');
+            
+            window.dispatchEvent(new CustomEvent('farmoutOfferAccepted', {
+                detail: {
+                    reservationId: 'TEST-' + Date.now(),
+                    driverId: 'driver-' + Date.now(),
+                    driverName: 'Eric Brustad',
+                    pickupTime: '8:15 PM'
+                }
+            }));
+            
+            log('Offer accepted by Eric Brustad', 'success');
+        }
+        
+        // Test offer declined
+        function testOfferDeclined() {
+            log('❌ Testing offer declined notification...', 'info');
+            
+            window.dispatchEvent(new CustomEvent('farmoutOfferDeclined', {
+                detail: {
+                    reservationId: 'TEST-' + Date.now(),
+                    driverId: 'driver-' + Date.now(),
+                    driverName: 'Eric Brustad',
+                    reason: 'Driver unavailable'
+                }
+            }));
+            
+            log('Offer declined by Eric Brustad', 'warning');
+        }
+        
+        // Test trip started
+        function testTripStart() {
+            log('🚗 Testing trip started notification...', 'info');
+            
+            window.dispatchEvent(new CustomEvent('tripStarted', {
+                detail: {
+                    reservationId: 'TEST-' + Date.now(),
+                    driverId: 'driver-' + Date.now(),
+                    driverName: 'Eric Brustad',
+                    passengerName: 'Sarah Johnson'
+                }
+            }));
+            
+            log('Trip started - Eric Brustad picking up Sarah Johnson', 'success');
+        }
+        
+        // Test trip completed
+        function testTripComplete() {
+            log('🏁 Testing trip completed notification...', 'info');
+            
+            window.dispatchEvent(new CustomEvent('tripCompleted', {
+                detail: {
+                    reservationId: 'TEST-' + Date.now(),
+                    driverId: 'driver-' + Date.now(),
+                    driverName: 'Eric Brustad',
+                    passengerName: 'Sarah Johnson',
+                    fare: 45.00
+                }
+            }));
+            
+            log('Trip completed - Eric Brustad / Sarah Johnson - $45.00', 'success');
+        }
+        
+        // Test urgent notification
+        function testUrgentNotification() {
+            log('🚨 Testing urgent notification...', 'info');
+            
+            window.dispatchEvent(new CustomEvent('urgentAlert', {
+                detail: {
+                    message: 'Driver needs assistance - GPS shows vehicle stopped',
+                    reservationId: 'TEST-' + Date.now(),
+                    priority: 'high'
+                }
+            }));
+            
+            log('Urgent alert dispatched', 'error');
+        }
+        
+        // Test SMS templates (renders actual SMS template from farmout automation)
+        function testSmsTemplates() {
+            log('📱 Testing SMS template rendering...', 'info');
+            
+            const mockOffer = {
+                pickupAddress: '2450 Louisiana Street, Houston, TX 77006',
+                dropoffAddress: '1400 McKinney Street, Houston, TX 77010',
+                pickupTime: '8:15 PM',
+                driverPay: 31.50,
+                passengerFirstName: 'Sarah'
+            };
+            
+            const template = `🚗 NEW TRIP OFFER! 
+📅 Tonight at ${mockOffer.pickupTime}
+👤 ${mockOffer.passengerFirstName} 
+💰 You earn: $${mockOffer.driverPay}
+📍 From: ${mockOffer.pickupAddress}
+📍 To: ${mockOffer.dropoffAddress}
+✅ Accept: ${window.location.origin}/driver-portal.html?offer=accept&id=TEST123
+❌ Decline: ${window.location.origin}/driver-portal.html?offer=decline&id=TEST123`;
+            
+            log('SMS Template Output:', 'info');
+            log(template.replace(/\n/g, '<br>'), 'success');
+        }
+        
+        // Test complete flow
+        async function testCompleteFlow() {
+            log('🔄 Starting complete farmout flow test...', 'info');
+            
+            // 1. New offer
+            await sleep(500);
+            testNewOffer();
+            
+            // 2. Offer accepted after 3 seconds
+            await sleep(3000);
+            testOfferAccepted();
+            
+            // 3. Trip started after 2 seconds  
+            await sleep(2000);
+            testTripStart();
+            
+            // 4. Trip completed after 5 seconds
+            await sleep(5000);
+            testTripComplete();
+            
+            log('✅ Complete flow test finished!', 'success');
+        }
+        
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        
+        // Initialize
+        log('🔊 Farmout notification test ready. Click buttons to test different scenarios.', 'info');
+        log('Make sure to have the driver portal open in another tab to hear sounds!', 'warning');
+    </script>
+</body>
+</html>

@@ -67,14 +67,17 @@ async function request(path, options = {}) {
   }
 
   try {
+    // Extract headers from options separately to prevent overwriting
+    const { headers: optionHeaders, ...restOptions } = options;
+    
     const res = await fetch(finalUrl, {
+      ...restOptions,
       headers: {
         "Content-Type": "application/json",
         apikey: apiKey,
         ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-        ...options.headers
-      },
-      ...options
+        ...optionHeaders
+      }
     });
 
     // read raw text first so we can include it in error messages even when JSON parsing fails
@@ -112,14 +115,19 @@ async function request(path, options = {}) {
 // Basic exported helpers (used across the app)
 export async function apiFetch(path, options = {}) {
   const url = buildUrl(path);
+  const apiKey = getApiKey();
+  
+  // Destructure headers from options to merge properly
+  const { headers: optionHeaders, ...restOptions } = options;
+  
   const res = await fetch(url, {
+    ...restOptions,
     headers: {
       'Content-Type': 'application/json',
-      apikey: API_KEY,
-      ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-      ...(options.headers || {})
-    },
-    ...options
+      apikey: apiKey,
+      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      ...(optionHeaders || {})
+    }
   });
   const text = await res.text();
   let data = null;
@@ -162,9 +170,17 @@ export async function fetchReservations() { return await request('/reservations?
 export async function getReservation(id) { const rows = await request(`/reservations?id=eq.${encodeURIComponent(id)}&select=*`); return Array.isArray(rows)&&rows.length?rows[0]:null; }
 
 // Drivers
-export async function createDriver(payload) { const rows = await request('/drivers', { method: 'POST', body: JSON.stringify(payload) }); return rows[0]; }
+export async function createDriver(payload) { 
+  const rows = await request('/drivers', { 
+    method: 'POST', 
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(payload) 
+  }); 
+  return Array.isArray(rows) ? rows[0] : rows; 
+}
 export async function listDriverNames({ limit, offset } = {}) {
-  let q = `/drivers?select=id,dispatch_display_name,first_name,last_name,status&order=last_name.asc,first_name.asc`;
+  // Include address fields for garage time calculations
+  let q = `/drivers?select=id,dispatch_display_name,first_name,last_name,status,assigned_vehicle_id,primary_address,city,state,postal_code&order=last_name.asc,first_name.asc`;
   if (limit) q += `&limit=${limit}`;
   if (offset) q += `&offset=${offset}`;
   try {
@@ -172,7 +188,7 @@ export async function listDriverNames({ limit, offset } = {}) {
   } catch (err) {
     // Fallback when dispatch_display_name column doesn't exist on older schemas
     if (/dispatch_display_name/i.test(err.message) || /dispatch_display_name does not exist/i.test(err.message)) {
-      const q2 = `/drivers?select=id,first_name,last_name,status&order=last_name.asc,first_name.asc${limit?`&limit=${limit}`:''}${offset?`&offset=${offset}`:''}`;
+      const q2 = `/drivers?select=id,first_name,last_name,status,assigned_vehicle_id,primary_address,city,state,postal_code&order=last_name.asc,first_name.asc${limit?`&limit=${limit}`:''}${offset?`&offset=${offset}`:''}`;
       const rows = await request(q2);
       return rows.map(r => ({
         ...r,
@@ -188,7 +204,14 @@ export async function deleteDriver(id) { return await request(`/drivers?id=eq.${
 
 // Affiliates
 export async function fetchAffiliates() { return await request('/affiliates?order=company_name.asc'); }
-export async function createAffiliate(payload) { const rows = await request('/affiliates', { method: 'POST', body: JSON.stringify(payload) }); return rows[0]; }
+export async function createAffiliate(payload) { 
+  const rows = await request('/affiliates', { 
+    method: 'POST', 
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(payload) 
+  }); 
+  return Array.isArray(rows) ? rows[0] : rows; 
+}
 export async function updateAffiliate(id, payload) { const rows = await request(`/affiliates?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(payload) }); return Array.isArray(rows)?rows[0]:rows; }
 export async function deleteAffiliate(id) { return await request(`/affiliates?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' }); }
 
@@ -232,16 +255,22 @@ export async function upsertVehicleType(payload) {
   const token = await getUserAccessToken();
   const allowDirectFallback = !token && (isLocalDevModeEnabled() || window?.SUPABASE_POLICY_ERROR);
 
-  async function upsertViaSupabase() {
+  async function upsertViaSupabase(authToken = null) {
+    // Pass user's auth token if available for RLS
+    const authHeader = authToken ? { Authorization: `Bearer ${authToken}` } : {};
     if (payload.id) {
       const rows = await request(`/vehicle_types?id=eq.${encodeURIComponent(payload.id)}`, {
         method: 'PATCH',
-        headers: { Prefer: 'return=representation' },
+        headers: { Prefer: 'return=representation', ...authHeader },
         body: JSON.stringify(payload)
       });
       return Array.isArray(rows) && rows.length ? rows[0] : rows;
     }
-    const rows = await request('/vehicle_types', { method: 'POST', body: JSON.stringify(payload) });
+    const rows = await request('/vehicle_types', { 
+      method: 'POST', 
+      headers: authHeader,
+      body: JSON.stringify(payload) 
+    });
     return Array.isArray(rows) && rows.length ? rows[0] : rows;
   }
 
@@ -261,7 +290,7 @@ export async function upsertVehicleType(payload) {
     });
     if (res.status === 401 || res.status === 403) {
       console.warn('[api-service] Vehicle type PATCH unauthorized; falling back to direct Supabase request');
-      return upsertViaSupabase();
+      return upsertViaSupabase(token);
     }
     const text = await res.text();
     if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
@@ -277,7 +306,7 @@ export async function upsertVehicleType(payload) {
   });
   if (res.status === 401 || res.status === 403) {
     console.warn('[api-service] Vehicle type POST unauthorized; falling back to direct Supabase request');
-    return upsertViaSupabase();
+    return upsertViaSupabase(token);
   }
   const text = await res.text();
   if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
@@ -374,7 +403,23 @@ export async function fetchActiveVehicles({ includeInactive = false } = {}) {
   }
 }
 
-export async function createFleetVehicle(payload) { const rows = await request('/fleet_vehicles', { method: 'POST', body: JSON.stringify(payload) }); return rows[0]; }
+export async function createFleetVehicle(payload) { 
+  const rows = await request('/fleet_vehicles', { 
+    method: 'POST', 
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(payload) 
+  }); 
+  return Array.isArray(rows) ? rows[0] : rows; 
+}
+
+export async function updateFleetVehicle(id, payload) {
+  const rows = await request(`/fleet_vehicles?id=eq.${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(payload)
+  });
+  return Array.isArray(rows) ? rows[0] : rows;
+}
 
 export async function fetchFleetVehicles({ limit, offset, includeInactive } = {}) {
   // Fetch from fleet_vehicles table (Supabase)
@@ -388,10 +433,31 @@ export async function fetchFleetVehicles({ limit, offset, includeInactive } = {}
 }
 
 // Accounts / Passengers / Booking Agents
-export async function saveAccountToSupabase(payload) { if (payload.id) { const rows = await request(`/accounts?id=eq.${encodeURIComponent(payload.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(payload) }); return Array.isArray(rows)?rows[0]:rows; } const rows = await request('/accounts', { method: 'POST', body: JSON.stringify(payload) }); return rows[0]; }
+export async function saveAccountToSupabase(payload) { 
+  if (payload.id) { 
+    const rows = await request(`/accounts?id=eq.${encodeURIComponent(payload.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(payload) }); 
+    return Array.isArray(rows) && rows.length ? rows[0] : rows; 
+  } 
+  const rows = await request('/accounts', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(payload) }); 
+  return Array.isArray(rows) && rows.length ? rows[0] : rows; 
+}
 export async function fetchAccounts() { return await request('/accounts?select=*'); }
-export async function savePassengerToSupabase(payload) { if (payload.id) { const rows = await request(`/passengers?id=eq.${encodeURIComponent(payload.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(payload) }); return Array.isArray(rows)?rows[0]:rows; } const rows = await request('/passengers', { method: 'POST', body: JSON.stringify(payload) }); return rows[0]; }
-export async function saveBookingAgentToSupabase(payload) { if (payload.id) { const rows = await request(`/booking_agents?id=eq.${encodeURIComponent(payload.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(payload) }); return Array.isArray(rows)?rows[0]:rows; } const rows = await request('/booking_agents', { method: 'POST', body: JSON.stringify(payload) }); return rows[0]; }
+export async function savePassengerToSupabase(payload) { 
+  if (payload.id) { 
+    const rows = await request(`/passengers?id=eq.${encodeURIComponent(payload.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(payload) }); 
+    return Array.isArray(rows) && rows.length ? rows[0] : rows; 
+  } 
+  const rows = await request('/passengers', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(payload) }); 
+  return Array.isArray(rows) && rows.length ? rows[0] : rows; 
+}
+export async function saveBookingAgentToSupabase(payload) { 
+  if (payload.id) { 
+    const rows = await request(`/booking_agents?id=eq.${encodeURIComponent(payload.id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(payload) }); 
+    return Array.isArray(rows) && rows.length ? rows[0] : rows; 
+  } 
+  const rows = await request('/booking_agents', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(payload) }); 
+  return Array.isArray(rows) && rows.length ? rows[0] : rows; 
+}
 
 // Simple admin helpers (used by utilities)
 export async function deleteAllReservationsSupabase() { return await request('/reservations', { method: 'DELETE' }); }
@@ -434,6 +500,7 @@ export default {
   listActiveVehiclesLight,
   fetchActiveVehicles,
   createFleetVehicle,
+  updateFleetVehicle,
   fetchFleetVehicles,
   deleteVehicleTypeImage,
   fetchVehicleTypeImages,

@@ -411,15 +411,24 @@ window.EmailService = {
 };
 
 function initEmailSettings() {
+  // Only run if we're on the email settings page
+  if (!$('saveSettingsBtn') && !$('saveTemplateBtn')) {
+    return;
+  }
+  
   loadSettings();
   initTagSelects();
   setupToolbar();
   renderTagReference();
   renderTemplateList();
 
-  $('saveSettingsBtn').addEventListener('click', saveSettings);
-  $('saveTemplateBtn').addEventListener('click', saveTemplate);
-  $('testSendBtn').addEventListener('click', testSendLocal);
+  const saveSettingsBtn = $('saveSettingsBtn');
+  const saveTemplateBtn = $('saveTemplateBtn');
+  const testSendBtn = $('testSendBtn');
+  
+  if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', saveSettings);
+  if (saveTemplateBtn) saveTemplateBtn.addEventListener('click', saveTemplate);
+  if (testSendBtn) testSendBtn.addEventListener('click', testSendLocal);
 }
 
 document.addEventListener('DOMContentLoaded', initEmailSettings);

@@ -8,3 +8,6 @@
 
 # Generated browser env (do NOT commit)
 env.js
+
+.vercel
+.env*.local

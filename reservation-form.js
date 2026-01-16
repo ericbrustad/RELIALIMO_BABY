@@ -585,23 +585,37 @@ class ReservationForm {
       }
 
       // Listen for Account saves (popup or iframe) so we can return and fill Billing Account#
-      window.addEventListener('message', (event) => {
+      window.addEventListener('message', async (event) => {
         // Handle account saves
         if (event?.data?.action !== 'relia:accountSaved') return;
-        const accountId = (event.data.accountId || '').toString().trim();
+        const accountId = (event.data.accountId || event.data.accountNumber || '').toString().trim();
         if (!accountId) return;
+        
+        console.log('📥 Received accountSaved message:', event.data);
 
         const billingAccountSearch = document.getElementById('billingAccountSearch');
         if (billingAccountSearch) {
           billingAccountSearch.value = accountId;
         }
 
-        // Also update the displayed account number if the account exists
+        // Refresh accounts from database to get the new/updated account
         try {
-          const account = db.getAllAccounts()?.find(a => (a?.account_number ?? a?.id)?.toString() === accountId || (a?.id ?? '').toString() === accountId);
-          if (account) this.updateBillingAccountNumberDisplay(account);
-          else this.setBillingAccountNumberDisplay(accountId);
-        } catch {
+          const freshAccounts = await db.getAllAccounts();
+          const account = freshAccounts?.find(a => 
+            (a?.account_number ?? a?.id)?.toString() === accountId || 
+            (a?.id ?? '').toString() === accountId ||
+            (a?.id ?? '').toString() === event.data.accountId
+          );
+          
+          if (account) {
+            console.log('✅ Found saved account:', account.account_number, account.company_name);
+            this.useExistingAccount(account);
+          } else {
+            console.log('⚠️ Account not found in refreshed list, setting display only');
+            this.setBillingAccountNumberDisplay(accountId);
+          }
+        } catch (e) {
+          console.error('❌ Error refreshing accounts after save:', e);
           this.setBillingAccountNumberDisplay(accountId);
         }
 
@@ -609,6 +623,9 @@ class ReservationForm {
         try { localStorage.removeItem('relia_return_to_reservation_url'); } catch { /* ignore */ }
         try { window.focus(); } catch { /* ignore */ }
       });
+
+      // Check if we returned from accounts page with a new account
+      await this.checkForNewAccountFromReturn();
 
       // Restore existing reservation or apply a draft copy
       if (this.isEditMode && this.editConfNumber) {
@@ -624,6 +641,47 @@ class ReservationForm {
       this.checkForTestData();
     } catch (error) {
       console.error('❌ Error during init:', error);
+    }
+  }
+
+  /**
+   * Check URL for newAccountId parameter (from same-window account creation return)
+   * and load that account into the billing section
+   */
+  async checkForNewAccountFromReturn() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const newAccountId = params.get('newAccountId');
+      
+      if (!newAccountId) return;
+      
+      console.log('📥 Found newAccountId from return:', newAccountId);
+      
+      // Clean up the URL by removing the parameter
+      const url = new URL(window.location.href);
+      url.searchParams.delete('newAccountId');
+      window.history.replaceState({}, '', url.toString());
+      
+      // Fetch fresh accounts and find the new one
+      const freshAccounts = await db.getAllAccounts();
+      const account = freshAccounts?.find(a => 
+        (a?.account_number ?? a?.id)?.toString() === newAccountId || 
+        (a?.id ?? '').toString() === newAccountId
+      );
+      
+      if (account) {
+        console.log('✅ Found new account from return:', account.account_number, account.company_name);
+        this.useExistingAccount(account);
+      } else {
+        console.log('⚠️ New account not found, setting search field only');
+        const billingAccountSearch = document.getElementById('billingAccountSearch');
+        if (billingAccountSearch) {
+          billingAccountSearch.value = newAccountId;
+        }
+        this.setBillingAccountNumberDisplay(newAccountId);
+      }
+    } catch (e) {
+      console.error('❌ Error checking for new account from return:', e);
     }
   }
 
@@ -867,11 +925,15 @@ class ReservationForm {
       this.vehicleIdToVehicle = {};
       this.activeVehicles.forEach(v => { if (v && v.id) this.vehicleIdToVehicle[v.id] = v; });
       const typeOptionsFromTable = Array.isArray(vehicleTypes) && vehicleTypes.length
-        ? vehicleTypes.map(t => ({
-            value: t.id,
-            label: normalizeVehicleTypeName(t.name || t.code || 'Vehicle Type'),
-            raw: t
-          }))
+        ? vehicleTypes.map(t => {
+            const name = normalizeVehicleTypeName(t.name || t.code || 'Vehicle Type');
+            return {
+              value: name, // Use name as value so it's human-readable when saved
+              label: name,
+              id: t.id, // Keep ID for rate lookups
+              raw: t
+            };
+          })
         : [];
 
       const typeOptionsFallback = activeVehicles.length
@@ -913,9 +975,11 @@ class ReservationForm {
 
       // Capture rate metadata for downstream cost application
       this.vehicleTypeRates = {};
+      // Store full vehicle type data for service type filtering
+      this.allVehicleTypeOptions = mergedOptions;
       typeOptionsFromTable.forEach((opt) => {
         const rates = opt.raw?.rates || opt.raw?.metadata?.rates || null;
-        if (opt.value && rates) {
+        if (opt.value && rates && Object.keys(rates).length > 0) {
           this.vehicleTypeRates[opt.value] = rates;
         }
       });
@@ -925,6 +989,9 @@ class ReservationForm {
       render(primaryCar, typeOptions);
       render(secondaryCar, typeOptions);
       render(vehicleTypeSelect, typeOptions);
+      
+      // Setup service type filter for vehicle types
+      this.setupVehicleTypeFiltering();
 
       console.log('[loadVehicleTypes] option counts', {
         vehicleTypeOptions: typeOptions.length,
@@ -1364,6 +1431,9 @@ class ReservationForm {
   setupEventListeners() {
     console.log('🔧 Setting up event listeners...');
     
+    // Setup rate section iframe communication
+    this.setupRateSectionIframe();
+    
     // Back button (removed from UI but keeping check)
     const backBtn = document.getElementById('backBtn');
     if (backBtn) {
@@ -1585,6 +1655,10 @@ class ReservationForm {
         driverSelect.addEventListener('change', (e) => {
           const driverId = e.target.value;
           if (!driverId) return;
+          
+          // Recalculate garage times based on new driver's address
+          this.updateGarageTimesFromDriver();
+          
           const assignedVehicleId = this.driverToVehicleMap && this.driverToVehicleMap[driverId];
           if (!assignedVehicleId) {
             console.log('[driverSelect] No assigned vehicle for driver:', driverId);
@@ -1884,6 +1958,20 @@ class ReservationForm {
         this.copyBillingToBooking();
       });
     }
+    
+    // Show Booking Agent button (Add Booking Agent link)
+    const showBookingAgentBtn = document.getElementById('showBookingAgentBtn');
+    if (showBookingAgentBtn) {
+      showBookingAgentBtn.addEventListener('click', () => {
+        this.showBookingAgentSection();
+      });
+    }
+    
+    // Booking Agent section toggle (expand/collapse)
+    this.setupBookingAgentToggle();
+    
+    // Setup phone and email validation for all contact sections
+    this.setupPhoneEmailValidation();
     
     // Auto-detect when passenger/booking matches billing
     this.setupMatchDetection();
@@ -2710,14 +2798,19 @@ class ReservationForm {
   }
 
   useExistingAccount(account) {
+    console.log('📝 useExistingAccount called with:', account);
+    console.log('🏢 Account company_name:', account.company_name);
+    
     // Populate Billing Accounts section with existing account (using db field names)
     const acctNum = account.account_number || account.id;
     document.getElementById('billingAccountSearch').value = acctNum;
     document.getElementById('billingCompany').value = account.company_name || '';
-    document.getElementById('billingFirstName').value = account.first_name;
-    document.getElementById('billingLastName').value = account.last_name;
-    document.getElementById('billingPhone').value = account.phone;
-    document.getElementById('billingEmail').value = account.email;
+    document.getElementById('billingFirstName').value = account.first_name || '';
+    document.getElementById('billingLastName').value = account.last_name || '';
+    document.getElementById('billingPhone').value = account.phone || account.cell_phone || '';
+    document.getElementById('billingEmail').value = account.email || '';
+    
+    console.log('✅ Set billingCompany to:', document.getElementById('billingCompany').value);
 
     // Cross-fill passenger fields ONLY if account is marked as passenger
     if (account.is_passenger) {
@@ -2974,6 +3067,135 @@ class ReservationForm {
     }, 2000);
   }
 
+  /**
+   * Auto Farmout Mode: If enabled, automatically set farmout options after save
+   * - Selects "Farm-out" radio option
+   * - Sets farmout status to "unassigned"
+   * - Sets farmout mode to "automatic"
+   * - Saves again to persist the farmout settings
+   */
+  async applyAutoFarmoutIfEnabled() {
+    // Check if auto farmout mode is enabled (from localStorage)
+    const isAutoFarmoutEnabled = localStorage.getItem('autoFarmoutMode') === 'true';
+    
+    if (!isAutoFarmoutEnabled) {
+      return; // Auto farmout mode not enabled, skip
+    }
+    
+    // Check if this reservation is already marked as farm-out
+    const farmOutRadio = document.querySelector('input[name="farmOption"][value="farm-out"]');
+    if (farmOutRadio?.checked) {
+      console.log('🏠 Auto Farmout: Already set to farm-out, skipping');
+      return;
+    }
+    
+    console.log('🏠 Auto Farmout Mode: Automatically setting farmout options...');
+    
+    try {
+      // 1. Select the "Farm-out" radio option
+      if (farmOutRadio) {
+        farmOutRadio.checked = true;
+        farmOutRadio.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      
+      // 2. Set farmout status to "unassigned"
+      const eFarmStatusInput = document.getElementById('eFarmStatus') || document.getElementById('efarmStatus');
+      if (eFarmStatusInput) {
+        eFarmStatusInput.value = 'Farm-out Unassigned';
+        eFarmStatusInput.dataset.canonical = 'unassigned';
+        // Update the visual styling
+        this.updateEFarmStatus('unassigned');
+      }
+      
+      // 3. Set farmout mode to "automatic"
+      const eFarmOutSelect = document.getElementById('eFarmOut');
+      if (eFarmOutSelect) {
+        // Find the automatic option
+        const autoOption = Array.from(eFarmOutSelect.options).find(opt => 
+          opt.value.toLowerCase().includes('auto') || 
+          opt.text.toLowerCase().includes('auto')
+        );
+        if (autoOption) {
+          eFarmOutSelect.value = autoOption.value;
+        } else {
+          // Try setting directly to 'automatic'
+          eFarmOutSelect.value = 'automatic';
+        }
+        eFarmOutSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      
+      // Show notification
+      this.showAutoFarmoutNotification();
+      
+      // 4. Save again to persist the farmout settings
+      console.log('🏠 Auto Farmout: Saving farmout settings...');
+      
+      // Small delay to let UI update
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Get the reservation ID from the database by confirmation number
+      const confField = document.getElementById('confNumber') || document.getElementById('confirmation-number');
+      const currentConfNumber = confField?.value?.trim();
+      
+      if (currentConfNumber && currentConfNumber !== 'NEW') {
+        // Find the reservation by confirmation number to get its ID
+        const allReservations = await db.getAllReservations();
+        const reservation = allReservations.find(r => 
+          r.confirmation_number === currentConfNumber || 
+          r.confirmationNumber === currentConfNumber
+        );
+        
+        if (reservation && reservation.id) {
+          // Import updateReservation directly from api-service
+          const { updateReservation } = await import('./api-service.js');
+          await updateReservation(reservation.id, {
+            farm_option: 'farm-out',
+            farmout_status: 'unassigned',
+            farmout_mode: 'automatic'
+          });
+          console.log('✅ Auto Farmout: Farmout settings saved successfully');
+        } else {
+          console.warn('🏠 Auto Farmout: Could not find reservation ID, settings applied locally only');
+        }
+      }
+      
+    } catch (error) {
+      console.error('❌ Auto Farmout: Error applying farmout settings:', error);
+    }
+  }
+  
+  showAutoFarmoutNotification() {
+    let toast = document.getElementById('autoFarmoutNotification');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'autoFarmoutNotification';
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 70px;
+        right: 20px;
+        background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+        color: #fff;
+        padding: 12px 16px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+        z-index: 1001;
+        font-size: 14px;
+        font-weight: 600;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      `;
+      document.body.appendChild(toast);
+    }
+    toast.innerHTML = '<span style="font-size: 18px;">🏠</span> Automatically Farmed Out';
+    toast.style.opacity = '1';
+    setTimeout(() => {
+      toast.style.opacity = '0';
+    }, 3000);
+  }
+
   async createNewAccount(passengerInfo) {
     // Get data from modal form fields
     const modal = document.getElementById('accountModal');
@@ -2996,10 +3218,14 @@ class ReservationForm {
       return;
     }
     
+    // Get organization_id for multi-tenant support
+    const organizationId = window.ENV?.ORGANIZATION_ID || localStorage.getItem('relia_organization_id') || null;
+    
     // Prepare account data for db module with proper field mappings
+    // Note: Do NOT set 'id' - Supabase auto-generates UUIDs for new accounts
     const accountData = {
-      id: nextAccountNumber.toString(),
       account_number: nextAccountNumber.toString(),
+      organization_id: organizationId,
       first_name: firstName,
       last_name: lastName,
       company_name: company,
@@ -3019,10 +3245,7 @@ class ReservationForm {
       return;
     }
 
-    // Increment account number for next account (local dev fallback only)
-    if (typeof db.setNextAccountNumber === 'function') {
-      db.setNextAccountNumber(nextAccountNumber + 1);
-    }
+    // Note: Counter is incremented in supabase-db.js saveAccount() on success
 
     // Clear cached pending number now that it has been used
     this.pendingAccountNumber = null;
@@ -3038,8 +3261,10 @@ class ReservationForm {
 
     this.closeModal();
 
-    // Store account ID for accounts page to load
-    localStorage.setItem('currentAccountId', nextAccountNumber.toString());
+    // Store account number for accounts page to load (use saved.account.id if available)
+    const savedId = saved.account?.id || saved.id || nextAccountNumber.toString();
+    localStorage.setItem('currentAccountId', savedId);
+    localStorage.setItem('currentAccountNumber', nextAccountNumber.toString());
     
     // Navigate directly to accounts page with all data
     window.location.href = 'accounts.html';
@@ -3140,6 +3365,155 @@ class ReservationForm {
       const firstField = document.getElementById('bookedByFirstName');
       if (firstField) firstField.focus();
     }, 100);
+  }
+
+  /**
+   * Setup the booking agent section expand/collapse toggle
+   */
+  setupBookingAgentToggle() {
+    const section = document.getElementById('bookingAgentSection');
+    const header = document.getElementById('bookingAgentHeader');
+    const toggleBtn = document.getElementById('bookingAgentToggleBtn');
+    const content = document.getElementById('bookingAgentContent');
+    
+    if (!section || !header) return;
+    
+    const toggleCollapse = (e) => {
+      // Don't collapse if clicking buttons (copy, clear)
+      if (e.target.closest('.btn-icon') || e.target.closest('#copyBillingToBookingBtn') || e.target.closest('#clearBookingAgentBtn')) {
+        return;
+      }
+      
+      section.classList.toggle('collapsed');
+      console.log('📋 Booking Agent section toggled:', section.classList.contains('collapsed') ? 'collapsed' : 'expanded');
+    };
+    
+    header.addEventListener('click', toggleCollapse);
+    
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        section.classList.toggle('collapsed');
+      });
+    }
+  }
+
+  /**
+   * Setup phone and email validation for billing, passenger, and booking sections
+   */
+  setupPhoneEmailValidation() {
+    // Phone fields to validate
+    const phoneFields = [
+      'billingPhone',
+      'passengerPhone',
+      'bookedByPhone',
+      'altContactPhone'
+    ];
+    
+    // Email fields to validate
+    const emailFields = [
+      'billingEmail',
+      'passengerEmail',
+      'bookedByEmail'
+    ];
+    
+    // Phone validation regex (supports various formats)
+    const phoneRegex = /^[\+]?[(]?[0-9]{1,3}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}$/;
+    const phoneDigitsMin = 10; // Minimum 10 digits for US phone
+    const defaultCountryCode = '+1'; // USA default
+    
+    // Email validation regex
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    // Format phone number as +1 (XXX) XXX-XXXX (USA default, international support)
+    const formatPhone = (value) => {
+      let digits = value.replace(/\D/g, '');
+      // If 10 digits, assume USA and add +1
+      if (digits.length === 10) {
+        return `${defaultCountryCode} (${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+      }
+      // If 11 digits starting with 1, format as USA
+      else if (digits.length === 11 && digits[0] === '1') {
+        return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+      }
+      // If more than 11 digits, likely international
+      else if (digits.length > 11) {
+        if (digits.startsWith('1')) {
+          return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7, 11)}${digits.length > 11 ? ' ext. ' + digits.slice(11) : ''}`;
+        }
+        return '+' + digits.replace(/(\d{1,3})(\d{3})(\d{3})(\d+)/, '$1 $2 $3 $4').trim();
+      }
+      return value;
+    };
+    
+    // Validate and style phone field
+    const validatePhone = (el) => {
+      const value = el.value.trim();
+      if (!value) {
+        el.classList.remove('invalid', 'valid');
+        return true; // Empty is ok (not required unless marked required)
+      }
+      
+      const digits = value.replace(/\D/g, '');
+      const isValid = digits.length >= phoneDigitsMin && phoneRegex.test(value);
+      
+      el.classList.toggle('invalid', !isValid);
+      el.classList.toggle('valid', isValid);
+      
+      return isValid;
+    };
+    
+    // Validate and style email field
+    const validateEmail = (el) => {
+      const value = el.value.trim();
+      if (!value) {
+        el.classList.remove('invalid', 'valid');
+        return true; // Empty is ok (not required unless marked required)
+      }
+      
+      const isValid = emailRegex.test(value);
+      
+      el.classList.toggle('invalid', !isValid);
+      el.classList.toggle('valid', isValid);
+      
+      return isValid;
+    };
+    
+    // Setup phone field listeners
+    phoneFields.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      
+      el.addEventListener('blur', () => {
+        // Format on blur
+        const formatted = formatPhone(el.value);
+        if (formatted !== el.value) {
+          el.value = formatted;
+        }
+        validatePhone(el);
+      });
+      
+      el.addEventListener('input', () => {
+        // Only validate on input, don't format mid-typing
+        validatePhone(el);
+      });
+    });
+    
+    // Setup email field listeners
+    emailFields.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      
+      el.addEventListener('blur', () => {
+        validateEmail(el);
+      });
+      
+      el.addEventListener('input', () => {
+        validateEmail(el);
+      });
+    });
+    
+    console.log('✅ Phone/email validation setup complete');
   }
 
   copyBillingToPassenger() {
@@ -3662,7 +4036,7 @@ class ReservationForm {
 
       container.innerHTML = results.map(account => `
         <div class="suggestion-item" data-account-id="${account.id}">
-          ${account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
+          <strong>${account.account_number || ''}</strong> - ${account.first_name || ''} ${account.last_name || ''} ${account.company_name ? '<span class="company-tag">' + account.company_name + '</span>' : ''}
         </div>
       `).join('');
 
@@ -3713,7 +4087,7 @@ class ReservationForm {
 
       container.innerHTML = results.map(account => `
         <div class="suggestion-item" data-account-id="${account.id}">
-          ${account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
+          <strong>${account.account_number || ''}</strong> - ${account.first_name || ''} ${account.last_name || ''} ${account.company_name ? '<span class="company-tag">' + account.company_name + '</span>' : ''}
         </div>
       `).join('');
 
@@ -3757,7 +4131,7 @@ class ReservationForm {
 
       container.innerHTML = results.map(account => `
         <div class="suggestion-item" data-account-id="${account.id}">
-          ${account.id} - ${account.first_name} ${account.last_name} (${account.company_name || 'Individual'})
+          <strong>${account.account_number || ''}</strong> - ${account.first_name || ''} ${account.last_name || ''} ${account.company_name ? '<span class="company-tag">' + account.company_name + '</span>' : ''}
         </div>
       `).join('');
 
@@ -4599,25 +4973,148 @@ class ReservationForm {
       return `${hh}:${mm}`;
     };
 
+    // Spot Time = PU Time - 15 minutes
     const spot = formatTime(puDate, puTime, -15);
-    const garOut = formatTime(puDate, puTime, -45);
-    const garIn = formatTime(puDate, puTime, 30);
-
     if (spot) {
       const spotEl = document.getElementById('spotTime');
       if (spotEl) spotEl.value = spot;
     }
+
+    // Update DO Time based on pickup + trip duration
+    this.updateDropoffFromDuration();
+
+    // Calculate garage times based on driver address (async operation)
+    this.updateGarageTimesFromDriver();
+  }
+
+  /**
+   * Get the selected driver's full address for routing calculations
+   * @returns {string|null} Full address string or null if not available
+   */
+  getSelectedDriverAddress() {
+    const driverSelect = document.getElementById('driverSelect');
+    const driverId = driverSelect?.value;
+    if (!driverId || !this.driversData) return null;
+
+    const driver = this.driversData.find(d => d.id === driverId);
+    if (!driver) return null;
+
+    // Build full address from driver's address components
+    const parts = [
+      driver.primary_address,
+      driver.city,
+      driver.state,
+      driver.postal_code
+    ].filter(Boolean);
+
+    if (parts.length < 2) {
+      console.log('[getSelectedDriverAddress] Driver has incomplete address:', driver.first_name, driver.last_name);
+      return null;
+    }
+
+    const fullAddress = parts.join(', ');
+    console.log('[getSelectedDriverAddress] Driver address:', fullAddress);
+    return fullAddress;
+  }
+
+  /**
+   * Calculate and update Garage Out and Garage In times based on driver location
+   * - Garage Out = PU Time - 15 min (spot time) - duration from driver address to pickup
+   * - Garage In = DO Time + duration from dropoff to driver address
+   */
+  async updateGarageTimesFromDriver() {
+    const puDate = document.getElementById('puDate')?.value || '';
+    const puTime = document.getElementById('puTime')?.value || '';
+    const doTime = document.getElementById('doTime')?.value || '';
+    
+    if (!puTime) return;
+
+    const formatTimeOffset = (dateStr, timeStr, offsetMinutes) => {
+      const baseDate = dateStr || new Date().toISOString().slice(0, 10);
+      const d = new Date(`${baseDate}T${timeStr}`);
+      if (Number.isNaN(d.getTime())) return null;
+      d.setMinutes(d.getMinutes() + offsetMinutes);
+      const hh = `${d.getHours()}`.padStart(2, '0');
+      const mm = `${d.getMinutes()}`.padStart(2, '0');
+      return `${hh}:${mm}`;
+    };
+
+    const driverAddress = this.getSelectedDriverAddress();
+    const stops = this.getStops ? this.getStops() : [];
+    
+    // Get pickup and dropoff addresses
+    const pickupStop = stops.find(s => (s.stopType || s.type || '').toLowerCase() === 'pickup') || stops[0];
+    const dropoffStop = [...stops].reverse().find(s => (s.stopType || s.type || '').toLowerCase() === 'dropoff') || stops[stops.length - 1];
+    
+    const pickupAddress = pickupStop?.fullAddress || pickupStop?.address || pickupStop?.address1;
+    const dropoffAddress = dropoffStop?.fullAddress || dropoffStop?.address || dropoffStop?.address1;
+
+    // Default offsets if we can't calculate from driver address
+    let garOutOffsetMinutes = -30; // Default: 30 min before pickup (15 spot + 15 travel)
+    let garInOffsetMinutes = 15;   // Default: 15 min after dropoff
+
+    // If we have driver address and Google Maps, calculate actual travel times
+    if (driverAddress && this.googleMapsService && pickupAddress) {
+      try {
+        // Calculate duration from driver's address to pickup
+        const toPickupRoute = await this.googleMapsService.getRouteSummary({
+          origin: driverAddress,
+          destination: pickupAddress
+        });
+        
+        if (toPickupRoute?.durationSeconds) {
+          const travelMinutes = Math.ceil(toPickupRoute.durationSeconds / 60);
+          // Garage Out = Pickup Time - 15 min (spot) - travel time from driver to pickup
+          garOutOffsetMinutes = -(15 + travelMinutes);
+          console.log(`[updateGarageTimesFromDriver] Driver to pickup: ${travelMinutes} min, Garage Out offset: ${garOutOffsetMinutes} min`);
+        }
+      } catch (err) {
+        console.warn('[updateGarageTimesFromDriver] Failed to calculate driver->pickup route:', err);
+      }
+    }
+
+    // Calculate Garage Out Time
+    const garOut = formatTimeOffset(puDate, puTime, garOutOffsetMinutes);
     if (garOut) {
       const garOutEl = document.getElementById('garOutTime');
       if (garOutEl) garOutEl.value = garOut;
     }
-    if (garIn) {
-      const garInEl = document.getElementById('garInTime');
-      if (garInEl) garInEl.value = garIn;
-    }
 
-    // Also keep DO Time aligned with pickup + duration when user edits pickup times
-    this.updateDropoffFromDuration();
+    // Calculate Garage In Time based on DO Time + return travel
+    if (doTime && driverAddress && this.googleMapsService && dropoffAddress) {
+      try {
+        // Calculate duration from dropoff to driver's address
+        const fromDropoffRoute = await this.googleMapsService.getRouteSummary({
+          origin: dropoffAddress,
+          destination: driverAddress
+        });
+        
+        if (fromDropoffRoute?.durationSeconds) {
+          const returnMinutes = Math.ceil(fromDropoffRoute.durationSeconds / 60);
+          const garIn = formatTimeOffset(puDate, doTime, returnMinutes);
+          console.log(`[updateGarageTimesFromDriver] Dropoff to driver: ${returnMinutes} min`);
+          if (garIn) {
+            const garInEl = document.getElementById('garInTime');
+            if (garInEl) garInEl.value = garIn;
+          }
+        }
+      } catch (err) {
+        console.warn('[updateGarageTimesFromDriver] Failed to calculate dropoff->driver route:', err);
+        // Fall back to default
+        const garIn = formatTimeOffset(puDate, doTime || puTime, garInOffsetMinutes);
+        if (garIn) {
+          const garInEl = document.getElementById('garInTime');
+          if (garInEl) garInEl.value = garIn;
+        }
+      }
+    } else if (doTime) {
+      // No driver address, use default offset from DO time
+      const garIn = formatTimeOffset(puDate, doTime, garInOffsetMinutes);
+      if (garIn) {
+        const garInEl = document.getElementById('garInTime');
+        if (garInEl) garInEl.value = garIn;
+      }
+    }
   }
 
   updateDropoffFromDuration() {
@@ -4752,10 +5249,18 @@ class ReservationForm {
     const shouldOverwrite = (input) => {
       if (!input) return false;
       const current = (input.value || '').trim();
-      return current === '' || current === '0' || current === '0.0' || current === '0.00' || input.dataset.autofilled === 'route';
+      return current === '' || current === '0' || current === '0.0' || current === '0.00' || current === '1' || input.dataset.autofilled === 'route';
     };
 
+    // Update main duration field from route calculation
     if (durationHours !== null) {
+      const mainDurationEl = document.getElementById('duration');
+      if (mainDurationEl && shouldOverwrite(mainDurationEl)) {
+        mainDurationEl.value = durationHours.toFixed(2);
+        mainDurationEl.dataset.autofilled = 'route';
+        // This will trigger DO time update
+        this.updateDropoffFromDuration();
+      }
       if (perHourQty && shouldOverwrite(perHourQty)) {
         perHourQty.value = durationHours.toFixed(2);
         perHourQty.dataset.autofilled = 'route';
@@ -4788,24 +5293,27 @@ class ReservationForm {
 
     this.latestRouteSummary = {
       ...summary,
-      miles: summary.distanceMeters ? summary.distanceMeters / 1609.344 : null
+      miles: summary.distanceMeters ? summary.distanceMeters / 1609.344 : 0,
+      hours: summary.durationSeconds ? summary.durationSeconds / 3600 : 0
     };
 
-    // Auto-set drop-off time based on pickup time + duration
-    if (summary.durationSeconds) {
-      const puDate = document.getElementById('puDate')?.value;
-      const puTime = document.getElementById('puTime')?.value;
-      if (puDate && puTime) {
-        const start = new Date(`${puDate}T${puTime}`);
-        if (!Number.isNaN(start.getTime())) {
-          const end = new Date(start.getTime() + summary.durationSeconds * 1000);
-          const hh = `${end.getHours()}`.padStart(2, '0');
-          const mm = `${end.getMinutes()}`.padStart(2, '0');
-          const doTimeEl = document.getElementById('doTime');
-          if (doTimeEl) doTimeEl.value = `${hh}:${mm}`;
-        }
-      }
+    // Send distance/duration/passengers directly to rate section iframe
+    if (this.rateSectionFrame && this.rateSectionReady) {
+      const miles = this.latestRouteSummary.miles || 0;
+      const hours = this.latestRouteSummary.hours || 0;
+      const passengers = parseFloat(document.getElementById('numPax')?.value) || 1;
+      
+      // Calculate trip hours from PU time to DO time
+      const tripHours = this.calculateTripHours();
+      
+      this.rateSectionFrame.contentWindow.postMessage({
+        type: 'setRouteData',
+        data: { miles, hours, passengers, tripHours }
+      }, '*');
     }
+
+    // Trigger rate recalculation now that we have distance
+    this.updateRateConfigDisplay();
 
     // Keep spot/garage times aligned after any pickup time edits
     this.updateTimesFromPickup();
@@ -4832,13 +5340,27 @@ class ReservationForm {
         return Number.isFinite(num) ? num : 0;
       };
 
+      // Fields that should always show 2 decimal places (currency/rates)
+      const rateFields = [
+        'flatRate', 'hourRate', 'unitRate', 'mileRate', 'passRate', 'waitRate',
+        'overtimeRate', 'extraPassRate', 'deadMileRate', 'minFare', 'ppBaseFare',
+        'distBaseFare', 'gratuityRate', 'fuelRate', 'discountRate', 'surfaceRate',
+        'baseRate', 'adminRate', 'stopsRate'
+      ];
+
       const setIfEmpty = (id, value) => {
         if (value === undefined || value === null) return;
         const el = document.getElementById(id);
         if (!el) return;
         const current = getNum(el.value);
         if (!el.value || current === 0) {
-          el.value = value;
+          // Format rate fields with 2 decimal places
+          if (rateFields.includes(id)) {
+            const numVal = parseFloat(value);
+            el.value = Number.isFinite(numVal) ? numVal.toFixed(2) : value;
+          } else {
+            el.value = value;
+          }
         }
       };
 
@@ -4846,11 +5368,21 @@ class ReservationForm {
       const passengerCount = getNum(document.getElementById('numPax')?.value || document.getElementById('passQty')?.value);
 
       if (rates.perHour) {
-        const hourRate = getNum(rates.perHour.asLow)
+        const hourRate = getNum(rates.perHour.baseRate)
+          || getNum(rates.perHour.asLow)
           || getNum(rates.perHour.rateSchedules && rates.perHour.rateSchedules[0]?.ratePerHour)
           || getNum(rates.perHour.hoursRange && rates.perHour.hoursRange.ratePerHour);
         if (hourRate) {
           setIfEmpty('hourRate', hourRate.toString());
+        }
+        // Also set overtime and wait time rates if available
+        const overtimeRate = getNum(rates.perHour.overtimeRate);
+        if (overtimeRate) {
+          setIfEmpty('overtimeRate', overtimeRate.toString());
+        }
+        const waitTimeRate = getNum(rates.perHour.waitTimeRate);
+        if (waitTimeRate) {
+          setIfEmpty('waitRate', waitTimeRate.toString());
         }
         if (durationHours) {
           setIfEmpty('hourQty', durationHours.toFixed(2));
@@ -4858,10 +5390,21 @@ class ReservationForm {
       }
 
       if (rates.perPassenger) {
-        const basePassRate = getNum(rates.perPassenger.baseRate)
+        const basePassRate = getNum(rates.perPassenger.ratePerPassenger)
+          || getNum(rates.perPassenger.baseRate)
           || getNum(rates.perPassenger.tiers && rates.perPassenger.tiers[0]?.rate);
         if (basePassRate) {
           setIfEmpty('passRate', basePassRate.toString());
+        }
+        // Set extra passenger rate
+        const extraPassRate = getNum(rates.perPassenger.extraPassengerRate);
+        if (extraPassRate) {
+          setIfEmpty('extraPassRate', extraPassRate.toString());
+        }
+        // Set per-passenger base fare
+        const ppBaseFare = getNum(rates.perPassenger.baseFare);
+        if (ppBaseFare) {
+          setIfEmpty('ppBaseFare', ppBaseFare.toString());
         }
         if (passengerCount) {
           setIfEmpty('passQty', passengerCount.toString());
@@ -4875,7 +5418,8 @@ class ReservationForm {
           ? Math.max(0, miles - includedMiles)
           : null;
 
-        const mileRate = getNum(rates.distance.basePerMile)
+        const mileRate = getNum(rates.distance.ratePerMile)
+          || getNum(rates.distance.basePerMile)
           || getNum(rates.distance.tiers && rates.distance.tiers[0]?.rate);
         if (mileRate) {
           setIfEmpty('mileRate', mileRate.toString());
@@ -4892,10 +5436,35 @@ class ReservationForm {
         if (minimumFare) {
           setIfEmpty('flatQty', '1');
           setIfEmpty('flatRate', minimumFare.toString());
+          setIfEmpty('minFare', minimumFare.toString());
+        }
+        
+        // Set base fare for distance
+        const distBaseFare = getNum(rates.distance.baseFare);
+        if (distBaseFare) {
+          setIfEmpty('distBaseFare', distBaseFare.toString());
+        }
+        
+        // Set dead mile rate
+        const deadMileRate = getNum(rates.distance.deadMileRate);
+        if (deadMileRate) {
+          setIfEmpty('deadMileRate', deadMileRate.toString());
         }
       }
 
       this.calculateCosts();
+      
+      // Store the current vehicle type data
+      const vehicleTypeData = {
+        id: vehicleTypeId,
+        rates: rates
+      };
+      this.currentVehicleType = vehicleTypeData;
+      
+      // Send rates to iframe if available
+      if (this.rateSectionReady) {
+        this.sendVehicleRatesToIframe(vehicleTypeData);
+      }
     } catch (error) {
       console.warn('[ReservationForm] applyVehicleTypePricing failed:', error);
     }
@@ -4998,12 +5567,29 @@ class ReservationForm {
       'adminQty', 'adminRate'
     ];
 
+    // Rate fields that should always display 2 decimal places
+    const rateFields = [
+      'flatRate', 'hourRate', 'unitRate', 'otRate', 'stopsRate',
+      'passRate', 'mileRate', 'adminRate', 'gratuityQty', 'fuelQty',
+      'discountQty', 'surfaceQty', 'baseRateQty'
+    ];
+
     costInputs.forEach(inputId => {
       const input = document.getElementById(inputId);
       if (input) {
         input.addEventListener('input', () => {
           this.calculateCosts();
         });
+        
+        // Format rate fields to 2 decimal places on blur
+        if (rateFields.includes(inputId)) {
+          input.addEventListener('blur', () => {
+            const val = parseFloat(input.value);
+            if (Number.isFinite(val)) {
+              input.value = val.toFixed(2);
+            }
+          });
+        }
       }
     });
 
@@ -5026,17 +5612,14 @@ class ReservationForm {
       });
     }
 
-    // Apply rates button
-    const applyRatesBtn = document.getElementById('applyRatesBtn');
-    if (applyRatesBtn) {
-      applyRatesBtn.addEventListener('click', () => {
-        this.applySelectedRatesToCosts();
-      });
-    }
-
-    // Listen for service type and vehicle type changes
+    // Listen for service type and vehicle type changes - rates applied automatically
     const serviceTypeEl = document.getElementById('serviceType');
     const vehicleTypeEl = document.getElementById('vehicleTypeRes');
+    const numPaxEl = document.getElementById('numPax');
+    const puTimeEl = document.getElementById('puTime');
+    const doTimeEl = document.getElementById('doTime');
+    const puDateEl = document.getElementById('puDate');
+    const doDateEl = document.getElementById('doDate');
 
     if (serviceTypeEl) {
       serviceTypeEl.addEventListener('change', () => this.updateRateConfigDisplay());
@@ -5044,13 +5627,119 @@ class ReservationForm {
     if (vehicleTypeEl) {
       vehicleTypeEl.addEventListener('change', () => this.updateRateConfigDisplay());
     }
+    // Update rates when passenger count changes (for per-passenger pricing)
+    if (numPaxEl) {
+      numPaxEl.addEventListener('change', () => this.updateRateConfigDisplay());
+      numPaxEl.addEventListener('input', () => this.updateRateConfigDisplay());
+    }
+    // Update rates when PU/DO times change (for hourly pricing)
+    if (puTimeEl) {
+      puTimeEl.addEventListener('change', () => this.updateRateConfigDisplay());
+    }
+    if (doTimeEl) {
+      doTimeEl.addEventListener('change', () => this.updateRateConfigDisplay());
+      doTimeEl.addEventListener('input', () => this.updateRateConfigDisplay());
+    }
+    if (puDateEl) {
+      puDateEl.addEventListener('change', () => this.updateRateConfigDisplay());
+    }
+    if (doDateEl) {
+      doDateEl.addEventListener('change', () => this.updateRateConfigDisplay());
+    }
 
     // Initial update
     this.updateRateConfigDisplay();
   }
 
   /**
-   * Update the rate configuration display based on selected service and vehicle types
+   * Setup vehicle type filtering based on service type selection
+   * Vehicle types can have service_type_tags that associate them with specific services
+   */
+  setupVehicleTypeFiltering() {
+    const serviceTypeEl = document.getElementById('serviceType');
+    const vehicleTypeEl = document.getElementById('vehicleTypeRes');
+    
+    if (!serviceTypeEl || !vehicleTypeEl) return;
+    
+    // Store current value before filtering
+    const currentValue = vehicleTypeEl.value;
+    
+    // Listen for service type changes
+    serviceTypeEl.addEventListener('change', () => {
+      this.filterVehicleTypesByServiceType();
+    });
+    
+    // Initial filter
+    this.filterVehicleTypesByServiceType();
+    
+    // Restore value if still valid
+    if (currentValue) {
+      const optionExists = Array.from(vehicleTypeEl.options).some(o => o.value === currentValue);
+      if (optionExists) vehicleTypeEl.value = currentValue;
+    }
+  }
+
+  /**
+   * Filter vehicle type dropdown based on selected service type
+   * Shows all if no service type selected or if vehicle type has no service restrictions
+   */
+  filterVehicleTypesByServiceType() {
+    const serviceTypeEl = document.getElementById('serviceType');
+    const vehicleTypeEl = document.getElementById('vehicleTypeRes');
+    
+    if (!vehicleTypeEl || !this.allVehicleTypeOptions) return;
+    
+    const selectedServiceType = serviceTypeEl?.value || '';
+    const currentValue = vehicleTypeEl.value;
+    
+    // Normalize service type tags helper
+    const normalizeTag = (tag) => {
+      if (!tag) return '';
+      return tag.toString().toLowerCase().trim().replace(/^st:/i, '');
+    };
+    
+    // Filter vehicle types
+    const filteredOptions = this.allVehicleTypeOptions.filter(opt => {
+      // Get service type tags from the raw data
+      const tags = opt.raw?.service_type_tags || opt.raw?.metadata?.service_type_tags || [];
+      
+      // If no tags or empty, show for all service types
+      if (!Array.isArray(tags) || tags.length === 0) {
+        return true;
+      }
+      
+      // If no service type selected, show all
+      if (!selectedServiceType) {
+        return true;
+      }
+      
+      // Check if any tag matches the selected service type
+      const normalizedSelected = normalizeTag(selectedServiceType);
+      return tags.some(tag => normalizeTag(tag) === normalizedSelected);
+    });
+    
+    // Re-render the dropdown
+    const placeholder = filteredOptions.length ? '-- Select Vehicle Type --' : '-- No vehicles for this service --';
+    vehicleTypeEl.innerHTML = `<option value="">${placeholder}</option>` + 
+      filteredOptions.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+    
+    // Try to restore current value if still in filtered list
+    const valueStillExists = filteredOptions.some(o => o.value === currentValue);
+    if (valueStillExists) {
+      vehicleTypeEl.value = currentValue;
+    } else if (filteredOptions.length === 1) {
+      // Auto-select if only one option
+      vehicleTypeEl.value = filteredOptions[0].value;
+      this.applyVehicleTypePricing();
+    }
+    
+    // Trigger rate update
+    this.updateRateConfigDisplay();
+  }
+
+  /**
+   * Update rate configuration based on selected service and vehicle types
+   * Sends pricing basis and rates to the rate section iframe
    */
   updateRateConfigDisplay() {
     const serviceTypeEl = document.getElementById('serviceType');
@@ -5058,19 +5747,492 @@ class ReservationForm {
 
     const serviceTypeCode = serviceTypeEl?.value || '';
     const vehicleTypeId = vehicleTypeEl?.value || '';
-    const vehicleTypeName = vehicleTypeEl?.options?.[vehicleTypeEl.selectedIndex]?.text || '--';
 
-    // Update display values
-    const setDisplay = (id, value) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = value;
+    // Get pricing types from cached service types (support both array and single value)
+    let allowedPricingTypes = ['DISTANCE']; // Default
+    let primaryPricingBasis = 'Distance';
+    
+    if (this._serviceTypesList) {
+      const serviceType = this._serviceTypesList.find(st => st.code === serviceTypeCode);
+      if (serviceType) {
+        // Get allowed pricing types (array or single value)
+        if (Array.isArray(serviceType.pricing_types) && serviceType.pricing_types.length > 0) {
+          allowedPricingTypes = serviceType.pricing_types.map(t => t.toUpperCase());
+        } else if (serviceType.pricing_type) {
+          allowedPricingTypes = [serviceType.pricing_type.toUpperCase()];
+        }
+        
+        // Set primary pricing basis from first allowed type
+        const pt = allowedPricingTypes[0];
+        if (pt === 'HOURS' || pt === 'PER_HOUR' || pt === 'HOURLY') primaryPricingBasis = 'Hourly';
+        else if (pt === 'DISTANCE' || pt === 'PER_MILE') primaryPricingBasis = 'Distance';
+        else if (pt === 'FLAT' || pt === 'FLAT_RATE' || pt === 'FIXED') primaryPricingBasis = 'Flat Rate';
+        else if (pt === 'PER_PASSENGER' || pt === 'PASSENGER') primaryPricingBasis = 'Per Passenger';
+      }
+    } else {
+      // Fallback to code-based detection
+      if (serviceTypeCode === 'hourly') {
+        primaryPricingBasis = 'Hourly';
+        allowedPricingTypes = ['HOURS'];
+      } else if (serviceTypeCode === 'point-to-point') {
+        primaryPricingBasis = 'Distance';
+        allowedPricingTypes = ['DISTANCE'];
+      } else if (serviceTypeCode === 'airport-transfer' || serviceTypeCode === 'from-airport' || serviceTypeCode === 'to-airport') {
+        primaryPricingBasis = 'Distance';
+        allowedPricingTypes = ['DISTANCE'];
+      }
+    }
+
+    // Helper to check if a pricing type is allowed
+    const isAllowed = (type) => {
+      const typeUpper = (type || '').toUpperCase();
+      return allowedPricingTypes.some(allowed => {
+        if (allowed === 'HOURS' || allowed === 'HOURLY' || allowed === 'PER_HOUR') {
+          return typeUpper === 'HOURS' || typeUpper === 'HOURLY' || typeUpper === 'PER_HOUR';
+        }
+        if (allowed === 'DISTANCE' || allowed === 'PER_MILE') {
+          return typeUpper === 'DISTANCE' || typeUpper === 'PER_MILE';
+        }
+        if (allowed === 'PASSENGER' || allowed === 'PER_PASSENGER') {
+          return typeUpper === 'PASSENGER' || typeUpper === 'PER_PASSENGER';
+        }
+        if (allowed === 'FIXED' || allowed === 'FLAT' || allowed === 'FLAT_RATE') {
+          return typeUpper === 'FIXED' || typeUpper === 'FLAT' || typeUpper === 'FLAT_RATE';
+        }
+        if (allowed === 'HYBRID') {
+          return typeUpper === 'HYBRID';
+        }
+        return allowed === typeUpper;
+      });
     };
 
-    // Service type display
-    const serviceTypeLabel = serviceTypeEl?.options?.[serviceTypeEl.selectedIndex]?.text || '--';
-    setDisplay('rateServiceType', serviceTypeLabel);
+    // Send pricing basis and allowed types to iframe
+    if (this.rateSectionFrame && this.rateSectionReady) {
+      this.rateSectionFrame.contentWindow.postMessage({
+        type: 'setPricingBasis',
+        data: { 
+          basis: primaryPricingBasis,
+          allowedTypes: allowedPricingTypes
+        }
+      }, '*');
+    }
 
-    // Get pricing type from cached service types
+    // Apply stored rates that match this service type
+    this.applyStoredRatesForServiceType(serviceTypeCode, primaryPricingBasis);
+
+    // Get rates from vehicle type - filter based on selected service type's pricing types
+    const allRates = this.vehicleTypeRates?.[vehicleTypeId] || {};
+    
+    // Get rates specific to current pricing basis, or fall back to general rates
+    const getRatesForPricingBasis = (rates, basis) => {
+      // Check if vehicle has service-specific rates
+      if (rates.serviceRates && rates.serviceRates[serviceTypeCode]) {
+        return rates.serviceRates[serviceTypeCode];
+      }
+      
+      // Otherwise use rates that match the pricing basis
+      switch (basis) {
+        case 'Hourly':
+          return rates.perHour || {};
+        case 'Distance':
+          return rates.distance || {};
+        case 'Per Passenger':
+          return rates.perPassenger || {};
+        case 'Flat Rate':
+          return rates.flatRate || rates.distance || {};
+        default:
+          return rates;
+      }
+    };
+    
+    const relevantRates = getRatesForPricingBasis(allRates, primaryPricingBasis);
+    
+    // Extract rates from nested structure (perHour, distance, etc.) or flat structure
+    const getNum = (val) => {
+      const num = parseFloat(val);
+      return Number.isFinite(num) ? num : 0;
+    };
+
+    // Base rate / flat rate - only if FIXED/FLAT is allowed or as minimum fare
+    const baseRate = getNum(relevantRates.baseRate)
+      || getNum(relevantRates.baseFare)
+      || getNum(relevantRates.minimumFare)
+      || getNum(allRates.perHour?.baseRate) 
+      || getNum(allRates.distance?.baseFare)
+      || getNum(allRates.distance?.minimumFare) 
+      || getNum(allRates.base_rate) || getNum(allRates.baseRate) || getNum(allRates.flatRate) || 0;
+    
+    // Hourly rate - only include if HOURS pricing type is allowed
+    const perHour = isAllowed('HOURS') ? (
+      getNum(relevantRates.ratePerHour)
+      || getNum(allRates.perHour?.ratePerHour)
+      || getNum(allRates.per_hour) || getNum(allRates.hourlyRate)
+      || getNum(allRates.perHour?.asLow)
+      || getNum(allRates.perHour?.rateSchedules?.[0]?.ratePerHour) || 0
+    ) : 0;
+    
+    // Per mile rate - only include if DISTANCE pricing type is allowed
+    const perMile = isAllowed('DISTANCE') ? (
+      getNum(relevantRates.ratePerMile)
+      || getNum(allRates.distance?.ratePerMile)
+      || getNum(allRates.per_mile) || getNum(allRates.mileageRate)
+      || getNum(allRates.distance?.basePerMile)
+      || getNum(allRates.distance?.tiers?.[0]?.rate) || 0
+    ) : 0;
+    
+    // Min hours - only include if HOURS pricing type is allowed
+    const minHours = isAllowed('HOURS') ? (
+      getNum(relevantRates.minimumHours)
+      || getNum(allRates.perHour?.minimumHours)
+      || getNum(allRates.min_hours) || getNum(allRates.minimumHours) || 0
+    ) : 0;
+    
+    // Per passenger rate - only include if PASSENGER pricing type is allowed
+    const perPassenger = isAllowed('PASSENGER') ? (
+      getNum(relevantRates.ratePerPassenger)
+      || getNum(allRates.perPassenger?.ratePerPassenger)
+      || getNum(allRates.per_passenger) || getNum(allRates.passengerRate) || 0
+    ) : 0;
+    
+    // Gratuity - always include (applies to all pricing types)
+    const gratuity = getNum(relevantRates.gratuity)
+      || getNum(allRates.perHour?.gratuity) 
+      || getNum(allRates.perPassenger?.gratuity)
+      || getNum(allRates.distance?.gratuity)
+      || getNum(allRates.gratuity) || getNum(allRates.defaultGratuity) || 0;
+
+    // Tiered distance formula config - only if DISTANCE is allowed
+    const tieredFormula = isAllowed('DISTANCE') 
+      ? (relevantRates.tieredFormula || allRates.distance?.tieredFormula || null)
+      : null;
+
+    // Auto-apply rates to cost fields (instant/automatic)
+    this.autoApplyRatesToCosts({
+      baseRate,
+      perHour,
+      perMile,
+      perPassenger,
+      minHours,
+      gratuity,
+      pricingBasis: primaryPricingBasis,
+      allowedPricingTypes,
+      tieredFormula
+    });
+  }
+
+  /**
+   * Automatically apply rates to cost fields based on vehicle type and route
+   * Called whenever vehicle type or route changes
+   */
+  autoApplyRatesToCosts(rateConfig) {
+    const { baseRate, perHour, perMile, perPassenger, minHours, gratuity, pricingBasis, allowedPricingTypes, tieredFormula } = rateConfig;
+    
+    // Helper to check if a pricing type is allowed
+    const isAllowed = (type) => {
+      if (!allowedPricingTypes || !Array.isArray(allowedPricingTypes)) return true;
+      const typeUpper = (type || '').toUpperCase();
+      return allowedPricingTypes.some(allowed => {
+        const a = allowed.toUpperCase();
+        if (a === 'HOURS' || a === 'HOURLY' || a === 'PER_HOUR') {
+          return typeUpper === 'HOURS' || typeUpper === 'HOURLY' || typeUpper === 'PER_HOUR';
+        }
+        if (a === 'DISTANCE' || a === 'PER_MILE') {
+          return typeUpper === 'DISTANCE' || typeUpper === 'PER_MILE';
+        }
+        if (a === 'PASSENGER' || a === 'PER_PASSENGER') {
+          return typeUpper === 'PASSENGER' || typeUpper === 'PER_PASSENGER';
+        }
+        if (a === 'FIXED' || a === 'FLAT' || a === 'FLAT_RATE') {
+          return typeUpper === 'FIXED' || typeUpper === 'FLAT' || typeUpper === 'FLAT_RATE';
+        }
+        return a === typeUpper;
+      });
+    };
+    
+    const setInputValue = (id, value) => {
+      const el = document.getElementById(id);
+      if (el && value > 0) {
+        el.value = parseFloat(value).toFixed(2);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    };
+
+    // Get current distance from route if available (use pre-converted miles or fall back to meters conversion)
+    const distanceMiles = this.latestRouteSummary?.miles 
+      || (this.latestRouteSummary?.distanceMeters ? this.latestRouteSummary.distanceMeters / 1609.344 : 0)
+      || 0;
+    
+    // Calculate hours from PU time to DO time for hourly pricing
+    const calculateHoursFromTimes = () => {
+      const puDate = document.getElementById('puDate')?.value;
+      const puTime = document.getElementById('puTime')?.value;
+      const doDate = document.getElementById('doDate')?.value || puDate; // Use puDate if doDate not set
+      const doTime = document.getElementById('doTime')?.value;
+      
+      if (puDate && puTime && doTime) {
+        const start = new Date(`${puDate}T${puTime}`);
+        const end = new Date(`${doDate || puDate}T${doTime}`);
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          const diffMs = end.getTime() - start.getTime();
+          if (diffMs > 0) {
+            return diffMs / (1000 * 60 * 60); // Convert ms to hours
+          }
+        }
+      }
+      return 0;
+    };
+    
+    // Get duration in hours - prefer PU/DO time calculation for hourly pricing, fall back to route duration
+    const hoursFromTimes = calculateHoursFromTimes();
+    const tripHours = hoursFromTimes; // Hours from PU to DO time
+    const routeHours = this.latestRouteSummary?.hours 
+        || (this.latestRouteSummary?.durationSeconds ? this.latestRouteSummary.durationSeconds / 3600 : 0)
+        || 0;
+    const durationHours = routeHours > 0 ? routeHours : (parseFloat(document.getElementById('hourQty')?.value) || minHours || 0);
+    
+    // Get passenger count
+    const passengerCount = parseFloat(document.getElementById('numPax')?.value) || 1;
+
+    // Calculate flat rate if tiered formula is enabled
+    let calculatedFlatRate = baseRate || 0;
+    if (tieredFormula?.enabled && distanceMiles > 0) {
+      calculatedFlatRate = this.calculateTieredDistanceCost(distanceMiles, tieredFormula);
+    }
+
+    // Build rate data - only include rates for allowed pricing types
+    // Always populate qty from route/passenger data for allowed types
+    // hour = route duration from Google Maps, hourTrip = PU to DO time duration
+    let rateData = {
+      flat: { qty: 1, rate: isAllowed('FIXED') || isAllowed('FLAT') ? calculatedFlatRate : 0 },
+      hour: { qty: isAllowed('HOURS') ? Math.max(durationHours, minHours) : 0, rate: isAllowed('HOURS') ? (perHour || 0) : 0 },
+      hourTrip: { qty: isAllowed('HOURS') ? tripHours : 0, rate: isAllowed('HOURS') ? (perHour || 0) : 0 },
+      pass: { qty: isAllowed('PASSENGER') ? passengerCount : 0, rate: isAllowed('PASSENGER') ? (perPassenger || 0) : 0 },
+      mile: { qty: isAllowed('DISTANCE') ? distanceMiles : 0, rate: isAllowed('DISTANCE') ? (perMile || 0) : 0 }
+    };
+
+    // Apply rates based on pricing basis (service type)
+    switch (pricingBasis) {
+      case 'Hourly':
+        // Hourly pricing: use duration × hourly rate
+        if (isAllowed('HOURS') && perHour > 0) {
+          setInputValue('hourRate', perHour);
+          rateData.hour.qty = Math.max(durationHours, minHours);
+        }
+        break;
+
+      case 'Per Passenger':
+        // Per passenger pricing: use passenger count × per-passenger rate
+        if (isAllowed('PASSENGER') && perPassenger > 0) {
+          setInputValue('passRate', perPassenger);
+          rateData.pass.qty = passengerCount;
+        }
+        break;
+
+      case 'Distance':
+        // Distance/Per mile pricing
+        if (isAllowed('DISTANCE')) {
+          if (tieredFormula?.enabled && distanceMiles > 0) {
+            // Tiered formula result goes to flat rate (qty 1)
+            setInputValue('flatRate', calculatedFlatRate);
+            rateData.flat.rate = calculatedFlatRate;
+            rateData.flat.qty = 1;
+            rateData.mile.qty = 0; // Don't double-count with tiered formula
+            rateData.mile.rate = 0;
+          } else {
+            // Simple per-mile: always set qty from distance, rate from vehicle type
+            rateData.mile.qty = distanceMiles;
+            rateData.mile.rate = perMile || 0;
+            if (perMile > 0) {
+              setInputValue('mileRate', perMile);
+            }
+          }
+        }
+        break;
+
+      case 'Flat Rate':
+      default:
+        // Flat rate pricing
+        if ((isAllowed('FIXED') || isAllowed('FLAT')) && calculatedFlatRate > 0) {
+          setInputValue('flatRate', calculatedFlatRate);
+          rateData.flat.rate = calculatedFlatRate;
+        }
+        break;
+    }
+
+    // Set individual rate fields ONLY for allowed pricing types
+    if (isAllowed('HOURS') && perHour > 0) setInputValue('hourRate', perHour);
+    if (isAllowed('DISTANCE') && perMile > 0) setInputValue('mileRate', perMile);
+    if (isAllowed('PASSENGER') && perPassenger > 0) setInputValue('passRate', perPassenger);
+
+    // Gratuity
+    if (gratuity > 0) {
+      setInputValue('gratuityQty', gratuity);
+    }
+
+    // If tiered formula is enabled, always send result to flat rate (qty 1, rate = calculated total)
+    if (isAllowed('DISTANCE') && tieredFormula?.enabled && calculatedFlatRate > 0) {
+      rateData.flat.qty = 1;
+      rateData.flat.rate = calculatedFlatRate;
+    }
+
+    // Send rates to iframe - only allowed rate types will have values
+    if (this.rateSectionFrame && this.rateSectionReady) {
+      this.rateSectionFrame.contentWindow.postMessage({
+        type: 'setRates',
+        data: rateData,
+        allowedPricingTypes: allowedPricingTypes
+      }, '*');
+
+      // Send tiered formula result directly to flat rate field
+      if (isAllowed('DISTANCE') && tieredFormula?.enabled && calculatedFlatRate > 0) {
+        this.rateSectionFrame.contentWindow.postMessage({
+          type: 'setTieredDistanceTotal',
+          data: { total: calculatedFlatRate }
+        }, '*');
+      }
+    }
+
+    // Recalculate costs
+    this.calculateCosts();
+  }
+
+  /**
+   * Calculate trip hours from PU time to DO time
+   * @returns {number} Trip duration in hours
+   */
+  calculateTripHours() {
+    const puDate = document.getElementById('puDate')?.value;
+    const puTime = document.getElementById('puTime')?.value;
+    const doDate = document.getElementById('doDate')?.value || puDate;
+    const doTime = document.getElementById('doTime')?.value;
+    
+    if (puDate && puTime && doTime) {
+      const start = new Date(`${puDate}T${puTime}`);
+      const end = new Date(`${doDate || puDate}T${doTime}`);
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+        const diffMs = end.getTime() - start.getTime();
+        if (diffMs > 0) {
+          return diffMs / (1000 * 60 * 60); // Convert ms to hours
+        }
+      }
+    }
+    return 0;
+  }
+
+  /**
+   * Calculate tiered distance cost using formula: 
+   * C(D) = multiplier * (tier1_rate * min(D, tier1_max) + tier2_rate * min(max(D - tier1_max, 0), tier2_range) + tier3_rate * max(D - tier3_start, 0))
+   */
+  calculateTieredDistanceCost(distanceMiles, formula) {
+    const D = distanceMiles || 0;
+    const M = formula.multiplier || 1.27;
+    const T1 = formula.tier1_rate || 7.87;
+    const T1max = formula.tier1_max || 3;
+    const T2 = formula.tier2_rate || 3.50;
+    const T2range = formula.tier2_range || 7;
+    const T3 = formula.tier3_rate || 3.25;
+    const T3start = T1max + T2range;
+
+    // Calculate miles in each tier
+    const tier1Miles = Math.min(D, T1max);
+    const tier2Miles = Math.min(Math.max(D - T1max, 0), T2range);
+    const tier3Miles = Math.max(D - T3start, 0);
+
+    // Calculate cost for each tier
+    const tier1Cost = T1 * tier1Miles;
+    const tier2Cost = T2 * tier2Miles;
+    const tier3Cost = T3 * tier3Miles;
+
+    // Calculate total with multiplier
+    const subtotal = tier1Cost + tier2Cost + tier3Cost;
+    const total = M * subtotal;
+
+    return total;
+  }
+
+  /**
+   * Apply stored rates that match the selected service type
+   * Loads rates from localStorage 'companyRates' and filters by:
+   * - status === 'active'
+   * - applyTo.serviceTypes includes 'st:' + serviceTypeCode, OR
+   * - applyTo.pricingBasis includes matching pricing basis or 'all'
+   */
+  applyStoredRatesForServiceType(serviceTypeCode, pricingBasis) {
+    if (!this.rateSectionFrame || !this.rateSectionReady) {
+      return;
+    }
+
+    try {
+      const savedRates = localStorage.getItem('companyRates');
+      if (!savedRates) {
+        return;
+      }
+
+      const allRates = JSON.parse(savedRates);
+      if (!Array.isArray(allRates) || allRates.length === 0) {
+        return;
+      }
+
+      // Map pricing basis to applyTo values
+      const pricingBasisMap = {
+        'Hourly': 'hourly',
+        'Distance': 'mileage',
+        'Flat Rate': 'flat',
+        'Per Passenger': 'passenger'
+      };
+      const pricingBasisValue = pricingBasisMap[pricingBasis] || 'all';
+
+      // Filter rates that match the service type OR pricing basis, and are active
+      const matchingRates = allRates.filter(rate => {
+        // Must be active
+        if (rate.status !== 'active') {
+          return false;
+        }
+
+        const applyTo = rate.applyTo || {};
+        
+        // Handle legacy string format
+        if (typeof applyTo === 'string') {
+          return applyTo === 'all' || applyTo === pricingBasisValue;
+        }
+
+        const serviceTypes = applyTo.serviceTypes || [];
+        const pricingBasisArr = applyTo.pricingBasis || ['all'];
+        
+        // If service types are specified, check if current service type matches
+        if (serviceTypes.length > 0) {
+          const serviceTypeMatch = serviceTypes.includes(`st:${serviceTypeCode}`);
+          if (serviceTypeMatch) {
+            return true;
+          }
+          // If service types are specified but don't match, this rate doesn't apply
+          return false;
+        }
+
+        // No service types specified - check pricing basis
+        return pricingBasisArr.includes('all') || pricingBasisArr.includes(pricingBasisValue);
+      });
+
+      // Send matching rates to the iframe
+      this.rateSectionFrame.contentWindow.postMessage({
+        type: 'setAdditionalRates',
+        data: matchingRates
+      }, '*');
+
+    } catch (e) {
+      console.error('Error applying stored rates:', e);
+    }
+  }
+
+  /**
+   * Apply stored rates when iframe becomes ready
+   * Gets current service type and pricing basis, then calls applyStoredRatesForServiceType
+   */
+  applyStoredRatesOnReady() {
+    const serviceTypeEl = document.getElementById('serviceType');
+    const serviceTypeCode = serviceTypeEl?.value || '';
+    
+    // Get pricing basis from service type
     let pricingBasis = 'Distance';
     if (this._serviceTypesList) {
       const serviceType = this._serviceTypesList.find(st => st.code === serviceTypeCode);
@@ -5079,63 +6241,11 @@ class ReservationForm {
         if (pt === 'HOURS' || pt === 'PER_HOUR' || pt === 'HOURLY') pricingBasis = 'Hourly';
         else if (pt === 'DISTANCE' || pt === 'PER_MILE') pricingBasis = 'Distance';
         else if (pt === 'FLAT' || pt === 'FLAT_RATE') pricingBasis = 'Flat Rate';
-        else if (pt === 'PER_PASSENGER') pricingBasis = 'Per Passenger';
+        else if (pt === 'PER_PASSENGER' || pt === 'PASSENGER') pricingBasis = 'Per Passenger';
       }
-    } else {
-      // Fallback to code-based detection
-      if (serviceTypeCode === 'hourly') pricingBasis = 'Hourly';
-      else if (serviceTypeCode === 'point-to-point') pricingBasis = 'Distance';
-      else if (serviceTypeCode === 'airport-transfer' || serviceTypeCode === 'from-airport' || serviceTypeCode === 'to-airport') pricingBasis = 'Distance';
     }
-    setDisplay('ratePricingBasis', pricingBasis);
-
-    // Vehicle type display
-    setDisplay('rateVehicleType', vehicleTypeName);
-
-    // Get rates from vehicle type - handle multiple rate structures
-    const rates = this.vehicleTypeRates?.[vehicleTypeId] || {};
     
-    // Extract rates from nested structure (perHour, distance, etc.) or flat structure
-    const getNum = (val) => {
-      const num = parseFloat(val);
-      return Number.isFinite(num) ? num : 0;
-    };
-
-    // Base rate / flat rate - check new simplified structure first
-    const baseRate = getNum(rates.perHour?.baseRate) 
-      || getNum(rates.distance?.baseFare)
-      || getNum(rates.distance?.minimumFare) 
-      || getNum(rates.base_rate) || getNum(rates.baseRate) || getNum(rates.flatRate) || 0;
-    
-    // Hourly rate - check new simplified structure first
-    const perHour = getNum(rates.perHour?.ratePerHour)
-      || getNum(rates.per_hour) || getNum(rates.hourlyRate)
-      || getNum(rates.perHour?.asLow)
-      || getNum(rates.perHour?.rateSchedules?.[0]?.ratePerHour) || 0;
-    
-    // Per mile rate - check new simplified structure first
-    const perMile = getNum(rates.distance?.ratePerMile)
-      || getNum(rates.per_mile) || getNum(rates.mileageRate)
-      || getNum(rates.distance?.basePerMile)
-      || getNum(rates.distance?.tiers?.[0]?.rate) || 0;
-    
-    // Min hours - check new simplified structure first
-    const minHours = getNum(rates.perHour?.minimumHours)
-      || getNum(rates.min_hours) || getNum(rates.minimumHours) || 0;
-    
-    // Gratuity - check per-service gratuity first
-    const gratuity = getNum(rates.perHour?.gratuity) 
-      || getNum(rates.perPassenger?.gratuity)
-      || getNum(rates.distance?.gratuity)
-      || getNum(rates.gratuity) || getNum(rates.defaultGratuity) || 0;
-
-    setDisplay('rateBaseRate', this.formatRate(baseRate));
-    setDisplay('ratePerHour', this.formatRate(perHour));
-    setDisplay('ratePerMile', this.formatRate(perMile));
-    setDisplay('rateMinHours', minHours);
-    setDisplay('rateGratuity', `${gratuity}%`);
-    
-    console.log(`📊 Rate config updated: service=${serviceTypeCode}, vehicle=${vehicleTypeId}, basis=${pricingBasis}`, rates);
+    this.applyStoredRatesForServiceType(serviceTypeCode, pricingBasis);
   }
 
   /**
@@ -5147,48 +6257,223 @@ class ReservationForm {
   }
 
   /**
-   * Apply the selected vehicle type rates to the cost form
+   * Setup communication with the rate section iframe
    */
-  applySelectedRatesToCosts() {
-    const vehicleTypeEl = document.getElementById('vehicleTypeRes');
-    const vehicleTypeId = vehicleTypeEl?.value || '';
-    const rates = this.vehicleTypeRates?.[vehicleTypeId] || {};
+  setupRateSectionIframe() {
+    const iframe = document.getElementById('rateSectionFrame');
+    if (!iframe) {
+      return;
+    }
 
-    // Apply to cost fields if they exist
-    const setInputValue = (id, value) => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.value = value;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
+    this.rateSectionFrame = iframe;
+    this.rateSectionReady = false;
+
+    // Listen for messages from the rate section iframe
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.source === 'rateSection') {
+        this.handleRateSectionMessage(event.data);
       }
+    });
+
+    // When iframe loads, request it to send ready again
+    iframe.addEventListener('load', () => {
+      // Give it a moment to initialize, then request ready
+      setTimeout(() => {
+        if (!this.rateSectionReady && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({ type: 'requestReady' }, '*');
+        }
+      }, 100);
+    });
+
+    // Also request ready immediately in case iframe already loaded
+    setTimeout(() => {
+      if (!this.rateSectionReady && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'requestReady' }, '*');
+      }
+    }, 200);
+  }
+
+  /**
+   * Handle messages from the rate section iframe
+   */
+  handleRateSectionMessage(message) {
+    switch (message.type) {
+      case 'ready':
+        this.rateSectionReady = true;
+        // Send vehicle rates if available
+        if (this.currentVehicleType && this.currentVehicleType.rates) {
+          this.sendVehicleRatesToIframe(this.currentVehicleType);
+        } else {
+          // Try to apply current vehicle type from dropdown
+          this.applyVehicleTypePricing();
+        }
+        // Apply stored rates filtered by current service type
+        this.applyStoredRatesOnReady();
+        // Send pricing basis from service type
+        this.sendPricingBasisToIframe();
+        // Trigger route calculation to populate distance/duration
+        this.updateTripMetricsFromStops().catch(err => {
+          console.warn('⚠️ Route metrics not available:', err);
+        });
+        break;
+
+      case 'ratesChanged':
+        // Update hidden fields for form compatibility
+        this.syncRatesFromIframe(message.data);
+        break;
+
+      case 'ratesData':
+        // Response to getRates request
+        this.lastRatesData = message.data;
+        break;
+
+      case 'resize':
+        // Resize iframe to fit content
+        if (this.rateSectionFrame && message.data?.height) {
+          this.rateSectionFrame.style.height = message.data.height + 'px';
+        }
+        break;
+
+      case 'matrixToggle':
+        break;
+    }
+  }
+
+  /**
+   * Send active Rate Management rates to iframe
+   */
+  sendAdditionalRatesToIframe() {
+    if (!this.rateSectionFrame || !this.rateSectionReady) return;
+
+    // Get rates from localStorage (same as Rate Management tab)
+    let rates = [];
+    try {
+      const saved = localStorage.getItem('companyRates');
+      rates = saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.warn('Could not load company rates:', e);
+    }
+
+    // Only send active rates
+    const activeRates = rates.filter(r => r.status === 'active');
+    
+    this.rateSectionFrame.contentWindow.postMessage({
+      type: 'setAdditionalRates',
+      data: activeRates
+    }, '*');
+  }
+
+  /**
+   * Send pricing basis to iframe based on selected service type
+   */
+  sendPricingBasisToIframe() {
+    if (!this.rateSectionFrame || !this.rateSectionReady) return;
+
+    // Get service type from dropdown
+    const serviceTypeSelect = document.getElementById('serviceType');
+    let pricingBasis = 'flat'; // default
+
+    if (serviceTypeSelect && serviceTypeSelect.value) {
+      const serviceTypeCode = serviceTypeSelect.value;
+      // Try to get pricing type from data attribute first
+      const selectedOption = serviceTypeSelect.options[serviceTypeSelect.selectedIndex];
+      if (selectedOption && selectedOption.dataset.pricingType) {
+        pricingBasis = selectedOption.dataset.pricingType;
+      } else if (this._serviceTypesList) {
+        // Fallback to cached service types list
+        const st = this._serviceTypesList.find(s => s.code === serviceTypeCode);
+        if (st?.pricing_type) {
+          pricingBasis = st.pricing_type;
+        }
+      }
+    }
+
+    this.rateSectionFrame.contentWindow.postMessage({
+      type: 'setPricingBasis',
+      data: { basis: pricingBasis }
+    }, '*');
+  }
+
+  /**
+   * Send vehicle type rates to the rate section iframe
+   */
+  sendVehicleRatesToIframe(vehicleData) {
+    if (!this.rateSectionFrame || !this.rateSectionReady) {
+      return;
+    }
+
+    this.rateSectionFrame.contentWindow.postMessage({
+      type: 'setVehicleRates',
+      data: vehicleData
+    }, '*');
+  }
+
+  /**
+   * Send gratuity percentage to the rate section iframe
+   */
+  sendGratuityToIframe(percent) {
+    if (!this.rateSectionFrame || !this.rateSectionReady) return;
+
+    this.rateSectionFrame.contentWindow.postMessage({
+      type: 'setGratuity',
+      data: { percent }
+    }, '*');
+  }
+
+  /**
+   * Sync rates from iframe to hidden form fields
+   */
+  syncRatesFromIframe(data) {
+    if (!data || !data.rates) return;
+
+    // Update hidden fields
+    const setHiddenValue = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.value = value;
     };
 
-    // Set rates based on vehicle type
-    const hourlyRate = rates.per_hour || rates.hourlyRate || 0;
-    const mileRate = rates.per_mile || rates.mileageRate || 0;
-    const baseRate = rates.base_rate || rates.baseRate || 0;
-    const gratuity = rates.gratuity || rates.defaultGratuity || 0;
+    setHiddenValue('grandTotal', data.grandTotal);
+    setHiddenValue('payments', data.payments);
+    setHiddenValue('flatQty', data.rates.flat?.qty || 1);
+    setHiddenValue('flatRate', data.rates.flat?.rate || 0);
+    setHiddenValue('hourQty', data.rates.hour?.qty || 0);
+    setHiddenValue('hourRate', data.rates.hour?.rate || 0);
+    setHiddenValue('passQty', data.rates.pass?.qty || 0);
+    setHiddenValue('passRate', data.rates.pass?.rate || 0);
+    setHiddenValue('mileQty', data.rates.mile?.qty || 0);
+    setHiddenValue('mileRate', data.rates.mile?.rate || 0);
+    setHiddenValue('gratuityPercent', data.gratuityPercent || 20);
+    setHiddenValue('gratuityTotal', data.gratuityTotal || 0);
 
-    if (baseRate > 0) setInputValue('flatRate', baseRate);
-    if (hourlyRate > 0) setInputValue('hourRate', hourlyRate);
-    if (gratuity > 0) setInputValue('gratuityQty', gratuity);
+    // Store for save operation
+    this.currentRatesData = data;
+  }
 
-    // Recalculate costs
-    this.calculateCosts();
-
-    // Show feedback
-    const applyBtn = document.getElementById('applyRatesBtn');
-    if (applyBtn) {
-      const originalText = applyBtn.textContent;
-      applyBtn.textContent = '✓ Applied!';
-      applyBtn.style.background = '#28a745';
-      applyBtn.style.color = 'white';
-      setTimeout(() => {
-        applyBtn.textContent = originalText;
-        applyBtn.style.background = '';
-        applyBtn.style.color = '';
-      }, 1500);
+  /**
+   * Request current rates from iframe
+   */
+  requestRatesFromIframe() {
+    if (!this.rateSectionFrame || !this.rateSectionReady) {
+      return Promise.resolve(this.currentRatesData || null);
     }
+
+    return new Promise((resolve) => {
+      const handler = (event) => {
+        if (event.data?.source === 'rateSection' && event.data?.type === 'ratesData') {
+          window.removeEventListener('message', handler);
+          resolve(event.data.data);
+        }
+      };
+      window.addEventListener('message', handler);
+      
+      this.rateSectionFrame.contentWindow.postMessage({ type: 'getRates' }, '*');
+      
+      // Timeout fallback
+      setTimeout(() => {
+        window.removeEventListener('message', handler);
+        resolve(this.currentRatesData || null);
+      }, 500);
+    });
   }
 
   initializeCostCalculations() {
@@ -5278,6 +6563,30 @@ class ReservationForm {
     // Validate required fields
     if (!this.validateForm()) {
       return;
+    }
+
+    // Check for warnings (missing but non-blocking fields)
+    const warnings = this.checkReservationWarnings();
+    if (warnings.length > 0) {
+      const warningList = warnings.map(w => `• ${w}`).join('\n');
+      const proceed = confirm(
+        `⚠️ RESERVATION WARNINGS\n\nThe following items are missing or need attention:\n\n${warningList}\n\nDo you want to save anyway?`
+      );
+      if (!proceed) {
+        return;
+      }
+    }
+
+    // Sync rates from iframe before saving
+    if (this.rateSectionFrame && this.rateSectionReady) {
+      try {
+        const ratesData = await this.requestRatesFromIframe();
+        if (ratesData) {
+          this.syncRatesFromIframe(ratesData);
+        }
+      } catch (e) {
+        console.warn('Could not sync rates from iframe:', e);
+      }
     }
 
     const getValue = (id) => document.getElementById(id)?.value ?? '';
@@ -5563,6 +6872,13 @@ class ReservationForm {
       const grandTotalValue = parseFloat(document.getElementById('grandTotal')?.textContent || '0') || 0;
       const paymentTypeValue = (document.querySelector('#paymentTab .payment-control')?.value || '').toString();
       const groupNameValue = document.getElementById('groupName')?.value || '';
+      
+      // Debug: Show what's being captured
+      console.log('📋 SAVE DEBUG - billingCompany field value:', document.getElementById('billingCompany')?.value);
+      console.log('📋 SAVE DEBUG - reservationData.billingAccount:', reservationData.billingAccount);
+      console.log('📋 SAVE DEBUG - billingCompanyName to be saved:', billingCompanyName);
+      console.log('📋 SAVE DEBUG - confirmation number:', currentConfNumber);
+      console.log('📋 SAVE DEBUG - account_id:', accountId);
 
       // SAVE TO SUPABASE (PRIMARY) - No localStorage for reservations
       let supabaseSaveSuccess = false;
@@ -5637,6 +6953,9 @@ class ReservationForm {
           }
           // Keep form open for further editing; just show a toast/notification
           this.showSaveNotification('Reservation saved');
+          
+          // Auto Farmout Mode: After save, auto-set farmout options if enabled
+          await this.applyAutoFarmoutIfEnabled();
         } else {
           throw new Error('Save operation returned unexpected format: ' + JSON.stringify(supabaseResult));
         }
@@ -5667,6 +6986,19 @@ class ReservationForm {
         btn.style.background = '#28a745';
         btn.style.color = 'white';
       });
+      
+      // Notify parent window to refresh reservations list
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            action: 'reservationSaved',
+            confirmationNumber: currentConfNumber
+          }, '*');
+          console.log('📤 Sent reservationSaved message to parent');
+        }
+      } catch (e) {
+        console.warn('Could not notify parent of save:', e);
+      }
       
       // Keep user on form; reset buttons after short delay
       setTimeout(() => {
@@ -5883,6 +7215,117 @@ class ReservationForm {
     };
   }
 
+  /**
+   * Check for non-blocking warnings before saving a reservation.
+   * Returns an array of warning messages. Empty array = no warnings.
+   */
+  checkReservationWarnings() {
+    const warnings = [];
+    const getValue = (id) => (document.getElementById(id)?.value || '').trim();
+
+    // 1. Billing info warnings
+    const billingAccount = getValue('billingAccountSearch');
+    const billingCompany = getValue('billingCompany');
+    const billingFirstName = getValue('billingFirstName');
+    const billingLastName = getValue('billingLastName');
+    if (!billingAccount && !billingCompany && !billingFirstName && !billingLastName) {
+      warnings.push('No billing information (account, company, or contact name)');
+    }
+
+    // 2. Passenger info warnings
+    const passengerFirstName = getValue('passengerFirstName');
+    const passengerLastName = getValue('passengerLastName');
+    const passengerPhone = getValue('passengerPhone');
+    if (!passengerFirstName && !passengerLastName) {
+      warnings.push('No passenger name');
+    }
+    if (!passengerPhone) {
+      warnings.push('No passenger phone number');
+    }
+
+    // 3. Pickup date warning
+    const puDate = getValue('puDate');
+    if (!puDate) {
+      warnings.push('No pickup date');
+    }
+
+    // 4. Pickup time warning
+    const puTime = getValue('puTime');
+    if (!puTime) {
+      warnings.push('No pickup time');
+    }
+
+    // 5. Pickup and dropoff location warnings
+    const stops = this.getStops();
+    const stopsWithAddress = Array.isArray(stops)
+      ? stops.filter(s => s && (s.fullAddress || s.address || s.address1 || s.locationName))
+      : [];
+
+    const hasPickup = stopsWithAddress.some(s => {
+      const t = (s.stopType || s.type || '').toLowerCase();
+      return t === 'pickup';
+    });
+
+    const hasDropoff = stopsWithAddress.some(s => {
+      const t = (s.stopType || s.type || '').toLowerCase();
+      return t === 'dropoff';
+    });
+
+    if (!hasPickup) {
+      warnings.push('No pickup location');
+    }
+    if (!hasDropoff) {
+      warnings.push('No dropoff location');
+    }
+
+    // Check if this is a farm-out reservation (affiliate will handle vehicle/driver)
+    const farmOutRadio = document.querySelector('input[name="farmOption"][value="farm-out"]');
+    const isFarmOut = farmOutRadio?.checked || false;
+
+    // 6. Fleet vehicle warning (skip for farm-outs)
+    const vehicleType = getValue('vehicleType');
+    if (!vehicleType && !isFarmOut) {
+      warnings.push('No fleet vehicle selected');
+    }
+
+    // 7. Service type warning
+    const serviceType = getValue('serviceType');
+    if (!serviceType) {
+      warnings.push('No service type selected');
+    }
+
+    // 8. Driver warning (skip for farm-outs - affiliate handles driver)
+    const driverSelect = document.getElementById('driver1') || document.getElementById('driver');
+    const driverValue = driverSelect?.value || '';
+    if (!driverValue && !isFarmOut) {
+      warnings.push('No driver assigned');
+    }
+
+    // 9. Airport pickup with unverified flight number
+    const pickupStop = stopsWithAddress.find(s => {
+      const t = (s.stopType || s.type || '').toLowerCase();
+      return t === 'pickup';
+    });
+
+    if (pickupStop && pickupStop.airportCode) {
+      // This is an airport pickup - check for flight verification
+      const flightNumber = pickupStop.flightNumber || getValue('flightNumber');
+      const flightStatus = pickupStop.flightStatus || getValue('flightStatus');
+      
+      if (flightNumber) {
+        // Has flight number - check if verified (status indicates it was looked up)
+        if (!flightStatus || flightStatus === '' || flightStatus.toLowerCase() === 'unverified') {
+          warnings.push(`Airport pickup with unverified flight: ${flightNumber}`);
+        }
+      } else {
+        // Airport pickup but no flight number at all
+        warnings.push('Airport pickup without flight number');
+      }
+    }
+
+    return warnings;
+  }
+
   validateForm() {
     // Check required fields
     const passengerFirstName = document.getElementById('passengerFirstName')?.value || '';
@@ -6036,7 +7479,6 @@ class ReservationForm {
       console.log('🔎 [ReservationForm] Database lookup result:', record);
       if (!record) {
         console.warn('⚠️ [ReservationForm] No reservation found in database for conf:', confNumber);
-        console.warn('📊 [ReservationForm] Available confirmations:', allReservations.map(r => ({id: r.id, conf: r.confirmation_number})));
         if (this.isViewMode) {
           this.viewModeReady = true;
           window.dispatchEvent(new Event('reliaReservationViewReady'));
@@ -6080,6 +7522,10 @@ class ReservationForm {
         }
       }
       console.log('✅ [ReservationForm] Reservation loaded successfully');
+      
+      // Refresh company name from linked account (in case account was updated)
+      await this.refreshCompanyNameFromAccount(record);
+      
       if (this.isViewMode) {
         this.viewConfNumber = this.viewConfNumber || confNumber;
         this.finalizeViewMode();
@@ -6092,6 +7538,44 @@ class ReservationForm {
         this.viewModeReady = true;
         window.dispatchEvent(new Event('reliaReservationViewReady'));
       }
+    }
+  }
+
+  /**
+   * Refresh company name from the linked account (for dynamic sync)
+   * This ensures if account's company name is updated, the reservation shows the current value
+   */
+  async refreshCompanyNameFromAccount(record) {
+    try {
+      const accountId = record?.account_id || record?.billing_account;
+      if (!accountId) {
+        console.log('📋 [ReservationForm] No account_id to refresh company name from');
+        return;
+      }
+      
+      const { getAllAccounts } = await import('./supabase-db.js');
+      const accounts = await getAllAccounts();
+      const account = accounts.find(a => a.id === accountId);
+      
+      if (account && account.company_name) {
+        console.log('🔄 [ReservationForm] Refreshing company name from account:', account.company_name);
+        this.safeSetValue('billingCompany', account.company_name);
+        
+        // Also update first/last name if available and not already set
+        const billingFirstName = document.getElementById('billingFirstName')?.value;
+        const billingLastName = document.getElementById('billingLastName')?.value;
+        
+        if (!billingFirstName && account.first_name) {
+          this.safeSetValue('billingFirstName', account.first_name);
+        }
+        if (!billingLastName && account.last_name) {
+          this.safeSetValue('billingLastName', account.last_name);
+        }
+      } else {
+        console.log('📋 [ReservationForm] Account found but no company_name, or account not found');
+      }
+    } catch (error) {
+      console.error('⚠️ [ReservationForm] Error refreshing company name from account:', error);
     }
   }
 
@@ -6258,6 +7742,9 @@ class ReservationForm {
   loadStops(stops) {
     if (!Array.isArray(stops)) return;
 
+    // Clear and initialize window.tripStops
+    window.tripStops = [];
+
     // Preferred: Stored Routing table
     const tableBody = document.getElementById('addressTableBody');
     if (tableBody) {
@@ -6275,29 +7762,57 @@ class ReservationForm {
         const stopType = (stop.stopType || stop.type || 'stop').toString().toLowerCase();
         const stopId = stop.id || `stop_${Date.now()}_${index}`;
 
+        // Build complete stop data object
+        const stopData = {
+          id: stopId,
+          stopType: stopType,
+          locationName: stop.locationName || stop.location || '',
+          address1: stop.address1 || '',
+          address2: stop.address2 || '',
+          city: stop.city || '',
+          state: stop.state || '',
+          zipCode: stop.zipCode || '',
+          country: stop.country || '',
+          phone: stop.phone || '',
+          notes: stop.notes || '',
+          timeIn: stop.timeIn || '',
+          fullAddress: stop.fullAddress || stop.address || '',
+          airportCode: stop.airportCode || '',
+          airline: stop.airline || '',
+          flightNumber: stop.flightNumber || '',
+          terminalGate: stop.terminalGate || '',
+          flightStatus: stop.flightStatus || '',
+          fboId: stop.fboId || '',
+          fboName: stop.fboName || '',
+          fboEmail: stop.fboEmail || ''
+        };
+
+        // Add to global tripStops array
+        window.tripStops.push(stopData);
+
         const row = document.createElement('tr');
         row.id = stopId;
         row.dataset.stopId = stopId;
-        row.dataset.stopType = stopType;
-        row.dataset.locationName = stop.locationName || stop.location || '';
-        row.dataset.address1 = stop.address1 || '';
-        row.dataset.address2 = stop.address2 || '';
-        row.dataset.city = stop.city || '';
-        row.dataset.state = stop.state || '';
-        row.dataset.zipCode = stop.zipCode || '';
-        row.dataset.country = stop.country || '';
-        row.dataset.phone = stop.phone || '';
-        row.dataset.notes = stop.notes || '';
-        row.dataset.timeIn = stop.timeIn || '';
-        row.dataset.fullAddress = stop.fullAddress || stop.address || '';
-        row.dataset.airportCode = stop.airportCode || '';
-        row.dataset.airline = stop.airline || '';
-        row.dataset.flightNumber = stop.flightNumber || '';
-        row.dataset.terminalGate = stop.terminalGate || '';
-        row.dataset.flightStatus = stop.flightStatus || '';
-        row.dataset.fboId = stop.fboId || '';
-        row.dataset.fboName = stop.fboName || '';
-        row.dataset.fboEmail = stop.fboEmail || '';
+        row.dataset.stopType = stopData.stopType;
+        row.dataset.locationName = stopData.locationName;
+        row.dataset.address1 = stopData.address1;
+        row.dataset.address2 = stopData.address2;
+        row.dataset.city = stopData.city;
+        row.dataset.state = stopData.state;
+        row.dataset.zipCode = stopData.zipCode;
+        row.dataset.country = stopData.country;
+        row.dataset.phone = stopData.phone;
+        row.dataset.notes = stopData.notes;
+        row.dataset.timeIn = stopData.timeIn;
+        row.dataset.fullAddress = stopData.fullAddress;
+        row.dataset.airportCode = stopData.airportCode;
+        row.dataset.airline = stopData.airline;
+        row.dataset.flightNumber = stopData.flightNumber;
+        row.dataset.terminalGate = stopData.terminalGate;
+        row.dataset.flightStatus = stopData.flightStatus;
+        row.dataset.fboId = stopData.fboId;
+        row.dataset.fboName = stopData.fboName;
+        row.dataset.fboEmail = stopData.fboEmail;
 
         const badgeColor =
           stopType === 'pickup' ? '#28a745' :
@@ -6324,12 +7839,17 @@ class ReservationForm {
           </td>
           <td>${timeIn || 'N/A'}</td>
           <td>
-            <button class="btn-edit" style="padding: 4px 8px; font-size: 12px; cursor: pointer; margin-right: 6px;" onclick="(typeof editStop === 'function' ? editStop('${stopId}') : null)">Edit</button>
-            <button class="btn-remove" style="padding: 4px 8px; font-size: 12px; cursor: pointer;" onclick="(typeof removeStop === 'function' ? removeStop('${stopId}') : this.closest('tr').remove())">✕ Remove</button>
+            <button class="btn-edit" style="padding: 4px 8px; font-size: 12px; cursor: pointer; margin-right: 6px;" onclick="window.editStop && window.editStop('${stopId}')">Edit</button>
+            <button class="btn-remove" style="padding: 4px 8px; font-size: 12px; cursor: pointer;" onclick="window.removeStop && window.removeStop('${stopId}')">✕ Remove</button>
           </td>
         `;
 
         tableBody.appendChild(row);
+      });
+
+      // Calculate route metrics after loading stops
+      this.updateTripMetricsFromStops().catch(err => {
+        console.warn('⚠️ Failed to update route metrics after loading stops:', err);
       });
 
       return;
@@ -6554,7 +8074,12 @@ class ReservationForm {
         .slice()
         .sort((a, b) => (Number(a.sort_order) - Number(b.sort_order)) || String(a.name || '').localeCompare(String(b.name || '')))
         .forEach((st) => {
-          select.add(new Option(st.name, st.code));
+          const opt = new Option(st.name, st.code);
+          // Store pricing type as data attribute for rate section
+          if (st.pricing_type) {
+            opt.dataset.pricingType = st.pricing_type;
+          }
+          select.add(opt);
         });
 
       // Keep legacy value if not found
@@ -6597,6 +8122,12 @@ console.log('🔍 ReservationForm class defined:', typeof ReservationForm);
 function initializeReservationForm() {
   try {
     window.reservationFormInstance = new ReservationForm();
+    // Also expose as reservationForm for convenience
+    window.reservationForm = window.reservationFormInstance;
+    // Also expose common methods globally for debugging
+    window.calculateRoute = () => window.reservationFormInstance?.updateTripMetricsFromStops?.();
+    window.refreshRates = () => window.reservationFormInstance?.updateRateConfigDisplay?.();
+    window.applyStoredRates = () => window.reservationFormInstance?.applyStoredRatesOnReady?.();
     console.log('✅ ReservationForm initialized');
   } catch (error) {
     console.error('❌ Failed to create ReservationForm instance:', error);
@@ -6717,3 +8248,457 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 });
+
+// ========================================
+// Global Stop Management Functions
+// These are exposed on window for use by onclick handlers
+// ========================================
+
+// Global edit state for stop editing
+if (typeof window.editingStopId === 'undefined') {
+  window.editingStopId = null;
+}
+
+// Global tripStops array
+if (typeof window.tripStops === 'undefined') {
+  window.tripStops = [];
+}
+
+/**
+ * Create or update a stop from the address entry form
+ */
+window.handleCreateStop = function() {
+  console.log('➕ handleCreateStop called!');
+  
+  // Get form values - use currentStopType from routing panel (new UI) or fallback to radio buttons
+  const radioBtn = document.querySelector('input[name="stopType"]:checked');
+  const stopType = radioBtn ? radioBtn.value : (window.reservationFormInstance?.currentStopType || 'pickup');
+  console.log('📋 Stop type:', stopType);
+  const locationName = document.getElementById('locationName')?.value?.trim() || '';
+  const address1 = document.getElementById('address1')?.value?.trim() || '';
+  
+  // Get airport and FBO fields - these may not exist in all layouts
+  const airportCode = document.getElementById('airportSelect')?.value?.trim() || '';
+  const airlineCode = document.getElementById('airlineCode')?.value?.trim() || '';
+  const flightNumber = document.getElementById('flightNumber')?.value?.trim() || '';
+  const terminalGate = document.getElementById('terminalGate')?.value?.trim() || '';
+  const flightStatus = document.getElementById('flightStatus')?.value?.trim() || '';
+  const fboSelectEl = document.getElementById('fboSelect');
+  const fboSelect = fboSelectEl?.value?.trim() || '';
+  
+  // Get FBO info from selected option if available
+  let fboInfo = null;
+  if (fboSelect && fboSelectEl?.selectedOptions?.[0]) {
+    const opt = fboSelectEl.selectedOptions[0];
+    fboInfo = {
+      name: opt.dataset.name || opt.textContent || '',
+      address: opt.dataset.address || '',
+      city: opt.dataset.city || '',
+      state: opt.dataset.state || '',
+      zip: opt.dataset.zip || '',
+      phone: opt.dataset.phone || '',
+      email: opt.dataset.email || '',
+      services: opt.dataset.services || ''
+    };
+  }
+  
+  console.log('📝 Form values - locationName:', locationName, 'address1:', address1);
+  console.log('✈️ Airport values - code:', airportCode, 'airline:', airlineCode, 'flight:', flightNumber);
+  console.log('🛩️ FBO values - fboSelect:', fboSelect, 'fboInfo:', fboInfo);
+  
+  // Validate - need either location name or address (unless airport or FBO)
+  if (!locationName && !address1 && !airportCode && !fboSelect) {
+    console.log('⚠️ Need location name, address, airport, or FBO');
+    alert('Please enter a location name, address, select an airport, or select an FBO.');
+    return;
+  }
+  console.log('✅ Validation passed, proceeding to create stop');
+  
+  // Get all form values (with null safety for optional fields)
+  const address2 = document.getElementById('address2')?.value?.trim() || '';
+  const city = document.getElementById('city')?.value?.trim() || '';
+  const state = document.getElementById('state')?.value?.trim() || '';
+  const zipCode = document.getElementById('zipCode')?.value?.trim() || '';
+  const country = document.getElementById('country')?.value?.trim() || 'US';
+  const phone = document.getElementById('locationPhone')?.value?.trim() || '';
+  const notes = document.getElementById('locationNotes')?.value?.trim() || '';
+  const timeIn = document.getElementById('timeIn')?.value?.trim() || '';
+  
+  console.log('📋 All form values:', { locationName, address1, address2, city, state, zipCode, country, phone, notes, timeIn });
+  
+  // Build full address
+  let fullAddress = address1;
+  if (address2) fullAddress += `, ${address2}`;
+  if (city) fullAddress += `, ${city}`;
+  if (state) fullAddress += ` ${state}`;
+  if (zipCode) fullAddress += ` ${zipCode}`;
+  if (country && country !== 'US') fullAddress += `, ${country}`;
+  
+  console.log('🏗️ Built full address:', fullAddress);
+  
+  // Create / update stop object with ALL details including airport and FBO
+  const isEditing = !!window.editingStopId;
+  const stopId = isEditing ? window.editingStopId : ('stop_' + Date.now());
+  console.log('🆔 Generated stopId:', stopId, 'isEditing:', isEditing);
+  
+  const stopData = {
+    id: stopId,
+    stopType: stopType,
+    locationName: locationName || (fboInfo?.name) || (airportCode ? `Airport: ${airportCode}` : ''),
+    address1: address1 || (fboInfo?.address) || '',
+    address2: address2 || (fboInfo?.address ? '' : ''),
+    city: city || (fboInfo?.city) || '',
+    state: state || (fboInfo?.state) || '',
+    zipCode: zipCode || (fboInfo?.zip) || '',
+    country: country || 'US',
+    phone: phone || (fboInfo?.phone) || '',
+    notes: notes || (fboInfo?.services ? `Services: ${fboInfo.services}` : ''),
+    timeIn: timeIn,
+    fullAddress: fullAddress || (fboInfo ? `${fboInfo.address}, ${fboInfo.city}, ${fboInfo.state} ${fboInfo.zip}` : ''),
+    // Airport info
+    airportCode: airportCode,
+    airline: airlineCode,
+    flightNumber: flightNumber,
+    terminalGate: terminalGate,
+    flightStatus: flightStatus,
+    // FBO info
+    fboId: fboSelect,
+    fboName: fboInfo?.name || '',
+    fboEmail: fboInfo?.email || '',
+    createdAt: new Date().toISOString()
+  };
+  console.log('📦 Created stopData object:', stopData);
+
+  // Save to global trips array
+  if (isEditing) {
+    const idx = window.tripStops.findIndex(stop => stop && stop.id === stopId);
+    if (idx >= 0) window.tripStops[idx] = stopData;
+    else window.tripStops.push(stopData);
+  } else {
+    window.tripStops.push(stopData);
+  }
+  console.log('💾 Stop saved to tripStops:', window.tripStops);
+
+  // Get table body
+  const tableBody = document.getElementById('addressTableBody');
+  if (!tableBody) {
+    console.error('❌ addressTableBody not found');
+    return;
+  }
+  
+  // Remove empty row if it exists
+  const emptyRow = tableBody.querySelector('.empty-row');
+  if (emptyRow) {
+    emptyRow.remove();
+    console.log('🗑️ Removed empty row');
+  }
+
+  // Create or update row with stop type badge
+  const existingRow = document.getElementById(stopId);
+  const row = existingRow || document.createElement('tr');
+  row.id = stopId;
+  row.dataset.stopId = stopId;
+  console.log('🏗️ Creating/updating table row with ID:', stopId);
+  
+  // Store full stop data for reliable save/load
+  row.dataset.stopType = stopData.stopType || '';
+  row.dataset.locationName = stopData.locationName || '';
+  row.dataset.address1 = stopData.address1 || '';
+  row.dataset.address2 = stopData.address2 || '';
+  row.dataset.city = stopData.city || '';
+  row.dataset.state = stopData.state || '';
+  row.dataset.zipCode = stopData.zipCode || '';
+  row.dataset.country = stopData.country || '';
+  row.dataset.phone = stopData.phone || '';
+  row.dataset.notes = stopData.notes || '';
+  row.dataset.timeIn = stopData.timeIn || '';
+  row.dataset.fullAddress = stopData.fullAddress || '';
+  row.dataset.airportCode = stopData.airportCode || '';
+  row.dataset.airline = stopData.airline || '';
+  row.dataset.flightNumber = stopData.flightNumber || '';
+  row.dataset.terminalGate = stopData.terminalGate || '';
+  row.dataset.flightStatus = stopData.flightStatus || '';
+  row.dataset.fboId = stopData.fboId || '';
+  row.dataset.fboName = stopData.fboName || '';
+  row.dataset.fboEmail = stopData.fboEmail || '';
+  
+  const badgeColor = 
+    stopType === 'pickup' ? '#28a745' :
+    stopType === 'dropoff' ? '#dc3545' :
+    stopType === 'stop' ? '#ffc107' :
+    '#17a2b8';
+  
+  // Build display content with airport and FBO info
+  let displayAddress = fullAddress;
+  let displayExtras = '';
+  
+  if (airportCode) {
+    displayAddress = `✈️ ${airportCode} Airport`;
+    displayExtras = `<div style="font-size: 11px; color: #005aa3; margin-top: 3px; font-weight: 500;">
+      Flight: ${airlineCode}${flightNumber} | Terminal: ${terminalGate} | Status: ${flightStatus}
+    </div>`;
+  }
+  
+  if (fboInfo) {
+    displayAddress = `🛩️ ${fboInfo.name}`;
+    displayExtras = `<div style="font-size: 11px; color: #005aa3; margin-top: 3px;">
+      ${fboInfo.address} | 📞 ${fboInfo.phone}
+    </div>`;
+  }
+  
+  row.innerHTML = `
+    <td><span class="stop-type-badge" style="background: ${badgeColor}; color: white; padding: 4px 8px; border-radius: 3px; font-size: 12px; font-weight: 600;">${stopType.toUpperCase()}</span></td>
+    <td><strong>${stopData.locationName || 'Address'}</strong></td>
+    <td>
+      <div>${displayAddress}</div>
+      <div style="font-size: 11px; color: #666; margin-top: 3px;">
+        ${phone ? '📞 ' + phone + ' | ' : ''}
+        ${timeIn ? '⏰ ' + timeIn : ''}
+      </div>
+      ${displayExtras}
+      ${notes ? '<div style="font-size: 11px; color: #666; margin-top: 3px; font-style: italic;">📝 ' + notes + '</div>' : ''}
+    </td>
+    <td>${timeIn || 'N/A'}</td>
+    <td>
+      <button class="btn-edit" style="padding: 4px 8px; font-size: 12px; cursor: pointer; margin-right: 6px;" onclick="window.editStop && window.editStop('${stopId}')">Edit</button>
+      <button class="btn-remove" style="padding: 4px 8px; font-size: 12px; cursor: pointer;" onclick="window.removeStop && window.removeStop('${stopId}')">✕ Remove</button>
+    </td>
+  `;
+  console.log('📋 Row HTML created:', row.innerHTML.substring(0, 200) + '...');
+
+  if (!existingRow) {
+    tableBody.appendChild(row);
+    console.log('➕ New row added to table, total rows now:', tableBody.children.length);
+  } else {
+    console.log('🔄 Existing row updated');
+  }
+  console.log('🎯 Final row element:', row);
+  console.log('✅ Stop added to trip table with stopType:', stopType);
+
+  // Refresh route metrics so distance/duration and quantities stay in sync
+  try {
+    console.log('🔄 Refreshing route metrics...');
+    if (window.reservationFormInstance && typeof window.reservationFormInstance.updateTripMetricsFromStops === 'function') {
+      console.log('🚀 Calling updateTripMetricsFromStops...');
+      window.reservationFormInstance.updateTripMetricsFromStops()
+        .then(() => console.log('✅ Route metrics calculation complete'))
+        .catch(err => console.error('❌ Route metrics calculation failed:', err));
+    } else {
+      console.warn('⚠️ reservationFormInstance or updateTripMetricsFromStops not available');
+    }
+  } catch (err) {
+    console.error('❌ Failed to refresh route metrics after adding stop:', err);
+  }
+
+  // Clear the form (with null safety)
+  const clearField = (id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  };
+  clearField('locationName');
+  clearField('address1');
+  clearField('address2');
+  clearField('city');
+  clearField('state');
+  clearField('zipCode');
+  clearField('locationNotes');
+  clearField('locationPhone');
+  clearField('timeIn');
+  clearField('airportSearch');
+  clearField('airportSelect');
+  clearField('airlineSearch');
+  clearField('airlineCode');
+  clearField('airlineName');
+  clearField('flightNumber');
+  clearField('terminalGate');
+  clearField('flightStatus');
+  clearField('fboSelect');
+  console.log('🧹 Form cleared successfully');
+  
+  // Reset stop type radio if it exists, or reset routing panel state
+  const pickupRadio = document.querySelector('input[name="stopType"][value="pickup"]');
+  if (pickupRadio) pickupRadio.checked = true;
+  if (window.reservationFormInstance) window.reservationFormInstance.currentStopType = 'pickup';
+
+  // Close the entry card (new routing panel UI)
+  const entryCard = document.getElementById('addressEntryCard');
+  if (entryCard) entryCard.style.display = 'none';
+
+  // Clear edit state
+  window.editingStopId = null;
+
+  // Show success feedback on the button
+  const createBtn = document.getElementById('createStopBtn');
+  if (createBtn) {
+    const originalText = 'CREATE';
+    createBtn.textContent = existingRow ? '✓ Updated!' : '✓ Added!';
+    createBtn.style.background = '#28a745';
+    createBtn.style.color = 'white';
+    
+    setTimeout(() => {
+      createBtn.textContent = originalText;
+      createBtn.style.background = '';
+      createBtn.style.color = '';
+    }, 1500);
+  }
+
+  console.log('✅ Form cleared and ready for next stop');
+};
+
+/**
+ * Edit a stop - loads its data back into the entry form
+ */
+window.editStop = function(stopId) {
+  console.log('✏️ Editing stop:', stopId);
+  window.editingStopId = stopId;
+
+  const row = document.getElementById(stopId);
+  if (!row) {
+    console.warn('⚠️ Stop row not found:', stopId);
+    return;
+  }
+
+  const get = (k) => (row.dataset?.[k] || '').toString();
+
+  const stopType = (get('stopType') || 'stop').toLowerCase().trim();
+  
+  // Set stop type via radio buttons if they exist, or via routing panel state
+  const typeEl = document.querySelector(`input[name="stopType"][value="${stopType}"]`);
+  if (typeEl) typeEl.checked = true;
+  if (window.reservationFormInstance) window.reservationFormInstance.currentStopType = stopType;
+  
+  // Open the entry card for editing (new routing panel UI)
+  const entryCard = document.getElementById('addressEntryCard');
+  const entryLabel = document.getElementById('entryTypeLabel');
+  if (entryCard) entryCard.style.display = 'block';
+  if (entryLabel) {
+    const labels = { pickup: '📍 Editing: Pick-up', dropoff: '🎯 Editing: Drop-off', stop: '⏸️ Editing: Stop', wait: '⏱️ Editing: Wait' };
+    entryLabel.textContent = labels[stopType] || 'Editing Location';
+  }
+
+  const setVal = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value || '';
+  };
+
+  setVal('locationName', get('locationName'));
+  setVal('address1', get('address1'));
+  setVal('address2', get('address2'));
+  setVal('city', get('city'));
+  setVal('state', get('state'));
+  setVal('zipCode', get('zipCode'));
+  setVal('country', get('country') || 'US');
+  setVal('locationPhone', get('phone'));
+  setVal('locationNotes', get('notes'));
+  setVal('timeIn', get('timeIn'));
+
+  // Airport fields (best effort)
+  const airportCode = get('airportCode');
+  if (airportCode) {
+    try {
+      const radio = document.getElementById('airport');
+      if (radio) radio.checked = true;
+      if (typeof window.handleLocationTypeChange === 'function') window.handleLocationTypeChange('airport');
+    } catch { /* ignore */ }
+    setVal('airportSelect', airportCode);
+    setVal('airportSearch', `${airportCode} - Airport`);
+    const airlineSection = document.getElementById('airlineSection');
+    if (airlineSection) airlineSection.style.display = 'block';
+    setVal('airlineCode', get('airline'));
+    setVal('airlineSearch', get('airline'));
+    setVal('flightNumber', get('flightNumber'));
+    setVal('terminalGate', get('terminalGate'));
+    setVal('flightStatus', get('flightStatus'));
+  }
+
+  // FBO fields (best effort)
+  const fboId = get('fboId');
+  if (fboId) {
+    try {
+      const radio = document.getElementById('fbo');
+      if (radio) radio.checked = true;
+      if (typeof window.handleLocationTypeChange === 'function') window.handleLocationTypeChange('fbo');
+    } catch { /* ignore */ }
+    setVal('fboSelect', fboId);
+    try {
+      if (typeof window.handleFBOSelection === 'function') window.handleFBOSelection(fboId);
+    } catch { /* ignore */ }
+  }
+
+  // Switch button to UPDATE mode
+  const createBtn = document.getElementById('createStopBtn');
+  if (createBtn) {
+    createBtn.textContent = 'UPDATE';
+    createBtn.style.background = '#ffc107';
+    createBtn.style.color = '#333';
+  }
+};
+
+/**
+ * Remove a stop from the table and data array
+ */
+window.removeStop = function(stopId) {
+  console.log('🗑️ Removing stop:', stopId);
+
+  // Cancel edit mode if we're deleting the row being edited
+  if (window.editingStopId === stopId) {
+    window.editingStopId = null;
+    const createBtn = document.getElementById('createStopBtn');
+    if (createBtn) {
+      createBtn.textContent = 'CREATE';
+      createBtn.style.background = '';
+      createBtn.style.color = '';
+    }
+  }
+  
+  // Remove from DOM
+  const row = document.getElementById(stopId);
+  if (row) {
+    row.remove();
+  }
+
+  // Remove from tripStops array
+  window.tripStops = window.tripStops.filter(stop => stop.id !== stopId);
+  console.log('✅ Stop removed, remaining stops:', window.tripStops);
+
+  // Show empty state if no stops left
+  const tableBody = document.getElementById('addressTableBody');
+  if (tableBody && tableBody.children.length === 0) {
+    const emptyRow = document.createElement('tr');
+    emptyRow.className = 'empty-row';
+    emptyRow.innerHTML = '<td colspan="5" class="empty-message">No addresses added yet. Use the form below to add addresses.</td>';
+    tableBody.appendChild(emptyRow);
+  }
+
+  // Recompute route metrics after stop removal
+  try {
+    window.reservationFormInstance?.updateTripMetricsFromStops?.();
+  } catch (err) {
+    console.warn('⚠️ Failed to refresh route metrics after removing stop:', err);
+  }
+};
+
+// Also expose handleLocationTypeChange if not defined
+if (typeof window.handleLocationTypeChange === 'undefined') {
+  window.handleLocationTypeChange = function(type) {
+    console.log('🔄 Location type changed to:', type);
+    // Implementation depends on the specific UI - this is a placeholder
+  };
+}
+
+// Also expose openEntryForm if not defined
+if (typeof window.openEntryForm === 'undefined') {
+  window.openEntryForm = function(stopType) {
+    console.log('📝 Opening entry form for:', stopType);
+    const entryCard = document.getElementById('addressEntryCard');
+    const entryLabel = document.getElementById('entryTypeLabel');
+    if (entryCard) entryCard.style.display = 'block';
+    if (entryLabel) {
+      const labels = { pickup: '📍 Add Pick-up', dropoff: '🎯 Add Drop-off', stop: '⏸️ Add Stop', wait: '⏱️ Add Wait' };
+      entryLabel.textContent = labels[stopType] || 'Add Location';
+    }
+    if (window.reservationFormInstance) {
+      window.reservationFormInstance.currentStopType = stopType;
+    }
+  };
+}

@@ -41,6 +41,12 @@ BEGIN
         ALTER TABLE public.drivers ADD COLUMN tlc_license_number TEXT;
     END IF;
 
+    -- password_hash: For driver portal login (separate from Supabase Auth)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_schema = 'public' AND table_name = 'drivers' AND column_name = 'password_hash') THEN
+        ALTER TABLE public.drivers ADD COLUMN password_hash TEXT;
+    END IF;
+
     -- Rename legacy tlc_license to tlc_license_number if it exists
     IF EXISTS (SELECT 1 FROM information_schema.columns 
                WHERE table_schema = 'public' AND table_name = 'drivers' AND column_name = 'tlc_license')
@@ -266,5 +272,78 @@ SELECT 'VEHICLES' as table_name, column_name, data_type, is_nullable
 FROM information_schema.columns 
 WHERE table_schema = 'public' AND table_name = 'vehicles'
 ORDER BY ordinal_position;
+
+-- ============================================================================
+-- RLS POLICIES: Allow driver registration from anonymous users
+-- ============================================================================
+
+-- Enable RLS on drivers table (if not already enabled)
+ALTER TABLE public.drivers ENABLE ROW LEVEL SECURITY;
+
+-- Allow anonymous users to INSERT new driver records (for registration)
+DROP POLICY IF EXISTS drivers_anon_insert ON public.drivers;
+CREATE POLICY drivers_anon_insert ON public.drivers
+    FOR INSERT
+    TO anon
+    WITH CHECK (true);
+
+-- Allow anonymous users to SELECT drivers (needed to check email uniqueness)
+DROP POLICY IF EXISTS drivers_anon_select ON public.drivers;
+CREATE POLICY drivers_anon_select ON public.drivers
+    FOR SELECT
+    TO anon
+    USING (true);
+
+-- Allow authenticated users full access to drivers
+DROP POLICY IF EXISTS drivers_auth_all ON public.drivers;
+CREATE POLICY drivers_auth_all ON public.drivers
+    FOR ALL
+    TO authenticated
+    USING (true)
+    WITH CHECK (true);
+
+-- Same for affiliates table (needed for company matching during registration)
+ALTER TABLE public.affiliates ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS affiliates_anon_select ON public.affiliates;
+CREATE POLICY affiliates_anon_select ON public.affiliates
+    FOR SELECT
+    TO anon
+    USING (true);
+
+DROP POLICY IF EXISTS affiliates_anon_insert ON public.affiliates;
+CREATE POLICY affiliates_anon_insert ON public.affiliates
+    FOR INSERT
+    TO anon
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS affiliates_auth_all ON public.affiliates;
+CREATE POLICY affiliates_auth_all ON public.affiliates
+    FOR ALL
+    TO authenticated
+    USING (true)
+    WITH CHECK (true);
+
+-- RLS for vehicles table (needed for driver registration vehicle creation)
+ALTER TABLE public.vehicles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS vehicles_anon_select ON public.vehicles;
+CREATE POLICY vehicles_anon_select ON public.vehicles
+    FOR SELECT
+    TO anon
+    USING (true);
+
+DROP POLICY IF EXISTS vehicles_anon_insert ON public.vehicles;
+CREATE POLICY vehicles_anon_insert ON public.vehicles
+    FOR INSERT
+    TO anon
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS vehicles_auth_all ON public.vehicles;
+CREATE POLICY vehicles_auth_all ON public.vehicles
+    FOR ALL
+    TO authenticated
+    USING (true)
+    WITH CHECK (true);
 
 -- ✅ All table columns have been synchronized!

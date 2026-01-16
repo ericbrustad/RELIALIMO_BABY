@@ -24,6 +24,8 @@ class ServiceTypesPage {
   cacheEls() {
     this.tableBody = document.getElementById('serviceTypesTableBody');
     this.addBtn = document.getElementById('addServiceTypeBtn');
+    this.quickSelect = document.getElementById('serviceTypeQuickSelect');
+    this.editSelectedBtn = document.getElementById('editSelectedBtn');
 
     this.modal = document.getElementById('serviceTypeModal');
     this.modalTitle = document.getElementById('serviceTypeModalTitle');
@@ -45,6 +47,18 @@ class ServiceTypesPage {
   bindEvents() {
     if (this.addBtn) {
       this.addBtn.addEventListener('click', () => this.openCreateModal());
+    }
+
+    // Quick select dropdown
+    if (this.quickSelect) {
+      this.quickSelect.addEventListener('change', () => this.handleQuickSelect());
+    }
+    if (this.editSelectedBtn) {
+      this.editSelectedBtn.addEventListener('click', () => {
+        if (this.quickSelect?.value) {
+          this.openEditModal(this.quickSelect.value);
+        }
+      });
     }
 
     // Close modal buttons
@@ -78,6 +92,9 @@ class ServiceTypesPage {
       this.deleteBtn.addEventListener('click', () => this.deleteSelected());
     }
 
+    // Pricing type multi-select
+    this.setupPricingTypeSelector();
+
     // Storage updates (if another window changes service types)
     window.addEventListener('storage', (e) => {
       if (e.key === SERVICE_TYPES_STORAGE_KEY || e.key === POLICIES_STORAGE_KEY) {
@@ -105,6 +122,7 @@ class ServiceTypesPage {
       this.policies = [];
     }
     this.populateAgreementOptions();
+    this.populateQuickSelect();
     this.serviceTypes.sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name));
     this.render();
 
@@ -158,9 +176,80 @@ class ServiceTypesPage {
     });
   }
 
+  /**
+   * Populate the quick select dropdown with all service types
+   */
+  populateQuickSelect() {
+    if (!this.quickSelect) return;
+    
+    const currentValue = this.quickSelect.value;
+    this.quickSelect.innerHTML = '<option value="">-- All Service Types --</option>';
+    
+    // Group by active/inactive
+    const active = this.serviceTypes.filter(st => st.active !== false);
+    const inactive = this.serviceTypes.filter(st => st.active === false);
+    
+    // Add active service types
+    active.forEach(st => {
+      const opt = document.createElement('option');
+      opt.value = st.id;
+      // Show multiple pricing types if available
+      const pricingLabel = this.prettyPricingType(st.pricing_types || st.pricing_type);
+      opt.textContent = `${st.name || st.code} (${pricingLabel})`;
+      this.quickSelect.appendChild(opt);
+    });
+    
+    // Add separator and inactive if any
+    if (inactive.length > 0) {
+      const sep = document.createElement('option');
+      sep.disabled = true;
+      sep.textContent = '── Inactive ──';
+      this.quickSelect.appendChild(sep);
+      
+      inactive.forEach(st => {
+        const opt = document.createElement('option');
+        opt.value = st.id;
+        opt.textContent = `${st.name || st.code} (inactive)`;
+        opt.style.color = '#999';
+        this.quickSelect.appendChild(opt);
+      });
+    }
+    
+    // Restore selection if still valid
+    if (currentValue) {
+      this.quickSelect.value = currentValue;
+    }
+  }
+
+  /**
+   * Handle quick select dropdown change
+   */
+  handleQuickSelect() {
+    const selectedId = this.quickSelect?.value;
+    
+    // Show/hide edit button
+    if (this.editSelectedBtn) {
+      this.editSelectedBtn.style.display = selectedId ? 'inline-block' : 'none';
+    }
+    
+    // Highlight the selected row in the table
+    this.tableBody?.querySelectorAll('tr').forEach(row => {
+      row.classList.remove('highlighted');
+    });
+    
+    if (selectedId) {
+      const row = this.tableBody?.querySelector(`[data-id="${selectedId}"]`)?.closest('tr');
+      if (row) {
+        row.classList.add('highlighted');
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }
+
   renderRow(st) {
     const safe = normalizeServiceType(st);
-    const pricingLabel = this.prettyPricingType(safe.pricing_type);
+    // Show multiple pricing types if available, otherwise fallback to single
+    const pricingLabel = this.prettyPricingType(safe.pricing_types || safe.pricing_type);
     const defaultCol = safe.default_settings ? this.escapeHtml(String(safe.default_settings)) : '';
     const agreementLabel = safe.agreement ? this.escapeHtml(this.getAgreementLabel(safe.agreement)) : '';
     return `
@@ -270,6 +359,10 @@ class ServiceTypesPage {
   }
 
   prettyPricingType(value) {
+    // Handle array of pricing types
+    if (Array.isArray(value)) {
+      return value.map(v => this.prettyPricingType(v)).join(', ');
+    }
     const v = (value || '').toString().toUpperCase();
     if (v === 'HOURS') return 'Hours';
     if (v === 'DISTANCE') return 'Distance';
@@ -277,6 +370,87 @@ class ServiceTypesPage {
     if (v === 'FIXED') return 'Fixed';
     if (v === 'HYBRID') return 'Hybrid';
     return v || '—';
+  }
+
+  /**
+   * Setup pricing type multi-select checkbox behavior
+   */
+  setupPricingTypeSelector() {
+    const selectAll = document.getElementById('pricingSelectAll');
+    const checkboxes = document.querySelectorAll('input[name="pricingType"]');
+    
+    if (selectAll) {
+      selectAll.addEventListener('change', () => {
+        checkboxes.forEach(cb => {
+          cb.checked = selectAll.checked;
+        });
+        this.syncPricingTypeToSelect();
+      });
+    }
+    
+    checkboxes.forEach(cb => {
+      cb.addEventListener('change', () => {
+        // Update select all state
+        const allChecked = Array.from(checkboxes).every(c => c.checked);
+        const someChecked = Array.from(checkboxes).some(c => c.checked);
+        if (selectAll) {
+          selectAll.checked = allChecked;
+          selectAll.indeterminate = someChecked && !allChecked;
+        }
+        this.syncPricingTypeToSelect();
+      });
+    });
+  }
+
+  /**
+   * Sync checkbox selections to the hidden select for compatibility
+   */
+  syncPricingTypeToSelect() {
+    const checkboxes = document.querySelectorAll('input[name="pricingType"]:checked');
+    const values = Array.from(checkboxes).map(cb => cb.value);
+    // Store first value in select for backwards compatibility
+    if (this.stPricingType) {
+      this.stPricingType.value = values[0] || 'DISTANCE';
+    }
+  }
+
+  /**
+   * Get selected pricing types from checkboxes
+   */
+  getSelectedPricingTypes() {
+    const checkboxes = document.querySelectorAll('input[name="pricingType"]:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+  }
+
+  /**
+   * Set pricing type checkboxes from value (string or array)
+   */
+  setPricingTypeCheckboxes(value) {
+    const selectAll = document.getElementById('pricingSelectAll');
+    const checkboxes = document.querySelectorAll('input[name="pricingType"]');
+    
+    // Convert to array
+    let types = [];
+    if (Array.isArray(value)) {
+      types = value.map(v => v.toString().toUpperCase());
+    } else if (value) {
+      types = [value.toString().toUpperCase()];
+    } else {
+      types = ['DISTANCE']; // Default
+    }
+    
+    // Set checkboxes
+    checkboxes.forEach(cb => {
+      cb.checked = types.includes(cb.value);
+    });
+    
+    // Update select all state
+    if (selectAll) {
+      const allChecked = Array.from(checkboxes).every(c => c.checked);
+      const someChecked = Array.from(checkboxes).some(c => c.checked);
+      selectAll.checked = allChecked;
+      selectAll.indeterminate = someChecked && !allChecked;
+    }
   }
 
   openCreateModal() {
@@ -287,7 +461,7 @@ class ServiceTypesPage {
 
     this.stName.value = '';
     this.stCode.value = '';
-    this.stPricingType.value = 'DISTANCE';
+    this.setPricingTypeCheckboxes(['DISTANCE']); // Default to distance
     this.stCustomLabel.value = '';
     this.stAgreement.value = '';
     this.stDefaultSettings.value = '';
@@ -308,7 +482,8 @@ class ServiceTypesPage {
 
     this.stName.value = st.name || '';
     this.stCode.value = st.code || '';
-    this.stPricingType.value = (st.pricing_type || 'DISTANCE').toUpperCase();
+    // Support both single pricing_type and array pricing_types
+    this.setPricingTypeCheckboxes(st.pricing_types || st.pricing_type || 'DISTANCE');
     this.stCustomLabel.value = st.custom_label || '';
     this.stAgreement.value = st.agreement || '';
     this.stDefaultSettings.value = st.default_settings || '';
@@ -371,11 +546,21 @@ class ServiceTypesPage {
     }
     this.clearError();
 
+    // Get selected pricing types from checkboxes
+    const selectedPricingTypes = this.getSelectedPricingTypes();
+    if (selectedPricingTypes.length === 0) {
+      this.showError('Please select at least one pricing type.');
+      return;
+    }
+
     const base = {
       id: this.selectedId || undefined,
       name: (this.stName.value || '').trim(),
       code: (this.stCode.value || '').trim(),
-      pricing_type: (this.stPricingType.value || 'DISTANCE').toUpperCase(),
+      // Store as array for multi-select support
+      pricing_types: selectedPricingTypes,
+      // Keep single pricing_type for backwards compatibility
+      pricing_type: selectedPricingTypes[0] || 'DISTANCE',
       custom_label: (this.stCustomLabel.value || '').trim(),
       // Store agreement as policy id when possible (still supports legacy free-text)
       agreement: this.coerceAgreementToPolicyId((this.stAgreement.value || '').trim()),

@@ -388,7 +388,9 @@ export async function getReservationById(reservationId) {
 let accountCache = null;
 
 export async function saveAccount(accountData) {
-  console.log('📥 supabase-db.saveAccount called with:', accountData?.account_number);
+  console.log('📥 supabase-db.saveAccount called with:', accountData?.account_number, 'id:', accountData?.id);
+  const isNewAccount = !accountData.id; // No id means new account
+  console.log('🆕 isNewAccount:', isNewAccount);
   try {
     console.log('🔧 Calling setupAPI...');
     await setupAPI();
@@ -415,6 +417,21 @@ export async function saveAccount(accountData) {
     logSuccess('Account saved', result);
     // Invalidate cache so future searches see latest data
     accountCache = null;
+    
+    // Store last used account number for fallback in case of future query failures
+    if (isNewAccount && accountData.account_number) {
+      try {
+        const settingsRaw = localStorage.getItem('relia_company_settings') || '{}';
+        const settings = JSON.parse(settingsRaw);
+        settings.lastUsedAccountNumber = parseInt(accountData.account_number, 10);
+        localStorage.setItem('relia_company_settings', JSON.stringify(settings));
+        console.log('📝 Stored lastUsedAccountNumber:', settings.lastUsedAccountNumber);
+      } catch (e) {
+        console.warn('⚠️ Failed to store lastUsedAccountNumber:', e);
+      }
+    }
+    
+    console.log('✅ Account saved successfully. Next account number will be fetched from database.');
     
     // Show success notification to user
     showDatabaseSuccess('Save Account', result);
@@ -810,40 +827,56 @@ export async function getAccountAddresses(accountId) {
 export async function getNextConfirmationNumber() {
   console.log('🔢 getNextConfirmationNumber called');
   try {
-    console.log('🔢 About to call setupAPI...');
+    // Get company settings for confirmation start number
+    const settingsRaw = localStorage.getItem('relia_company_settings');
+    const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
+    const confirmationStartNumber = parseInt(settings.confirmationStartNumber, 10) || 100000;
+    
     await setupAPI();
-    console.log('🔢 setupAPI done');
     const client = getSupabaseClient();
-    console.log('🔢 Client:', client);
-    console.log('🔢 Client.from:', typeof client?.from);
     if (!client) throw new Error('No Supabase client');
-    if (!client.from) throw new Error('Client has no .from() method');
     
-    // Get the max confirmation number from reservations
-    console.log('🔢 Querying reservations for max confirmation_number...');
-    const query = client.from('reservations').select('confirmation_number').order('confirmation_number', { ascending: false }).limit(1);
-    console.log('🔢 Query built:', query);
-    const { data, error } = await query;
+    // Get ALL confirmation numbers from database to find max
+    const { data, error } = await client
+      .from('reservations')
+      .select('confirmation_number');
     
-    console.log('🔢 Query result - data:', data, 'error:', error);
     if (error) throw error;
     
-    let nextNum = 100000; // Default starting number
-    if (data && data.length > 0 && data[0].confirmation_number) {
-      const lastNum = parseInt(data[0].confirmation_number);
-      if (!isNaN(lastNum)) {
-        nextNum = lastNum + 1;
+    let nextNum;
+    
+    if (data && data.length > 0) {
+      // Reservations exist - find the highest and increment
+      const confirmationNumbers = data
+        .map(r => parseInt(r.confirmation_number, 10))
+        .filter(n => !isNaN(n));
+      
+      if (confirmationNumbers.length > 0) {
+        const maxFromDb = Math.max(...confirmationNumbers);
+        nextNum = maxFromDb + 1;
+        console.log('🔢 getNextConfirmationNumber: Found', confirmationNumbers.length, 'reservations, max is', maxFromDb, '→ next:', nextNum);
+      } else {
+        // Reservations exist but no valid numbers - use start number
+        nextNum = confirmationStartNumber;
+        console.log('🔢 getNextConfirmationNumber: No valid confirmation numbers found, starting at:', nextNum);
       }
+    } else {
+      // No reservations exist - use configured start number
+      nextNum = confirmationStartNumber;
+      console.log('🔢 getNextConfirmationNumber: No reservations in database, starting at:', nextNum);
     }
     
-    console.log('🔢 Returning confirmation number:', nextNum);
     return nextNum;
   } catch (error) {
     console.error('❌ Error getting next confirmation number:', error);
-    // Fall back to 6-digit timestamp-based number
-    const fallback = Math.floor(Date.now() / 1000) % 900000 + 100000;
-    console.log('🔢 Using fallback confirmation number:', fallback);
-    return fallback;
+    // Fall back to start number or default
+    try {
+      const settingsRaw = localStorage.getItem('relia_company_settings');
+      const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
+      return parseInt(settings.confirmationStartNumber, 10) || 100000;
+    } catch {
+      return 100000;
+    }
   }
 }
 
@@ -898,33 +931,84 @@ export async function createReservationFromAccount(accountData) {
 
 export async function getNextAccountNumber() {
   try {
+    // Get company settings
+    const settingsRaw = localStorage.getItem('relia_company_settings');
+    const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
+    const accountStartNumber = parseInt(settings.accountStartNumber, 10) || 30000;
+    
     await setupAPI();
-    const client = getSupabaseClient();
-    if (!client) throw new Error('No Supabase client');
     
-    // Get the max account number from accounts
-    const { data, error } = await client
-      .from('accounts')
-      .select('account_number')
-      .order('account_number', { ascending: false })
-      .limit(1);
-    
-    if (error) throw error;
-    
-    let nextNum = 30000; // Default starting number
-    if (data && data.length > 0 && data[0].account_number) {
-      const lastNum = parseInt(data[0].account_number);
-      if (!isNaN(lastNum)) {
-        nextNum = lastNum + 1;
+    // Use fetchAccounts which we know works, instead of direct Supabase client
+    let allAccounts = [];
+    try {
+      allAccounts = await fetchAccounts() || [];
+    } catch (fetchError) {
+      console.warn('⚠️ fetchAccounts failed, trying direct client:', fetchError);
+      // Fallback to direct client
+      const client = getSupabaseClient();
+      if (client) {
+        const { data, error } = await client
+          .from('accounts')
+          .select('account_number');
+        if (!error && data) {
+          allAccounts = data;
+        }
       }
+    }
+    
+    let nextNum;
+    
+    if (allAccounts && allAccounts.length > 0) {
+      // Accounts exist - find the highest and increment
+      const accountNumbers = allAccounts
+        .map(a => parseInt(a.account_number, 10))
+        .filter(n => !isNaN(n));
+      
+      if (accountNumbers.length > 0) {
+        const maxFromDb = Math.max(...accountNumbers);
+        nextNum = maxFromDb + 1;
+        console.log('📊 getNextAccountNumber: Found', accountNumbers.length, 'accounts, max is', maxFromDb, '→ next:', nextNum);
+      } else {
+        // Accounts exist but no valid numbers - use start number
+        nextNum = accountStartNumber;
+        console.log('📊 getNextAccountNumber: No valid account numbers found, starting at:', nextNum);
+      }
+    } else {
+      // No accounts exist - use configured start number
+      nextNum = accountStartNumber;
+      console.log('📊 getNextAccountNumber: No accounts in database, starting at:', nextNum);
     }
     
     return nextNum;
   } catch (error) {
     console.error('Error getting next account number:', error);
-    // Fall back to 5-digit number in 30000 range
-    return 30000 + (Date.now() % 10000);
+    // Fall back - try to get from localStorage cache or use incremented start
+    try {
+      const settingsRaw = localStorage.getItem('relia_company_settings');
+      const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
+      const startNum = parseInt(settings.accountStartNumber, 10) || 30000;
+      
+      // Check if we have a last used number stored
+      const lastUsed = parseInt(settings.lastUsedAccountNumber, 10);
+      if (!isNaN(lastUsed) && lastUsed >= startNum) {
+        return lastUsed + 1;
+      }
+      
+      // Last resort: use start number (may cause conflicts if accounts exist)
+      return startNum;
+    } catch {
+      return 30000;
+    }
   }
+}
+
+// These functions are no longer needed but kept for compatibility
+export function incrementAccountCounter() {
+  console.log('ℹ️ incrementAccountCounter called - counter is now managed by database');
+}
+
+export function resetAccountCounter() {
+  console.log('ℹ️ resetAccountCounter called - counter is now managed by database');
 }
 
 // ========================================
@@ -981,5 +1065,7 @@ export default {
   searchAccountsByCompany,
   getNextConfirmationNumber,
   getNextAccountNumber,
+  incrementAccountCounter,
+  resetAccountCounter,
   checkConnection
 };

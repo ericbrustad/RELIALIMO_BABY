@@ -1,3 +1,31 @@
 {
-  "version": 2
+  "version": 2,
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/server.js"
+    },
+    {
+      "src": "/driver/([^/]+)",
+      "dest": "/driver-portal.html?driver_id=$1"
+    },
+    {
+      "src": "/portal/([^/]+)",
+      "dest": "/driver-portal.html?driver_id=$1"
+    },
+    {
+      "src": "/([a-f0-9\\-]{8,})",
+      "dest": "/driver-portal.html?driver_id=$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ]
 }

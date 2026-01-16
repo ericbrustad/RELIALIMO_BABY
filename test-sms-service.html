@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test SMS Service</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        button { background: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .log { background: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; margin: 10px 0; border-radius: 4px; font-family: monospace; font-size: 12px; }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 SMS Service Test</h1>
+        <p>Test if the SMS service is loaded and can attempt to send messages.</p>
+        
+        <div>
+            <button onclick="testSmsService()">Test SMS Service</button>
+            <button onclick="testSmsToEric()">Test SMS to Eric (+17632838336)</button>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <script src="sms-service.js"></script>
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = type;
+            div.innerHTML = `[${timestamp}] ${message}`;
+            logDiv.appendChild(div);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        function testSmsService() {
+            log('🔍 Testing SMS service availability...', 'info');
+            
+            if (window.smsService) {
+                log('✅ SMS service is loaded!', 'success');
+                log(`Service methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(window.smsService)).join(', ')}`, 'info');
+                
+                // Test provider loading
+                const providers = window.smsService.providers;
+                log(`Providers found: ${providers.length}`, 'info');
+                
+                if (providers.length > 0) {
+                    const defaultProvider = window.smsService.getDefaultProvider();
+                    log(`Default provider: ${defaultProvider ? defaultProvider.name : 'None'}`, 'info');
+                    if (defaultProvider) {
+                        log(`Provider config: AccountSID=${defaultProvider.accountSid ? 'Set' : 'Missing'}, AuthToken=${defaultProvider.authToken ? 'Set' : 'Missing'}`, 'info');
+                    }
+                } else {
+                    log('⚠️ No SMS providers configured', 'error');
+                }
+            } else {
+                log('❌ SMS service not available at window.smsService', 'error');
+            }
+        }
+        
+        async function testSmsToEric() {
+            log('📱 Testing SMS to Eric Brustad...', 'info');
+            
+            if (!window.smsService) {
+                log('❌ SMS service not available', 'error');
+                return;
+            }
+            
+            const testMessage = `🚗 TEST: RELIALIMO SMS Service Test at ${new Date().toLocaleTimeString()}`;
+            
+            try {
+                const result = await window.smsService.sendTestSms('+17632838336', testMessage);
+                log('✅ SMS sent successfully!', 'success');
+                log(`Result: ${JSON.stringify(result, null, 2)}`, 'success');
+            } catch (error) {
+                log('❌ SMS failed:', 'error');
+                log(`Error: ${error.message}`, 'error');
+                
+                if (error.message.includes('not configured')) {
+                    log('💡 Hint: Add Twilio credentials to .env file', 'info');
+                } else if (error.message.includes('CORS')) {
+                    log('💡 This is expected - browser CORS protection', 'info');
+                } else if (error.message.includes('SMS API error')) {
+                    log('💡 Server endpoint responded but Twilio credentials may be missing', 'info');
+                }
+            }
+        }
+        
+        // Auto-test on load
+        document.addEventListener('DOMContentLoaded', () => {
+            log('🔧 SMS Service Test loaded', 'info');
+            setTimeout(() => {
+                testSmsService();
+            }, 500);
+        });
+    </script>
+</body>
+</html>

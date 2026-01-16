@@ -1,0 +1,300 @@
+/* Rate Section Styles - Standalone */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 12px;
+  background: #fff;
+  color: #333;
+}
+
+.rate-section-container {
+  padding: 0;
+  width: 100%;
+}
+
+/* Rate Tabs */
+.rate-tabs {
+  display: flex;
+  border-bottom: 2px solid #ddd;
+  background: #f8f9fa;
+}
+
+.rate-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.rate-tab:hover {
+  background: #e9ecef;
+}
+
+.rate-tab.active {
+  color: #007bff;
+  border-bottom-color: #007bff;
+  background: #fff;
+}
+
+/* Rate Tab Content */
+.rate-tab-content {
+  display: none;
+  padding: 10px 0;
+}
+
+.rate-tab-content.active {
+  display: block;
+}
+
+/* Rate Table */
+.rate-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rate-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  border-bottom: 1px solid #eee;
+  align-items: center;
+}
+
+.rate-row.header {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #555;
+}
+
+.rate-row.header .rate-cell {
+  padding: 8px 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.rate-row.summary {
+  background: #f8f9fa;
+  font-weight: 600;
+}
+
+.rate-row.grand-total {
+  background: #e3f2fd;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.rate-cell {
+  padding: 6px;
+  font-size: 12px;
+}
+
+.rate-cell:first-child {
+  font-weight: 500;
+}
+
+.rate-input {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 12px;
+  text-align: right;
+}
+
+.rate-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+}
+
+/* Currency formatting */
+.currency-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.currency-symbol {
+  position: absolute;
+  left: 10px;
+  color: #666;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.currency-input {
+  padding-left: 18px;
+}
+
+.rate-input[readonly] {
+  background: #f8f9fa;
+  color: #333;
+  font-weight: 500;
+}
+
+.rate-input.total-input {
+  font-weight: 600;
+  background: #fff3cd;
+}
+
+/* Summary Section */
+.rate-summary {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 2px solid #ddd;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.summary-row.grand-total {
+  background: #28a745;
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: 4px;
+  margin-top: 5px;
+}
+
+.summary-row .label {
+  font-weight: 500;
+}
+
+.summary-row .value {
+  font-weight: 600;
+}
+
+/* Payments Row */
+.payments-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: #f8f9fa;
+  border-top: 1px solid #ddd;
+  font-size: 12px;
+}
+
+.balance-due {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: #fff3cd;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* Section Divider */
+.section-divider {
+  display: flex;
+  align-items: center;
+  margin: 12px 0 8px 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+}
+
+.section-divider::before,
+.section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #ddd;
+}
+
+.section-divider::before {
+  margin-right: 10px;
+}
+
+.section-divider::after {
+  margin-left: 10px;
+}
+
+/* Subtotal Row */
+.rate-row.subtotal-row {
+  background: #f0f4f8;
+  font-weight: 600;
+  border-top: 2px solid #ddd;
+}
+
+.subtotal-value {
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+/* Gratuity Row */
+.rate-row.gratuity-row {
+  background: #fffde7;
+  border-bottom: 1px solid #f0e68c;
+}
+
+.rate-row.gratuity-row .rate-cell {
+  font-weight: 500;
+  color: #5d4037;
+}
+
+.gratuity-value {
+  font-weight: 600;
+  color: #6d4c41;
+}
+
+/* Additional Rates */
+.rate-row.additional-rate {
+  background: #fafafa;
+}
+
+.rate-row.additional-rate:hover {
+  background: #f0f7ff;
+}
+
+.rate-type-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-left: 6px;
+}
+
+.rate-type-badge.fixed {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.rate-type-badge.percentage {
+  background: #fce4ec;
+  color: #c2185b;
+}
+
+.rate-type-badge.multiplier {
+  background: #e8f5e9;
+  color: #388e3c;
+}
+
+/* Active pricing row (based on service type) */
+.rate-row.active-pricing {
+  background: #e8f4ff !important;
+  border-left: 3px solid #2196f3;
+}
+
+.rate-row.active-pricing .rate-cell:first-child {
+  font-weight: 600;
+  color: #1976d2;
+}

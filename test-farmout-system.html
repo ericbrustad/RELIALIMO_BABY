@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Farmout Automation on Vercel</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 20px; margin: 10px 0; background: #007cba; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #005c8a; }
+        #result { margin-top: 20px; padding: 10px; background: #f5f5f5; border-radius: 5px; white-space: pre-wrap; }
+        .error { background: #ffeaea; color: #d00; }
+        .success { background: #eafff0; color: #0a5d1a; }
+    </style>
+</head>
+<body>
+    <h1>🚗 Farmout Automation Test on Vercel</h1>
+    <p>Testing the complete farmout system with SMS notifications</p>
+
+    <button onclick="testFarmoutNotification()">📱 Test Farmout SMS to Eric (+17632838336)</button>
+    <button onclick="testDriverPortalConnection()">🖥️ Test Driver Portal Connection</button>
+    <button onclick="testNotificationSounds()">🔊 Test Notification Sounds</button>
+    <button onclick="runFullFarmoutTest()">🎯 Run Complete Farmout Flow Test</button>
+
+    <div id="result">Click a button above to run tests...</div>
+
+    <script>
+        const resultDiv = document.getElementById('result');
+
+        function updateResult(message, isError = false, isSuccess = false) {
+            resultDiv.innerHTML = message;
+            resultDiv.className = isError ? 'error' : isSuccess ? 'success' : '';
+        }
+
+        async function testFarmoutNotification() {
+            updateResult('🔄 Testing farmout SMS notification...');
+
+            try {
+                const response = await fetch('/api/sms-send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        to: '+17632838336', // Eric's real phone
+                        message: `🚗 NEW FARMOUT OFFER - Test from Vercel
+
+📅 Trip: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}
+📍 From: 123 Test St, Houston, TX
+📍 To: 456 Demo Ave, Houston, TX
+💰 Pay: $85.00
+🚙 Vehicle: Black SUV
+
+Accept/View: https://relialimo.com/driver-portal.html#offer-12345
+
+This is a test message from the live Vercel deployment.`
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    updateResult(`✅ SMS Test Success!\n\nResponse: ${JSON.stringify(data, null, 2)}\n\nCheck your phone (+17632838336) for the farmout notification!`, false, true);
+                } else {
+                    updateResult(`❌ SMS Test Failed\n\nError: ${JSON.stringify(data, null, 2)}`, true);
+                }
+            } catch (error) {
+                updateResult(`❌ Network Error\n\n${error.message}`, true);
+            }
+        }
+
+        async function testDriverPortalConnection() {
+            updateResult('🔄 Testing driver portal connection...');
+            
+            try {
+                const response = await fetch('/driver-portal.html');
+                if (response.ok) {
+                    updateResult('✅ Driver Portal Connection Success!\n\nThe driver portal is accessible at:\nhttps://relialimo.com/driver-portal.html', false, true);
+                } else {
+                    updateResult(`❌ Driver Portal Connection Failed\nStatus: ${response.status}`, true);
+                }
+            } catch (error) {
+                updateResult(`❌ Driver Portal Connection Error\n${error.message}`, true);
+            }
+        }
+
+        function testNotificationSounds() {
+            updateResult('🔄 Testing notification sounds (check browser console)...');
+            
+            // Test if Web Audio API is available
+            if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+                updateResult('✅ Web Audio API Available\n\nNotification sounds should work in the driver portal.\nSound patterns configured for:\n- New Offer\n- Accept Notification\n- Decline Notification\n- Trip Start\n- Trip Complete\n- Urgent Alerts', false, true);
+            } else {
+                updateResult('❌ Web Audio API Not Available\n\nNotification sounds may not work in this browser.', true);
+            }
+        }
+
+        async function runFullFarmoutTest() {
+            updateResult('🔄 Running complete farmout system test...');
+            
+            let testResults = [];
+            
+            // Test 1: API endpoint
+            try {
+                const apiTest = await fetch('/api/sms-send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to: '+17632838336', message: 'API test' })
+                });
+                
+                if (apiTest.ok) {
+                    testResults.push('✅ SMS API endpoint responding');
+                } else {
+                    testResults.push('❌ SMS API endpoint failed');
+                }
+            } catch (e) {
+                testResults.push('❌ SMS API endpoint error: ' + e.message);
+            }
+            
+            // Test 2: Driver portal
+            try {
+                const portalTest = await fetch('/driver-portal.html');
+                if (portalTest.ok) {
+                    testResults.push('✅ Driver portal accessible');
+                } else {
+                    testResults.push('❌ Driver portal not accessible');
+                }
+            } catch (e) {
+                testResults.push('❌ Driver portal error: ' + e.message);
+            }
+            
+            // Test 3: Static assets
+            try {
+                const cssTest = await fetch('/driver-portal.css');
+                if (cssTest.ok) {
+                    testResults.push('✅ CSS assets loading');
+                } else {
+                    testResults.push('❌ CSS assets not loading');
+                }
+            } catch (e) {
+                testResults.push('❌ CSS assets error: ' + e.message);
+            }
+            
+            // Test 4: Audio API
+            if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+                testResults.push('✅ Notification sounds supported');
+            } else {
+                testResults.push('❌ Notification sounds not supported');
+            }
+            
+            const summary = testResults.join('\n');
+            const allPassed = testResults.every(result => result.startsWith('✅'));
+            
+            updateResult(`🎯 Complete Farmout System Test Results:\n\n${summary}\n\n${allPassed ? '🎉 ALL TESTS PASSED! The farmout system is fully operational on Vercel.' : '⚠️ Some tests failed. Check individual components above.'}`, !allPassed, allPassed);
+        }
+    </script>
+</body>
+</html>

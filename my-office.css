@@ -123,6 +123,82 @@ body {
   display: block;
 }
 
+/* Multi-Select Container for Apply To */
+.multi-select-container {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 10px;
+  background: #fafafa;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.multi-select-group {
+  margin-bottom: 10px;
+}
+
+.multi-select-group:last-child {
+  margin-bottom: 0;
+}
+
+.multi-select-label {
+  font-weight: 600;
+  font-size: 11px;
+  color: #555;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+  display: block;
+}
+
+.multi-select-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.multi-select-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.multi-select-option:hover {
+  background: #e8f4fc;
+  border-color: #2196f3;
+}
+
+.multi-select-option input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.multi-select-option:has(input:checked) {
+  background: #d4edff;
+  border-color: #2196f3;
+}
+
+/* Stored Rate Items */
+.stored-rate-item {
+  transition: background-color 0.15s ease;
+}
+
+.stored-rate-item:hover {
+  background-color: #e8f4fc !important;
+}
+
+.stored-rate-item.selected {
+  background-color: #d4edff !important;
+  border-left: 3px solid #2196f3 !important;
+}
+
 /* Rate Matrix Layout */
 .rate-matrix-layout {
   padding: 30px;

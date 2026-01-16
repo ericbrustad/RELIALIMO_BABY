@@ -58,6 +58,10 @@ class CompanySettingsManager {
       confirmationStartNumber: 100000,
       lastUsedConfirmationNumber: null,
       
+      // Account Settings
+      accountStartNumber: 30000,
+      lastUsedAccountNumber: null,
+      
       // Communication Settings
       sendConfirmationEmail: true,
       sendReminderSMS: false,

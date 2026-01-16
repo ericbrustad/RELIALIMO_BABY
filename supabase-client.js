@@ -397,6 +397,32 @@ export const supabase = {
       const result = await signOut();
       return { error: result.success ? null : { message: result.error || 'Sign out failed' } };
     },
+    signUp: async ({ email, password, options = {} }) => {
+      const result = await signUpWithEmail(email, password, options);
+      
+      if (!result.success) {
+        return { data: null, error: { message: result.error || 'Sign up failed' } };
+      }
+      
+      // If email already exists, return user with empty identities (Supabase convention)
+      if (result.emailExists) {
+        return {
+          data: {
+            user: { ...result.user, identities: [] },
+            session: null
+          },
+          error: null
+        };
+      }
+      
+      return {
+        data: {
+          user: result.user,
+          session: null  // User needs to confirm email before session is created
+        },
+        error: null
+      };
+    },
     onAuthStateChange: (callback) => {
       console.log('ℹ️ Auth state listener registered');
 
@@ -709,6 +735,53 @@ export async function signOut() {
     return { success: true };
   } catch (error) {
     console.error('❌ Sign out exception:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Sign up new user via REST API
+export async function signUpWithEmail(email, password, options = {}) {
+  try {
+    const response = await fetch(`${getSupabaseAuthUrl()}/auth/v1/signup`, {
+      method: 'POST',
+      headers: {
+        'apikey': getSupabaseAnonKey(),
+        'Authorization': `Bearer ${getSupabaseAnonKey()}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email,
+        password,
+        data: options.data || {}  // User metadata (first_name, last_name, etc.)
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok || data.error) {
+      console.error('❌ Sign up error:', data.error || data.error_description || data.msg);
+      return { success: false, error: data.error || data.error_description || data.msg || 'Sign up failed' };
+    }
+    
+    // Check if user was created but email needs confirmation
+    // Supabase returns user with identities=[] if email already exists
+    if (data.id && (!data.identities || data.identities.length === 0)) {
+      console.log('ℹ️ Email already registered');
+      return { 
+        success: true, 
+        user: data, 
+        emailExists: true 
+      };
+    }
+    
+    console.log('✅ Signed up:', email);
+    return {
+      success: true,
+      user: data,
+      emailExists: false
+    };
+  } catch (error) {
+    console.error('❌ Sign up exception:', error);
     return { success: false, error: error.message };
   }
 }

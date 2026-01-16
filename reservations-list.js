@@ -9,8 +9,26 @@ class ReservationsList {
     await this.loadDbModule();
     this.setupEventListeners();
     this.setupTabSwitching();
+    this.setupMessageListener();
     await this.loadReservations();
     this.handleOpenConfFromCalendar();
+  }
+  
+  setupMessageListener() {
+    // Listen for messages from parent window (e.g., to refresh after save)
+    window.addEventListener('message', async (event) => {
+      if (event.data && event.data.action === 'refreshReservations') {
+        console.log('📥 Received refreshReservations message, reloading list...');
+        await this.loadReservations();
+      } else if (event.data && event.data.action === 'openReservation') {
+        const confNumber = event.data.conf || event.data.openConf;
+        if (confNumber) {
+          console.log('📥 Received openReservation message for:', confNumber);
+          this.openReservationInParent(confNumber);
+        }
+      }
+    });
+    console.log('👂 Message listener set up for reservations list');
   }
   
   async loadDbModule() {
@@ -31,8 +49,36 @@ class ReservationsList {
     }
     
     try {
-      const reservations = await this.db.getAllReservations();
-      console.log('📋 Loaded reservations:', reservations);
+      // Load all data in parallel for efficiency
+      const [reservations, accounts, vehicleTypes] = await Promise.all([
+        this.db.getAllReservations(),
+        this.db.getAllAccounts(),
+        this.db.getAllVehicleTypes()
+      ]);
+      
+      console.log('📋 Loaded reservations:', reservations?.length || 0);
+      console.log('👥 Loaded accounts:', accounts?.length || 0);
+      console.log('🚗 Loaded vehicle types:', vehicleTypes?.length || 0);
+      
+      // Create lookup maps for fast access
+      this.accountsMap = new Map();
+      (accounts || []).forEach(acc => {
+        this.accountsMap.set(acc.id, acc);
+        if (acc.account_number) {
+          // Store by account_number as both number and string
+          this.accountsMap.set(acc.account_number, acc);
+          this.accountsMap.set(String(acc.account_number), acc);
+        }
+      });
+      console.log('🗺️ AccountsMap keys:', Array.from(this.accountsMap.keys()).slice(0, 10));
+      
+      this.vehicleTypesMap = new Map();
+      (vehicleTypes || []).forEach(vt => {
+        this.vehicleTypesMap.set(vt.id, vt);
+        if (vt.name) {
+          this.vehicleTypesMap.set(vt.name.toLowerCase(), vt);
+        }
+      });
       
       if (reservations && reservations.length > 0) {
         this.displayReservations(reservations);
@@ -43,6 +89,54 @@ class ReservationsList {
     } catch (error) {
       console.error('❌ Error loading reservations:', error);
     }
+  }
+  
+  // Helper to resolve vehicle type name from ID or name
+  resolveVehicleTypeName(vehicleTypeValue) {
+    if (!vehicleTypeValue) return '';
+    
+    // Check if it's a UUID (looks like: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vehicleTypeValue);
+    
+    if (isUUID && this.vehicleTypesMap) {
+      const vt = this.vehicleTypesMap.get(vehicleTypeValue);
+      if (vt) {
+        return vt.name || vt.display_name || vehicleTypeValue;
+      }
+    }
+    
+    // Already a name or not found
+    return vehicleTypeValue;
+  }
+  
+  // Helper to resolve company name from account_id (prioritize dynamic lookup)
+  resolveCompanyName(reservation) {
+    // Try multiple fields to find the account link
+    const accountId = reservation.account_id || reservation.billing_account || reservation.accountId;
+    console.log(`🔍 resolveCompanyName for ${reservation.confirmation_number}: account_id=${accountId}, billing_account=${reservation.billing_account}, stored company_name=${reservation.company_name}`);
+    
+    if (accountId && this.accountsMap) {
+      // Try direct lookup
+      let account = this.accountsMap.get(accountId);
+      
+      // Try as string if not found
+      if (!account && accountId) {
+        account = this.accountsMap.get(String(accountId));
+      }
+      
+      console.log(`   → Account lookup result:`, account ? `found: ${account.company_name}` : 'not found in map');
+      if (account && account.company_name) {
+        return account.company_name;
+      }
+    }
+    
+    // Fallback to stored company_name (for reservations without linked account)
+    if (reservation.company_name) {
+      console.log(`   → Using stored company_name: ${reservation.company_name}`);
+      return reservation.company_name;
+    }
+    
+    return '';
   }
   
   displayReservations(reservations) {
@@ -81,14 +175,23 @@ class ReservationsList {
     
     // Add new rows for each reservation
     filtered.forEach(res => {
+      // Debug: show what confirmation_number and id look like
+      console.log(`📋 Res: confirmation_number=${res.confirmation_number}, id=${res.id}, company_name=${res.company_name}, account_id=${res.account_id}`);
+      
+      // Resolve company name from account (dynamic lookup)
+      const companyName = this.resolveCompanyName(res);
+      
+      // Resolve vehicle type name (in case it's stored as UUID)
+      const vehicleTypeName = this.resolveVehicleTypeName(res.vehicle_type);
+      
       const row = document.createElement('tr');
       row.innerHTML = `
         <td><a href="#" class="conf-link" data-conf="${res.confirmation_number || ''}">${res.confirmation_number || 'N/A'}</a></td>
         <td>${this.formatDate(res.pickup_at)}</td>
         <td>${this.formatTime(res.pickup_at)}</td>
         <td>${res.passenger_name || [res.passenger_first_name, res.passenger_last_name].filter(Boolean).join(' ') || ''}</td>
-        <td>${res.company_name || ''}</td>
-        <td>${res.vehicle_type || ''}</td>
+        <td>${companyName}</td>
+        <td>${vehicleTypeName}</td>
         <td>$${Number(res.grand_total || 0).toFixed(2)}</td>
         <td>${res.payment_type || ''}</td>
         <td>${res.status || 'confirmed'}</td>

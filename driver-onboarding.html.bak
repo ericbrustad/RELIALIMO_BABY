@@ -92,6 +92,10 @@
     .toast.success { border-color: color-mix(in oklab, var(--success) 50%, var(--border)); }
     .toast.error { border-color: color-mix(in oklab, var(--error) 50%, var(--border)); }
 
+    /* Validation styles */
+    input.invalid { border-color: var(--error) !important; background-color: color-mix(in oklab, var(--error) 10%, var(--input)) !important; }
+    input.valid { border-color: var(--success) !important; }
+
     .step { display: none; }
     .step.active { display:block; }
   </style>

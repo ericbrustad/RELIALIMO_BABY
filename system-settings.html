@@ -3,14 +3,90 @@
   <meta charset="UTF-8">
   <title>System Settings</title>
   <script src="env.js"></script>
+  <style>
+    .settings-card {
+      display: inline-block;
+      width: 280px;
+      padding: 20px;
+      margin: 10px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+      vertical-align: top;
+    }
+    .settings-card:hover {
+      border-color: #3b82f6;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+      transform: translateY(-2px);
+    }
+    .settings-card h4 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      color: #1f2937;
+    }
+    .settings-card p {
+      margin: 0;
+      font-size: 13px;
+      color: #6b7280;
+    }
+    .settings-card .icon {
+      font-size: 28px;
+      margin-bottom: 12px;
+    }
+    .settings-section {
+      margin: 24px 0;
+    }
+    .settings-section h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+  </style>
 </head>
 <div id="systemSettingsTab" class="tab-section">
   <h2>System Settings</h2>
-  <button id="utilitiesBtn" class="btn">Utilities</button>
+  
+  <!-- Settings Cards -->
+  <div class="settings-section">
+    <h3>Automation & Dispatch</h3>
+    <div class="settings-card" onclick="window.location.href='farmout-settings.html'">
+      <div class="icon">🚗</div>
+      <h4>Farmout Automation</h4>
+      <p>Configure driver ratings, offer timing, SMS templates, and auto-dispatch settings</p>
+    </div>
+    <div class="settings-card" onclick="window.location.href='sms-settings.html'">
+      <div class="icon">📱</div>
+      <h4>SMS Settings</h4>
+      <p>Configure SMS provider, templates, and messaging preferences</p>
+    </div>
+    <div class="settings-card" onclick="window.location.href='email-settings.html'">
+      <div class="icon">📧</div>
+      <h4>Email Settings</h4>
+      <p>Configure email templates and notification preferences</p>
+    </div>
+  </div>
+  
+  <div class="settings-section">
+    <h3>Appearance & Display</h3>
+    <div class="settings-card" onclick="window.location.href='appearance.html'">
+      <div class="icon">🎨</div>
+      <h4>Appearance</h4>
+      <p>Customize colors, theme, and visual preferences</p>
+    </div>
+  </div>
+  
+  <button id="utilitiesBtn" class="btn">Advanced Utilities</button>
   <div id="utilitiesPanel" style="display:none; margin-top:20px;">
     <h3>Utilities</h3>
     <ul>
-      <li><button id="appearanceUtilBtn" class="btn">Appearance</button></li>
       <li><button id="testChecklistUtilBtn" class="btn">Test Checklist</button></li>
       <li><button id="supabaseTestUtilBtn" class="btn">Supabase Integration Test</button></li>
       <li><button id="deleteAllReservationsSupabaseBtn" class="btn btn-danger">Delete ALL Reservations (Supabase)</button></li>
@@ -25,9 +101,6 @@
     const panel = document.getElementById('utilitiesPanel');
     panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
   };
-  document.getElementById('appearanceUtilBtn').onclick = function() {
-    window.location.href = 'appearance.html';
-  };
   document.getElementById('testChecklistUtilBtn').onclick = function() {
     window.location.href = 'full-site-test-checklist.html';
   };
@@ -37,6 +110,7 @@
 </script>
 <script type="module">
 import { deleteAllReservationsSupabase, deleteAllAccountsSupabase, deleteAllDriversSupabase, deleteAllRatesSupabase } from './api-service.js';
+import { resetAccountCounter } from './supabase-db.js';
 
 function setupDeleteButton(btnId, fn, label) {
   const btn = document.getElementById(btnId);
@@ -47,6 +121,10 @@ function setupDeleteButton(btnId, fn, label) {
         btn.textContent = 'Deleting...';
         const result = await fn();
         if (result) {
+          // Reset account counter when deleting all accounts
+          if (label === 'Accounts') {
+            resetAccountCounter();
+          }
           alert(`All ${label} deleted from Supabase.`);
         } else {
           alert(`Failed to delete ${label}. Check console for details.`);

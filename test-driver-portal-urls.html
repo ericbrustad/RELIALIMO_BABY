@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Driver Portal URLs</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; }
+        .url-test { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .url-test a { display: block; color: #007cba; text-decoration: none; font-weight: bold; margin: 5px 0; }
+        .url-test a:hover { text-decoration: underline; }
+        .description { color: #666; font-size: 14px; }
+        .format { background: #e8f4f8; padding: 10px; border-left: 4px solid #007cba; margin: 10px 0; }
+        .example { background: #f0f8f0; padding: 10px; border-left: 4px solid #28a745; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🚗 RELIALIMO Driver Portal URL Testing</h1>
+    <p>This page demonstrates the individual driver portal URL routing system.</p>
+    
+    <div class="format">
+        <h3>📋 Supported URL Formats:</h3>
+        <ul>
+            <li><strong>Query Parameter:</strong> <code>relialimo.com/driver-portal.html?driver_id={driver_id}</code></li>
+            <li><strong>Driver Path:</strong> <code>relialimo.com/driver/{driver_id}</code> (auto-converts to query param)</li>
+            <li><strong>Portal Path:</strong> <code>relialimo.com/portal/{driver_id}</code> (auto-converts to query param)</li>
+            <li><strong>Direct ID:</strong> <code>relialimo.com/{driver_id}</code> (if looks like UUID)</li>
+            <li><strong>Hash Fragment:</strong> <code>relialimo.com/driver-portal.html#driver-{driver_id}</code> (for bookmarks)</li>
+        </ul>
+    </div>
+
+    <h2>🧪 Test URLs</h2>
+    
+    <div class="url-test">
+        <h3>Eric's Driver Portal (Test Driver ID)</h3>
+        <div class="description">Using Eric's driver ID for testing</div>
+        <a href="https://relialimo.com/driver/99d34cd5-a593-4362-9846-db7167276592" target="_blank">
+            https://relialimo.com/driver/99d34cd5-a593-4362-9846-db7167276592
+        </a>
+        <a href="https://relialimo.com/portal/99d34cd5-a593-4362-9846-db7167276592" target="_blank">
+            https://relialimo.com/portal/99d34cd5-a593-4362-9846-db7167276592
+        </a>
+        <a href="https://relialimo.com/99d34cd5-a593-4362-9846-db7167276592" target="_blank">
+            https://relialimo.com/99d34cd5-a593-4362-9846-db7167276592
+        </a>
+    </div>
+
+    <div class="url-test">
+        <h3>Direct Query Parameter Method (Most Reliable)</h3>
+        <div class="description">Uses URL query parameter for server-side routing</div>
+        <a href="https://relialimo.com/driver-portal.html?driver_id=99d34cd5-a593-4362-9846-db7167276592" target="_blank">
+            https://relialimo.com/driver-portal.html?driver_id=99d34cd5-a593-4362-9846-db7167276592
+        </a>
+    </div>
+
+    <div class="url-test">
+        <h3>Hash Fragment Method (For Bookmarks)</h3>
+        <div class="description">Uses hash fragment for client-side routing</div>
+        <a href="https://relialimo.com/driver-portal.html#driver-99d34cd5-a593-4362-9846-db7167276592" target="_blank">
+            https://relialimo.com/driver-portal.html#driver-99d34cd5-a593-4362-9846-db7167276592
+        </a>
+        <a href="https://relialimo.com/driver-portal.html#99d34cd5-a593-4362-9846-db7167276592" target="_blank">
+            https://relialimo.com/driver-portal.html#99d34cd5-a593-4362-9846-db7167276592
+        </a>
+    </div>
+
+    <div class="url-test">
+        <h3>Test Invalid Driver ID</h3>
+        <div class="description">This will show the "Driver Not Found" error screen</div>
+        <a href="https://relialimo.com/driver/invalid-driver-id-123" target="_blank">
+            https://relialimo.com/driver/invalid-driver-id-123
+        </a>
+    </div>
+
+    <div class="url-test">
+        <h3>Main Driver Portal (No Specific Driver)</h3>
+        <div class="description">General login screen for all drivers</div>
+        <a href="https://relialimo.com/driver-portal.html" target="_blank">
+            https://relialimo.com/driver-portal.html
+        </a>
+    </div>
+
+    <div class="example">
+        <h3>🎯 How It Works:</h3>
+        <ol>
+            <li><strong>URL Detection:</strong> The system detects driver IDs in URL paths and hash fragments</li>
+            <li><strong>Driver Lookup:</strong> Queries Supabase to find the driver by ID or portal slug</li>
+            <li><strong>Auto-Login:</strong> If driver found, pre-fills login form with their email</li>
+            <li><strong>Personalization:</strong> Updates page title and portal content for the specific driver</li>
+            <li><strong>Error Handling:</strong> Shows friendly error screen if driver not found</li>
+            <li><strong>Session Management:</strong> Remembers the driver and maintains their personal portal experience</li>
+        </ol>
+    </div>
+
+    <h2>📱 Mobile Driver Experience</h2>
+    <p>Each driver gets their own personalized portal URL that they can:</p>
+    <ul>
+        <li>📌 <strong>Bookmark</strong> on their mobile device home screen</li>
+        <li>📧 <strong>Receive via SMS</strong> for farmout notifications</li>
+        <li>🔗 <strong>Share</strong> with dispatch for direct access</li>
+        <li>💾 <strong>Auto-remember</strong> their login across sessions</li>
+    </ul>
+
+    <div class="format">
+        <h3>🛠️ For Developers:</h3>
+        <p>To set up a new driver portal:</p>
+        <code>const driverPortalUrl = `https://relialimo.com/driver/${driver.id}`;</code>
+        <p>This URL will automatically route to their personalized portal interface.</p>
+    </div>
+
+    <script>
+        console.log('Driver Portal URL Test Page Loaded');
+        console.log('Current URL:', window.location.href);
+        console.log('Test URLs ready for clicking!');
+    </script>
+</body>
+</html>

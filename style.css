@@ -160,17 +160,18 @@ body {
 
 .address-suggestions-dropdown {
   position: absolute;
-  background: #2a2a2a;
-  border: 1px solid #3a3a3a;
-  border-top: none;
-  border-radius: 0 0 3px 3px;
-  max-height: 250px;
+  background: white;
+  border: 2px solid #007bff;
+  border-radius: 6px;
+  max-height: 400px;
   overflow-y: auto;
   width: 100%;
+  min-width: 350px;
   z-index: 1000;
   display: none;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
-  margin-top: -1px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  margin-top: 2px;
+  padding: 4px 0;
 }
 
 .address-suggestions-dropdown.active {
@@ -178,14 +179,14 @@ body {
 }
 
 .address-suggestion-item {
-  padding: 10px 12px;
+  padding: 12px 15px;
   cursor: pointer;
-  border-bottom: 1px solid #333;
-  transition: background 0.2s;
+  border-bottom: 1px solid #e8e8e8;
+  transition: background 0.15s ease;
 }
 
 .address-suggestion-item:hover {
-  background: #333;
+  background: linear-gradient(135deg, #e3f2fd, #f0f7ff);
 }
 
 .address-suggestion-item:last-child {
@@ -193,15 +194,15 @@ body {
 }
 
 .suggestion-main {
-  color: #e0e0e0;
-  font-weight: 500;
-  font-size: 13px;
+  color: #333;
+  font-weight: 600;
+  font-size: 15px;
 }
 
 .suggestion-secondary {
-  color: #888;
-  font-size: 11px;
-  margin-top: 2px;
+  color: #555;
+  font-size: 13px;
+  margin-top: 4px;
 }
 
 .form-group {

@@ -257,6 +257,30 @@ body {
   box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
 }
 
+/* Phone/Email validation styles */
+.form-control.invalid,
+input.invalid {
+  border-color: #dc3545 !important;
+  background-color: #fff5f5 !important;
+}
+
+.form-control.valid,
+input.valid {
+  border-color: #28a745 !important;
+}
+
+.validation-message {
+  font-size: 11px;
+  color: #dc3545;
+  margin-top: 2px;
+  display: none;
+}
+
+.form-control.invalid + .validation-message,
+input.invalid + .validation-message {
+  display: block;
+}
+
 .form-control-full {
   width: 100%;
 }
@@ -304,7 +328,8 @@ body {
   display: grid;
   grid-template-columns: 220px 1fr;
   gap: 20px;
-  height: calc(100vh - 140px);
+  height: calc(100vh - 80px);
+  min-height: 600px;
 }
 
 /* Accounts Sidebar */
@@ -447,9 +472,10 @@ body {
   border-radius: 4px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   transition: all 0.3s ease;
   position: relative;
+  max-height: 100%;
 }
 
 .accounts-main::before {
@@ -521,6 +547,8 @@ body {
   display: none;
   flex: 1;
   overflow-y: auto;
+  max-height: calc(100vh - 200px);
+  padding-bottom: 100px; /* Space for sticky buttons */
 }
 
 .account-tab-content.active {
@@ -984,4 +1012,18 @@ body {
   left: 5px;
   color: #1976d2;
   font-weight: bold;
+}
+
+/* Account Action Buttons - Fixed at bottom */
+#accountActionButtons {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 240px;
+  right: 20px;
+  z-index: 100;
+  background: #f8f9fa !important;
+  border: 2px solid #007bff !important;
+  border-radius: 8px 8px 0 0 !important;
+  box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.15);
+  padding: 15px 20px !important;
 }

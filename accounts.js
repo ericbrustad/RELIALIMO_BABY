@@ -1,4 +1,5 @@
 import { wireMainNav, navigateToSection } from './navigation.js';
+import { setupPhoneEmailValidation, validateAllFields } from './validation-utils.js';
 
 class Accounts {
   constructor() {
@@ -36,13 +37,6 @@ class Accounts {
 
     if (cityEl && !cityEl.value) cityEl.value = city;
     if (stateEl && !stateEl.value) stateEl.value = state;
-  }
-
-  clearDres4LoginFields() {
-    const emailEl = document.getElementById('dres4LoginEmail');
-    const passwordEl = document.getElementById('dres4LoginPassword');
-    if (emailEl) emailEl.value = '';
-    if (passwordEl) passwordEl.value = '';
   }
 
   getSelectedAccountId() {
@@ -300,12 +294,6 @@ class Accounts {
           this.applyDraftIfPresent();
         }, 100);
       }
-
-      // Never prefill DRES4 / Passenger App login credentials (even if browser tries)
-      this.clearDres4LoginFields();
-      setTimeout(() => this.clearDres4LoginFields(), 0);
-      setTimeout(() => this.clearDres4LoginFields(), 250);
-      setTimeout(() => this.clearDres4LoginFields(), 1000);
       
       console.log('✅ Accounts initialization complete');
     } catch (error) {
@@ -392,6 +380,7 @@ class Accounts {
       this.switchAccountTab('info');
       
       // Populate form fields with proper mapping
+      const accountUUIDEl = document.getElementById('accountUUID');
       const accountNumberEl = document.getElementById('accountNumber');
       const firstNameEl = document.getElementById('acctFirstName');
       const lastNameEl = document.getElementById('acctLastName');
@@ -400,6 +389,11 @@ class Accounts {
       const cellularPhone1El = document.getElementById('acctCellularPhone1'); // Contact Info > Cellular Phone 1
       const emailEl = document.getElementById('acctEmail2'); // Maps to email
       
+      // Store the actual UUID for later use in save operations
+      if (accountUUIDEl) {
+        accountUUIDEl.value = account.id || '';
+        console.log('🔑 Stored account UUID:', account.id);
+      }
       if (accountNumberEl) {
         accountNumberEl.value = account.account_number || account.id;
         accountNumberEl.setAttribute('readonly', true);
@@ -496,9 +490,6 @@ class Accounts {
       // Multi-select fields (restricted drivers/cars)
       this.setMultiSelectValues('acctRestrictedDrivers', account.restricted_drivers || []);
       this.setMultiSelectValues('acctRestrictedCars', account.restricted_cars || []);
-
-      // Ensure DRES4 fields never prefill from account data
-      this.clearDres4LoginFields();
       
       // Switch to accounts tab
       this.switchAccountTab('info');
@@ -881,7 +872,17 @@ class Accounts {
       });
     }
 
-    // Add New Account link
+    // Create New Account button (prominent sidebar button)
+    const createNewAccountBtn = document.getElementById('createNewAccountBtn');
+    if (createNewAccountBtn) {
+      createNewAccountBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.addNewAccount();
+      });
+      console.log('✅ Create New Account button listener attached');
+    }
+
+    // Add New Account link (legacy support)
     const addNewAccountLink = document.querySelector('.link-add');
     if (addNewAccountLink) {
       addNewAccountLink.addEventListener('click', (e) => {
@@ -1017,6 +1018,34 @@ class Accounts {
         this.generateEmailExport();
       });
     }
+    
+    // Setup phone and email validation
+    this.setupPhoneEmailValidation();
+  }
+  
+  /**
+   * Setup phone and email field validation
+   */
+  setupPhoneEmailValidation() {
+    const phoneFieldIds = [
+      'acctOfficePhone',
+      'acctHomePhone',
+      'acctCellularPhone1',
+      'acctCellularPhone2',
+      'acctCellularPhone3',
+      'acctFax1',
+      'acctFax2',
+      'acctFax3',
+      'acctCellPhone1'
+    ];
+    
+    const emailFieldIds = [
+      'acctEmail',
+      'acctEmail2',
+      'acctEmailContact'
+    ];
+    
+    setupPhoneEmailValidation(phoneFieldIds, emailFieldIds);
   }
 
   switchAccountTab(tabName) {
@@ -1041,10 +1070,6 @@ class Accounts {
         el.classList.add('active');
         el.style.display = '';
       }
-      // DRES4 login fields should never prefill (some browsers autofill on tab reveal)
-      this.clearDres4LoginFields();
-      setTimeout(() => this.clearDres4LoginFields(), 0);
-      setTimeout(() => this.clearDres4LoginFields(), 250);
     } else if (tabName === 'financial') {
       const el = document.getElementById('financialDataTab');
       if (el) {
@@ -1245,9 +1270,6 @@ class Accounts {
     // Clear multi-selects
     this.setMultiSelectValues('acctRestrictedDrivers', []);
     this.setMultiSelectValues('acctRestrictedCars', []);
-
-    // Never carry DRES4 login fields between accounts
-    this.clearDres4LoginFields();
     
     // Clear account number (will be assigned on save)
     const accountNumberEl = document.getElementById('accountNumber');
@@ -1256,6 +1278,12 @@ class Accounts {
       accountNumberEl.placeholder = 'Will be assigned on save';
       accountNumberEl.setAttribute('readonly', true);
       accountNumberEl.style.backgroundColor = '#f5f5f5';
+    }
+    
+    // Clear UUID field (new accounts should have no UUID)
+    const accountUUIDEl = document.getElementById('accountUUID');
+    if (accountUUIDEl) {
+      accountUUIDEl.value = '';
     }
     
     // Clear misc account number too
@@ -1288,6 +1316,12 @@ class Accounts {
     accountNumberEl.placeholder = 'Fetching next account number...';
 
     try {
+      if (window.SUPABASE_POLICY_ERROR) {
+        console.warn('⚠️ SUPABASE_POLICY_ERROR set; skipping next account number fetch');
+        accountNumberEl.placeholder = 'Will be assigned on save';
+        return;
+      }
+
       const nextNum = await this.db?.getNextAccountNumber?.();
       if (!nextNum) throw new Error('No next account number returned');
 
@@ -1496,12 +1530,21 @@ class Accounts {
         if (miscAccountNumberEl) {
           miscAccountNumberEl.value = accountNumber;
         }
+        
+        // Note: Counter is incremented in supabase-db.js saveAccount() on success
       }
+      
+      // Get the UUID for existing accounts (for updates)
+      // New accounts should NOT have an 'id' - Supabase will auto-generate UUID
+      const existingUUID = document.getElementById('accountUUID')?.value?.trim();
+      
+      // Get organization_id for multi-tenant support
+      const organizationId = window.ENV?.ORGANIZATION_ID || localStorage.getItem('relia_organization_id') || null;
       
       // Collect form data with proper field mappings
       const accountData = {
-        id: accountNumber,
         account_number: accountNumber,
+        organization_id: organizationId,
         first_name: document.getElementById('acctFirstName')?.value?.trim() || '',
         last_name: document.getElementById('acctLastName')?.value?.trim() || '',
         company_name: document.getElementById('acctCompany')?.value?.trim() || '',
@@ -1564,6 +1607,15 @@ class Accounts {
         type: 'individual',
         updated_at: new Date().toISOString()
       };
+      
+      // For existing accounts, set the UUID id for update operation
+      // New accounts should NOT have id - Supabase auto-generates UUID
+      if (existingUUID) {
+        accountData.id = existingUUID;
+        console.log('📝 Updating existing account with UUID:', existingUUID);
+      } else {
+        console.log('🆕 Creating new account (no UUID set)');
+      }
 
       console.log('📝 Account data to save:', accountData);
 
@@ -1630,43 +1682,60 @@ class Accounts {
       }
       
       const saved = result?.account || accountData;
+      
+      // Store the new UUID if we got one back from Supabase (for newly created accounts)
+      if (saved.id && !existingUUID) {
+        const accountUUIDEl = document.getElementById('accountUUID');
+        if (accountUUIDEl) {
+          accountUUIDEl.value = saved.id;
+          console.log('🔑 Stored new account UUID:', saved.id);
+        }
+      }
 
-      // If this page was opened from Reservation, notify the opener/parent and return
+      // ALWAYS notify parent/opener that account was saved (for dynamic data sync)
+      const payload = {
+        action: 'relia:accountSaved',
+        accountId: saved.id || accountNumber,
+        accountNumber: accountNumber,
+        companyName: accountData.company_name || '',
+        accountName: this.getCurrentAccountDisplayName?.() || ''
+      };
+      
+      // Send to parent (when in iframe)
+      if (window.parent && window.parent !== window) {
+        console.log('📤 Sending accountSaved to parent:', payload);
+        window.parent.postMessage(payload, '*');
+      }
+      
+      // Send to opener (when in popup)
+      if (window.opener && !window.opener.closed) {
+        console.log('📤 Sending accountSaved to opener:', payload);
+        window.opener.postMessage(payload, '*');
+      }
+
+      // Handle return-to-reservation flow if applicable
       try {
         const params = new URLSearchParams(window.location.search);
         const from = (params.get('from') || '').toLowerCase();
-        const payload = {
-          action: 'relia:accountSaved',
-          accountId: accountNumber,
-          accountName: this.getCurrentAccountDisplayName?.() || ''
-        };
 
-        if (window.opener && !window.opener.closed) {
-          window.opener.postMessage(payload, '*');
-          if (from === 'reservation') {
+        if (from === 'reservation') {
+          if (window.opener && !window.opener.closed) {
             // Close popup if possible
             setTimeout(() => {
               try { window.close(); } catch { /* ignore */ }
             }, 150);
-          }
-        }
-
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage(payload, '*');
-        }
-
-        // Fallback: same-window return
-        if (from === 'reservation' && (!window.opener || window.opener.closed)) {
-          const returnUrl = localStorage.getItem('relia_return_to_reservation_url');
-          if (returnUrl) {
-            try {
-              const u = new URL(returnUrl, window.location.origin);
-              u.searchParams.set('newAccountId', accountNumber);
-              localStorage.removeItem('relia_return_to_reservation_url');
-              window.location.href = u.toString();
-            } catch {
-              // If URL parsing fails, just go back to reservation form
-              window.location.href = 'reservation-form.html';
+          } else {
+            // Fallback: same-window return
+            const returnUrl = localStorage.getItem('relia_return_to_reservation_url');
+            if (returnUrl) {
+              try {
+                const u = new URL(returnUrl, window.location.origin);
+                u.searchParams.set('newAccountId', accountNumber);
+                localStorage.removeItem('relia_return_to_reservation_url');
+                window.location.href = u.toString();
+              } catch {
+                window.location.href = 'reservation-form.html';
+              }
             }
           }
         }
@@ -1675,7 +1744,33 @@ class Accounts {
       }
 
       if (isNewAccount) {
-        await this.createReservationForAccount(saved, { redirect: true, notify: true });
+        // Reload accounts list first to show new account
+        await this.loadAccountsList();
+        
+        // Select the newly created account in the listbox
+        const listbox = document.getElementById('accountsListbox');
+        if (listbox && saved.id) {
+          listbox.value = saved.id;
+          console.log('✅ Selected newly created account in listbox:', saved.id);
+        }
+        
+        // Show success notification
+        const btn = document.getElementById('saveAccountBtn');
+        if (btn) {
+          const originalText = btn.textContent;
+          btn.textContent = '✓ Saved!';
+          btn.style.background = '#28a745';
+          btn.disabled = true;
+
+          setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.background = '';
+            btn.disabled = false;
+          }, 2000);
+        }
+        
+        // Optionally create reservation for new account
+        // await this.createReservationForAccount(saved, { redirect: true, notify: true });
         return;
       }
 
@@ -1697,6 +1792,13 @@ class Accounts {
       
       // Reload accounts list
       await this.loadAccountsList();
+      
+      // Re-select the saved account in the listbox
+      const listbox = document.getElementById('accountsListbox');
+      if (listbox && saved.id) {
+        listbox.value = saved.id;
+        console.log('✅ Re-selected saved account in listbox:', saved.id);
+      }
     } catch (error) {
       console.error('❌ Error saving account:', error);
     }

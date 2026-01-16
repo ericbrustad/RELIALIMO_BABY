@@ -154,6 +154,7 @@
     <li><a class="btn" href="debug-supabase.html" target="_top" style="background:#9c27b0;">🔍 Debug Supabase</a></li>
     <li><a class="btn" href="debug-reservation-form.html" target="_top" style="background:#9c27b0;">📝 Debug Reservation Form</a></li>
     <li><a class="btn" href="debug-account-creation.html" target="_top" style="background:#9c27b0;">👤 Debug Account Creation</a></li>
+    <li><a class="btn" href="delete-driver-utility.html" target="_top" style="background:#d32f2f;">🗑️ Delete Driver Utility</a></li>
   </ul>
 
   <!-- =============== SCHEMA & DATABASE =============== -->
@@ -178,6 +179,7 @@
     <li><button id="deleteAllAccountsSupabaseBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Accounts (Supabase)</button></li>
     <li><button id="deleteAllDriversSupabaseBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Drivers (Supabase)</button></li>
     <li><button id="deleteAllVehiclesSupabaseBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Vehicles (Supabase)</button></li>
+    <li><button id="deleteAllFleetVehiclesBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Fleet Vehicles (Supabase)</button></li>
     <li><button id="deleteAllAffiliatesBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Affiliates (Supabase)</button></li>
     <li><button id="deleteAllRatesSupabaseBtn" class="btn" style="background:#d32f2f;">🗑️ Delete ALL Rate Data (Supabase)</button></li>
     <li style="margin-top:16px; margin-bottom:12px;"><strong style="color:#b71c1c;">Both Local + Supabase:</strong></li>
@@ -194,6 +196,7 @@
     <li><button id="viewSupabaseDriversBtn" class="btn" style="background:#6a1b9a;">🚗 View Supabase Drivers</button></li>
     <li><button id="viewLocalDriversBtn" class="btn" style="background:#8e24aa;">🚗 View Local Drivers</button></li>
     <li><button id="viewSupabaseVehiclesBtn" class="btn" style="background:#ff7043;">🚐 View Supabase Vehicles</button></li>
+    <li><button id="viewFleetVehiclesBtn" class="btn" style="background:#e64a19;">🚐 View Fleet Vehicles (Supabase)</button></li>
     <li><button id="viewLocalVehiclesBtn" class="btn" style="background:#ff8a65;">🚐 View Local Vehicles</button></li>
   </ul>
 
@@ -249,6 +252,7 @@
 console.log('=== UTILITIES MODULE LOADING ===');
 
 import { removeDuplicateAffiliates, removeDuplicateDrivers, setupAPI, getSupabaseClient, deleteAllReservationsSupabase, deleteAllAccountsSupabase, deleteAllDriversSupabase, deleteAllRatesSupabase, deleteAllVehiclesSupabase, resetConfirmationCounterToStart } from './api-service.js';
+import { resetAccountCounter } from './supabase-db.js';
 import * as driverFieldConfig from './driver-field-config.js';
 
 // Forced vehicle context (used by vehicle-related buttons); pull from env when present
@@ -401,6 +405,13 @@ function attachDataViewHandlers() {
     try {
       const rows = await fetchSupabaseList('vehicles');
       renderDataList('Supabase Vehicles', rows);
+    } catch (e) { alert(e.message || e); }
+  });
+
+  bind('viewFleetVehiclesBtn', async () => {
+    try {
+      const rows = await fetchSupabaseList('fleet_vehicles');
+      renderDataList('Fleet Vehicles', rows);
     } catch (e) { alert(e.message || e); }
   });
 
@@ -739,6 +750,10 @@ function setupDeleteButton(btnId, fn, label) {
         btn.textContent = 'Deleting...';
         const result = await fn();
         if (result) {
+          // Reset account counter when deleting all accounts
+          if (label === 'Accounts') {
+            resetAccountCounter();
+          }
           alert(`All ${label} deleted from Supabase.`);
         } else {
           alert(`Failed to delete ${label}. Check console for details.`);
@@ -755,6 +770,36 @@ setupDeleteButton('deleteAllAccountsSupabaseBtn', deleteAllAccountsSupabase, 'Ac
 setupDeleteButton('deleteAllDriversSupabaseBtn', deleteAllDriversSupabase, 'Drivers');
 setupDeleteButton('deleteAllRatesSupabaseBtn', deleteAllRatesSupabase, 'Rate Data');
 setupDeleteButton('deleteAllVehiclesSupabaseBtn', deleteAllVehiclesSupabase, 'Vehicles');
+
+// Delete ALL Fleet Vehicles
+const deleteAllFleetVehiclesBtn = document.getElementById('deleteAllFleetVehiclesBtn');
+if (deleteAllFleetVehiclesBtn) {
+  deleteAllFleetVehiclesBtn.onclick = async function() {
+    const confirmFirst = confirm('⚠️ WARNING: This will permanently delete ALL fleet vehicles from Supabase.\n\nThis includes all driver-registered vehicles. This action CANNOT be undone.\n\nAre you sure you want to proceed?');
+    if (!confirmFirst) return;
+    
+    const confirmSecond = prompt('Type DELETE to confirm removing all fleet vehicles:');
+    if (confirmSecond !== 'DELETE') {
+      alert('Deletion cancelled.');
+      return;
+    }
+    
+    deleteAllFleetVehiclesBtn.disabled = true;
+    deleteAllFleetVehiclesBtn.textContent = 'Deleting...';
+    
+    try {
+      const client = getSupabaseClient();
+      const { error } = await client.from('fleet_vehicles').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (error) throw error;
+      alert('✅ All fleet vehicles deleted successfully!');
+    } catch (e) {
+      alert('❌ Error deleting fleet vehicles: ' + (e.message || e));
+    } finally {
+      deleteAllFleetVehiclesBtn.disabled = false;
+      deleteAllFleetVehiclesBtn.textContent = '🗑️ Delete ALL Fleet Vehicles (Supabase)';
+    }
+  };
+}
 
 // Delete ALL Accounts (Local + Supabase) - comprehensive cleanup
 const deleteAllAccountsBothBtn = document.getElementById('deleteAllAccountsBothBtn');
@@ -809,10 +854,13 @@ if (deleteAllAccountsBothBtn) {
       await ensureSupabaseReady();
       supabaseDeleted = await deleteAllAccountsSupabase();
       
+      // 3. Reset account counter
+      resetAccountCounter();
+      
       if (supabaseDeleted) {
-        alert(`✅ Successfully deleted ALL accounts!\n\n- Local storage: ${localDeleted} accounts cleared\n- Supabase: All accounts deleted\n\nAll company/account data has been removed.`);
+        alert(`✅ Successfully deleted ALL accounts!\n\n- Local storage: ${localDeleted} accounts cleared\n- Supabase: All accounts deleted\n- Account counter: Reset to 0\n\nAll company/account data has been removed.`);
       } else {
-        alert(`⚠️ Partial deletion:\n\n- Local storage: ${localDeleted} accounts cleared\n- Supabase: Failed to delete (check console)\n\nSome accounts may still exist in the database.`);
+        alert(`⚠️ Partial deletion:\n\n- Local storage: ${localDeleted} accounts cleared\n- Supabase: Failed to delete (check console)\n- Account counter: Reset to 0\n\nSome accounts may still exist in the database.`);
       }
     } catch (err) {
       console.error('❌ Error deleting all accounts:', err);

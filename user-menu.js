@@ -59,6 +59,13 @@ function renderSkeleton(container) {
       <div class="layout-toggle-inline" aria-label="Layout selector">
         <button type="button" id="inlineLayoutVertical" title="Vertical layout">⬛</button>
         <button type="button" id="inlineLayoutHorizontal" title="Horizontal layout">▬</button>
+        <!-- Auto Farmout Mode Toggle -->
+        <label class="auto-farmout-toggle" title="Automatic Farmout Mode - New reservations will auto-farm out">
+          <input type="checkbox" id="autoFarmoutToggle">
+          <span class="toggle-slider"></span>
+          <span class="toggle-label">🏠 Auto Farm</span>
+        </label>
+        <span id="autoFarmoutIndicator" class="auto-farmout-indicator" style="display: none;">✅ Auto-Farmed</span>
         <span id="globalSupabaseBadge" class="supabase-status-badge admin-only inline-badge" title="Supabase connection status">Checking…</span>
       </div>
 
@@ -271,8 +278,84 @@ function wireLayoutToggle() {
   if (vertBtn) vertBtn.addEventListener('click', () => setLayout('vertical'));
   if (horzBtn) horzBtn.addEventListener('click', () => setLayout('horizontal'));
 
+  // Wire up Auto Farmout toggle
+  wireAutoFarmoutToggle();
+
   // Also expose a global function to trigger badge update from other UI
   window.updateGlobalSupabaseBadge = updateGlobalSupabaseBadge;
+}
+
+// Auto Farmout Mode Toggle
+function wireAutoFarmoutToggle() {
+  const toggle = document.getElementById('autoFarmoutToggle');
+  const indicator = document.getElementById('autoFarmoutIndicator');
+  
+  if (!toggle) return;
+  
+  // Initialize from stored preference
+  const isEnabled = localStorage.getItem('autoFarmoutMode') === 'true';
+  toggle.checked = isEnabled;
+  updateAutoFarmoutUI(isEnabled);
+  
+  // Handle toggle change
+  toggle.addEventListener('change', () => {
+    const enabled = toggle.checked;
+    localStorage.setItem('autoFarmoutMode', enabled ? 'true' : 'false');
+    updateAutoFarmoutUI(enabled);
+    
+    // Broadcast to all frames
+    try {
+      const frames = [window, window.parent, window.top];
+      frames.forEach(frame => {
+        try {
+          frame.postMessage({ type: 'autoFarmoutModeChanged', enabled }, '*');
+        } catch (e) { /* cross-origin */ }
+      });
+    } catch (e) { /* ignore */ }
+  });
+  
+  // Listen for messages from other frames
+  window.addEventListener('message', (event) => {
+    if (event.data?.type === 'autoFarmoutModeChanged') {
+      toggle.checked = event.data.enabled;
+      updateAutoFarmoutUI(event.data.enabled);
+    }
+  });
+  
+  // Expose global getter
+  window.isAutoFarmoutMode = () => localStorage.getItem('autoFarmoutMode') === 'true';
+}
+
+function updateAutoFarmoutUI(enabled) {
+  const indicator = document.getElementById('autoFarmoutIndicator');
+  if (indicator) {
+    indicator.style.display = enabled ? 'inline-flex' : 'none';
+  }
+  
+  // Update Reservations button badge in all frames
+  try {
+    const frames = [document, window.parent?.document, window.top?.document].filter(Boolean);
+    frames.forEach(doc => {
+      try {
+        const reservationsBtn = doc.querySelector('[data-section="reservations"]');
+        if (reservationsBtn) {
+          let badge = reservationsBtn.querySelector('.auto-farmout-badge');
+          if (enabled) {
+            if (!badge) {
+              badge = doc.createElement('span');
+              badge.className = 'auto-farmout-badge';
+              badge.textContent = '🏠';
+              badge.title = 'Auto Farmout Mode Active';
+              reservationsBtn.style.position = 'relative';
+              reservationsBtn.appendChild(badge);
+            }
+          } else if (badge) {
+            badge.remove();
+          }
+        }
+      } catch (e) { /* cross-origin */ }
+    });
+  } catch (e) { /* ignore */ }
 }
 
 async function refreshUser() {

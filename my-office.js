@@ -1,5 +1,5 @@
 // Import API service
-import { setupAPI, apiFetch, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, fetchVehicleTypes, upsertVehicleType, deleteVehicleType, fetchActiveVehicles, uploadVehicleTypeImage, fetchVehicleTypeImages, deleteVehicleTypeImage, updateVehicleTypeImage } from './api-service.js';
+import { setupAPI, apiFetch, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, fetchVehicleTypes, upsertVehicleType, deleteVehicleType, fetchActiveVehicles, uploadVehicleTypeImage, fetchVehicleTypeImages, deleteVehicleTypeImage, updateVehicleTypeImage, updateFleetVehicle } from './api-service.js';
 import { wireMainNav } from './navigation.js';
 import { loadServiceTypes, SERVICE_TYPES_STORAGE_KEY } from './service-types-store.js';
 import { getSupabaseConfig } from './config.js';
@@ -59,6 +59,7 @@ class MyOffice {
     this.vehicleTypeShowAll = false;
     this.vehicleTabsLocked = true;
     this.apiReady = false;
+    this.unsavedRateChanges = false; // Track if rates were applied/modified but not saved
     this.fleetRecords = [];
     this.activeFleetId = null;
     this.fleetSelectionBound = false;
@@ -104,6 +105,7 @@ class MyOffice {
   }
 
   init() {
+    this.setupUnsavedChangesWarning();
     this.setupEventListeners();
     this.setupCustomFormsInteraction();
     this.setupListManagementSidebar();
@@ -231,6 +233,83 @@ class MyOffice {
       const details = err ? ` — ${err?.message || err?.toString?.() || String(err)}` : '';
       content.textContent = `${msg}${details}`;
     } catch (e) { console.warn('[MyOffice] Failed to show error banner', e); }
+  }
+
+  /**
+   * Show a toast-style notification
+   * @param {string} message - The message to display
+   * @param {string} type - 'success', 'error', 'warning', or 'info'
+   */
+  showNotification(message, type = 'success') {
+    try {
+      // Remove existing notification if any
+      const existing = document.getElementById('myOfficeNotification');
+      if (existing) existing.remove();
+
+      const notification = document.createElement('div');
+      notification.id = 'myOfficeNotification';
+      
+      // Set colors based on type
+      const colors = {
+        success: { bg: '#10b981', icon: '✓' },
+        error: { bg: '#ef4444', icon: '✕' },
+        warning: { bg: '#f59e0b', icon: '⚠' },
+        info: { bg: '#3b82f6', icon: 'ℹ' }
+      };
+      const { bg, icon } = colors[type] || colors.success;
+
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${bg};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 6px;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        z-index: 30000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        animation: slideIn 0.3s ease;
+      `;
+
+      notification.innerHTML = `<span style="font-size: 16px;">${icon}</span> ${message}`;
+
+      // Add animation keyframes if not already added
+      if (!document.getElementById('notificationStyles')) {
+        const style = document.createElement('style');
+        style.id = 'notificationStyles';
+        style.textContent = `
+          @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+          }
+          @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
+      document.body.appendChild(notification);
+
+      // Auto-remove after 3 seconds
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.style.animation = 'slideOut 0.3s ease forwards';
+          setTimeout(() => notification.remove(), 300);
+        }
+      }, 3000);
+    } catch (e) {
+      console.warn('[MyOffice] Failed to show notification:', e);
+      // Fallback to alert
+      alert(message);
+    }
   }
 
   checkURLParameters() {
@@ -824,6 +903,12 @@ class MyOffice {
     
     // Vehicle Type Image Upload
     this.setupVehicleTypeImageUpload();
+
+    // Rate Scheme Modal Event Listeners
+    this.setupRateSchemeModals();
+
+    // Tiered Distance Formula
+    this.setupTieredDistanceFormula();
   }
 
   setupLogoUpload() {
@@ -1760,6 +1845,15 @@ class MyOffice {
   }
 
   navigateToSection(section) {
+    // Check for unsaved rate changes before navigating away from vehicle-types
+    if (this.unsavedRateChanges && this.currentSection === 'vehicle-types' && section !== 'vehicle-types') {
+      if (!confirm('⚠️ You have unsaved rate changes. Leave this section anyway?\n\nClick "Cancel" to stay and save your changes.')) {
+        return; // User chose to stay
+      }
+      // User chose to navigate anyway, clear the flag
+      this.clearRatesUnsaved();
+    }
+
     // Update sidebar active state (only within Company Settings group)
     document.querySelectorAll('#companySettingsGroup .sidebar-btn').forEach(btn => {
       btn.classList.remove('active');
@@ -1901,7 +1995,7 @@ class MyOffice {
         this.navigateToResource(this.currentResource || 'drivers');
         break;
       case 'rate-management':
-        if (normalLayout) normalLayout.style.display = 'block';
+        // Don't show normalLayout - rate sections are siblings to it and should be shown directly
         if (sidebarGroups['rate-management']) sidebarGroups['rate-management'].style.display = 'block';
         this.navigateToRateSection('system-rate-manager');
         break;
@@ -1960,14 +2054,27 @@ class MyOffice {
   loadAccountsCalendarPrefs() {
     try {
       const settings = this.companySettingsManager?.getAllSettings?.() || {};
-      const startInput = document.getElementById('confirmationNumberStart');
-      const defaultStart = 100000;
-      const storedStart = parseInt(settings.confirmationStartNumber, 10);
-      const startValue = !isNaN(storedStart) && storedStart > 0 ? storedStart : defaultStart;
+      
+      // Load confirmation number start
+      const confStartInput = document.getElementById('confirmationNumberStart');
+      const defaultConfStart = 100000;
+      const storedConfStart = parseInt(settings.confirmationStartNumber, 10);
+      const confStartValue = !isNaN(storedConfStart) && storedConfStart > 0 ? storedConfStart : defaultConfStart;
 
-      if (startInput) {
-        startInput.value = startValue;
-        startInput.placeholder = startValue.toString();
+      if (confStartInput) {
+        confStartInput.value = confStartValue;
+        confStartInput.placeholder = confStartValue.toString();
+      }
+      
+      // Load account number start
+      const acctStartInput = document.getElementById('accountNumberStart');
+      const defaultAcctStart = 30000;
+      const storedAcctStart = parseInt(settings.accountStartNumber, 10);
+      const acctStartValue = !isNaN(storedAcctStart) && storedAcctStart > 0 ? storedAcctStart : defaultAcctStart;
+
+      if (acctStartInput) {
+        acctStartInput.value = acctStartValue;
+        acctStartInput.placeholder = acctStartValue.toString();
       }
 
       const tickerCityInput = document.getElementById('tickerSearchCity');
@@ -1981,26 +2088,43 @@ class MyOffice {
 
   saveAccountsCalendarPrefs() {
     try {
-      const startInput = document.getElementById('confirmationNumberStart');
-      const rawStart = startInput?.value?.trim();
-      let startValue = parseInt(rawStart, 10);
-      const defaultStart = 100000;
-      if (isNaN(startValue) || startValue <= 0) {
-        startValue = defaultStart;
+      // Handle confirmation number start
+      const confStartInput = document.getElementById('confirmationNumberStart');
+      const rawConfStart = confStartInput?.value?.trim();
+      let confStartValue = parseInt(rawConfStart, 10);
+      const defaultConfStart = 100000;
+      if (isNaN(confStartValue) || confStartValue <= 0) {
+        confStartValue = defaultConfStart;
       }
 
       const existingSettings = this.companySettingsManager?.getAllSettings?.() || {};
-      const existingLastUsedRaw = existingSettings.lastUsedConfirmationNumber;
-      const existingLastUsed = parseInt(existingLastUsedRaw, 10);
-      const normalizedLastUsed = isNaN(existingLastUsed) ? null : existingLastUsed;
-      const adjustedLastUsed = Math.max(normalizedLastUsed ?? (startValue - 1), startValue - 1);
+      const existingLastUsedConfRaw = existingSettings.lastUsedConfirmationNumber;
+      const existingLastUsedConf = parseInt(existingLastUsedConfRaw, 10);
+      const normalizedLastUsedConf = isNaN(existingLastUsedConf) ? null : existingLastUsedConf;
+      const adjustedLastUsedConf = Math.max(normalizedLastUsedConf ?? (confStartValue - 1), confStartValue - 1);
+      
+      // Handle account number start
+      const acctStartInput = document.getElementById('accountNumberStart');
+      const rawAcctStart = acctStartInput?.value?.trim();
+      let acctStartValue = parseInt(rawAcctStart, 10);
+      const defaultAcctStart = 30000;
+      if (isNaN(acctStartValue) || acctStartValue <= 0) {
+        acctStartValue = defaultAcctStart;
+      }
+      
+      const existingLastUsedAcctRaw = existingSettings.lastUsedAccountNumber;
+      const existingLastUsedAcct = parseInt(existingLastUsedAcctRaw, 10);
+      const normalizedLastUsedAcct = isNaN(existingLastUsedAcct) ? null : existingLastUsedAcct;
+      const adjustedLastUsedAcct = Math.max(normalizedLastUsedAcct ?? (acctStartValue - 1), acctStartValue - 1);
 
       const tickerCityInput = document.getElementById('tickerSearchCity');
       const tickerCity = tickerCityInput?.value?.trim() || '';
 
       this.companySettingsManager?.updateSettings({
-        confirmationStartNumber: startValue,
-        lastUsedConfirmationNumber: adjustedLastUsed,
+        confirmationStartNumber: confStartValue,
+        lastUsedConfirmationNumber: adjustedLastUsedConf,
+        accountStartNumber: acctStartValue,
+        lastUsedAccountNumber: adjustedLastUsedAcct,
         tickerSearchCity: tickerCity
       });
 
@@ -2731,6 +2855,15 @@ class MyOffice {
 
       const vehicleId = element.dataset.vehicleId;
 
+      // Check for unsaved changes before switching
+      if (this.unsavedRateChanges && this.activeVehicleTypeId && this.activeVehicleTypeId !== vehicleId) {
+        if (!confirm('⚠️ You have unsaved rate changes. Switch vehicle type anyway?\n\nClick "Cancel" to stay and save your changes.')) {
+          return; // User chose to stay
+        }
+        // User chose to switch anyway, clear the flag
+        this.clearRatesUnsaved();
+      }
+
       if (this.activeVehicleTypeId && this.activeVehicleTypeId !== vehicleId) {
         this.captureVehicleTypeForm(this.activeVehicleTypeId);
       }
@@ -3064,6 +3197,1131 @@ class MyOffice {
     // Placeholder hook if future wiring is needed; listener is attached during setupEventListeners.
   }
 
+  /**
+   * Setup beforeunload warning for unsaved rate changes
+   */
+  setupUnsavedChangesWarning() {
+    window.addEventListener('beforeunload', (e) => {
+      if (this.unsavedRateChanges) {
+        const message = 'You have unsaved rate changes. Are you sure you want to leave?';
+        e.preventDefault();
+        e.returnValue = message; // Required for Chrome
+        return message;
+      }
+    });
+
+    // Also warn when switching vehicle types with unsaved changes
+    console.log('✅ Unsaved changes warning initialized');
+  }
+
+  /**
+   * Mark rates as having unsaved changes (call after Apply or form edits)
+   */
+  markRatesUnsaved() {
+    this.unsavedRateChanges = true;
+    this.showUnsavedRatesBanner(true);
+  }
+
+  /**
+   * Clear unsaved changes flag (call after Save Rates succeeds)
+   */
+  clearRatesUnsaved() {
+    this.unsavedRateChanges = false;
+    this.showUnsavedRatesBanner(false);
+  }
+
+  /**
+   * Show/hide a visual banner indicating unsaved rate changes
+   */
+  showUnsavedRatesBanner(show) {
+    let banner = document.getElementById('unsavedRatesBanner');
+    
+    if (show) {
+      if (!banner) {
+        // Create the banner if it doesn't exist
+        const ratesPanel = document.getElementById('vehicle-type-rates');
+        if (ratesPanel) {
+          banner = document.createElement('div');
+          banner.id = 'unsavedRatesBanner';
+          banner.className = 'alert alert-warning';
+          banner.style.cssText = 'margin: 10px 0; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between;';
+          banner.innerHTML = `
+            <span>⚠️ <strong>Unsaved Changes:</strong> You have rate changes that haven't been saved to this vehicle type.</span>
+            <button class="btn btn-sm btn-primary" id="saveRatesFromBanner">💾 Save Rates Now</button>
+          `;
+          ratesPanel.insertBefore(banner, ratesPanel.firstChild);
+          
+          // Wire up the save button
+          document.getElementById('saveRatesFromBanner')?.addEventListener('click', async () => {
+            await this.saveVehicleRates();
+          });
+        } else {
+          console.warn('Cannot show unsaved rates banner - vehicle-type-rates panel not found');
+          return;
+        }
+      }
+      if (banner) {
+        banner.style.display = 'flex';
+      }
+    } else {
+      if (banner) {
+        banner.style.display = 'none';
+      }
+    }
+  }
+
+  /**
+   * Setup Tiered Distance Formula UI and calculations
+   */
+  setupTieredDistanceFormula() {
+    const enableCheckbox = document.getElementById('enableTieredFormula');
+    const formulaFields = document.getElementById('tieredFormulaFields');
+    const calculateBtn = document.getElementById('calculateFormulaBtn');
+    const testInput = document.getElementById('testDistanceInput');
+    
+    // All formula field inputs
+    const multiplierInput = document.getElementById('distFormulaMultiplier');
+    const tier1RateInput = document.getElementById('distFormulaTier1Rate');
+    const tier1MaxInput = document.getElementById('distFormulaTier1Max');
+    const tier2RateInput = document.getElementById('distFormulaTier2Rate');
+    const tier2RangeInput = document.getElementById('distFormulaTier2Range');
+    const tier3RateInput = document.getElementById('distFormulaTier3Rate');
+
+    if (!enableCheckbox || !formulaFields) {
+      console.log('Tiered formula elements not found');
+      return;
+    }
+
+    // Toggle formula fields visibility
+    const updateFormulaFieldsVisibility = () => {
+      const isEnabled = enableCheckbox.checked;
+      formulaFields.style.opacity = isEnabled ? '1' : '0.5';
+      formulaFields.querySelectorAll('input, button').forEach(el => {
+        el.disabled = !isEnabled;
+      });
+    };
+
+    enableCheckbox.addEventListener('change', updateFormulaFieldsVisibility);
+    updateFormulaFieldsVisibility();
+
+    // Update formula preview when values change
+    const updateFormulaPreview = () => {
+      const mult = parseFloat(multiplierInput?.value) || 1.27;
+      const t1Rate = parseFloat(tier1RateInput?.value) || 7.87;
+      const t1Max = parseFloat(tier1MaxInput?.value) || 3;
+      const t2Rate = parseFloat(tier2RateInput?.value) || 3.50;
+      const t2Range = parseFloat(tier2RangeInput?.value) || 7;
+      const t3Rate = parseFloat(tier3RateInput?.value) || 3.25;
+      const t3Start = t1Max + t2Range;
+
+      // Update preview spans
+      const setPreview = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+      };
+      
+      setPreview('formulaMultiplier', mult.toFixed(2));
+      setPreview('formulaTier1Rate', t1Rate.toFixed(2));
+      setPreview('formulaTier1Max', t1Max);
+      setPreview('formulaTier1MaxRef', t1Max);
+      setPreview('formulaTier2Rate', t2Rate.toFixed(2));
+      setPreview('formulaTier2Range', t2Range);
+      setPreview('formulaTier3Rate', t3Rate.toFixed(2));
+      setPreview('formulaTier3Start', t3Start);
+    };
+
+    // Add change listeners to all formula inputs
+    [multiplierInput, tier1RateInput, tier1MaxInput, tier2RateInput, tier2RangeInput, tier3RateInput].forEach(input => {
+      if (input) {
+        input.addEventListener('input', updateFormulaPreview);
+      }
+    });
+
+    // Calculate button
+    if (calculateBtn) {
+      calculateBtn.addEventListener('click', () => {
+        this.calculateTieredDistanceFormula();
+      });
+    }
+
+    // Also calculate on Enter in test input
+    if (testInput) {
+      testInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this.calculateTieredDistanceFormula();
+        }
+      });
+    }
+
+    // Initial preview update
+    updateFormulaPreview();
+  }
+
+  /**
+   * Calculate tiered distance formula: C(D) = M * (T1 * min(D, T1max) + T2 * min(max(D - T1max, 0), T2range) + T3 * max(D - T3start, 0))
+   */
+  calculateTieredDistanceFormula(distanceOverride = null) {
+    const testInput = document.getElementById('testDistanceInput');
+    const resultEl = document.getElementById('formulaResult');
+    const breakdownEl = document.getElementById('formulaBreakdown');
+
+    const D = distanceOverride !== null ? distanceOverride : (parseFloat(testInput?.value) || 0);
+    
+    // Get formula parameters
+    const M = parseFloat(document.getElementById('distFormulaMultiplier')?.value) || 1.27;
+    const T1 = parseFloat(document.getElementById('distFormulaTier1Rate')?.value) || 7.87;
+    const T1max = parseFloat(document.getElementById('distFormulaTier1Max')?.value) || 3;
+    const T2 = parseFloat(document.getElementById('distFormulaTier2Rate')?.value) || 3.50;
+    const T2range = parseFloat(document.getElementById('distFormulaTier2Range')?.value) || 7;
+    const T3 = parseFloat(document.getElementById('distFormulaTier3Rate')?.value) || 3.25;
+    const T3start = T1max + T2range;
+
+    // Calculate each tier
+    const tier1Miles = Math.min(D, T1max);
+    const tier1Cost = T1 * tier1Miles;
+
+    const tier2Miles = Math.min(Math.max(D - T1max, 0), T2range);
+    const tier2Cost = T2 * tier2Miles;
+
+    const tier3Miles = Math.max(D - T3start, 0);
+    const tier3Cost = T3 * tier3Miles;
+
+    const subtotal = tier1Cost + tier2Cost + tier3Cost;
+    const total = M * subtotal;
+
+    // Update result
+    if (resultEl) {
+      resultEl.textContent = `$${total.toFixed(2)}`;
+    }
+
+    // Update breakdown
+    if (breakdownEl) {
+      breakdownEl.innerHTML = `
+        Tier 1: ${tier1Miles.toFixed(1)} mi × $${T1.toFixed(2)} = $${tier1Cost.toFixed(2)}<br>
+        Tier 2: ${tier2Miles.toFixed(1)} mi × $${T2.toFixed(2)} = $${tier2Cost.toFixed(2)}<br>
+        Tier 3: ${tier3Miles.toFixed(1)} mi × $${T3.toFixed(2)} = $${tier3Cost.toFixed(2)}<br>
+        Subtotal: $${subtotal.toFixed(2)} × ${M.toFixed(2)} = <strong>$${total.toFixed(2)}</strong>
+      `;
+    }
+
+    return total;
+  }
+
+  /**
+   * Get tiered formula config for a vehicle type
+   */
+  getTieredFormulaConfig() {
+    const isEnabled = document.getElementById('enableTieredFormula')?.checked || false;
+    
+    return {
+      enabled: isEnabled,
+      multiplier: parseFloat(document.getElementById('distFormulaMultiplier')?.value) || 1.27,
+      tier1_rate: parseFloat(document.getElementById('distFormulaTier1Rate')?.value) || 7.87,
+      tier1_max: parseFloat(document.getElementById('distFormulaTier1Max')?.value) || 3,
+      tier2_rate: parseFloat(document.getElementById('distFormulaTier2Rate')?.value) || 3.50,
+      tier2_range: parseFloat(document.getElementById('distFormulaTier2Range')?.value) || 7,
+      tier3_rate: parseFloat(document.getElementById('distFormulaTier3Rate')?.value) || 3.25
+    };
+  }
+
+  /**
+   * Set tiered formula config from saved data
+   */
+  setTieredFormulaConfig(config) {
+    if (!config) return;
+
+    const setVal = (id, value) => {
+      const el = document.getElementById(id);
+      if (el && value !== undefined && value !== null) {
+        if (el.type === 'checkbox') {
+          el.checked = !!value;
+        } else {
+          el.value = value;
+        }
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    };
+
+    setVal('enableTieredFormula', config.enabled);
+    setVal('distFormulaMultiplier', config.multiplier);
+    setVal('distFormulaTier1Rate', config.tier1_rate);
+    setVal('distFormulaTier1Max', config.tier1_max);
+    setVal('distFormulaTier2Rate', config.tier2_rate);
+    setVal('distFormulaTier2Range', config.tier2_range);
+    setVal('distFormulaTier3Rate', config.tier3_rate);
+
+    // Trigger visibility update
+    document.getElementById('enableTieredFormula')?.dispatchEvent(new Event('change'));
+  }
+
+  /**
+   * Setup Rate Scheme Event Listeners (new dropdown-based UI)
+   */
+  setupRateSchemeModals() {
+    // Saved Schemes Dropdown
+    const savedSchemesDropdown = document.getElementById('savedSchemesDropdown');
+    if (savedSchemesDropdown) {
+      savedSchemesDropdown.addEventListener('change', () => this.onSchemeDropdownChange());
+    }
+
+    // Apply Scheme Button
+    const applySchemeBtn = document.getElementById('applySchemeBtn');
+    if (applySchemeBtn) {
+      applySchemeBtn.addEventListener('click', () => this.applySelectedScheme());
+    }
+
+    // Edit Scheme Button
+    const editSchemeBtn = document.getElementById('editSchemeBtn');
+    if (editSchemeBtn) {
+      editSchemeBtn.addEventListener('click', () => this.editSelectedScheme());
+    }
+
+    // Delete Scheme Button
+    const deleteSchemeBtn = document.getElementById('deleteSchemeBtn');
+    if (deleteSchemeBtn) {
+      deleteSchemeBtn.addEventListener('click', () => this.deleteSelectedScheme());
+    }
+
+    // Save New Scheme Button
+    const saveNewSchemeBtn = document.getElementById('saveNewSchemeBtn');
+    if (saveNewSchemeBtn) {
+      saveNewSchemeBtn.addEventListener('click', () => this.saveNewScheme());
+    }
+
+    // Save Rate Scheme Modal Controls (keep for compatibility)
+    const closeSaveModalBtn = document.getElementById('closeSaveRateSchemeModalBtn');
+    const cancelSaveBtn = document.getElementById('cancelSaveRateSchemeBtn');
+    const confirmSaveBtn = document.getElementById('confirmSaveRateSchemeBtn');
+    const saveModalOverlay = document.querySelector('#saveRateSchemeModal .rate-scheme-modal-overlay');
+
+    [closeSaveModalBtn, cancelSaveBtn].forEach(btn => {
+      if (btn) btn.addEventListener('click', () => this.closeSaveRateSchemeModal());
+    });
+    if (saveModalOverlay) {
+      saveModalOverlay.addEventListener('click', () => this.closeSaveRateSchemeModal());
+    }
+    if (confirmSaveBtn) {
+      confirmSaveBtn.addEventListener('click', () => this.handleSaveRateScheme());
+    }
+  }
+
+  /**
+   * Handle scheme dropdown change - enable/disable buttons and show info
+   */
+  onSchemeDropdownChange() {
+    const dropdown = document.getElementById('savedSchemesDropdown');
+    const applyBtn = document.getElementById('applySchemeBtn');
+    const editBtn = document.getElementById('editSchemeBtn');
+    const deleteBtn = document.getElementById('deleteSchemeBtn');
+    const infoPanel = document.getElementById('schemeInfoPanel');
+    const infoText = document.getElementById('schemeInfoText');
+
+    const schemeId = dropdown?.value;
+    const hasSelection = !!schemeId;
+
+    if (applyBtn) applyBtn.disabled = !hasSelection;
+    if (editBtn) editBtn.disabled = !hasSelection;
+    if (deleteBtn) deleteBtn.disabled = !hasSelection;
+
+    if (hasSelection && this.savedRateSchemes) {
+      const scheme = this.savedRateSchemes.find(s => s.id === schemeId);
+      if (scheme && infoPanel && infoText) {
+        const rateTypeLabel = this.getRateTypeLabel(scheme.rate_type);
+        const createdDate = scheme.created_at ? new Date(scheme.created_at).toLocaleDateString() : 'Unknown';
+        infoText.textContent = `Type: ${rateTypeLabel} | Created: ${createdDate}`;
+        infoPanel.style.display = 'block';
+      }
+    } else if (infoPanel) {
+      infoPanel.style.display = 'none';
+    }
+  }
+
+  /**
+   * Load saved schemes into dropdown
+   */
+  async loadSavedSchemesDropdown() {
+    const dropdown = document.getElementById('savedSchemesDropdown');
+    if (!dropdown) return;
+
+    dropdown.innerHTML = '<option value="">Loading...</option>';
+
+    try {
+      let schemes = [];
+      try {
+        schemes = await apiFetch('/v_saved_rate_schemes?select=*&order=name.asc');
+      } catch (viewErr) {
+        console.warn('v_saved_rate_schemes view not available, trying saved_rate_schemes table:', viewErr);
+        schemes = await apiFetch('/saved_rate_schemes?select=*&order=name.asc');
+      }
+
+      this.savedRateSchemes = schemes || [];
+
+      dropdown.innerHTML = '<option value="">-- Select a saved scheme --</option>';
+
+      if (!schemes || schemes.length === 0) {
+        return;
+      }
+
+      schemes.forEach(scheme => {
+        const option = document.createElement('option');
+        option.value = scheme.id;
+        const rateTypeLabel = this.getRateTypeLabel(scheme.rate_type);
+        option.textContent = `${scheme.name} (${rateTypeLabel})`;
+        dropdown.appendChild(option);
+      });
+
+      // Reset button states
+      this.onSchemeDropdownChange();
+    } catch (err) {
+      console.error('❌ Failed to load saved rate schemes:', err);
+      dropdown.innerHTML = '<option value="">-- Failed to load schemes --</option>';
+    }
+  }
+
+  /**
+   * Apply selected scheme to current vehicle type
+   */
+  async applySelectedScheme() {
+    const dropdown = document.getElementById('savedSchemesDropdown');
+    const schemeId = dropdown?.value;
+
+    if (!schemeId) {
+      alert('Please select a scheme first.');
+      return;
+    }
+
+    if (!this.activeVehicleTypeId) {
+      alert('Please select a vehicle type first.');
+      return;
+    }
+
+    const scheme = this.savedRateSchemes?.find(s => s.id === schemeId);
+    if (!scheme) {
+      alert('Scheme not found.');
+      return;
+    }
+
+    if (!confirm(`Apply "${scheme.name}" rates to this vehicle type?`)) {
+      return;
+    }
+
+    try {
+      console.log('📥 Applying rate scheme:', { schemeId, vehicleTypeId: this.activeVehicleTypeId });
+
+      const result = await this.applyRateSchemeFromSupabase(schemeId, false);
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      // Reload the vehicle type rates to show updated values
+      const vehicleData = this.getVehicleTypeData(this.activeVehicleTypeId);
+      this.populateVehicleRates(vehicleData);
+
+      // Mark as having unsaved changes - user needs to save rates
+      this.markRatesUnsaved();
+
+      alert('✅ Rate scheme applied successfully! Remember to Save Rates to keep these changes.');
+    } catch (err) {
+      console.error('❌ Failed to apply rate scheme:', err);
+      alert(`Failed to apply scheme: ${err.message || err}`);
+    }
+  }
+
+  /**
+   * Edit selected scheme (opens modal with current values)
+   */
+  async editSelectedScheme() {
+    const dropdown = document.getElementById('savedSchemesDropdown');
+    const schemeId = dropdown?.value;
+
+    if (!schemeId) {
+      alert('Please select a scheme first.');
+      return;
+    }
+
+    const scheme = this.savedRateSchemes?.find(s => s.id === schemeId);
+    if (!scheme) {
+      alert('Scheme not found.');
+      return;
+    }
+
+    const newName = prompt('Enter new name for this scheme:', scheme.name);
+    if (newName === null) return; // User cancelled
+    if (!newName.trim()) {
+      alert('Scheme name cannot be empty.');
+      return;
+    }
+
+    try {
+      await apiFetch(`/saved_rate_schemes?id=eq.${schemeId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: newName.trim() })
+      });
+
+      alert('✅ Scheme renamed successfully!');
+      await this.loadSavedSchemesDropdown();
+    } catch (err) {
+      console.error('❌ Failed to update scheme:', err);
+      alert(`Failed to update scheme: ${err.message || err}`);
+    }
+  }
+
+  /**
+   * Delete selected scheme
+   */
+  async deleteSelectedScheme() {
+    const dropdown = document.getElementById('savedSchemesDropdown');
+    const schemeId = dropdown?.value;
+
+    if (!schemeId) {
+      alert('Please select a scheme first.');
+      return;
+    }
+
+    const scheme = this.savedRateSchemes?.find(s => s.id === schemeId);
+    if (!scheme) {
+      alert('Scheme not found.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete "${scheme.name}"? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      // Delete entries first (cascade might not be set up)
+      await apiFetch(`/saved_rate_scheme_entries?scheme_id=eq.${schemeId}`, {
+        method: 'DELETE'
+      });
+
+      // Delete the scheme
+      await apiFetch(`/saved_rate_schemes?id=eq.${schemeId}`, {
+        method: 'DELETE'
+      });
+
+      alert('✅ Scheme deleted successfully!');
+      await this.loadSavedSchemesDropdown();
+    } catch (err) {
+      console.error('❌ Failed to delete scheme:', err);
+      alert(`Failed to delete scheme: ${err.message || err}`);
+    }
+  }
+
+  /**
+   * Save current rates as a new scheme
+   */
+  async saveNewScheme() {
+    if (!this.activeVehicleTypeId) {
+      alert('Please select a vehicle type first.');
+      return;
+    }
+
+    const schemeName = prompt('Enter a name for this rate scheme:');
+    if (schemeName === null) return; // User cancelled
+    if (!schemeName.trim()) {
+      alert('Scheme name cannot be empty.');
+      return;
+    }
+
+    // Determine rate type from active tab
+    const activeRateTab = document.querySelector('.rates-subtab.active');
+    const rateTypeMap = {
+      'per-hour': 'PER_HOUR',
+      'per-passenger': 'PER_PASSENGER',
+      'distance': 'DISTANCE'
+    };
+    const rateType = rateTypeMap[activeRateTab?.dataset?.rateType] || 'PER_HOUR';
+
+    try {
+      console.log('💾 Saving new rate scheme:', { schemeName, rateType, vehicleTypeId: this.activeVehicleTypeId });
+
+      const result = await this.saveRateSchemeToSupabase(this.activeVehicleTypeId, rateType, schemeName.trim());
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      alert(`✅ Rate scheme "${schemeName}" saved successfully!`);
+      await this.loadSavedSchemesDropdown();
+    } catch (err) {
+      console.error('❌ Failed to save rate scheme:', err);
+      alert(`Failed to save: ${err.message || err}`);
+    }
+  }
+
+  /**
+   * Open Save Rate Scheme Modal (legacy - kept for compatibility)
+   */
+  openSaveRateSchemeModal() {
+    if (!this.activeVehicleTypeId) {
+      alert('Please select a vehicle type first.');
+      return;
+    }
+
+    const modal = document.getElementById('saveRateSchemeModal');
+    const nameInput = document.getElementById('rateSchemeNameInput');
+    const typeSelect = document.getElementById('rateSchemeTypeSelect');
+    const errorDiv = document.getElementById('saveRateSchemeError');
+
+    if (modal) {
+      modal.style.display = 'block';
+      if (nameInput) {
+        nameInput.value = '';
+        nameInput.focus();
+      }
+      if (typeSelect) {
+        // Default to the currently active rate tab
+        const activeRateTab = document.querySelector('.rates-subtab.active');
+        const rateTypeMap = {
+          'per-hour': 'PER_HOUR',
+          'per-passenger': 'PER_PASSENGER',
+          'distance': 'DISTANCE'
+        };
+        const activeType = rateTypeMap[activeRateTab?.dataset?.rateType] || 'PER_HOUR';
+        typeSelect.value = activeType;
+      }
+      if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+      }
+    }
+  }
+
+  /**
+   * Close Save Rate Scheme Modal
+   */
+  closeSaveRateSchemeModal() {
+    const modal = document.getElementById('saveRateSchemeModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+  }
+
+  /**
+   * Handle saving a rate scheme (legacy modal handler)
+   */
+  async handleSaveRateScheme() {
+    const nameInput = document.getElementById('rateSchemeNameInput');
+    const typeSelect = document.getElementById('rateSchemeTypeSelect');
+    const errorDiv = document.getElementById('saveRateSchemeError');
+
+    const schemeName = nameInput?.value?.trim();
+    const rateType = typeSelect?.value;
+
+    if (!schemeName) {
+      if (errorDiv) {
+        errorDiv.textContent = 'Please enter a scheme name.';
+        errorDiv.style.display = 'block';
+      }
+      return;
+    }
+
+    if (!this.activeVehicleTypeId) {
+      if (errorDiv) {
+        errorDiv.textContent = 'No vehicle type selected.';
+        errorDiv.style.display = 'block';
+      }
+      return;
+    }
+
+    try {
+      console.log('💾 Saving rate scheme:', { schemeName, rateType, vehicleTypeId: this.activeVehicleTypeId });
+
+      // First, ensure the vehicle type has rate entries in the database
+      // For now, we'll save to the saved_rate_schemes table directly
+      // The RPC will handle copying entries from the matrix
+
+      const result = await this.saveRateSchemeToSupabase(this.activeVehicleTypeId, rateType, schemeName);
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      alert(`✅ Rate scheme "${schemeName}" saved successfully!`);
+      this.closeSaveRateSchemeModal();
+    } catch (err) {
+      console.error('❌ Failed to save rate scheme:', err);
+      if (errorDiv) {
+        errorDiv.textContent = `Failed to save: ${err.message || err}`;
+        errorDiv.style.display = 'block';
+      }
+    }
+  }
+
+  /**
+   * Save rate scheme to Supabase using the RPC or direct table insert
+   */
+  async saveRateSchemeToSupabase(vehicleTypeId, rateType, schemeName) {
+    if (!this.apiReady) {
+      throw new Error('API not ready');
+    }
+
+    // Get organization_id from the vehicle type first (needed for both RPC and fallback)
+    const vehicleType = this.vehicleTypeSeeds[vehicleTypeId];
+    const orgId = vehicleType?.organization_id || localStorage.getItem('selectedOrgId') || '54eb6ce7-ba97-4198-8566-6ac075828160';
+
+    console.log('💾 saveRateSchemeToSupabase called:', { vehicleTypeId, rateType, schemeName, orgId });
+
+    // Try to call the RPC first (only works if rate matrix exists)
+    let rpcFailed = false;
+    try {
+      const response = await apiFetch('/rpc/save_vehicle_rate_scheme', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_vehicle_type_id: vehicleTypeId,
+          p_rate_type: rateType,
+          p_scheme_name: schemeName,
+          p_created_by: null
+        })
+      });
+
+      if (response && !response.error) {
+        console.log('✅ Rate scheme saved via RPC:', response);
+        return { success: true, schemeId: response };
+      }
+      rpcFailed = true;
+    } catch (rpcErr) {
+      console.warn('RPC failed (this is normal if no matrix exists), using direct insert:', rpcErr.message);
+      rpcFailed = true;
+    }
+
+    // Fallback: Direct insert into saved_rate_schemes table
+    console.log('📝 Using direct insert fallback...');
+
+    const schemeData = {
+      organization_id: orgId,
+      source_vehicle_type_id: vehicleTypeId,
+      rate_type: rateType,
+      name: schemeName
+    };
+
+    console.log('📝 Inserting scheme:', schemeData);
+
+    const insertResult = await apiFetch('/saved_rate_schemes', {
+      method: 'POST',
+      headers: {
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify(schemeData)
+    });
+
+    console.log('📝 Insert result:', insertResult);
+
+    // insertResult could be an array or single object
+    const savedScheme = Array.isArray(insertResult) ? insertResult[0] : insertResult;
+    
+    if (!savedScheme?.id) {
+      throw new Error('No scheme ID returned from insert');
+    }
+
+    // Now save the entries - get current rates and save as entries
+    const rates = this.captureVehicleRates();
+    const entries = this.convertRatesToEntries(rates, rateType, savedScheme.id);
+    
+    console.log('📝 Saving rate entries:', entries);
+    
+    if (entries.length > 0) {
+      await apiFetch('/saved_rate_scheme_entries', {
+        method: 'POST',
+        headers: {
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(entries)
+      });
+      console.log('✅ Rate entries saved');
+    }
+
+    console.log('✅ Rate scheme saved successfully with ID:', savedScheme.id);
+    return { success: true, schemeId: savedScheme.id };
+  }
+
+  /**
+   * Convert rate data to rate scheme entries format
+   */
+  convertRatesToEntries(rates, rateType, schemeId) {
+    const entries = [];
+    let sortOrder = 1;
+
+    if (rateType === 'PER_HOUR' && rates.perHour) {
+      entries.push({
+        scheme_id: schemeId,
+        from_quantity: 0,
+        to_quantity: rates.perHour.minimumHours || 1,
+        rate: rates.perHour.baseRate || 0,
+        unit: 'flat',
+        sort_order: sortOrder++
+      });
+      entries.push({
+        scheme_id: schemeId,
+        from_quantity: rates.perHour.minimumHours || 1,
+        to_quantity: null,
+        rate: rates.perHour.ratePerHour || 0,
+        unit: 'per_hour',
+        sort_order: sortOrder++
+      });
+    } else if (rateType === 'PER_PASSENGER' && rates.perPassenger) {
+      entries.push({
+        scheme_id: schemeId,
+        from_quantity: 1,
+        to_quantity: rates.perPassenger.minPassengers || 1,
+        rate: rates.perPassenger.baseFare || 0,
+        unit: 'flat',
+        sort_order: sortOrder++
+      });
+      entries.push({
+        scheme_id: schemeId,
+        from_quantity: rates.perPassenger.minPassengers || 1,
+        to_quantity: rates.perPassenger.maxPassengers || 10,
+        rate: rates.perPassenger.ratePerPassenger || 0,
+        unit: 'per_passenger',
+        sort_order: sortOrder++
+      });
+    } else if (rateType === 'DISTANCE' && rates.distance) {
+      entries.push({
+        scheme_id: schemeId,
+        from_quantity: 0,
+        to_quantity: rates.distance.includedMiles || 0,
+        rate: rates.distance.baseFare || 0,
+        unit: 'flat',
+        sort_order: sortOrder++
+      });
+      entries.push({
+        scheme_id: schemeId,
+        from_quantity: rates.distance.includedMiles || 0,
+        to_quantity: null,
+        rate: rates.distance.ratePerMile || 0,
+        unit: 'per_mile',
+        sort_order: sortOrder++
+      });
+    }
+
+    return entries;
+  }
+
+  /**
+   * Open Apply Rate Scheme Modal
+   */
+  async openApplyRateSchemeModal() {
+    if (!this.activeVehicleTypeId) {
+      alert('Please select a vehicle type first.');
+      return;
+    }
+
+    const modal = document.getElementById('applyRateSchemeModal');
+    const filterSelect = document.getElementById('applyRateSchemeTypeFilter');
+    const errorDiv = document.getElementById('applyRateSchemeError');
+    const detailsDiv = document.getElementById('selectedSchemeDetails');
+
+    if (modal) {
+      modal.style.display = 'block';
+      if (filterSelect) filterSelect.value = '';
+      if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+      }
+      if (detailsDiv) detailsDiv.style.display = 'none';
+
+      // Load saved schemes
+      await this.loadSavedRateSchemes();
+    }
+  }
+
+  /**
+   * Close Apply Rate Scheme Modal
+   */
+  closeApplyRateSchemeModal() {
+    const modal = document.getElementById('applyRateSchemeModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+  }
+
+  /**
+   * Load saved rate schemes from Supabase
+   */
+  async loadSavedRateSchemes() {
+    const select = document.getElementById('rateSchemeSelect');
+    if (!select) return;
+
+    select.innerHTML = '<option value="" disabled selected>Loading...</option>';
+
+    try {
+      // Try to fetch from the view first
+      let schemes = [];
+      try {
+        schemes = await apiFetch('/v_saved_rate_schemes?select=*&order=name.asc');
+      } catch (viewErr) {
+        console.warn('v_saved_rate_schemes view not available, trying saved_rate_schemes table:', viewErr);
+        schemes = await apiFetch('/saved_rate_schemes?select=*,saved_rate_scheme_entries(*)&order=name.asc');
+      }
+
+      this.savedRateSchemes = schemes || [];
+
+      if (!schemes || schemes.length === 0) {
+        select.innerHTML = '<option value="" disabled>No saved rate schemes found</option>';
+        return;
+      }
+
+      this.renderSchemeOptions(schemes);
+    } catch (err) {
+      console.error('❌ Failed to load saved rate schemes:', err);
+      select.innerHTML = '<option value="" disabled>Failed to load schemes</option>';
+    }
+  }
+
+  /**
+   * Render scheme options in the select
+   */
+  renderSchemeOptions(schemes) {
+    const select = document.getElementById('rateSchemeSelect');
+    if (!select) return;
+
+    select.innerHTML = '';
+
+    if (!schemes || schemes.length === 0) {
+      select.innerHTML = '<option value="" disabled>No saved rate schemes found</option>';
+      return;
+    }
+
+    schemes.forEach(scheme => {
+      const option = document.createElement('option');
+      option.value = scheme.id;
+      const rateTypeLabel = this.getRateTypeLabel(scheme.rate_type);
+      option.textContent = `${scheme.name} (${rateTypeLabel})`;
+      option.dataset.rateType = scheme.rate_type;
+      option.dataset.sourceVehicle = scheme.source_vehicle_type_name || scheme.source_vehicle_type_id || '';
+      select.appendChild(option);
+    });
+  }
+
+  /**
+   * Filter saved rate schemes by type
+   */
+  filterSavedRateSchemes() {
+    const filterSelect = document.getElementById('applyRateSchemeTypeFilter');
+    const filterValue = filterSelect?.value;
+
+    if (!this.savedRateSchemes) return;
+
+    let filtered = this.savedRateSchemes;
+    if (filterValue) {
+      filtered = this.savedRateSchemes.filter(s => s.rate_type === filterValue);
+    }
+
+    this.renderSchemeOptions(filtered);
+  }
+
+  /**
+   * Get human-readable label for rate type
+   */
+  getRateTypeLabel(rateType) {
+    const labels = {
+      'PER_HOUR': 'Hourly',
+      'PER_PASSENGER': 'Per Passenger',
+      'DISTANCE': 'Distance'
+    };
+    return labels[rateType] || rateType;
+  }
+
+  /**
+   * Show selected scheme details
+   */
+  showSchemeDetails() {
+    const select = document.getElementById('rateSchemeSelect');
+    const detailsDiv = document.getElementById('selectedSchemeDetails');
+    const contentDiv = document.getElementById('schemeDetailsContent');
+
+    if (!select || !detailsDiv || !contentDiv) return;
+
+    const schemeId = select.value;
+    if (!schemeId) {
+      detailsDiv.style.display = 'none';
+      return;
+    }
+
+    const scheme = this.savedRateSchemes?.find(s => s.id === schemeId);
+    if (!scheme) {
+      detailsDiv.style.display = 'none';
+      return;
+    }
+
+    contentDiv.innerHTML = `
+      <div><strong>Name:</strong> ${scheme.name}</div>
+      <div><strong>Rate Type:</strong> ${this.getRateTypeLabel(scheme.rate_type)}</div>
+      ${scheme.source_vehicle_type_name ? `<div><strong>Source Vehicle:</strong> ${scheme.source_vehicle_type_name}</div>` : ''}
+      ${scheme.entry_count ? `<div><strong>Entries:</strong> ${scheme.entry_count}</div>` : ''}
+      <div><strong>Created:</strong> ${scheme.created_at ? new Date(scheme.created_at).toLocaleDateString() : 'Unknown'}</div>
+    `;
+    detailsDiv.style.display = 'block';
+  }
+
+  /**
+   * Handle applying a rate scheme
+   */
+  async handleApplyRateScheme() {
+    const select = document.getElementById('rateSchemeSelect');
+    const makeDefaultCheck = document.getElementById('makeDefaultSchemeCheck');
+    const errorDiv = document.getElementById('applyRateSchemeError');
+
+    const schemeId = select?.value;
+    const makeDefault = makeDefaultCheck?.checked || false;
+
+    if (!schemeId) {
+      if (errorDiv) {
+        errorDiv.textContent = 'Please select a rate scheme.';
+        errorDiv.style.display = 'block';
+      }
+      return;
+    }
+
+    if (!this.activeVehicleTypeId) {
+      if (errorDiv) {
+        errorDiv.textContent = 'No vehicle type selected.';
+        errorDiv.style.display = 'block';
+      }
+      return;
+    }
+
+    try {
+      console.log('📥 Applying rate scheme:', { schemeId, vehicleTypeId: this.activeVehicleTypeId, makeDefault });
+
+      const result = await this.applyRateSchemeFromSupabase(schemeId, makeDefault);
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      // Reload the vehicle type rates to show updated values
+      const vehicleData = this.getVehicleTypeData(this.activeVehicleTypeId);
+      this.populateVehicleRates(vehicleData);
+
+      // Mark as having unsaved changes - user needs to save rates
+      this.markRatesUnsaved();
+
+      alert('✅ Rate scheme applied successfully! Remember to Save Rates to keep these changes.');
+      this.closeApplyRateSchemeModal();
+    } catch (err) {
+      console.error('❌ Failed to apply rate scheme:', err);
+      if (errorDiv) {
+        errorDiv.textContent = `Failed to apply: ${err.message || err}`;
+        errorDiv.style.display = 'block';
+      }
+    }
+  }
+
+  /**
+   * Apply rate scheme from Supabase using RPC or fallback
+   */
+  async applyRateSchemeFromSupabase(schemeId, makeDefault = false) {
+    if (!this.apiReady) {
+      throw new Error('API not ready');
+    }
+
+    // Try to call the RPC first
+    try {
+      const response = await apiFetch('/rpc/apply_saved_rate_scheme_to_vehicle', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_target_vehicle_type_id: this.activeVehicleTypeId,
+          p_scheme_id: schemeId,
+          p_make_default: makeDefault,
+          p_matrix_name: null,
+          p_matrix_description: null,
+          p_user_id: null
+        })
+      });
+
+      if (response && !response.error) {
+        return { success: true, matrixId: response };
+      }
+    } catch (rpcErr) {
+      console.warn('RPC apply_saved_rate_scheme_to_vehicle not available, falling back to manual apply:', rpcErr);
+    }
+
+    // Fallback: Get scheme entries and apply them to vehicle type's rates JSON
+    const scheme = this.savedRateSchemes?.find(s => s.id === schemeId);
+    if (!scheme) {
+      throw new Error('Scheme not found');
+    }
+
+    // Fetch scheme entries
+    let entries = [];
+    try {
+      entries = await apiFetch(`/saved_rate_scheme_entries?scheme_id=eq.${schemeId}&order=sort_order.asc`);
+    } catch (e) {
+      console.warn('Could not fetch scheme entries:', e);
+    }
+
+    // Convert entries back to rates JSON format
+    const currentRates = this.captureVehicleRates();
+    const updatedRates = this.convertEntriesToRates(entries, scheme.rate_type, currentRates);
+
+    // Update the vehicle type with new rates
+    const draft = this.captureVehicleTypeForm(this.activeVehicleTypeId);
+    const payload = { ...draft, rates: updatedRates };
+    this.vehicleTypeDrafts[this.activeVehicleTypeId] = payload;
+    this.persistVehicleTypeDraft(this.activeVehicleTypeId, payload);
+
+    // Save to Supabase
+    const saved = await upsertVehicleType(payload);
+    if (saved?.id) {
+      this.vehicleTypeSeeds[saved.id] = saved;
+      this.vehicleTypeDrafts[saved.id] = saved;
+      // Refresh rates display
+      this.populateVehicleRates(saved);
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Convert rate scheme entries back to rates JSON format
+   */
+  convertEntriesToRates(entries, rateType, currentRates) {
+    const rates = { ...currentRates };
+
+    if (!entries || entries.length === 0) {
+      return rates;
+    }
+
+    if (rateType === 'PER_HOUR') {
+      rates.perHour = rates.perHour || {};
+      entries.forEach(entry => {
+        if (entry.unit === 'flat') {
+          rates.perHour.baseRate = entry.rate;
+          rates.perHour.minimumHours = entry.to_quantity;
+        } else if (entry.unit === 'per_hour') {
+          rates.perHour.ratePerHour = entry.rate;
+        }
+      });
+    } else if (rateType === 'PER_PASSENGER') {
+      rates.perPassenger = rates.perPassenger || {};
+      entries.forEach(entry => {
+        if (entry.unit === 'flat') {
+          rates.perPassenger.baseFare = entry.rate;
+          rates.perPassenger.minPassengers = entry.to_quantity;
+        } else if (entry.unit === 'per_passenger') {
+          rates.perPassenger.ratePerPassenger = entry.rate;
+          rates.perPassenger.maxPassengers = entry.to_quantity;
+        }
+      });
+    } else if (rateType === 'DISTANCE') {
+      rates.distance = rates.distance || {};
+      entries.forEach(entry => {
+        if (entry.unit === 'flat') {
+          rates.distance.baseFare = entry.rate;
+          rates.distance.includedMiles = entry.to_quantity;
+        } else if (entry.unit === 'per_mile') {
+          rates.distance.ratePerMile = entry.rate;
+        }
+      });
+    }
+
+    return rates;
+  }
+
   renderLoggedInEmail() {
     const label = document.getElementById('loggedInEmail');
     if (!label) return;
@@ -3124,6 +4382,17 @@ class MyOffice {
     setSelectValue(container.querySelector('[data-vehicle-field="passenger_capacity"]'), data.passenger_capacity, '2');
     setSelectValue(container.querySelector('[data-vehicle-field="luggage_capacity"]'), data.luggage_capacity, '6');
     
+    // Switch to the correct rate type tab based on pricing_basis
+    if (data.pricing_basis) {
+      const pricingBasisMap = {
+        'hours': 'per-hour',
+        'passengers': 'per-passenger',
+        'distance': 'distance'
+      };
+      const rateType = pricingBasisMap[data.pricing_basis] || 'per-hour';
+      this.switchRateType(rateType);
+    }
+    
     // Associated Service Types (multi-select) - field is data-vehicle-field="service_type_tags"
     const serviceTypeSelect = container.querySelector('[data-vehicle-field="service_type_tags"]');
     if (serviceTypeSelect) {
@@ -3138,6 +4407,11 @@ class MyOffice {
         Array.from(serviceTypeSelect.options).forEach((opt) => {
           opt.selected = tags.includes(opt.value);
         });
+        // Sync the enhanced multi-select UI checkboxes with the select element
+        const wrapper = serviceTypeSelect.parentElement?.querySelector('.relia-multiselect');
+        if (wrapper) {
+          this.syncMultiSelectCheckboxesFromSelect(wrapper, serviceTypeSelect);
+        }
         // Refresh enhanced multi-select UI label (if present)
         this.updateServiceTypesMultiSelectLabel(serviceTypeSelect);
       } else {
@@ -3173,6 +4447,9 @@ class MyOffice {
 
     // Load rates for this vehicle type
     this.populateVehicleRates(data);
+
+    // Load saved rate schemes dropdown
+    this.loadSavedSchemesDropdown();
 
     // Load images for this vehicle type
     this.loadVehicleTypeImages();
@@ -3225,6 +4502,22 @@ class MyOffice {
       setFieldValue(distanceContainer, 'dist-base-fare', distance.baseFare || 0);
       setFieldValue(distanceContainer, 'dist-gratuity', distance.gratuity || 20);
       setFieldValue(distanceContainer, 'dist-dead-mile', distance.deadMileRate || 0);
+    }
+
+    // Tiered Distance Formula
+    if (rates.distance?.tieredFormula) {
+      this.setTieredFormulaConfig(rates.distance.tieredFormula);
+    } else {
+      // Reset to defaults if no tiered formula saved
+      this.setTieredFormulaConfig({
+        enabled: false,
+        multiplier: 1.27,
+        tier1_rate: 7.87,
+        tier1_max: 3,
+        tier2_rate: 3.50,
+        tier2_range: 7,
+        tier3_rate: 3.25
+      });
     }
 
     console.log('📊 Populated vehicle rates:', rates);
@@ -3302,12 +4595,32 @@ class MyOffice {
       draft.color_hex = colorInput.value.trim();
     }
 
+    // Capture pricing_basis from the active rate type tab
+    const activeRateTab = document.querySelector('.rates-subtab.active');
+    if (activeRateTab && activeRateTab.dataset.rateType) {
+      // Map rate-type values to pricing_basis values
+      const rateTypeMap = {
+        'per-hour': 'hours',
+        'per-passenger': 'passengers',
+        'distance': 'distance'
+      };
+      draft.pricing_basis = rateTypeMap[activeRateTab.dataset.rateType] || 'hours';
+    } else {
+      // Preserve existing pricing_basis if no tab is active
+      draft.pricing_basis = draft.pricing_basis || 'hours';
+    }
+
     // Handle service_type_tags multi-select
     const serviceTypeTags = container.querySelector('[data-vehicle-field="service_type_tags"]');
     if (serviceTypeTags) {
       // Vehicle Types can be associated with one OR MORE service types.
       // We store multiple selections in `service_type_tags` (TEXT[]) and keep `service_type` for legacy compatibility.
       if (serviceTypeTags instanceof HTMLSelectElement && serviceTypeTags.multiple) {
+        // First, sync from enhanced multi-select UI checkboxes if present
+        const wrapper = serviceTypeTags.parentElement?.querySelector('.relia-multiselect');
+        if (wrapper) {
+          this.applyMultiSelectCheckboxesToSelect(wrapper, serviceTypeTags);
+        }
         const selected = Array.from(serviceTypeTags.selectedOptions)
           .map((opt) => opt.value)
           .filter((v) => v && v.trim());
@@ -3380,6 +4693,9 @@ class MyOffice {
       distance.baseFare = parseNumber(getFieldValue(distanceContainer, 'dist-base-fare'));
       distance.gratuity = parseNumber(getFieldValue(distanceContainer, 'dist-gratuity'));
       distance.deadMileRate = parseNumber(getFieldValue(distanceContainer, 'dist-dead-mile'));
+      
+      // Include tiered formula config
+      distance.tieredFormula = this.getTieredFormulaConfig();
     }
 
     console.log('📊 Captured vehicle rates:', { perHour, perPassenger, distance });
@@ -3401,16 +4717,23 @@ class MyOffice {
 
     try {
       if (!this.apiReady) throw new Error('API not ready');
-      console.log('📤 Saving vehicle rates payload:', payload);
+      console.log('📤 Saving vehicle rates payload:', JSON.stringify(payload, null, 2));
+      console.log('📤 Rates being saved:', JSON.stringify(rates, null, 2));
       const saved = await upsertVehicleType(payload);
+      console.log('📥 Save response:', JSON.stringify(saved, null, 2));
       if (saved?.id) {
         this.vehicleTypeSeeds[saved.id] = saved;
         this.vehicleTypeDrafts[saved.id] = saved;
         this.refreshVehicleTypeList(saved.id, saved.name);
+        console.log('✅ Rates saved successfully to vehicle type:', saved.id);
+      } else {
+        console.warn('⚠️ Save returned but no ID found:', saved);
       }
+      // Clear unsaved changes flag after successful save
+      this.clearRatesUnsaved();
       alert('Vehicle type rates saved to Supabase.');
     } catch (err) {
-      console.error('Vehicle Type rate save failed, kept locally:', err);
+      console.error('❌ Vehicle Type rate save failed, kept locally:', err);
       alert(`Saved locally. Supabase save failed: ${err.message || err}`);
     }
   }
@@ -3859,6 +5182,33 @@ class MyOffice {
         this.handleFleetDelete();
       });
     }
+    
+    // Fleet refresh button - force reload from Supabase
+    const refreshBtn = document.getElementById('fleetRefreshBtn');
+    if (refreshBtn && !refreshBtn.dataset.bound) {
+      refreshBtn.dataset.bound = 'true';
+      refreshBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = '⏳ Loading...';
+        try {
+          // Clear localStorage cache to force fresh fetch
+          localStorage.removeItem(this.fleetStorageKey);
+          await this.loadFleetFromAllSources();
+          this.renderFleetList();
+          // Also refresh driver dropdown in fleet form
+          await this.loadDriversList();
+          this.populateFleetDriverOptions();
+          alert('Fleet data refreshed from database!');
+        } catch (err) {
+          console.error('Failed to refresh fleet:', err);
+          alert('Failed to refresh: ' + err.message);
+        } finally {
+          refreshBtn.disabled = false;
+          refreshBtn.textContent = '🔄 Refresh';
+        }
+      });
+    }
   }
 
   populateFleetYearOptions() {
@@ -4036,6 +5386,7 @@ class MyOffice {
             vehicle_type: v.vehicle_type || v.veh_type,
             vehicle_type_id: v.vehicle_type_id,
             veh_type: v.veh_type || v.vehicle_type,
+            veh_title: v.veh_title,
             year: v.year,
             make: v.make,
             model: v.model,
@@ -4043,9 +5394,24 @@ class MyOffice {
             license_plate: v.license_plate,
             vin: v.vin,
             veh_disp_name: v.veh_disp_name || `${v.unit_number || ''} ${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim(),
-            veh_pax_capacity: v.veh_pax_capacity || v.passenger_capacity,
+            // Capacity - use passenger_capacity as primary, fallback to capacity
+            passenger_capacity: v.passenger_capacity || v.capacity || v.veh_pax_capacity,
+            veh_pax_capacity: v.passenger_capacity || v.veh_pax_capacity || v.capacity,
+            capacity: v.capacity || v.passenger_capacity,
+            // Driver assignment
             assigned_driver_id: v.assigned_driver_id,
+            assigned_at: v.assigned_at,
+            // Insurance fields
+            insurance_company: v.insurance_company,
+            insurance_policy_number: v.insurance_policy_number,
+            // Permit fields
+            limo_permit_number: v.limo_permit_number,
+            permit_expiration_month: v.permit_expiration_month,
+            permit_expiration_year: v.permit_expiration_year,
+            us_dot_number: v.us_dot_number,
+            // Organization
             organization_id: v.organization_id,
+            affiliate_id: v.affiliate_id,
             created_at: v.created_at,
             updated_at: v.updated_at
           });
@@ -4281,18 +5647,35 @@ class MyOffice {
 
     setValue('fleetUnitNumber', record.unit_number);
     setValue('fleetStatus', record.status || 'ACTIVE');
-    setValue('fleetVehicleType', record.vehicle_type || '');
+    
+    // Populate vehicle type dropdown first, then set value
+    this.populateFleetVehicleTypeOptions(Object.values(this.vehicleTypeSeeds || {}));
+    const vehicleTypeId = record.vehicle_type_id || record.vehicle_type || '';
+    const vehicleTypeSelect = document.getElementById('fleetVehicleType');
+    if (vehicleTypeSelect && vehicleTypeId) {
+      // Check if option exists, if not add it
+      if (!vehicleTypeSelect.querySelector(`option[value="${vehicleTypeId}"]`)) {
+        const missing = document.createElement('option');
+        missing.value = vehicleTypeId;
+        missing.textContent = record.vehicle_type || 'Previously Used Type';
+        vehicleTypeSelect.appendChild(missing);
+        console.log('[Fleet] Added missing vehicle type option:', vehicleTypeId, record.vehicle_type);
+      }
+      vehicleTypeSelect.value = vehicleTypeId;
+      console.log('[Fleet] Vehicle type dropdown set to:', vehicleTypeSelect.value);
+    }
+    
     setValue('fleetYear', record.year || '');
     setValue('fleetMake', record.make);
     setValue('fleetModel', record.model);
     setValue('fleetColor', record.color);
-    setValue('fleetPassengers', record.passengers);
+    setValue('fleetPassengers', record.passenger_capacity || record.passengers || record.capacity || record.veh_pax_capacity);
     setValue('fleetVin', record.vin);
     setValue('fleetLicense', record.license_plate);
     setValue('fleetRegExp', record.registration_expiration);
     setValue('fleetInsExp', record.insurance_expiration);
     setValue('fleetInsCompany', record.insurance_company);
-    setValue('fleetPolicyNumber', record.policy_number);
+    setValue('fleetPolicyNumber', record.insurance_policy_number || record.policy_number);
     setValue('fleetInsContact', record.insurance_contact);
     setValue('fleetMileage', record.mileage);
     setValue('fleetNextServiceMiles', record.next_service_miles);
@@ -4305,13 +5688,19 @@ class MyOffice {
     const driverSelect = document.getElementById('fleetAssignedDriver');
     if (driverSelect) {
       const driverId = record.assigned_driver_id || '';
+      console.log('[Fleet] Setting driver dropdown to:', driverId);
       if (driverId && !driverSelect.querySelector(`option[value="${driverId}"]`)) {
+        // Driver not in list - find driver name and add option
+        const driver = (this.drivers || []).find(d => d.id === driverId);
+        const driverName = driver ? `${driver.first_name} ${driver.last_name}` : 'Previously Assigned Driver';
         const missing = document.createElement('option');
         missing.value = driverId;
-        missing.textContent = 'Previously Assigned Driver';
+        missing.textContent = driverName;
         driverSelect.appendChild(missing);
+        console.log('[Fleet] Added missing driver option:', driverName);
       }
       driverSelect.value = driverId;
+      console.log('[Fleet] Driver dropdown value after set:', driverSelect.value);
       
       // Update driver info display
       this.updateFleetDriverInfoDisplay(driverId);
@@ -4878,6 +6267,11 @@ class MyOffice {
     if (sectionElement) {
       sectionElement.classList.add('active');
       sectionElement.style.display = 'block';
+      
+      // Initialize stored rates when showing rate manager
+      if (section === 'system-rate-manager') {
+        this.initStoredRates();
+      }
     } else {
       // Show placeholder for not-yet-implemented sections
       alert(`${section} section is under construction`);
@@ -4917,7 +6311,472 @@ class MyOffice {
     if (formElement) {
       formElement.classList.add('active');
     }
+
+    // Clear the form when switching
+    this.clearRateForm(rateType);
   }
+
+  // ============================================
+  // Rate Management Methods
+  // ============================================
+
+  /**
+   * Initialize stored rates from localStorage or database
+   */
+  async initStoredRates() {
+    if (!this.storedRates) {
+      try {
+        const saved = localStorage.getItem('companyRates');
+        this.storedRates = saved ? JSON.parse(saved) : [];
+      } catch (e) {
+        this.storedRates = [];
+      }
+    }
+    this.renderStoredRates();
+    // Populate service types in rate forms
+    await this.populateRateServiceTypes();
+  }
+
+  /**
+   * Populate service types in Apply To multi-selects
+   */
+  async populateRateServiceTypes() {
+    try {
+      const serviceTypes = await loadServiceTypes({ includeInactive: false, preferRemote: true });
+      const containers = [
+        'fixedRateServiceTypes',
+        'percentageRateServiceTypes',
+        'multiplierRateServiceTypes'
+      ];
+      
+      containers.forEach(containerId => {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        container.innerHTML = '';
+        if (!serviceTypes || serviceTypes.length === 0) {
+          container.innerHTML = '<span style="color: #999; font-size: 11px;">No service types configured</span>';
+          return;
+        }
+        
+        serviceTypes.forEach(st => {
+          const code = st.code || st.name;
+          const label = document.createElement('label');
+          label.className = 'multi-select-option';
+          label.innerHTML = `<input type="checkbox" value="st:${code}"> ${st.name}`;
+          container.appendChild(label);
+        });
+      });
+    } catch (e) {
+      console.warn('Could not load service types for rate forms:', e);
+    }
+  }
+
+  /**
+   * Get selected values from multi-select container
+   */
+  getMultiSelectValues(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return ['all'];
+    
+    const checkboxes = container.querySelectorAll('input[type="checkbox"]:checked');
+    const values = Array.from(checkboxes).map(cb => cb.value);
+    return values.length > 0 ? values : ['all'];
+  }
+
+  /**
+   * Get combined Apply To values (pricing basis + service types)
+   */
+  getCombinedApplyToValues(pricingBasisId, serviceTypesId) {
+    const pricingBasis = this.getMultiSelectValues(pricingBasisId);
+    const serviceTypes = this.getMultiSelectValues(serviceTypesId);
+    return {
+      pricingBasis,
+      serviceTypes: serviceTypes.filter(v => v.startsWith('st:'))
+    };
+  }
+
+  /**
+   * Set multi-select values from saved data
+   */
+  setMultiSelectValues(containerId, values) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    // Uncheck all first
+    container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.checked = false;
+    });
+    
+    // Check matching values
+    const valueArray = Array.isArray(values) ? values : [values];
+    valueArray.forEach(value => {
+      const checkbox = container.querySelector(`input[value="${value}"]`);
+      if (checkbox) checkbox.checked = true;
+    });
+  }
+
+  /**
+   * Clear multi-select container (reset to default)
+   */
+  clearMultiSelect(containerId, defaultValue = null) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.checked = defaultValue ? cb.value === defaultValue : false;
+    });
+  }
+
+  /**
+   * Get all stored rates
+   */
+  getStoredRates() {
+    if (!this.storedRates) {
+      try {
+        const saved = localStorage.getItem('companyRates');
+        this.storedRates = saved ? JSON.parse(saved) : [];
+      } catch (e) {
+        this.storedRates = [];
+      }
+    }
+    return this.storedRates;
+  }
+
+  /**
+   * Save stored rates to localStorage
+   */
+  saveStoredRates() {
+    try {
+      localStorage.setItem('companyRates', JSON.stringify(this.storedRates || []));
+    } catch (e) {
+      console.error('Failed to save rates:', e);
+    }
+  }
+
+  /**
+   * Render stored rates list
+   */
+  renderStoredRates(filterType = 'all') {
+    const listContainer = document.getElementById('storedRatesList');
+    if (!listContainer) return;
+
+    const rates = this.getStoredRates();
+    const filteredRates = filterType === 'all' 
+      ? rates 
+      : rates.filter(r => r.type === filterType);
+
+    if (filteredRates.length === 0) {
+      listContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #888; font-size: 13px;">No rates configured yet</div>';
+      return;
+    }
+
+    listContainer.innerHTML = filteredRates.map(rate => `
+      <div class="stored-rate-item${this.selectedRateId === rate.id ? ' selected' : ''}" 
+           data-rate-id="${rate.id}" 
+           onclick="window.myOffice.selectRate('${rate.id}')"
+           style="padding: 12px 15px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">${rate.name}</div>
+          <div style="font-size: 11px; color: #888;">
+            <span style="background: ${rate.type === 'fixed' ? '#e3f2fd' : rate.type === 'percentage' ? '#fce4ec' : '#e8f5e9'}; color: ${rate.type === 'fixed' ? '#1976d2' : rate.type === 'percentage' ? '#c2185b' : '#388e3c'}; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; font-size: 10px; font-weight: 600;">${rate.type}</span>
+            <span style="margin-left: 8px;">${this.formatRateValue(rate)}</span>
+          </div>
+        </div>
+        <div style="font-size: 11px; color: ${rate.status === 'active' ? '#4caf50' : '#999'};">
+          ${rate.status === 'active' ? '● Active' : '○ Inactive'}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  /**
+   * Format rate value for display
+   */
+  formatRateValue(rate) {
+    if (rate.type === 'fixed') {
+      return `$${parseFloat(rate.amount || 0).toFixed(2)}`;
+    } else if (rate.type === 'percentage') {
+      return `${parseFloat(rate.value || 0).toFixed(1)}%`;
+    } else if (rate.type === 'multiplier') {
+      return `×${parseFloat(rate.value || 1).toFixed(2)}`;
+    }
+    return '';
+  }
+
+  /**
+   * Filter stored rates by type
+   */
+  filterStoredRates(type) {
+    this.currentRateFilter = type;
+    this.renderStoredRates(type);
+  }
+
+  /**
+   * Select a rate in the list - immediately populate form with rate details
+   */
+  selectRate(rateId) {
+    this.selectedRateId = rateId;
+    this.renderStoredRates(this.currentRateFilter || 'all');
+    
+    // Enable edit/delete buttons
+    const editBtn = document.getElementById('editRateBtn');
+    const deleteBtn = document.getElementById('deleteRateBtn');
+    if (editBtn) editBtn.disabled = false;
+    if (deleteBtn) deleteBtn.disabled = false;
+
+    // Immediately populate form with selected rate details
+    const rates = this.getStoredRates();
+    const rate = rates.find(r => r.id === rateId);
+    if (rate) {
+      this.populateRateForm(rate);
+    }
+  }
+
+  /**
+   * Populate rate form with rate data
+   */
+  populateRateForm(rate) {
+    // Switch to the rate type tab (without clearing the form)
+    document.querySelectorAll('.rate-type-tab').forEach(tab => {
+      tab.classList.remove('active');
+      if (tab.dataset.rateType === rate.type) {
+        tab.classList.add('active');
+      }
+    });
+
+    document.querySelectorAll('.rate-form').forEach(form => {
+      form.classList.remove('active');
+    });
+
+    let formId = '';
+    if (rate.type === 'fixed') formId = 'fixedRateForm';
+    else if (rate.type === 'multiplier') formId = 'multiplierRateForm';
+    else if (rate.type === 'percentage') formId = 'percentageRateForm';
+
+    const formElement = document.getElementById(formId);
+    if (formElement) formElement.classList.add('active');
+
+    // Handle applyTo - support both old format (string) and new format (object)
+    const applyTo = rate.applyTo || {};
+    const pricingBasis = typeof applyTo === 'string' ? [applyTo] : (applyTo.pricingBasis || ['all']);
+    const serviceTypes = typeof applyTo === 'object' ? (applyTo.serviceTypes || []) : [];
+
+    // Populate form fields
+    if (rate.type === 'fixed') {
+      document.getElementById('fixedRateId').value = rate.id;
+      document.getElementById('fixedRateName').value = rate.name || '';
+      document.getElementById('fixedRateAmount').value = rate.amount || 0;
+      document.getElementById('fixedRateDescription').value = rate.description || '';
+      this.setMultiSelectValues('fixedRateApplyTo', pricingBasis);
+      this.setMultiSelectValues('fixedRateServiceTypes', serviceTypes);
+      document.getElementById('fixedRateStatus').value = rate.status || 'active';
+    } else if (rate.type === 'percentage') {
+      document.getElementById('percentageRateId').value = rate.id;
+      document.getElementById('percentageRateName').value = rate.name || '';
+      document.getElementById('percentageRateValue').value = rate.value || 0;
+      document.getElementById('percentageRateDescription').value = rate.description || '';
+      this.setMultiSelectValues('percentageRateApplyTo', pricingBasis);
+      this.setMultiSelectValues('percentageRateServiceTypes', serviceTypes);
+      document.getElementById('percentageRateStatus').value = rate.status || 'active';
+    } else if (rate.type === 'multiplier') {
+      document.getElementById('multiplierRateId').value = rate.id;
+      document.getElementById('multiplierRateName').value = rate.name || '';
+      document.getElementById('multiplierRateValue').value = rate.value || 1;
+      document.getElementById('multiplierRateDescription').value = rate.description || '';
+      this.setMultiSelectValues('multiplierRateApplyTo', pricingBasis);
+      this.setMultiSelectValues('multiplierRateServiceTypes', serviceTypes);
+      document.getElementById('multiplierRateStatus').value = rate.status || 'active';
+    }
+  }
+
+  /**
+   * Add new rate - clear form and switch to appropriate tab
+   */
+  addNewRate() {
+    this.selectedRateId = null;
+    const activeTab = document.querySelector('.rate-type-tab.active');
+    const rateType = activeTab?.dataset?.rateType || 'fixed';
+    this.clearRateForm(rateType);
+    
+    // Disable edit/delete buttons
+    const editBtn = document.getElementById('editRateBtn');
+    const deleteBtn = document.getElementById('deleteRateBtn');
+    if (editBtn) editBtn.disabled = true;
+    if (deleteBtn) deleteBtn.disabled = true;
+  }
+
+  /**
+   * Edit selected rate - just calls populateRateForm since it's already populated on select
+   */
+  editSelectedRate() {
+    if (!this.selectedRateId) return;
+
+    const rates = this.getStoredRates();
+    const rate = rates.find(r => r.id === this.selectedRateId);
+    if (!rate) return;
+
+    // Form is already populated on select, but ensure it's visible
+    this.populateRateForm(rate);
+  }
+
+  /**
+   * Delete selected rate
+   */
+  deleteSelectedRate() {
+    if (!this.selectedRateId) return;
+
+    if (!confirm('Are you sure you want to delete this rate?')) return;
+
+    const rates = this.getStoredRates();
+    const index = rates.findIndex(r => r.id === this.selectedRateId);
+    if (index > -1) {
+      rates.splice(index, 1);
+      this.storedRates = rates;
+      this.saveStoredRates();
+      this.selectedRateId = null;
+      this.renderStoredRates(this.currentRateFilter || 'all');
+      
+      // Disable edit/delete buttons
+      const editBtn = document.getElementById('editRateBtn');
+      const deleteBtn = document.getElementById('deleteRateBtn');
+      if (editBtn) editBtn.disabled = true;
+      if (deleteBtn) deleteBtn.disabled = true;
+      
+      this.showNotification('Rate deleted', 'success');
+    }
+  }
+
+  /**
+   * Save a rate
+   */
+  saveRate(rateType) {
+    let rate = {};
+
+    if (rateType === 'fixed') {
+      const name = document.getElementById('fixedRateName')?.value?.trim();
+      const amount = parseFloat(document.getElementById('fixedRateAmount')?.value) || 0;
+      
+      if (!name) {
+        alert('Rate name is required');
+        return;
+      }
+
+      rate = {
+        id: document.getElementById('fixedRateId')?.value || this.generateRateId(),
+        type: 'fixed',
+        name,
+        amount,
+        description: document.getElementById('fixedRateDescription')?.value || '',
+        applyTo: this.getCombinedApplyToValues('fixedRateApplyTo', 'fixedRateServiceTypes'),
+        status: document.getElementById('fixedRateStatus')?.value || 'active'
+      };
+    } else if (rateType === 'percentage') {
+      const name = document.getElementById('percentageRateName')?.value?.trim();
+      const value = parseFloat(document.getElementById('percentageRateValue')?.value) || 0;
+      
+      if (!name) {
+        alert('Rate name is required');
+        return;
+      }
+
+      rate = {
+        id: document.getElementById('percentageRateId')?.value || this.generateRateId(),
+        type: 'percentage',
+        name,
+        value,
+        description: document.getElementById('percentageRateDescription')?.value || '',
+        applyTo: this.getCombinedApplyToValues('percentageRateApplyTo', 'percentageRateServiceTypes'),
+        status: document.getElementById('percentageRateStatus')?.value || 'active'
+      };
+    } else if (rateType === 'multiplier') {
+      const name = document.getElementById('multiplierRateName')?.value?.trim();
+      const value = parseFloat(document.getElementById('multiplierRateValue')?.value) || 1;
+      
+      if (!name) {
+        alert('Rate name is required');
+        return;
+      }
+
+      rate = {
+        id: document.getElementById('multiplierRateId')?.value || this.generateRateId(),
+        type: 'multiplier',
+        name,
+        value,
+        description: document.getElementById('multiplierRateDescription')?.value || '',
+        applyTo: this.getCombinedApplyToValues('multiplierRateApplyTo', 'multiplierRateServiceTypes'),
+        status: document.getElementById('multiplierRateStatus')?.value || 'active'
+      };
+    }
+
+    // Save or update
+    const rates = this.getStoredRates();
+    const existingIndex = rates.findIndex(r => r.id === rate.id);
+    
+    if (existingIndex > -1) {
+      rates[existingIndex] = rate;
+    } else {
+      rates.push(rate);
+    }
+
+    this.storedRates = rates;
+    this.saveStoredRates();
+    this.renderStoredRates(this.currentRateFilter || 'all');
+    this.clearRateForm(rateType);
+    
+    this.showNotification('Rate saved successfully', 'success');
+  }
+
+  /**
+   * Clear rate form
+   */
+  clearRateForm(rateType) {
+    if (rateType === 'fixed') {
+      const form = document.getElementById('fixedRateForm');
+      if (form) {
+        document.getElementById('fixedRateId').value = '';
+        document.getElementById('fixedRateName').value = '';
+        document.getElementById('fixedRateAmount').value = '0.00';
+        document.getElementById('fixedRateDescription').value = '';
+        this.clearMultiSelect('fixedRateApplyTo', 'all');
+        this.clearMultiSelect('fixedRateServiceTypes');
+        document.getElementById('fixedRateStatus').value = 'active';
+      }
+    } else if (rateType === 'percentage') {
+      const form = document.getElementById('percentageRateForm');
+      if (form) {
+        document.getElementById('percentageRateId').value = '';
+        document.getElementById('percentageRateName').value = '';
+        document.getElementById('percentageRateValue').value = '0';
+        document.getElementById('percentageRateDescription').value = '';
+        this.clearMultiSelect('percentageRateApplyTo', 'subtotal');
+        this.clearMultiSelect('percentageRateServiceTypes');
+        document.getElementById('percentageRateStatus').value = 'active';
+      }
+    } else if (rateType === 'multiplier') {
+      const form = document.getElementById('multiplierRateForm');
+      if (form) {
+        document.getElementById('multiplierRateId').value = '';
+        document.getElementById('multiplierRateName').value = '';
+        document.getElementById('multiplierRateValue').value = '1.0';
+        document.getElementById('multiplierRateDescription').value = '';
+        this.clearMultiSelect('multiplierRateApplyTo', 'subtotal');
+        this.clearMultiSelect('multiplierRateServiceTypes');
+        document.getElementById('multiplierRateStatus').value = 'active';
+      }
+    }
+  }
+
+  /**
+   * Generate unique rate ID
+   */
+  generateRateId() {
+    return 'rate_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  }
+
+  // ============================================
+  // End Rate Management Methods
+  // ============================================
 
   switchPromoTab(promoTab) {
     // Update tab active state
@@ -5317,6 +7176,29 @@ class MyOffice {
         }
 
         this.renderDriverContactSummary(null);
+      });
+    }
+
+    // Refresh Drivers button
+    const driversRefreshBtn = document.getElementById('driversRefreshBtn');
+    if (driversRefreshBtn) {
+      driversRefreshBtn.addEventListener('click', async () => {
+        driversRefreshBtn.disabled = true;
+        driversRefreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+        try {
+          // Reload drivers list from Supabase
+          await this.loadDriversList();
+          // Reload fleet to get fresh vehicle assignments
+          await this.loadFleetFromAllSources();
+          // Re-populate vehicle dropdown
+          await this.populateDriverVehicleDropdown(this.currentDriver?.id || null);
+          console.log('[DriversRefresh] Drivers and vehicles refreshed successfully');
+        } catch (error) {
+          console.error('[DriversRefresh] Error refreshing:', error);
+        } finally {
+          driversRefreshBtn.disabled = false;
+          driversRefreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+        }
       });
     }
 
@@ -6398,10 +8280,10 @@ class MyOffice {
     setById('driverWebUsername', driver.web_username);
     setById('driverWebPassword', driver.web_password);
     
-    // Driver level select
+    // Driver level select (1-10, default 5)
     const levelSelect = document.getElementById('driverLevel');
     if (levelSelect) {
-      levelSelect.value = driver.driver_level ?? '0';
+      levelSelect.value = driver.driver_level || '5';
     }
 
     // Populate and set the assigned vehicle dropdown
@@ -6548,18 +8430,10 @@ class MyOffice {
 
       if (Array.isArray(vehicles) && vehicles.length > 0) {
         vehicles.forEach((vehicle) => {
-          const vehicleTypeName = getVehicleTypeName(vehicle);
-          const displayName = [
-            vehicle.unit_number,
-            vehicle.year,
-            vehicle.make,
-            vehicle.model,
-            vehicleTypeName ? `(${vehicleTypeName})` : ''
-          ].filter(Boolean).join(' ');
-          
           const option = document.createElement('option');
           option.value = vehicle.id;
-          option.textContent = displayName || vehicle.veh_disp_name || `Vehicle ${vehicle.id}`;
+          // Use veh_disp_name as primary display
+          option.textContent = vehicle.veh_disp_name || vehicle.unit_number || `Vehicle ${vehicle.id}`;
           select.appendChild(option);
         });
       }
@@ -7050,7 +8924,7 @@ class MyOffice {
         include_phone_other: document.getElementById('driverIncludePhoneOther')?.checked || false,
         dispatch_display_name: document.getElementById('driverDispatchDisplayName')?.value?.trim() || null,
         trip_sheets_display_name: document.getElementById('driverTripSheetsDisplayName')?.value?.trim() || null,
-        driver_level: document.getElementById('driverLevel')?.value || '0',
+        driver_level: document.getElementById('driverLevel')?.value || '5',
         is_vip: document.getElementById('driverIsVip')?.checked || false,
         assigned_vehicle_id: capturedVehicleId || null, // Use captured value from start of save to prevent race conditions
         driver_alias: document.getElementById('driverAlias')?.value?.trim() || null,
@@ -7183,8 +9057,39 @@ class MyOffice {
             await updateDriver(conflictingDriver.id, { assigned_vehicle_id: null });
             console.log(`✅ Vehicle unassigned from previous driver`);
           }
+          
+          // Also update the vehicle's assigned_driver_id to point to this driver
+          // This ensures the bidirectional relationship is maintained
+          const driverIdToAssign = currentDriverId || null; // Will be set after driver is created for new drivers
+          if (driverIdToAssign) {
+            console.log(`🚗 Updating vehicle ${driverData.assigned_vehicle_id} with assigned_driver_id: ${driverIdToAssign}`);
+            await updateFleetVehicle(driverData.assigned_vehicle_id, { assigned_driver_id: driverIdToAssign });
+            console.log(`✅ Vehicle updated with driver assignment`);
+          }
         } catch (err) {
-          console.warn('Could not unassign vehicle from previous driver:', err);
+          console.warn('Could not update vehicle-driver assignment:', err);
+        }
+      }
+      
+      // If unassigning a vehicle (had one before, now doesn't), clear the vehicle's assigned_driver_id
+      if (originalVehicleId && !driverData.assigned_vehicle_id) {
+        try {
+          console.log(`🚗 Clearing assigned_driver_id from vehicle ${originalVehicleId}`);
+          await updateFleetVehicle(originalVehicleId, { assigned_driver_id: null });
+          console.log(`✅ Vehicle's driver assignment cleared`);
+        } catch (err) {
+          console.warn('Could not clear vehicle driver assignment:', err);
+        }
+      }
+      
+      // If changing to a different vehicle, clear old vehicle and set new
+      if (originalVehicleId && driverData.assigned_vehicle_id && originalVehicleId !== driverData.assigned_vehicle_id) {
+        try {
+          console.log(`🚗 Clearing assigned_driver_id from old vehicle ${originalVehicleId}`);
+          await updateFleetVehicle(originalVehicleId, { assigned_driver_id: null });
+          console.log(`✅ Old vehicle's driver assignment cleared`);
+        } catch (err) {
+          console.warn('Could not clear old vehicle driver assignment:', err);
         }
       }
 

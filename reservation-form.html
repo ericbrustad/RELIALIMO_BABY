@@ -296,14 +296,15 @@
             </section>
 
             <!-- Booking Agent Section (hidden by default, shown when agent present or account requires it) -->
-            <section class="panel" id="bookingAgentSection" style="display: none;">
-              <div class="panel-header">
-                <h2 class="panel-title">Booking Agent</h2>
+            <section class="panel collapsible" id="bookingAgentSection" style="display: none;">
+              <div class="panel-header" id="bookingAgentHeader" style="cursor: pointer;">
+                <button type="button" class="panel-toggle-btn" id="bookingAgentToggleBtn" title="Expand/Collapse" style="background: none; border: none; font-size: 14px; padding: 4px 8px; cursor: pointer;">▼</button>
+                <h2 class="panel-title" style="margin: 0;">Booking Agent</h2>
                 <button type="button" id="copyBillingToBookingBtn" class="btn-icon" title="Copy from Billing" style="margin-left: auto; padding: 6px 12px; background: #17a2b8; color: white;">📋 Copy from Billing</button>
                 <button type="button" id="clearBookingAgentBtn" class="btn-icon" title="Clear booking agent" style="padding: 6px 12px;">Clear</button>
               </div>
               
-              <div class="form-section">
+              <div class="form-section" id="bookingAgentContent">
                 <div class="form-row-2">
                     <div class="form-group" style="position: relative;">
                     <label>First Name</label>
@@ -884,12 +885,7 @@
                   <div class="form-group">
                     <label>Service Type</label>
                     <select id="serviceType" class="form-control">
-                      <option value="">- - - - NOT ASSIGNED - - - -</option>
-                      <option value="point-to-point">Point to Point</option>
-                      <option value="hourly">Hourly</option>
-                      <option value="airport-transfer">Airport Transfer</option>
-                      <option value="wedding">Wedding</option>
-                      <option value="corporate">Corporate</option>
+                      <option value="">-- Loading service types... --</option>
                     </select>
                   </div>
 
@@ -969,262 +965,27 @@
                 <!-- Action Buttons -->
                 <div class="form-divider"></div>
 
-                <!-- Rate Configuration Summary -->
-                <div class="rate-config-panel" id="rateConfigPanel">
-                  <div class="rate-config-header">
-                    <span class="rate-config-title">📊 Pricing Configuration</span>
-                    <button type="button" class="rate-config-toggle" id="toggleRateConfig" title="Show/Hide rate details">▼</button>
-                  </div>
-                  <div class="rate-config-body" id="rateConfigBody">
-                    <div class="rate-row">
-                      <div class="rate-label">Service Type:</div>
-                      <div class="rate-value" id="rateServiceType">--</div>
-                      <div class="rate-label">Pricing Basis:</div>
-                      <div class="rate-value" id="ratePricingBasis">--</div>
-                    </div>
-                    <div class="rate-row">
-                      <div class="rate-label">Vehicle Type:</div>
-                      <div class="rate-value" id="rateVehicleType">--</div>
-                      <div class="rate-label">Base Rate:</div>
-                      <div class="rate-value" id="rateBaseRate">$0.00</div>
-                    </div>
-                    <div class="rate-row">
-                      <div class="rate-label">Per Hour:</div>
-                      <div class="rate-value" id="ratePerHour">$0.00</div>
-                      <div class="rate-label">Per Mile:</div>
-                      <div class="rate-value" id="ratePerMile">$0.00</div>
-                    </div>
-                    <div class="rate-row">
-                      <div class="rate-label">Min Hours:</div>
-                      <div class="rate-value" id="rateMinHours">0</div>
-                      <div class="rate-label">Gratuity:</div>
-                      <div class="rate-value" id="rateGratuity">0%</div>
-                    </div>
-                    <div class="rate-config-actions">
-                      <button type="button" class="btn btn-small btn-secondary" id="applyRatesBtn">Apply Rates to Costs</button>
-                    </div>
-                  </div>
+                <!-- Rate Section (iframe) -->
+                <div id="rateSectionContainer" style="border: 1px solid #ddd; border-radius: 4px; overflow: hidden; margin-top: 10px;">
+                  <iframe 
+                    id="rateSectionFrame"
+                    src="rate-section.html" 
+                    style="width: 100%; min-height: 400px; height: auto; border: none; display: block;"
+                    title="Rate Calculator">
+                  </iframe>
                 </div>
 
-                <!-- Cost Tabs -->
-                <div class="cost-tabs">
-                  <button class="cost-tab active" data-tab="primary">Primary</button>
-                  <button class="cost-tab" data-tab="secondary">Secondary</button>
-                  <button class="cost-tab" data-tab="farmout">Farm-out Costs</button>
-                </div>
-
-                <div class="cost-tab-content active" id="primaryCostTab">
-                  <!-- Primary Cost Breakdown -->
-                <div class="cost-table">
-                  <div class="cost-row header">
-                    <div class="cost-cell">Charge</div>
-                    <div class="cost-cell">Qty</div>
-                    <div class="cost-cell">Rate</div>
-                    <div class="cost-cell">Ext.</div>
-                  </div>
-
-                  <div class="cost-row">
-                    <div class="cost-cell">Flat Rate</div>
-                    <div class="cost-cell"><input type="number" id="flatQty" class="cost-input" value="1" /></div>
-                    <div class="cost-cell"><input type="number" id="flatRate" class="cost-input" value="0" step="0.01" /></div>
-                    <div class="cost-cell"><input type="number" id="flatExt" class="cost-input" value="0" readonly /></div>
-                  </div>
-
-                  <div class="cost-row">
-                    <div class="cost-cell">Per Hour</div>
-                    <div class="cost-cell"><input type="number" id="hourQty" class="cost-input" value="0" step="0.5" /></div>
-                    <div class="cost-cell"><input type="number" id="hourRate" class="cost-input" value="0" step="0.01" /></div>
-                    <div class="cost-cell"><input type="number" id="hourExt" class="cost-input" value="0" readonly /></div>
-                  </div>
-
-                  <div class="cost-row">
-                    <div class="cost-cell">Per Unit</div>
-                    <div class="cost-cell"><input type="number" id="unitQty" class="cost-input" value="0" /></div>
-                    <div class="cost-cell"><input type="number" id="unitRate" class="cost-input" value="0" step="0.01" /></div>
-                    <div class="cost-cell"><input type="number" id="unitExt" class="cost-input" value="0" readonly /></div>
-                  </div>
-
-                  <div class="cost-row">
-                    <div class="cost-cell">OT/Wait Time</div>
-                    <div class="cost-cell"><input type="number" id="otQty" class="cost-input" value="0" step="0.5" /></div>
-                    <div class="cost-cell"><input type="number" id="otRate" class="cost-input" value="0" step="0.01" /></div>
-                    <div class="cost-cell"><input type="number" id="otExt" class="cost-input" value="0" readonly /></div>
-                  </div>
-
-                  <div class="cost-row">
-                    <div class="cost-cell">Extra Stops</div>
-                    <div class="cost-cell"><input type="number" id="stopsQty" class="cost-input" value="0" /></div>
-                    <div class="cost-cell"><input type="number" id="stopsRate" class="cost-input" value="0" step="0.01" /></div>
-                    <div class="cost-cell"><input type="number" id="stopsExt" class="cost-input" value="0" readonly /></div>
-                  </div>
-
-                  <div class="cost-row">
-                    <div class="cost-cell">Total Gratuity (%)</div>
-                    <div class="cost-cell"><input type="number" id="gratuityQty" class="cost-input" value="0" step="1" /></div>
-                    <div class="cost-cell"></div>
-                    <div class="cost-cell"><input type="number" id="gratuityExt" class="cost-input" value="0" readonly /></div>
-                  </div>
-
-                  <div class="cost-row">
-                    <div class="cost-cell">Late Night/Early/Mid Surch</div>
-                    <div class="cost-cell"><input type="number" class="cost-input" value="0" step="1" /></div>
-                    <div class="cost-cell"><span class="percent-label">%</span></div>
-                    <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                  </div>
-
-                  <div class="cost-row summary">
-                    <div class="cost-cell">Grand Total (USD)</div>
-                    <div class="cost-cell"></div>
-                    <div class="cost-cell"></div>
-                    <div class="cost-cell"><span id="grandTotal">0.00</span></div>
-                  </div>
-
-                  <div class="cost-row summary">
-                    <div class="cost-cell">Payments/Deposits</div>
-                    <div class="cost-cell"></div>
-                    <div class="cost-cell"></div>
-                    <div class="cost-cell"><span id="payments">0.00</span></div>
-                  </div>
-
-                  </div>
-
-                  <!-- Secondary/Farm-out tabs content (hidden by default) -->
-
-                </div>
-
-                <div class="cost-tab-content" id="secondaryCostTab">
-                    <div class="cost-table">
-                      <div class="cost-row header">
-                        <div class="cost-cell">Charge</div>
-                        <div class="cost-cell">Qty</div>
-                        <div class="cost-cell">Rate</div>
-                        <div class="cost-cell">Ext.</div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Fuel Surcharge (%)</div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0" step="1" /></div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Discount (%)</div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0" step="1" /></div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Per Pass</div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0" /></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0" step="0.01" /></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Per Mile</div>
-                        <div class="cost-cell"><input type="number" id="secondaryPerMileQty" class="cost-input" value="0" step="0.1" /></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0" step="0.01" /></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Surface Transp. Charge (%)</div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0" step="1" /></div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Base Rate STC (%)</div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0" step="1" /></div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Admin Fee</div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0" /></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0" step="0.01" /></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Fuel Surch</div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="4.9" step="0.1" /></div>
-                        <div class="cost-cell"><span class="percent-label">%</span></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Discount</div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0" step="1" /></div>
-                        <div class="cost-cell"><span class="percent-label">%</span></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Base</div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Base rate STC</div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="20" step="1" /></div>
-                        <div class="cost-cell"><span class="percent-label">%</span></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Per Mile</div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0" step="0.1" /></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0" step="0.01" /></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Per Hour</div>
-                        <div class="cost-cell"><input type="number" id="secondaryPerHourQty" class="cost-input" value="0" step="0.5" /></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0" step="0.01" /></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Admin Fee</div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Base rate STC</div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Fuel Surcharge</div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-
-                      <div class="cost-row">
-                        <div class="cost-cell">Requested Gratuity</div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"></div>
-                        <div class="cost-cell"><input type="number" class="cost-input" value="0.00" readonly /></div>
-                      </div>
-                    </div>
-                </div>
-
-                <div class="cost-tab-content" id="farmoutCostTab">
-                  <p style="text-align: center; padding: 20px; color: #666;">Farm-out cost details</p>
-                </div>
+                <!-- Hidden fields for form data compatibility -->
+                <input type="hidden" id="grandTotal" value="0">
+                <input type="hidden" id="payments" value="0">
+                <input type="hidden" id="flatQty" value="1">
+                <input type="hidden" id="flatRate" value="0">
+                <input type="hidden" id="hourQty" value="0">
+                <input type="hidden" id="hourRate" value="0">
+                <input type="hidden" id="passQty" value="0">
+                <input type="hidden" id="passRate" value="0">
+                <input type="hidden" id="mileQty" value="0">
+                <input type="hidden" id="mileRate" value="0">
 
                 <div class="form-divider" style="margin-top: 20px;"></div>
 
@@ -1449,8 +1210,12 @@
     </div>
 
     <script>
-      // Global stops array to store all trip stops
-      let tripStops = [];
+      // Global stops array to store all trip stops (use window.tripStops for consistency)
+      if (typeof window.tripStops === 'undefined') {
+        window.tripStops = [];
+      }
+      // Local alias for convenience
+      let tripStops = window.tripStops;
       
       // Debounce timer for API searches
       let locationSearchTimeout;
@@ -2127,8 +1892,8 @@
           </td>
           <td>${timeIn || 'N/A'}</td>
           <td>
-            <button class="btn-edit" style="padding: 4px 8px; font-size: 12px; cursor: pointer; margin-right: 6px;" onclick="editStop('${stopId}')">Edit</button>
-            <button class="btn-remove" style="padding: 4px 8px; font-size: 12px; cursor: pointer;" onclick="removeStop('${stopId}')">✕ Remove</button>
+            <button class="btn-edit" style="padding: 4px 8px; font-size: 12px; cursor: pointer; margin-right: 6px;" onclick="window.editStop && window.editStop('${stopId}')">Edit</button>
+            <button class="btn-remove" style="padding: 4px 8px; font-size: 12px; cursor: pointer;" onclick="window.removeStop && window.removeStop('${stopId}')">✕ Remove</button>
           </td>
         `;
         console.log('📋 Row HTML created:', row.innerHTML.substring(0, 200) + '...');
@@ -2675,6 +2440,13 @@
 
         console.log('✅ FBO details auto-populated successfully');
       }
+
+      // Expose functions globally for onclick handlers (only if not already defined by reservation-form.js)
+      if (typeof window.editStop === 'undefined') window.editStop = editStop;
+      if (typeof window.removeStop === 'undefined') window.removeStop = removeStop;
+      if (typeof window.handleCreateStop === 'undefined') window.handleCreateStop = handleCreateStop;
+      if (typeof window.handleLocationTypeChange === 'undefined') window.handleLocationTypeChange = handleLocationTypeChange;
+      if (typeof window.openEntryForm === 'undefined') window.openEntryForm = openEntryForm;
     </script>
     <script src="env.js"></script>
     <script type="module" src="auth-guard.js"></script>

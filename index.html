@@ -94,6 +94,104 @@
       .status-indicator.not-configured .status-dot { background: #c62828; }
       .status-indicator.partial .status-dot { background: #e65100; }
       
+      /* Global Search Bar */
+      .global-search-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+      .global-search-toggle {
+        background: rgba(255,255,255,0.15);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+      }
+      .global-search-toggle:hover {
+        background: rgba(255,255,255,0.25);
+      }
+      .global-search-toggle.active {
+        background: white;
+        color: #667eea;
+      }
+      .global-search-box {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        width: 350px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        display: none;
+        z-index: 9999;
+        margin-top: 8px;
+      }
+      .global-search-box.active {
+        display: block;
+      }
+      .global-search-input {
+        width: 100%;
+        padding: 12px 16px;
+        border: none;
+        border-bottom: 1px solid #eee;
+        font-size: 14px;
+        outline: none;
+        border-radius: 8px 8px 0 0;
+      }
+      .global-search-results {
+        max-height: 400px;
+        overflow-y: auto;
+      }
+      .search-result-item {
+        padding: 10px 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-bottom: 1px solid #f0f0f0;
+      }
+      .search-result-item:hover {
+        background: #f5f5f5;
+      }
+      .search-result-item .result-icon {
+        font-size: 16px;
+        width: 24px;
+        text-align: center;
+      }
+      .search-result-item .result-text {
+        flex: 1;
+      }
+      .search-result-item .result-title {
+        font-weight: 600;
+        color: #333;
+      }
+      .search-result-item .result-section {
+        font-size: 11px;
+        color: #888;
+      }
+      .search-no-results {
+        padding: 20px;
+        text-align: center;
+        color: #888;
+      }
+      html[data-layout="vertical"] .global-search-container {
+        margin-top: 10px;
+      }
+      html[data-layout="vertical"] .global-search-box {
+        left: 100%;
+        right: auto;
+        top: 0;
+        margin-left: 8px;
+        margin-top: 0;
+      }
+      
       html[data-layout="vertical"] .system-status-bar {
         flex-direction: column;
         border-top: 1px solid rgba(255,255,255,0.1);
@@ -391,6 +489,14 @@
         <div class="header-content">
           <div class="header-left">
             <h1 class="logo">RELIA<img src="https://rosebud.ai/assets/red-bull-logo.webp?5r88" alt="RELIA bull" class="logo-bull">LIMO™</h1>
+            <!-- Global Search -->
+            <div class="global-search-container">
+              <button class="global-search-toggle" id="globalSearchToggle" title="Search (Ctrl+K)">🔍</button>
+              <div class="global-search-box" id="globalSearchBox">
+                <input type="text" class="global-search-input" id="globalSearchInput" placeholder="Search sections, settings, data..." autocomplete="off">
+                <div class="global-search-results" id="globalSearchResults"></div>
+              </div>
+            </div>
             <!-- System Status Indicators -->
             <div class="system-status-bar">
               <div id="smsStatusIndicator" class="status-indicator not-configured" title="Click to configure SMS" onclick="navigateToSmsSettings()">
@@ -520,6 +626,9 @@
         // Check if user has a startup page preference and navigate there
         checkStartupPagePreference();
         
+        // Initialize Auto Farmout Mode badge on Reservations button
+        initAutoFarmoutBadge();
+        
         const mainNav = document.querySelector('.main-nav');
         if (mainNav) {
           mainNav.addEventListener('click', (e) => {
@@ -531,6 +640,46 @@
           });
         }
       });
+      
+      /**
+       * Initialize Auto Farmout Mode badge on Reservations button if enabled
+       */
+      function initAutoFarmoutBadge() {
+        const isEnabled = localStorage.getItem('autoFarmoutMode') === 'true';
+        const reservationsBtn = document.querySelector('[data-section="reservations"]');
+        if (!reservationsBtn) return;
+        
+        if (isEnabled) {
+          let badge = reservationsBtn.querySelector('.auto-farmout-badge');
+          if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'auto-farmout-badge';
+            badge.textContent = '🏠';
+            badge.title = 'Auto Farmout Mode Active';
+            reservationsBtn.style.position = 'relative';
+            reservationsBtn.appendChild(badge);
+          }
+        }
+        
+        // Listen for changes from user menu
+        window.addEventListener('message', (event) => {
+          if (event.data?.type === 'autoFarmoutModeChanged') {
+            const badge = reservationsBtn.querySelector('.auto-farmout-badge');
+            if (event.data.enabled) {
+              if (!badge) {
+                const newBadge = document.createElement('span');
+                newBadge.className = 'auto-farmout-badge';
+                newBadge.textContent = '🏠';
+                newBadge.title = 'Auto Farmout Mode Active';
+                reservationsBtn.style.position = 'relative';
+                reservationsBtn.appendChild(newBadge);
+              }
+            } else if (badge) {
+              badge.remove();
+            }
+          }
+        });
+      }
 
       /**
        * Check for startup page preference and navigate if applicable
@@ -747,6 +896,31 @@
           // Switch back to reservations list
           switchMainSection('reservations');
         } else if (event.data.action === 'navigate') {
+        } else if (event.data.action === 'reservationSaved') {
+          // Reservation was saved - refresh the reservations list
+          console.log('📥 Received reservationSaved message, refreshing list...');
+          const reservationsIframe = document.querySelector('#reservationsSection iframe');
+          if (reservationsIframe && reservationsIframe.contentWindow) {
+            reservationsIframe.contentWindow.postMessage({
+              action: 'refreshReservations'
+            }, '*');
+          }
+        } else if (event.data.action === 'relia:accountSaved' || event.data.action === 'accountSaved') {
+          // Account was saved - refresh the reservations list to show updated account data
+          console.log('📥 Received accountSaved message:', event.data);
+          const reservationsIframe = document.querySelector('#reservationsSection iframe');
+          if (reservationsIframe && reservationsIframe.contentWindow) {
+            reservationsIframe.contentWindow.postMessage({
+              action: 'refreshReservations'
+            }, '*');
+          }
+          
+          // Also forward to reservation form iframe so it can update billing account
+          const reservationIframe = document.querySelector('#newReservationSection iframe');
+          if (reservationIframe && reservationIframe.contentWindow) {
+            console.log('📤 Forwarding accountSaved to reservation form iframe');
+            reservationIframe.contentWindow.postMessage(event.data, '*');
+          }
         } else if (event.data.action === 'switchToDashboard') {
           // Switch to dashboard first
           switchMainSection('dashboard');
@@ -916,6 +1090,159 @@
       
       // Initialize status checker on DOM ready
       document.addEventListener('DOMContentLoaded', () => SystemStatusChecker.init());
+      
+      // Global Search Functionality
+      const GlobalSearch = {
+        searchableItems: [
+          // Main Navigation Sections
+          { title: 'New Reservation', section: 'Navigation', icon: '➕', action: () => switchMainSection('new-reservation') },
+          { title: 'Farmout Dashboard', section: 'Navigation', icon: '🏠', action: () => switchMainSection('dashboard') },
+          { title: 'Office / My Office', section: 'Navigation', icon: '🏢', action: () => switchMainSection('office') },
+          { title: 'Accounts', section: 'Navigation', icon: '👤', action: () => switchMainSection('accounts') },
+          { title: 'Calendar', section: 'Navigation', icon: '📅', action: () => switchMainSection('calendar') },
+          { title: 'Quotes', section: 'Navigation', icon: '📋', action: () => switchMainSection('quotes') },
+          { title: 'Reservations List', section: 'Navigation', icon: '🚗', action: () => switchMainSection('reservations') },
+          { title: 'Dispatch', section: 'Navigation', icon: '🚙', action: () => switchMainSection('dispatch') },
+          { title: 'Network', section: 'Navigation', icon: '🌐', action: () => switchMainSection('network') },
+          { title: 'Settle', section: 'Navigation', icon: '💰', action: () => switchMainSection('settle') },
+          { title: 'Receivables', section: 'Navigation', icon: '📊', action: () => switchMainSection('receivables') },
+          { title: 'Payables', section: 'Navigation', icon: '💳', action: () => switchMainSection('payables') },
+          { title: 'Memos', section: 'Navigation', icon: '📝', action: () => switchMainSection('memos') },
+          { title: 'Files', section: 'Navigation', icon: '📁', action: () => switchMainSection('files') },
+          { title: 'Tools', section: 'Navigation', icon: '🔧', action: () => switchMainSection('tools') },
+          { title: 'Reports', section: 'Navigation', icon: '📈', action: () => switchMainSection('reports') },
+          
+          // Office Sub-sections
+          { title: 'Vehicle Types', section: 'Office Settings', icon: '🚗', keywords: 'car suv sedan limo bus', action: () => this.navigateToOffice('vehicle-types') },
+          { title: 'Service Types', section: 'Office Settings', icon: '🛎️', keywords: 'airport hourly point transfer', action: () => this.navigateToOffice('service-types') },
+          { title: 'Rate Management', section: 'Office Settings', icon: '💵', keywords: 'pricing fees gratuity charges', action: () => this.navigateToOffice('rate-management') },
+          { title: 'Driver Management', section: 'Office Settings', icon: '👨‍✈️', keywords: 'employee driver chauffeur', action: () => this.navigateToOffice('drivers') },
+          { title: 'Company Settings', section: 'Office Settings', icon: '⚙️', keywords: 'configuration business', action: () => this.navigateToOffice('company-settings') },
+          { title: 'SMS Settings', section: 'Office Settings', icon: '📱', keywords: 'text message twilio', action: () => navigateToSmsSettings() },
+          { title: 'Email Settings', section: 'Office Settings', icon: '✉️', keywords: 'smtp mail notification', action: () => navigateToEmailSettings() },
+          { title: 'System Mapping', section: 'Office Settings', icon: '🗺️', keywords: 'google mapbox api', action: () => this.navigateToOffice('system-mapping') },
+          { title: 'Affiliates', section: 'Office Settings', icon: '🤝', keywords: 'partner vendor farm', action: () => this.navigateToOffice('affiliates') },
+          
+          // Common Actions
+          { title: 'Create Account', section: 'Actions', icon: '➕', keywords: 'new customer client', action: () => { switchMainSection('accounts'); } },
+          { title: 'View Calendar', section: 'Actions', icon: '📅', keywords: 'schedule booking', action: () => switchMainSection('calendar') },
+          { title: 'Dispatch Board', section: 'Actions', icon: '🚙', keywords: 'assign driver trip', action: () => switchMainSection('dispatch') },
+        ],
+        
+        navigateToOffice(page) {
+          switchMainSection('office');
+          setTimeout(() => {
+            const officeIframe = document.querySelector('#officeSection iframe');
+            if (officeIframe && officeIframe.contentWindow) {
+              officeIframe.contentWindow.postMessage({ action: 'navigateToTab', tab: page }, '*');
+            }
+          }, 150);
+        },
+        
+        search(query) {
+          if (!query || query.length < 2) return [];
+          const q = query.toLowerCase();
+          return this.searchableItems.filter(item => {
+            const searchText = `${item.title} ${item.section} ${item.keywords || ''}`.toLowerCase();
+            return searchText.includes(q);
+          }).slice(0, 10);
+        },
+        
+        renderResults(results) {
+          const container = document.getElementById('globalSearchResults');
+          if (!container) return;
+          
+          if (results.length === 0) {
+            container.innerHTML = '<div class="search-no-results">No results found</div>';
+            return;
+          }
+          
+          container.innerHTML = results.map((item, idx) => `
+            <div class="search-result-item" data-index="${idx}">
+              <span class="result-icon">${item.icon}</span>
+              <div class="result-text">
+                <div class="result-title">${item.title}</div>
+                <div class="result-section">${item.section}</div>
+              </div>
+            </div>
+          `).join('');
+          
+          // Bind click events
+          container.querySelectorAll('.search-result-item').forEach((el, idx) => {
+            el.addEventListener('click', () => {
+              const item = results[idx];
+              if (item.action) item.action();
+              this.close();
+            });
+          });
+        },
+        
+        open() {
+          const toggle = document.getElementById('globalSearchToggle');
+          const box = document.getElementById('globalSearchBox');
+          const input = document.getElementById('globalSearchInput');
+          if (toggle) toggle.classList.add('active');
+          if (box) box.classList.add('active');
+          if (input) { input.value = ''; input.focus(); }
+          document.getElementById('globalSearchResults').innerHTML = '';
+        },
+        
+        close() {
+          const toggle = document.getElementById('globalSearchToggle');
+          const box = document.getElementById('globalSearchBox');
+          if (toggle) toggle.classList.remove('active');
+          if (box) box.classList.remove('active');
+        },
+        
+        toggle() {
+          const box = document.getElementById('globalSearchBox');
+          if (box?.classList.contains('active')) {
+            this.close();
+          } else {
+            this.open();
+          }
+        },
+        
+        init() {
+          const toggle = document.getElementById('globalSearchToggle');
+          const input = document.getElementById('globalSearchInput');
+          
+          if (toggle) {
+            toggle.addEventListener('click', (e) => {
+              e.stopPropagation();
+              this.toggle();
+            });
+          }
+          
+          if (input) {
+            input.addEventListener('input', (e) => {
+              const results = this.search(e.target.value);
+              this.renderResults(results);
+            });
+            input.addEventListener('keydown', (e) => {
+              if (e.key === 'Escape') this.close();
+            });
+          }
+          
+          // Close on click outside
+          document.addEventListener('click', (e) => {
+            const container = document.querySelector('.global-search-container');
+            if (container && !container.contains(e.target)) {
+              this.close();
+            }
+          });
+          
+          // Keyboard shortcut: Ctrl+K
+          document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+              e.preventDefault();
+              this.toggle();
+            }
+          });
+        }
+      };
+      
+      document.addEventListener('DOMContentLoaded', () => GlobalSearch.init());
     </script>
 
     <!-- Authentication Protection & User Menu -->
@@ -924,5 +1251,7 @@
     <!-- Company Settings & Application -->
     <script src="CompanySettingsManager.js"></script>
     <script src="SettingsApplicationManager.js"></script>
+    <!-- SMS Service -->
+    <script src="sms-service.js"></script>
   </body>
 </html>

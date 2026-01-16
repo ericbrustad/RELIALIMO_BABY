@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delete Driver Utility</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 { color: #d32f2f; }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin: 5px;
+    }
+    .btn-primary { background: #1976d2; color: white; }
+    .btn-danger { background: #d32f2f; color: white; }
+    .btn-warning { background: #f57c00; color: white; }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    th { background: #f0f0f0; font-weight: 600; }
+    tr:hover { background: #f9f9f9; }
+    .log {
+      background: #1e1e1e;
+      color: #00ff00;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .success { color: #4caf50; }
+    .error { color: #f44336; }
+    .warning { color: #ff9800; }
+    input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+    .select-all { margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h1>🗑️ Delete Driver Utility</h1>
+  <p>This utility allows you to delete drivers and their associated fleet vehicles for testing/cleanup purposes.</p>
+  
+  <div class="card">
+    <h2>📋 Drivers List</h2>
+    <button class="btn btn-primary" onclick="loadDrivers()">🔄 Refresh Drivers</button>
+    <div class="select-all">
+      <label><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"> Select All</label>
+    </div>
+    <table id="driversTable">
+      <thead>
+        <tr>
+          <th>Select</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Status</th>
+          <th>Vehicle</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody id="driversBody">
+        <tr><td colspan="7">Click "Refresh Drivers" to load...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  
+  <div class="card">
+    <h2>⚠️ Delete Selected</h2>
+    <p style="color: #d32f2f;"><strong>Warning:</strong> This action cannot be undone! The following will be deleted:</p>
+    <ul>
+      <li>Driver record from <code>drivers</code> table</li>
+      <li>Associated vehicle from <code>fleet_vehicles</code> table (where assigned_driver_id matches)</li>
+      <li>Associated affiliate from <code>affiliates</code> table (if driver is the only one linked to it)</li>
+    </ul>
+    <button class="btn btn-danger" onclick="deleteSelected()" id="deleteBtn" disabled>🗑️ Delete Selected Drivers</button>
+    <button class="btn btn-warning" onclick="deleteAll()">💀 Delete ALL Drivers</button>
+  </div>
+  
+  <div class="card">
+    <h2>📝 Log</h2>
+    <div class="log" id="log">Ready...\n</div>
+    <button class="btn btn-primary" onclick="clearLog()">Clear Log</button>
+  </div>
+
+  <script type="module">
+    import { setupAPI, fetchDrivers, fetchVehicles, fetchAffiliates } from './api-service.js';
+    
+    const SUPABASE_URL = 'https://siumiadylwcrkaqsfwkj.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpdW1pYWR5bHdjcmthcXNmd2tqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU2NjMzMTMsImV4cCI6MjA4MTIzOTMxM30.sSZBsXyOOmIp2eve_SpiUGeIwx3BMoxvY4c7bvE2kKw';
+    
+    let drivers = [];
+    let vehicles = [];
+    let affiliates = [];
+    
+    function log(msg, type = '') {
+      const logEl = document.getElementById('log');
+      const timestamp = new Date().toLocaleTimeString();
+      const className = type ? `class="${type}"` : '';
+      logEl.innerHTML += `<span ${className}>[${timestamp}] ${msg}</span>\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+    
+    window.clearLog = function() {
+      document.getElementById('log').innerHTML = '';
+    };
+    
+    window.loadDrivers = async function() {
+      log('Loading drivers...');
+      try {
+        await setupAPI();
+        
+        // Load all data
+        drivers = await fetchDrivers() || [];
+        vehicles = await fetchVehicles() || [];
+        affiliates = await fetchAffiliates() || [];
+        
+        log(`Loaded ${drivers.length} drivers, ${vehicles.length} vehicles, ${affiliates.length} affiliates`, 'success');
+        
+        renderDriversTable();
+      } catch (err) {
+        log('Error loading drivers: ' + err.message, 'error');
+      }
+    };
+    
+    function renderDriversTable() {
+      const tbody = document.getElementById('driversBody');
+      
+      if (drivers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7">No drivers found</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = drivers.map(d => {
+        // Find associated vehicle
+        const vehicle = vehicles.find(v => v.assigned_driver_id === d.id);
+        const vehicleInfo = vehicle ? `${vehicle.unit_number || vehicle.veh_disp_name || 'Unknown'}` : '-';
+        const createdAt = d.created_at ? new Date(d.created_at).toLocaleDateString() : '-';
+        
+        return `
+          <tr>
+            <td><input type="checkbox" class="driver-checkbox" value="${d.id}" onchange="updateDeleteBtn()"></td>
+            <td>${d.first_name || ''} ${d.last_name || ''}</td>
+            <td>${d.email || '-'}</td>
+            <td>${d.cell_phone || d.phone || '-'}</td>
+            <td>${d.driver_status || d.status || '-'}</td>
+            <td>${vehicleInfo}</td>
+            <td>${createdAt}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+    
+    window.toggleSelectAll = function() {
+      const selectAll = document.getElementById('selectAll').checked;
+      document.querySelectorAll('.driver-checkbox').forEach(cb => cb.checked = selectAll);
+      updateDeleteBtn();
+    };
+    
+    window.updateDeleteBtn = function() {
+      const selected = document.querySelectorAll('.driver-checkbox:checked').length;
+      document.getElementById('deleteBtn').disabled = selected === 0;
+      document.getElementById('deleteBtn').textContent = selected > 0 
+        ? `🗑️ Delete ${selected} Driver(s)` 
+        : '🗑️ Delete Selected Drivers';
+    };
+    
+    window.deleteSelected = async function() {
+      const checkboxes = document.querySelectorAll('.driver-checkbox:checked');
+      const driverIds = Array.from(checkboxes).map(cb => cb.value);
+      
+      if (driverIds.length === 0) {
+        alert('No drivers selected');
+        return;
+      }
+      
+      if (!confirm(`Are you sure you want to delete ${driverIds.length} driver(s) and their associated data?`)) {
+        return;
+      }
+      
+      await deleteDrivers(driverIds);
+    };
+    
+    window.deleteAll = async function() {
+      if (drivers.length === 0) {
+        alert('No drivers to delete');
+        return;
+      }
+      
+      if (!confirm(`⚠️ DANGER: Delete ALL ${drivers.length} drivers and their vehicles/affiliates?`)) {
+        return;
+      }
+      
+      if (!confirm('Are you REALLY sure? This cannot be undone!')) {
+        return;
+      }
+      
+      const driverIds = drivers.map(d => d.id);
+      await deleteDrivers(driverIds);
+    };
+    
+    async function deleteDrivers(driverIds) {
+      log(`Starting deletion of ${driverIds.length} driver(s)...`);
+      
+      let deletedDrivers = 0;
+      let deletedVehicles = 0;
+      let deletedAffiliates = 0;
+      
+      for (const driverId of driverIds) {
+        const driver = drivers.find(d => d.id === driverId);
+        const driverName = driver ? `${driver.first_name} ${driver.last_name}` : driverId;
+        
+        try {
+          // 1. Delete associated vehicles
+          const driverVehicles = vehicles.filter(v => v.assigned_driver_id === driverId);
+          for (const vehicle of driverVehicles) {
+            log(`  Deleting vehicle: ${vehicle.unit_number || vehicle.id}`);
+            const resp = await fetch(`${SUPABASE_URL}/rest/v1/fleet_vehicles?id=eq.${vehicle.id}`, {
+              method: 'DELETE',
+              headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+              }
+            });
+            if (resp.ok) {
+              deletedVehicles++;
+              log(`    ✅ Vehicle deleted`, 'success');
+            } else {
+              log(`    ⚠️ Vehicle deletion warning: ${resp.status}`, 'warning');
+            }
+          }
+          
+          // 2. Check if driver has affiliate that should be deleted
+          if (driver?.affiliate_id) {
+            // Check if any other drivers use this affiliate
+            const otherDriversWithAffiliate = drivers.filter(
+              d => d.affiliate_id === driver.affiliate_id && d.id !== driverId
+            );
+            
+            if (otherDriversWithAffiliate.length === 0) {
+              log(`  Deleting affiliate: ${driver.affiliate_id}`);
+              const resp = await fetch(`${SUPABASE_URL}/rest/v1/affiliates?id=eq.${driver.affiliate_id}`, {
+                method: 'DELETE',
+                headers: {
+                  'apikey': SUPABASE_ANON_KEY,
+                  'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                }
+              });
+              if (resp.ok) {
+                deletedAffiliates++;
+                log(`    ✅ Affiliate deleted`, 'success');
+              } else {
+                log(`    ⚠️ Affiliate deletion warning: ${resp.status}`, 'warning');
+              }
+            } else {
+              log(`  Skipping affiliate (used by ${otherDriversWithAffiliate.length} other driver(s))`, 'warning');
+            }
+          }
+          
+          // 3. Delete driver
+          log(`  Deleting driver: ${driverName}`);
+          const resp = await fetch(`${SUPABASE_URL}/rest/v1/drivers?id=eq.${driverId}`, {
+            method: 'DELETE',
+            headers: {
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+            }
+          });
+          if (resp.ok) {
+            deletedDrivers++;
+            log(`    ✅ Driver deleted`, 'success');
+          } else {
+            log(`    ❌ Driver deletion failed: ${resp.status}`, 'error');
+          }
+          
+        } catch (err) {
+          log(`  ❌ Error deleting ${driverName}: ${err.message}`, 'error');
+        }
+      }
+      
+      log(`\n=== DELETION COMPLETE ===`, 'success');
+      log(`Drivers deleted: ${deletedDrivers}`, 'success');
+      log(`Vehicles deleted: ${deletedVehicles}`, 'success');
+      log(`Affiliates deleted: ${deletedAffiliates}`, 'success');
+      
+      // Refresh the list
+      await loadDrivers();
+    }
+    
+    // Auto-load on page load
+    loadDrivers();
+  </script>
+</body>
+</html>

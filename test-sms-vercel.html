@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test SMS on Vercel</title>
+</head>
+<body>
+    <h1>Test SMS on Vercel</h1>
+    <button onclick="testSMS()">Send Test SMS</button>
+    <div id="result"></div>
+
+    <script>
+        async function testSMS() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Sending SMS...';
+
+            try {
+                const response = await fetch('/api/sms-send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        to: '+17632838336', // Eric's real phone number
+                        message: 'Test SMS from Vercel deployment - farmout system is live!'
+                    })
+                });
+
+                const data = await response.json();
+                resultDiv.innerHTML = `Response: ${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                resultDiv.innerHTML = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
