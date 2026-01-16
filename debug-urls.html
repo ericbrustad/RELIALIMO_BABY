@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Debug - RELIALIMO</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; }
+        .test-result { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        button { background: #007cba; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 5px; }
+        .url-input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="text-align: center;">🔍 <img src="https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/reliabull_Trans.png" alt="RELIALIMO" style="height: 50px; width: auto; vertical-align: middle; margin: 0 8px;"> URL Debug Tool</h1>
+        <p>This page helps debug URL routing issues.</p>
+        
+        <div class="info">
+            <h3>Current Page Info:</h3>
+            <p><strong>URL:</strong> <span id="currentUrl"></span></p>
+            <p><strong>Origin:</strong> <span id="currentOrigin"></span></p>
+            <p><strong>Pathname:</strong> <span id="currentPath"></span></p>
+            <p><strong>Search:</strong> <span id="currentSearch"></span></p>
+            <p><strong>Hash:</strong> <span id="currentHash"></span></p>
+        </div>
+
+        <h3>Test Custom URL:</h3>
+        <input type="text" id="testUrl" class="url-input" placeholder="Enter full URL to test (e.g., https://relialimo.com/driver/123)">
+        <button onclick="testUrl()">Test URL</button>
+        <button onclick="testDriverPortal()">Test Driver Portal Direct</button>
+        
+        <div id="testResults"></div>
+
+        <h3>Quick Tests:</h3>
+        <button onclick="testQuick('https://relialimo.com/driver-portal.html')">Basic Portal</button>
+        <button onclick="testQuick('https://relialimo.com/driver/99d34cd5-a593-4362-9846-db7167276592')">Driver Path</button>
+        <button onclick="testQuick('https://relialimo.com/portal/99d34cd5-a593-4362-9846-db7167276592')">Portal Path</button>
+        <button onclick="testQuick('https://relialimo.com/driver-portal.html?driver_id=99d34cd5-a593-4362-9846-db7167276592')">Query Param</button>
+        <button onclick="testQuick('https://relialimo.com/driver-portal.html#driver-99d34cd5-a593-4362-9846-db7167276592')">Hash Method</button>
+        
+        <div id="quickResults"></div>
+    </div>
+
+    <script>
+        // Show current page info
+        document.getElementById('currentUrl').textContent = window.location.href;
+        document.getElementById('currentOrigin').textContent = window.location.origin;
+        document.getElementById('currentPath').textContent = window.location.pathname;
+        document.getElementById('currentSearch').textContent = window.location.search || '(none)';
+        document.getElementById('currentHash').textContent = window.location.hash || '(none)';
+
+        async function testUrl() {
+            const url = document.getElementById('testUrl').value;
+            if (!url) {
+                alert('Please enter a URL to test');
+                return;
+            }
+            
+            const results = document.getElementById('testResults');
+            results.innerHTML = '<div class="info">Testing: ' + url + '</div>';
+            
+            try {
+                const response = await fetch(url, { method: 'HEAD' });
+                const resultClass = response.ok ? 'success' : 'error';
+                const statusText = response.ok ? 'Success' : 'Failed';
+                
+                results.innerHTML += `
+                    <div class="${resultClass}">
+                        <strong>${statusText}</strong><br>
+                        Status: ${response.status} ${response.statusText}<br>
+                        URL: ${response.url}
+                    </div>
+                `;
+            } catch (error) {
+                results.innerHTML += `
+                    <div class="error">
+                        <strong>Error</strong><br>
+                        ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        async function testDriverPortal() {
+            const driverId = '99d34cd5-a593-4362-9846-db7167276592';
+            const testUrls = [
+                `https://relialimo.com/driver-portal.html`,
+                `https://relialimo.com/driver-portal.html?driver_id=${driverId}`,
+                `https://relialimo.com/driver-portal.html#driver-${driverId}`,
+                `https://relialimo.com/driver/${driverId}`,
+                `https://relialimo.com/portal/${driverId}`
+            ];
+            
+            const results = document.getElementById('testResults');
+            results.innerHTML = '<div class="info">Testing multiple driver portal URLs...</div>';
+            
+            for (const url of testUrls) {
+                try {
+                    const response = await fetch(url, { method: 'HEAD' });
+                    const resultClass = response.ok ? 'success' : 'error';
+                    const statusText = response.ok ? '✅ OK' : '❌ Failed';
+                    
+                    results.innerHTML += `
+                        <div class="${resultClass}">
+                            ${statusText} - ${url}<br>
+                            Status: ${response.status}
+                        </div>
+                    `;
+                } catch (error) {
+                    results.innerHTML += `
+                        <div class="error">
+                            ❌ Error - ${url}<br>
+                            ${error.message}
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        async function testQuick(url) {
+            const results = document.getElementById('quickResults');
+            
+            try {
+                const response = await fetch(url, { method: 'HEAD' });
+                const resultClass = response.ok ? 'success' : 'error';
+                const statusText = response.ok ? '✅' : '❌';
+                
+                results.innerHTML = `
+                    <div class="${resultClass}">
+                        ${statusText} ${url}<br>
+                        Status: ${response.status} ${response.statusText}
+                    </div>
+                ` + (results.innerHTML || '');
+            } catch (error) {
+                results.innerHTML = `
+                    <div class="error">
+                        ❌ ${url}<br>
+                        Error: ${error.message}
+                    </div>
+                ` + (results.innerHTML || '');
+            }
+        }
+
+        // Auto-test when page loads
+        window.addEventListener('load', () => {
+            setTimeout(testDriverPortal, 1000);
+        });
+    </script>
+</body>
+</html>

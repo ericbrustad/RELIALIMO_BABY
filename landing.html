@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RELIALIMO - Professional Transportation Services</title>
+    <link rel="icon" href="favicon.png" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        header {
+            text-align: center;
+            padding: 40px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 50px;
+        }
+        
+        .logo {
+            font-size: 48px;
+            font-weight: 700;
+            color: #4ecdc4;
+            margin-bottom: 10px;
+            text-shadow: 0 4px 20px rgba(78, 205, 196, 0.3);
+        }
+        
+        .tagline {
+            font-size: 18px;
+            opacity: 0.8;
+            font-weight: 300;
+        }
+        
+        .main-content {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+        
+        .card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            background: rgba(255,255,255,0.08);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        
+        .card-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            display: block;
+        }
+        
+        .card h2 {
+            color: #4ecdc4;
+            margin-bottom: 15px;
+            font-size: 24px;
+        }
+        
+        .card p {
+            opacity: 0.8;
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+        
+        .btn {
+            display: inline-block;
+            background: #007cba;
+            color: white;
+            text-decoration: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .btn:hover {
+            background: #005c8a;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 124, 186, 0.4);
+        }
+        
+        .btn-secondary {
+            background: transparent;
+            border: 2px solid #4ecdc4;
+            color: #4ecdc4;
+        }
+        
+        .btn-secondary:hover {
+            background: #4ecdc4;
+            color: #1a1a2e;
+        }
+        
+        .quick-links {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+        
+        .quick-links a {
+            color: rgba(255,255,255,0.6);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s;
+        }
+        
+        .quick-links a:hover {
+            color: #4ecdc4;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 30px 0;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            opacity: 0.6;
+        }
+        
+        @media (max-width: 768px) {
+            .logo {
+                font-size: 36px;
+            }
+            
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .card {
+                padding: 25px;
+            }
+            
+            .quick-links {
+                flex-direction: column;
+                align-items: center;
+                gap: 10px;
+            }
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #4ecdc4;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo" style="text-align: center;">
+                <img src="https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/reliabull_Trans.png" 
+                     alt="RELIALIMO" 
+                     style="height: 216px; width: auto; filter: drop-shadow(0 4px 20px rgba(78, 205, 196, 0.3));">>
+            </div>
+            <div class="tagline">Professional Transportation Services</div>
+        </header>
+        
+        <div class="main-content">
+            <div class="card">
+                <span class="card-icon">🚗</span>
+                <h2>Driver Portal</h2>
+                <p>Access your personal driver dashboard, view trip assignments, and manage your availability.</p>
+                <a href="https://driver.relialimo.com" class="btn">Access Portal</a>
+            </div>
+            
+            <div class="card">
+                <span class="card-icon">🏢</span>
+                <h2>Admin Portal</h2>
+                <p>Complete dispatch and reservation management system for transportation operations.</p>
+                <a href="https://admin.relialimo.com" class="btn btn-secondary">Admin System</a>
+            </div>
+            
+            <div class="card">
+                <span class="card-icon">📱</span>
+                <h2>SMS Integration</h2>
+                <p><span class="status-indicator"></span>Live farmout automation with instant SMS notifications to drivers.</p>
+                <a href="/test-farmout-system.html" class="btn btn-secondary">Test System</a>
+            </div>
+        </div>
+        
+        <div class="quick-links">
+            <a href="/debug-urls.html">URL Debug Tool</a>
+            <a href="/test-driver-portal-urls.html">Driver Portal Tests</a>
+            <a href="https://driver.relialimo.com">Driver Login</a>
+            <a href="https://admin.relialimo.com">Admin Portal</a>
+            <a href="/dispatch-grid.html">Dispatch Grid</a>
+        </div>
+        
+        <footer>
+            <p>&copy; 2026 <img src="https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/reliabull_Trans.png" alt="RELIALIMO" style="height: 29px; width: auto; vertical-align: middle; margin: 0 4px;">. Professional Transportation Services.</p>
+        </footer>
+    </div>
+
+    <script>
+        // Auto-detect and redirect driver URLs
+        const path = window.location.pathname;
+        const segments = path.split('/').filter(s => s.length > 0);
+        
+        // If URL looks like it contains a driver ID, redirect to driver portal
+        if (segments.length === 1) {
+            const segment = segments[0];
+            if (segment.length >= 8 && (segment.includes('-') || /^[a-f0-9]+$/i.test(segment))) {
+                console.log('Redirecting to driver portal for:', segment);
+                window.location.href = `/driver-portal.html?driver_id=${segment}`;
+            }
+        }
+        
+        // Add some interactive effects
+        document.addEventListener('DOMContentLoaded', () => {
+            const cards = document.querySelectorAll('.card');
+            cards.forEach(card => {
+                card.addEventListener('mouseenter', () => {
+                    card.style.borderColor = 'rgba(78, 205, 196, 0.3)';
+                });
+                card.addEventListener('mouseleave', () => {
+                    card.style.borderColor = 'rgba(255,255,255,0.1)';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
