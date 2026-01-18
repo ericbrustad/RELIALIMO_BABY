@@ -3006,3 +3006,396 @@ body {
 @media print {
   .screen { display: none !important; }
 }
+
+/* ============================================
+   Enhanced Driver Trip Flow Styles
+   ============================================ */
+
+/* Status Progress Bar */
+.status-progress-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md);
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  gap: 0;
+}
+
+.status-step {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  background: var(--bg-input);
+  border: 2px solid var(--border);
+  transition: all 0.3s ease;
+}
+
+.status-step.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  transform: scale(1.15);
+  box-shadow: 0 0 16px rgba(79, 70, 229, 0.5);
+}
+
+.status-step.complete {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.status-step.pending {
+  opacity: 0.5;
+}
+
+.status-connector {
+  width: 20px;
+  height: 2px;
+  background: var(--border);
+}
+
+/* Enhanced Active Trip Header */
+.active-trip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-md);
+}
+
+.pickup-datetime {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.datetime-primary {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.datetime-secondary {
+  display: flex;
+  gap: var(--space-sm);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.trip-conf-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  background: var(--bg-input);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.conf-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.conf-number {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--primary-light);
+}
+
+/* Passenger Info */
+.trip-passenger-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--bg-input);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-md);
+}
+
+.passenger-avatar {
+  font-size: 2rem;
+}
+
+.passenger-details {
+  flex: 1;
+}
+
+.passenger-name {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.passenger-phone {
+  color: var(--info);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.passenger-count {
+  background: var(--primary);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+/* Vehicle Type Badge */
+.trip-vehicle-type {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-card-hover);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-md);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.trip-vehicle-type .vehicle-icon {
+  font-size: 1.2rem;
+}
+
+/* Route with Navigate Buttons */
+.trip-route-active {
+  background: var(--bg-input);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.trip-route-active .route-point {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.trip-route-active .route-marker {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.trip-route-active .route-marker.pickup {
+  background: var(--success);
+  color: white;
+}
+
+.trip-route-active .route-marker.dropoff {
+  background: var(--danger);
+  color: white;
+}
+
+.trip-route-active .route-address {
+  flex: 1;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.trip-route-active .route-connector {
+  width: 2px;
+  height: 20px;
+  background: var(--border);
+  margin-left: 15px;
+}
+
+.btn-nav {
+  padding: var(--space-xs) var(--space-sm) !important;
+  font-size: 1rem !important;
+  min-width: 40px;
+}
+
+/* Map Toggle Button */
+.btn-map-toggle {
+  width: 100%;
+  margin-bottom: var(--space-md);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+}
+
+.btn-map-toggle.map-hidden {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+/* Quick Notes */
+.trip-notes-quick {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
+.quick-note-input {
+  flex: 1;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.quick-note-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* Special Instructions */
+.trip-special-instructions {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-top: var(--space-md);
+}
+
+.instructions-header {
+  font-weight: 600;
+  margin-bottom: var(--space-sm);
+  color: var(--warning);
+}
+
+.instructions-text {
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Map Preference Modal */
+.map-app-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.map-app-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  background: var(--bg-input);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.map-app-option:hover {
+  border-color: var(--primary);
+  background: var(--bg-card-hover);
+}
+
+.map-app-icon {
+  font-size: 2.5rem;
+}
+
+.map-app-name {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.map-app-desc {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.modal-subtitle {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-lg);
+  text-align: center;
+}
+
+/* Post-Trip Modal Enhancements */
+.post-trip-summary {
+  background: var(--bg-input);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-lg);
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.summary-label {
+  color: var(--text-secondary);
+}
+
+.summary-value {
+  font-weight: 600;
+  font-size: 1.25rem;
+  color: var(--success);
+}
+
+.form-section-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: var(--space-lg) 0 var(--space-sm);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--border);
+}
+
+.form-input-sm {
+  padding: var(--space-sm);
+  font-size: 0.9rem;
+}
+
+.post-trip-totals {
+  background: var(--bg-card);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-lg);
+  border: 1px solid var(--border);
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-sm) 0;
+  color: var(--text-secondary);
+}
+
+.total-row.total-grand {
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--success);
+  border-top: 2px solid var(--border);
+  padding-top: var(--space-md);
+  margin-top: var(--space-sm);
+}
+
+/* New Status Colors */
+.active-trip-status-bar.getting_ready,
+.active-trip-status-bar.getting-ready {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+.active-trip-status-bar.waiting {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+}
+
+.active-trip-status-bar.done {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+/* Status step colors */
+:root {
+  --status-getting-ready: #3b82f6;
+  --status-waiting: #8b5cf6;
+  --status-done: #10b981;
+}

@@ -626,37 +626,116 @@
       </div>
     </div>
 
-    <!-- Post-Trip Modal -->
+    <!-- Map Preference Modal (First Run) -->
+    <div id="mapPreferenceModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>🗺️ Choose Your Map App</h2>
+        </div>
+        <div class="modal-body">
+          <p class="modal-subtitle">Select your preferred navigation app. This will be used when you tap "Navigate" on trips.</p>
+          <div class="map-app-options" id="mapAppOptions">
+            <button type="button" class="map-app-option" data-map="google">
+              <span class="map-app-icon">🗺️</span>
+              <span class="map-app-name">Google Maps</span>
+              <span class="map-app-desc">Works on all devices</span>
+            </button>
+            <button type="button" class="map-app-option" data-map="apple">
+              <span class="map-app-icon">🍎</span>
+              <span class="map-app-name">Apple Maps</span>
+              <span class="map-app-desc">iPhone & CarPlay</span>
+            </button>
+            <button type="button" class="map-app-option" data-map="waze">
+              <span class="map-app-icon">🚙</span>
+              <span class="map-app-name">Waze</span>
+              <span class="map-app-desc">Live traffic & alerts</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Post-Trip Modal (Enhanced with Incidentals) -->
     <div id="postTripModal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h2>Complete Trip</h2>
+          <h2>🏁 Complete Trip</h2>
         </div>
         <div class="modal-body">
-          <div class="form-group">
-            <label for="waitTime">Wait Time (minutes)</label>
-            <input type="number" id="waitTime" value="0" min="0">
+          <div class="post-trip-summary" id="postTripSummary">
+            <div class="summary-item">
+              <span class="summary-label">Base Fare</span>
+              <span class="summary-value" id="baseFareDisplay">$0.00</span>
+            </div>
           </div>
-          <div class="form-group">
-            <label for="extraStops">Extra Stops</label>
-            <input type="number" id="extraStops" value="0" min="0">
+          
+          <h3 class="form-section-title">⏱️ Time & Stops</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="waitTime">Wait Time (min)</label>
+              <input type="number" id="waitTime" value="0" min="0" class="form-input-sm">
+            </div>
+            <div class="form-group">
+              <label for="extraStops">Extra Stops</label>
+              <input type="number" id="extraStops" value="0" min="0" class="form-input-sm">
+            </div>
           </div>
-          <div class="form-group">
-            <label for="tollsParking">Tolls/Parking ($)</label>
-            <input type="number" id="tollsParking" value="0" min="0" step="0.01">
+          
+          <h3 class="form-section-title">💰 Incidentals (Job-Related Costs)</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="parkingCost">Parking ($)</label>
+              <input type="number" id="parkingCost" value="0" min="0" step="0.01" class="form-input-sm" oninput="updateTripTotals()">
+            </div>
+            <div class="form-group">
+              <label for="tollsCost">Tolls ($)</label>
+              <input type="number" id="tollsCost" value="0" min="0" step="0.01" class="form-input-sm" oninput="updateTripTotals()">
+            </div>
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="otherCosts">Other Costs ($)</label>
+              <input type="number" id="otherCosts" value="0" min="0" step="0.01" class="form-input-sm" oninput="updateTripTotals()">
+            </div>
+            <div class="form-group">
+              <label for="otherCostsDesc">Description</label>
+              <input type="text" id="otherCostsDesc" placeholder="e.g., Airport fee" class="form-input-sm">
+            </div>
+          </div>
+          
+          <h3 class="form-section-title">💵 Tip</h3>
           <div class="form-group">
             <label for="tipAmount">Tip Amount ($)</label>
-            <input type="number" id="tipAmount" value="0" min="0" step="0.01">
+            <input type="number" id="tipAmount" value="0" min="0" step="0.01" oninput="updateTripTotals()">
           </div>
+          
+          <h3 class="form-section-title">📝 Notes</h3>
           <div class="form-group">
-            <label for="driverNotes">Notes</label>
-            <textarea id="driverNotes" rows="3" placeholder="Any notes about the trip..."></textarea>
+            <textarea id="driverNotes" rows="2" placeholder="Any notes about the trip..."></textarea>
+          </div>
+          
+          <div class="post-trip-totals">
+            <div class="total-row">
+              <span>Base Fare</span>
+              <span id="totalBaseFare">$0.00</span>
+            </div>
+            <div class="total-row">
+              <span>+ Incidentals</span>
+              <span id="totalIncidentals">$0.00</span>
+            </div>
+            <div class="total-row">
+              <span>+ Tip</span>
+              <span id="totalTip">$0.00</span>
+            </div>
+            <div class="total-row total-grand">
+              <span>TOTAL TO BE PAID</span>
+              <span id="grandTotal">$0.00</span>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" id="submitPostTrip" class="btn btn-success btn-large">
-            ✓ Complete Trip
+            ✅ Complete Trip
           </button>
         </div>
       </div>

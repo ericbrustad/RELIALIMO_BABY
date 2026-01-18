@@ -475,6 +475,11 @@ const state = {
   vehicleTypes: [],
   activeTimer: null,
   timerStartTime: null,
+  // Map preferences
+  preferredMapApp: localStorage.getItem('driver_preferred_map') || null,
+  mapVisible: true, // Show/hide map toggle state
+  // Active trip state
+  activeTripBaseFare: 0,
   // OTP verification state (phone)
   otpCode: null,
   otpExpiry: null,
@@ -855,24 +860,38 @@ const elements = {
 };
 
 // ============================================
-// Status Configuration
+// Status Configuration - Enhanced Flow
 // ============================================
 const STATUS_META = {
   available: { emoji: '🟢', label: 'Available', color: 'available' },
+  getting_ready: { emoji: '🔵', label: 'Getting Ready', color: 'getting-ready' },
   enroute: { emoji: '🟡', label: 'On the Way', color: 'enroute' },
   arrived: { emoji: '🟠', label: 'Arrived', color: 'arrived' },
-  passenger_onboard: { emoji: '🔵', label: 'Passenger On Board', color: 'onboard' },
-  completed: { emoji: '✅', label: 'Completed', color: 'completed' },
+  waiting: { emoji: '⏳', label: 'Waiting', color: 'waiting' },
+  passenger_onboard: { emoji: '🚗', label: 'Customer in Car', color: 'onboard' },
+  done: { emoji: '✅', label: 'Done', color: 'done' },
+  completed: { emoji: '🏁', label: 'Completed', color: 'completed' },
   busy: { emoji: '🔴', label: 'Busy', color: 'busy' },
   offline: { emoji: '⚫', label: 'Offline', color: 'offline' }
 };
 
+// Status flow with skip options (e.g., can skip 'waiting')
 const STATUS_TRANSITIONS = {
   // What statuses are available from each status
-  available: ['enroute'],
+  available: ['getting_ready'],
+  getting_ready: ['enroute'],
   enroute: ['arrived'],
-  arrived: ['passenger_onboard'],
-  passenger_onboard: ['completed']
+  arrived: ['waiting', 'passenger_onboard'], // Can skip waiting
+  waiting: ['passenger_onboard'],
+  passenger_onboard: ['done'],
+  done: ['completed'] // After done, goes to post-trip incidentals
+};
+
+// Map app preferences
+const MAP_APPS = {
+  google: { name: 'Google Maps', icon: '🗺️', scheme: 'google.navigation:q=' },
+  apple: { name: 'Apple Maps', icon: '🍎', scheme: 'maps://maps.google.com/maps?daddr=' },
+  waze: { name: 'Waze', icon: '🚗', scheme: 'waze://?ll=' }
 };
 
 // ============================================
@@ -4886,9 +4905,17 @@ function renderFarmoutOfferDetails(trip, type) {
 }
 
 function renderActiveTripCard(trip) {
-  const status = trip.driver_status || 'enroute';
-  const statusMeta = STATUS_META[status] || STATUS_META.enroute;
+  const status = trip.driver_status || 'getting_ready';
+  const statusMeta = STATUS_META[status] || STATUS_META.getting_ready;
   const passengerName = trip.passenger_name || trip.passenger_first_name || 'Passenger';
+  const passengerPhone = trip.passenger_phone || trip.passenger_cell || '';
+  
+  // Parse pickup date/time for display
+  const pickupDateTime = new Date(trip.pickup_date_time || trip.pickup_date);
+  const pickupDay = pickupDateTime.toLocaleDateString('en-US', { weekday: 'short' });
+  const pickupDate = pickupDateTime.getDate();
+  const pickupMonth = pickupDateTime.toLocaleDateString('en-US', { month: 'short' });
+  const pickupTime = pickupDateTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   
   // Calculate elapsed time
   const elapsed = state.timerStartTime ? formatElapsedTime(Date.now() - state.timerStartTime) : '00:00';
@@ -4896,48 +4923,122 @@ function renderActiveTripCard(trip) {
   // Next status options
   const nextStatuses = STATUS_TRANSITIONS[status] || [];
   
+  // Store base fare for post-trip calculations
+  state.activeTripBaseFare = parseFloat(trip.driver_pay) || parseFloat(trip.base_fare) || 0;
+  
+  // Create status progress bar
+  const statusFlow = ['getting_ready', 'enroute', 'arrived', 'passenger_onboard', 'done'];
+  const currentStatusIndex = statusFlow.indexOf(status);
+  
   elements.activeTripCard.innerHTML = `
+    <!-- Status Progress Bar -->
+    <div class="status-progress-bar">
+      ${statusFlow.map((s, idx) => {
+        const meta = STATUS_META[s];
+        const isActive = s === status;
+        const isComplete = idx < currentStatusIndex;
+        const stateClass = isActive ? 'active' : (isComplete ? 'complete' : 'pending');
+        return `<div class="status-step ${stateClass}" title="${meta.label}">${meta.emoji}</div>`;
+      }).join('<div class="status-connector"></div>')}
+    </div>
+    
+    <!-- Current Status Banner -->
     <div class="active-trip-status-bar ${status}">
       ${statusMeta.emoji} ${statusMeta.label}
     </div>
+    
     <div class="active-trip-body">
-      <div class="trip-card-header">
-        <div class="trip-date-time">
-          <span class="trip-date">${passengerName}</span>
-          <span class="trip-time">#${trip.confirmation_number || trip.id?.slice(0, 8)}</span>
+      <!-- Trip Info Header -->
+      <div class="active-trip-header">
+        <div class="pickup-datetime">
+          <div class="datetime-primary">
+            <span class="datetime-time">${pickupTime}</span>
+          </div>
+          <div class="datetime-secondary">
+            <span class="datetime-day">${pickupDay}</span>
+            <span class="datetime-date">${pickupMonth} ${pickupDate}</span>
+          </div>
+        </div>
+        <div class="trip-conf-badge">
+          <span class="conf-label">CONF#</span>
+          <span class="conf-number">${trip.confirmation_number || trip.id?.slice(0, 8)}</span>
         </div>
       </div>
       
+      <!-- Passenger Info -->
+      <div class="trip-passenger-info">
+        <div class="passenger-avatar">👤</div>
+        <div class="passenger-details">
+          <div class="passenger-name">${passengerName}</div>
+          ${passengerPhone ? `<a href="tel:${passengerPhone}" class="passenger-phone">📞 ${formatPhone(passengerPhone)}</a>` : ''}
+        </div>
+        <div class="passenger-count">${trip.passenger_count || 1} PAX</div>
+      </div>
+      
+      <!-- Vehicle Type -->
+      ${trip.vehicle_type ? `
+        <div class="trip-vehicle-type">
+          <span class="vehicle-icon">🚗</span>
+          <span class="vehicle-name">${trip.vehicle_type}</span>
+        </div>
+      ` : ''}
+      
+      <!-- Trip Timer -->
       <div class="active-trip-timer">
         <div class="timer-value" id="tripTimer">${elapsed}</div>
         <div class="timer-label">Trip Duration</div>
       </div>
       
-      <div class="trip-route" style="margin-bottom: var(--space-lg);">
-        <div class="trip-location pickup">
-          <span class="trip-location-icon">📍</span>
-          <span class="trip-location-text">${trip.pickup_address || trip.pickup_location || 'Pickup'}</span>
+      <!-- Route with Navigate buttons -->
+      <div class="trip-route-active">
+        <div class="route-point">
+          <div class="route-marker pickup">PU</div>
+          <div class="route-address">${trip.pickup_address || trip.pickup_location || 'Pickup'}</div>
+          <button class="btn btn-sm btn-nav" onclick="event.stopPropagation(); openNavigation('${(trip.pickup_address || trip.pickup_location || '').replace(/'/g, "\\'")}')">
+            🧭
+          </button>
         </div>
-        <div class="trip-location dropoff">
-          <span class="trip-location-icon">🏁</span>
-          <span class="trip-location-text">${trip.dropoff_address || trip.dropoff_location || 'Dropoff'}</span>
+        <div class="route-connector"></div>
+        <div class="route-point">
+          <div class="route-marker dropoff">DO</div>
+          <div class="route-address">${trip.dropoff_address || trip.dropoff_location || 'Dropoff'}</div>
+          <button class="btn btn-sm btn-nav" onclick="event.stopPropagation(); openNavigation('${(trip.dropoff_address || trip.dropoff_location || '').replace(/'/g, "\\'")}')">
+            🧭
+          </button>
         </div>
       </div>
       
+      <!-- Map Toggle Button (for mobile) -->
+      <button type="button" id="toggleMapBtn" class="btn btn-outline btn-map-toggle" onclick="toggleMapVisibility()">
+        🗺️ ${state.mapVisible ? 'Hide Map' : 'Show Map'}
+      </button>
+      
+      <!-- Status Action Buttons -->
       <div class="active-trip-actions">
         ${nextStatuses.map(nextStatus => {
           const meta = STATUS_META[nextStatus];
-          const btnClass = nextStatus === 'completed' ? 'btn-success' : 'btn-primary';
+          const btnClass = nextStatus === 'done' ? 'btn-success btn-large' : 'btn-primary';
+          const btnLabel = getStatusActionLabel(nextStatus);
           return `
             <button class="btn ${btnClass}" onclick="updateTripStatus('${trip.id}', '${nextStatus}')">
-              ${meta.emoji} ${getStatusActionLabel(nextStatus)}
+              ${meta.emoji} ${btnLabel}
             </button>
           `;
         }).join('')}
-        
-        <button class="btn btn-secondary" onclick="openNavigation('${trip.dropoff_address || trip.dropoff_location || ''}')">
-          🧭 Open Navigation
-        </button>
+      </div>
+      
+      <!-- Special Instructions -->
+      ${trip.special_instructions ? `
+        <div class="trip-special-instructions">
+          <div class="instructions-header">⚠️ Special Instructions</div>
+          <div class="instructions-text">${trip.special_instructions}</div>
+        </div>
+      ` : ''}
+      
+      <!-- Driver Notes Quick Add -->
+      <div class="trip-notes-quick">
+        <input type="text" id="quickNotes" placeholder="Quick note to dispatch..." class="quick-note-input">
+        <button class="btn btn-sm" onclick="sendQuickNote('${trip.id}')">📤</button>
       </div>
     </div>
   `;
@@ -5127,14 +5228,17 @@ window.startTrip = async function(tripId) {
     // Play trip start sound
     playNotificationSound('trip_start');
     
-    await updateReservationStatus(tripId, { driver_status: 'enroute' });
+    // Start with "getting_ready" status instead of immediately enroute
+    await updateReservationStatus(tripId, { driver_status: 'getting_ready' });
     
-    // Send notification to passenger
-    await sendPassengerNotification(tripId, 'on_the_way');
-    
-    showToast('Trip started! Passenger notified.', 'success');
+    showToast('Trip started! Update status as you go.', 'success');
     switchTab('active');
     await refreshTrips();
+    
+    // Check map preference on first navigation
+    if (!state.preferredMapApp) {
+      checkMapPreference();
+    }
   } catch (err) {
     console.error('[DriverPortal] Start trip error:', err);
     showToast('Failed to start trip', 'error');
@@ -5148,10 +5252,28 @@ window.updateTripStatus = async function(tripId, newStatus) {
     // Send notifications for certain statuses
     if (newStatus === 'enroute') {
       await sendPassengerNotification(tripId, 'on_the_way');
-      showToast('Passenger notified you are on the way', 'success');
+      showToast('🚗 On the way! Passenger notified.', 'success');
     } else if (newStatus === 'arrived') {
       await sendPassengerNotification(tripId, 'arrived');
-      showToast('Passenger notified you have arrived', 'success');
+      showToast('📍 Arrived! Passenger notified.', 'success');
+    } else if (newStatus === 'waiting') {
+      showToast('⏳ Waiting for passenger...', 'info');
+    } else if (newStatus === 'passenger_onboard') {
+      showToast('🚗 Customer in car! Drive safe.', 'success');
+    } else if (newStatus === 'done') {
+      // When driver marks as Done, show the post-trip incidentals modal
+      playNotificationSound('trip_complete');
+      stopTripTimer();
+      openModal('postTripModal');
+      elements.postTripModal.dataset.tripId = tripId;
+      
+      // Pre-fill base fare
+      const trip = state.trips.active;
+      if (trip) {
+        state.activeTripBaseFare = parseFloat(trip.driver_pay) || parseFloat(trip.base_fare) || 0;
+        updateTripTotals();
+      }
+      return; // Don't refresh yet, wait for post-trip form
     } else if (newStatus === 'completed') {
       // Play completion sound
       playNotificationSound('trip_complete');
@@ -5160,6 +5282,14 @@ window.updateTripStatus = async function(tripId, newStatus) {
       openModal('postTripModal');
       // Store trip ID for post-trip form
       elements.postTripModal.dataset.tripId = tripId;
+      
+      // Pre-fill the base fare from trip data
+      const trip = state.trips.active;
+      if (trip) {
+        state.activeTripBaseFare = parseFloat(trip.driver_pay) || parseFloat(trip.base_fare) || 0;
+        updateTripTotals();
+      }
+      
       return; // Don't refresh yet, wait for post-trip form
     }
     
@@ -5170,15 +5300,48 @@ window.updateTripStatus = async function(tripId, newStatus) {
   }
 };
 
+// Update trip totals in post-trip modal
+window.updateTripTotals = function() {
+  const baseFare = state.activeTripBaseFare || 0;
+  const parking = parseFloat(document.getElementById('parkingCost')?.value) || 0;
+  const tolls = parseFloat(document.getElementById('tollsCost')?.value) || 0;
+  const otherCosts = parseFloat(document.getElementById('otherCosts')?.value) || 0;
+  const tip = parseFloat(document.getElementById('tipAmount')?.value) || 0;
+  
+  const totalIncidentals = parking + tolls + otherCosts;
+  const grandTotal = baseFare + totalIncidentals + tip;
+  
+  // Update display
+  const baseFareEl = document.getElementById('totalBaseFare');
+  const incidentalsEl = document.getElementById('totalIncidentals');
+  const tipEl = document.getElementById('totalTip');
+  const grandTotalEl = document.getElementById('grandTotal');
+  const baseFareDisplayEl = document.getElementById('baseFareDisplay');
+  
+  if (baseFareEl) baseFareEl.textContent = `$${baseFare.toFixed(2)}`;
+  if (baseFareDisplayEl) baseFareDisplayEl.textContent = `$${baseFare.toFixed(2)}`;
+  if (incidentalsEl) incidentalsEl.textContent = `$${totalIncidentals.toFixed(2)}`;
+  if (tipEl) tipEl.textContent = `$${tip.toFixed(2)}`;
+  if (grandTotalEl) grandTotalEl.textContent = `$${grandTotal.toFixed(2)}`;
+};
+
 async function handlePostTripSubmit() {
   const tripId = elements.postTripModal.dataset.tripId;
   
+  // Enhanced post-trip data with separate incidentals
   const postTripData = {
     wait_time: parseInt(document.getElementById('waitTime').value) || 0,
     extra_stops: parseInt(document.getElementById('extraStops').value) || 0,
-    tolls_parking: parseFloat(document.getElementById('tollsParking').value) || 0,
+    parking_cost: parseFloat(document.getElementById('parkingCost')?.value) || 0,
+    tolls_cost: parseFloat(document.getElementById('tollsCost')?.value) || 0,
+    other_costs: parseFloat(document.getElementById('otherCosts')?.value) || 0,
+    other_costs_description: document.getElementById('otherCostsDesc')?.value?.trim() || '',
     tip: parseFloat(document.getElementById('tipAmount').value) || 0,
-    driver_notes: document.getElementById('driverNotes').value.trim()
+    driver_notes: document.getElementById('driverNotes').value.trim(),
+    // Calculate totals
+    total_incidentals: (parseFloat(document.getElementById('parkingCost')?.value) || 0) +
+                       (parseFloat(document.getElementById('tollsCost')?.value) || 0) +
+                       (parseFloat(document.getElementById('otherCosts')?.value) || 0)
   };
   
   try {
@@ -5195,7 +5358,10 @@ async function handlePostTripSubmit() {
     // Reset post-trip form
     document.getElementById('waitTime').value = '0';
     document.getElementById('extraStops').value = '0';
-    document.getElementById('tollsParking').value = '0';
+    if (document.getElementById('parkingCost')) document.getElementById('parkingCost').value = '0';
+    if (document.getElementById('tollsCost')) document.getElementById('tollsCost').value = '0';
+    if (document.getElementById('otherCosts')) document.getElementById('otherCosts').value = '0';
+    if (document.getElementById('otherCostsDesc')) document.getElementById('otherCostsDesc').value = '';
     document.getElementById('tipAmount').value = '0';
     document.getElementById('driverNotes').value = '';
     
@@ -5209,26 +5375,112 @@ async function handlePostTripSubmit() {
   }
 }
 
-window.openNavigation = function(address) {
+// ============================================
+// Map Preference System
+// ============================================
+function checkMapPreference() {
+  // Check if map preference is set, if not show modal on first use
+  if (!state.preferredMapApp) {
+    openModal('mapPreferenceModal');
+    setupMapPreferenceHandlers();
+  }
+}
+
+function setupMapPreferenceHandlers() {
+  const options = document.querySelectorAll('.map-app-option');
+  options.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mapApp = btn.dataset.map;
+      setMapPreference(mapApp);
+      closeModal('mapPreferenceModal');
+      showToast(`${MAP_APPS[mapApp]?.name || mapApp} set as your navigation app!`, 'success');
+    });
+  });
+}
+
+function setMapPreference(mapApp) {
+  state.preferredMapApp = mapApp;
+  localStorage.setItem('driver_preferred_map', mapApp);
+  
+  // Update settings UI if visible
+  const prefSelect = document.getElementById('preferredMapApp');
+  if (prefSelect) prefSelect.value = mapApp;
+}
+
+window.openNavigation = function(address, usePickup = false) {
   if (!address) {
     showToast('No address available', 'warning');
     return;
   }
   
+  // Check if user has set a preference, if not ask first
+  if (!state.preferredMapApp) {
+    checkMapPreference();
+    // Store the address to navigate after preference is set
+    localStorage.setItem('pending_navigation_address', address);
+    return;
+  }
+  
   const encoded = encodeURIComponent(address);
-  
-  // Try to detect platform and open appropriate navigation app
   const userAgent = navigator.userAgent.toLowerCase();
+  const isIOS = /iphone|ipad|ipod/.test(userAgent);
+  const isAndroid = /android/.test(userAgent);
   
-  if (/iphone|ipad|ipod/.test(userAgent)) {
-    // iOS - Apple Maps
-    window.open(`maps://maps.google.com/maps?daddr=${encoded}`, '_blank');
-  } else if (/android/.test(userAgent)) {
-    // Android - Google Maps
-    window.open(`google.navigation:q=${encoded}`, '_blank');
-  } else {
-    // Desktop - Google Maps web
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${encoded}`, '_blank');
+  let navigationUrl = '';
+  
+  switch (state.preferredMapApp) {
+    case 'google':
+      if (isAndroid) {
+        // Deep link for Google Maps on Android - works with CarPlay/Android Auto
+        navigationUrl = `google.navigation:q=${encoded}&mode=d`;
+      } else {
+        // Universal link works on iOS and opens in Google Maps app if installed
+        navigationUrl = `https://www.google.com/maps/dir/?api=1&destination=${encoded}&travelmode=driving`;
+      }
+      break;
+      
+    case 'apple':
+      if (isIOS) {
+        // Apple Maps deep link - works great with CarPlay
+        navigationUrl = `maps://?daddr=${encoded}&dirflg=d`;
+      } else {
+        // Fallback to Google Maps on non-iOS
+        navigationUrl = `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
+      }
+      break;
+      
+    case 'waze':
+      // Waze deep link - works on both platforms and CarPlay
+      navigationUrl = `https://waze.com/ul?q=${encoded}&navigate=yes`;
+      break;
+      
+    default:
+      // Default to Google Maps web
+      navigationUrl = `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
+  }
+  
+  console.log(`[DriverPortal] Opening navigation with ${state.preferredMapApp}:`, navigationUrl);
+  window.open(navigationUrl, '_blank');
+};
+
+// Toggle map visibility for small screens
+window.toggleMapVisibility = function() {
+  state.mapVisible = !state.mapVisible;
+  const mapContainer = document.getElementById('driverViewMap');
+  const toggleBtn = document.getElementById('toggleMapBtn');
+  
+  if (mapContainer) {
+    mapContainer.style.display = state.mapVisible ? 'block' : 'none';
+  }
+  
+  if (toggleBtn) {
+    toggleBtn.textContent = state.mapVisible ? '🗺️ Hide Map' : '🗺️ Show Map';
+    toggleBtn.classList.toggle('map-hidden', !state.mapVisible);
+  }
+  
+  // Resize map when showing
+  if (state.mapVisible && driverViewMap) {
+    setTimeout(() => driverViewMap.resize(), 100);
   }
 };
 
@@ -5511,12 +5763,127 @@ function formatPhone(phone) {
 
 function getStatusActionLabel(status) {
   switch (status) {
+    case 'getting_ready': return 'Getting Ready';
     case 'enroute': return 'On the Way';
     case 'arrived': return 'Arrived';
-    case 'passenger_onboard': return 'Passenger On Board';
+    case 'waiting': return 'Waiting';
+    case 'passenger_onboard': return 'Customer in Car';
+    case 'done': return 'Done';
     case 'completed': return 'Complete Trip';
     default: return STATUS_META[status]?.label || status;
   }
+}
+
+// Send quick note to dispatch
+window.sendQuickNote = async function(tripId) {
+  const noteInput = document.getElementById('quickNotes');
+  const note = noteInput?.value?.trim();
+  
+  if (!note) {
+    showToast('Please enter a note', 'warning');
+    return;
+  }
+  
+  try {
+    // Append to existing notes
+    const existingNotes = state.trips.active?.driver_notes || '';
+    const timestamp = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const newNote = existingNotes 
+      ? `${existingNotes}\n[${timestamp}] ${note}`
+      : `[${timestamp}] ${note}`;
+    
+    await updateReservationStatus(tripId, { driver_notes: newNote });
+    
+    noteInput.value = '';
+    showToast('Note sent to dispatch! 📤', 'success');
+  } catch (err) {
+    console.error('[DriverPortal] Send note error:', err);
+    showToast('Failed to send note', 'error');
+  }
+};
+
+// ============================================
+// SMS Trip Reminder System
+// ============================================
+async function sendTripReminderSMS(trip, driverId) {
+  // Build the trip status URL for the driver
+  const baseUrl = window.location.origin;
+  const driverSlug = state.portalSlug || state.driver?.portal_slug || '';
+  const tripStatusUrl = `${baseUrl}/driver-trip-status.html?reservation=${trip.id}&driver=${driverId}`;
+  const portalUrl = driverSlug ? `${baseUrl}/${driverSlug}` : `${baseUrl}/driver-portal.html`;
+  
+  // Get driver's phone number
+  const driverPhone = state.driver?.phone || state.driver?.cell_phone;
+  if (!driverPhone) {
+    console.warn('[DriverPortal] No driver phone for SMS reminder');
+    return;
+  }
+  
+  // Format pickup time
+  const pickupTime = new Date(trip.pickup_date_time || trip.pickup_date);
+  const timeStr = pickupTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const dateStr = pickupTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  
+  const message = `🚗 RELIALIMO Trip Reminder\n` +
+    `📅 ${dateStr} at ${timeStr}\n` +
+    `📍 ${(trip.pickup_address || trip.pickup_location || 'Pickup').substring(0, 50)}\n` +
+    `🏁 ${(trip.dropoff_address || trip.dropoff_location || 'Dropoff').substring(0, 50)}\n\n` +
+    `Trip Status: ${tripStatusUrl}\n` +
+    `Portal: ${portalUrl}`;
+  
+  try {
+    // Use the SMS service
+    const response = await fetch(`${baseUrl}/api/sms-send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: driverPhone,
+        body: message
+      })
+    });
+    
+    if (response.ok) {
+      console.log('[DriverPortal] Trip reminder SMS sent successfully');
+      return true;
+    } else {
+      console.warn('[DriverPortal] SMS send failed:', response.status);
+      return false;
+    }
+  } catch (err) {
+    console.error('[DriverPortal] SMS send error:', err);
+    return false;
+  }
+}
+
+// Schedule reminder SMS for upcoming trips
+function scheduleUpcomingTripReminders() {
+  const upcomingTrips = state.trips.upcoming || [];
+  
+  upcomingTrips.forEach(trip => {
+    const pickupTime = new Date(trip.pickup_date_time || trip.pickup_date);
+    const now = new Date();
+    
+    // Send reminder 60 minutes before pickup
+    const reminderTime = new Date(pickupTime.getTime() - 60 * 60 * 1000);
+    const msUntilReminder = reminderTime - now;
+    
+    // Only schedule if reminder time is in the future and within 24 hours
+    if (msUntilReminder > 0 && msUntilReminder < 24 * 60 * 60 * 1000) {
+      const reminderKey = `reminder_scheduled_${trip.id}`;
+      
+      // Check if already scheduled
+      if (!localStorage.getItem(reminderKey)) {
+        console.log(`[DriverPortal] Scheduling reminder for trip ${trip.id} in ${Math.round(msUntilReminder / 60000)} minutes`);
+        
+        setTimeout(() => {
+          sendTripReminderSMS(trip, state.driverId);
+          localStorage.removeItem(reminderKey);
+        }, msUntilReminder);
+        
+        localStorage.setItem(reminderKey, 'true');
+      }
+    }
+  });
 }
 
 // ============================================
