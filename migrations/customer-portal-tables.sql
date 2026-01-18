@@ -99,14 +99,55 @@ CREATE TABLE IF NOT EXISTS vehicle_types (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Insert default vehicle types
-INSERT INTO vehicle_types (name, description, icon, max_passengers, max_luggage, display_order) VALUES
-    ('Sedan', 'Luxury sedan for up to 3 passengers', '🚗', 3, 3, 1),
-    ('SUV', 'Premium SUV for up to 6 passengers', '🚙', 6, 6, 2),
-    ('Executive Van', 'Spacious van for groups up to 10', '🚐', 10, 10, 3),
-    ('Stretch Limo', 'Classic stretch limousine', '🚕', 8, 4, 4),
-    ('Party Bus', 'Party bus for special events', '🚌', 20, 10, 5)
-ON CONFLICT DO NOTHING;
+-- Add missing columns if they don't exist (for existing tables)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vehicle_types' AND column_name = 'icon') THEN
+        ALTER TABLE vehicle_types ADD COLUMN icon VARCHAR(10) DEFAULT '🚗';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vehicle_types' AND column_name = 'description') THEN
+        ALTER TABLE vehicle_types ADD COLUMN description TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vehicle_types' AND column_name = 'max_passengers') THEN
+        ALTER TABLE vehicle_types ADD COLUMN max_passengers INTEGER DEFAULT 4;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vehicle_types' AND column_name = 'max_luggage') THEN
+        ALTER TABLE vehicle_types ADD COLUMN max_luggage INTEGER DEFAULT 4;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vehicle_types' AND column_name = 'base_rate') THEN
+        ALTER TABLE vehicle_types ADD COLUMN base_rate DECIMAL(10, 2);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vehicle_types' AND column_name = 'per_mile_rate') THEN
+        ALTER TABLE vehicle_types ADD COLUMN per_mile_rate DECIMAL(10, 2);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vehicle_types' AND column_name = 'per_hour_rate') THEN
+        ALTER TABLE vehicle_types ADD COLUMN per_hour_rate DECIMAL(10, 2);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vehicle_types' AND column_name = 'minimum_fare') THEN
+        ALTER TABLE vehicle_types ADD COLUMN minimum_fare DECIMAL(10, 2);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vehicle_types' AND column_name = 'is_active') THEN
+        ALTER TABLE vehicle_types ADD COLUMN is_active BOOLEAN DEFAULT true;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vehicle_types' AND column_name = 'display_order') THEN
+        ALTER TABLE vehicle_types ADD COLUMN display_order INTEGER DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vehicle_types' AND column_name = 'created_at') THEN
+        ALTER TABLE vehicle_types ADD COLUMN created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'vehicle_types' AND column_name = 'updated_at') THEN
+        ALTER TABLE vehicle_types ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    END IF;
+END $$;
+
+-- Update existing rows with default values for new columns
+UPDATE vehicle_types SET 
+    icon = COALESCE(icon, '🚗'),
+    max_passengers = COALESCE(max_passengers, 4),
+    max_luggage = COALESCE(max_luggage, 4),
+    is_active = COALESCE(is_active, true),
+    display_order = COALESCE(display_order, 0)
+WHERE icon IS NULL OR max_passengers IS NULL;
 
 -- =====================================================
 -- CUSTOMER PASSENGERS TABLE

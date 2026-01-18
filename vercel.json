@@ -4,7 +4,7 @@
     {
       "source": "/",
       "has": [{ "type": "host", "value": "driver.relialimo.com" }],
-      "destination": "/drivers/auth.html"
+      "destination": "/drivers/driver-portal.html"
     },
     {
       "source": "/auth.html",
@@ -30,6 +30,11 @@
       "source": "/driver-portal.js",
       "has": [{ "type": "host", "value": "driver.relialimo.com" }],
       "destination": "/drivers/driver-portal.js"
+    },
+    {
+      "source": "/shared/:path*",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/shared/:path*"
     },
     {
       "source": "/:driver_slug",
@@ -65,6 +70,11 @@
       "source": "/customer-portal.js",
       "has": [{ "type": "host", "value": "account.relialimo.com" }],
       "destination": "/customers/customer-portal.js"
+    },
+    {
+      "source": "/shared/:path*",
+      "has": [{ "type": "host", "value": "account.relialimo.com" }],
+      "destination": "/shared/:path*"
     },
     {
       "source": "/:customer_slug",
