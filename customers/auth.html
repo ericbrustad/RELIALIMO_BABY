@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="customer-portal.css">
-  <script src="../shared/env.js"></script>
+  <script src="/shared/env.js"></script>
 </head>
 <body>
   <div id="app">
@@ -136,7 +136,7 @@
   </div>
 
   <script type="module">
-    import { getSupabaseCredentials } from '../shared/supabase-config.js';
+    import { getSupabaseCredentials } from '/shared/supabase-config.js';
     
     // Check if already authenticated and redirect
     async function checkAuth() {

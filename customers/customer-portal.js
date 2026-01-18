@@ -2,7 +2,7 @@
 // Customer Portal - Main JavaScript
 // ============================================
 
-import { getSupabaseCredentials } from '../shared/supabase-config.js';
+import { getSupabaseCredentials } from '/shared/supabase-config.js';
 
 // ============================================
 // State Management

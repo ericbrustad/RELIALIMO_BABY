@@ -15,7 +15,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="driver-portal.css">
   <!-- Load ENV first -->
-  <script src="../shared/env.js"></script>
+  <script src="/shared/env.js"></script>
   <script>
     // Auth guard - redirect to auth.html if not logged in
     (function() {
@@ -68,9 +68,9 @@
     <div id="toast" class="toast"></div>
   </div>
 
-  <script src="../shared/sms-service.js"></script>
+  <script src="/shared/sms-service.js"></script>
   <script type="module">
-    import { getSupabaseCredentials } from '../shared/supabase-config.js';
+    import { getSupabaseCredentials } from '/shared/supabase-config.js';
     
     // Redirect to driver's personal portal URL
     async function redirectToDriverPortal() {
