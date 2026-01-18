@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>Book a Ride | RELIALIMO</title>
+  <link rel="icon" href="favicon.ico">
+  <link rel="manifest" href="customer-portal-manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="customer-portal.css">
+  <script src="../shared/env.js"></script>
+  <!-- Mapbox for location selection -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="screen active">
+      <div class="loading-content">
+        <div class="logo-pulse"><img id="loadingLogo" src="favicon.ico" alt="Logo" class="favicon-logo"></div>
+        <h1 class="brand-name" id="loadingBrandName">RELIA<img src="favicon.ico" alt="" class="brand-icon">LIMO<span class="trademark">™</span></h1>
+        <p id="loadingSubtitle">Customer Portal</p>
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+
+    <!-- Main Portal Screen -->
+    <div id="portalScreen" class="screen">
+      <!-- Header -->
+      <header class="portal-header">
+        <div class="header-left">
+          <img id="headerLogo" src="favicon.ico" alt="Logo" class="header-logo">
+          <span class="header-title" id="headerTitle">RELIALIMO</span>
+        </div>
+        <div class="header-right">
+          <button class="btn-icon" id="preferencesBtn" aria-label="Preferences">
+            ⚙️
+          </button>
+          <button class="btn-icon" id="logoutBtn" aria-label="Logout">
+            🚪
+          </button>
+        </div>
+      </header>
+
+      <!-- Welcome Banner -->
+      <div class="welcome-banner" id="welcomeBanner">
+        <div class="welcome-greeting" id="welcomeGreeting">Welcome back!</div>
+        <div class="welcome-name" id="welcomeName"></div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <nav class="tab-nav">
+        <button class="tab-btn active" data-tab="book">
+          <span class="tab-icon">🚗</span>
+          <span class="tab-label">Book</span>
+        </button>
+        <button class="tab-btn" data-tab="trips">
+          <span class="tab-icon">📋</span>
+          <span class="tab-label">My Trips</span>
+        </button>
+        <button class="tab-btn" data-tab="track">
+          <span class="tab-icon">📍</span>
+          <span class="tab-label">Track</span>
+        </button>
+        <button class="tab-btn" data-tab="account">
+          <span class="tab-icon">👤</span>
+          <span class="tab-label">Account</span>
+        </button>
+      </nav>
+
+      <!-- Tab Content -->
+      <main class="tab-content">
+        <!-- Book Tab -->
+        <section id="bookTab" class="tab-panel active">
+          <div class="booking-form-container">
+            <h2 class="section-title">📅 Book Your Ride</h2>
+            
+            <!-- Passenger Selection -->
+            <div class="form-section">
+              <label class="form-label">Passenger</label>
+              <div class="passenger-selector">
+                <select id="passengerSelect" class="form-select">
+                  <option value="self">Myself</option>
+                </select>
+                <button type="button" class="btn-sm btn-secondary" id="addPassengerBtn">+ New</button>
+              </div>
+            </div>
+
+            <!-- Passenger Details (auto-filled) -->
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">First Name*</label>
+                <input type="text" id="passengerFirstName" class="form-input" placeholder="First name">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Last Name*</label>
+                <input type="text" id="passengerLastName" class="form-input" placeholder="Last name">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Phone*</label>
+                <input type="tel" id="passengerPhone" class="form-input" placeholder="(555) 123-4567">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" id="passengerEmail" class="form-input" placeholder="email@example.com">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Number of Passengers*</label>
+              <div class="passenger-count-selector">
+                <button type="button" class="count-btn" id="countMinus">−</button>
+                <input type="number" id="passengerCount" class="count-input" value="1" min="1" max="50">
+                <button type="button" class="count-btn" id="countPlus">+</button>
+              </div>
+            </div>
+
+            <!-- Date and Time -->
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">📅 Pick Up Date*</label>
+                <input type="date" id="pickupDate" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="form-label">🕐 Pick Up Time*</label>
+                <input type="time" id="pickupTime" class="form-input">
+              </div>
+            </div>
+
+            <!-- Pickup Address -->
+            <div class="form-section">
+              <label class="form-label">📍 Pick Up Address*</label>
+              <div class="address-selector">
+                <select id="pickupAddressSelect" class="form-select">
+                  <option value="">- Select or enter new address -</option>
+                  <option value="airport">✈️ Airport Pickup</option>
+                  <option value="new">📝 Enter New Address</option>
+                </select>
+              </div>
+              
+              <!-- Saved Pickup Addresses -->
+              <div id="savedPickupAddresses" class="saved-addresses hidden"></div>
+              
+              <!-- New Pickup Address Input -->
+              <div id="pickupAddressNew" class="address-input-group hidden">
+                <input type="text" id="pickupAddressInput" class="form-input address-autocomplete" 
+                       placeholder="Start typing an address..." data-type="pickup">
+                <button type="button" class="btn-icon btn-map" id="pickupMapBtn" title="Select on map">
+                  🗺️
+                </button>
+              </div>
+
+              <!-- Airport Pickup Details -->
+              <div id="airportPickupDetails" class="airport-details hidden">
+                <div class="airport-header">
+                  <span class="airport-icon">✈️</span>
+                  <span>Airport Pickup Details</span>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Airport*</label>
+                    <select id="pickupAirport" class="form-select">
+                      <option value="">Select Airport</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Flight Number*</label>
+                    <input type="text" id="flightNumber" class="form-input" placeholder="e.g., DL1234">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Arrival Time*</label>
+                    <input type="time" id="flightArrivalTime" class="form-input">
+                  </div>
+                </div>
+                <div id="flightVerification" class="flight-verification hidden">
+                  <div class="verification-status">
+                    <span class="status-icon"></span>
+                    <span class="status-text"></span>
+                  </div>
+                  <div class="flight-info"></div>
+                </div>
+                <button type="button" id="verifyFlightBtn" class="btn btn-sm btn-secondary">
+                  ✈️ Verify Flight
+                </button>
+              </div>
+            </div>
+
+            <!-- Stops -->
+            <div class="form-section">
+              <div class="stops-header">
+                <label class="form-label">🛑 Stops</label>
+                <button type="button" class="btn-sm btn-secondary" id="addStopBtn">+ Add Stop</button>
+              </div>
+              <div id="stopsContainer" class="stops-container">
+                <p class="no-stops">No stops added</p>
+              </div>
+            </div>
+
+            <!-- Dropoff Address -->
+            <div class="form-section">
+              <label class="form-label">🏁 Drop Off Address*</label>
+              <div class="address-selector">
+                <select id="dropoffAddressSelect" class="form-select">
+                  <option value="">- Select or enter new address -</option>
+                  <option value="airport">✈️ Airport Dropoff</option>
+                  <option value="new">📝 Enter New Address</option>
+                </select>
+              </div>
+              
+              <!-- Saved Dropoff Addresses -->
+              <div id="savedDropoffAddresses" class="saved-addresses hidden"></div>
+              
+              <!-- New Dropoff Address Input -->
+              <div id="dropoffAddressNew" class="address-input-group hidden">
+                <input type="text" id="dropoffAddressInput" class="form-input address-autocomplete" 
+                       placeholder="Start typing an address..." data-type="dropoff">
+                <button type="button" class="btn-icon btn-map" id="dropoffMapBtn" title="Select on map">
+                  🗺️
+                </button>
+              </div>
+
+              <!-- Airport Dropoff Details -->
+              <div id="airportDropoffDetails" class="airport-details hidden">
+                <div class="airport-header">
+                  <span class="airport-icon">✈️</span>
+                  <span>Airport Dropoff Details</span>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Airport*</label>
+                  <select id="dropoffAirport" class="form-select">
+                    <option value="">Select Airport</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Flight Number <span class="optional-tag">(optional)</span></label>
+                  <input type="text" id="dropoffFlightNumber" class="form-input" placeholder="e.g., AA567">
+                  <p class="form-hint">Optional - helps us coordinate your departure</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Special Instructions -->
+            <div class="form-section">
+              <label class="form-label">📝 Special Instructions</label>
+              <textarea id="specialInstructions" class="form-textarea" 
+                        placeholder="Any special requests or notes for your driver..." rows="3"></textarea>
+            </div>
+
+            <!-- Vehicle Type -->
+            <div class="form-section">
+              <label class="form-label">🚗 Vehicle Type</label>
+              <div class="vehicle-type-selector" id="vehicleTypeSelector">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+
+            <!-- Booking Buttons -->
+            <div class="booking-buttons">
+              <button type="button" id="bookOneWayBtn" class="btn btn-primary btn-large">
+                🚗 Book One Way Trip
+              </button>
+              <button type="button" id="bookRoundTripBtn" class="btn btn-secondary btn-large">
+                🔄 Book One Way and Enter Return Trip
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- My Trips Tab -->
+        <section id="tripsTab" class="tab-panel">
+          <h2 class="section-title">📋 My Trips</h2>
+          <div class="trips-filter">
+            <button class="filter-btn active" data-filter="upcoming">Upcoming</button>
+            <button class="filter-btn" data-filter="past">Past</button>
+            <button class="filter-btn" data-filter="all">All</button>
+          </div>
+          <div id="tripsList" class="trips-list">
+            <!-- Trips loaded dynamically -->
+          </div>
+        </section>
+
+        <!-- Track Tab -->
+        <section id="trackTab" class="tab-panel">
+          <h2 class="section-title">📍 Track Your Driver</h2>
+          <div id="noActiveTrip" class="empty-state">
+            <span class="empty-icon">🚗</span>
+            <p>No active trip to track</p>
+            <p class="empty-hint">When your driver is on the way, you'll see their location here</p>
+          </div>
+          <div id="activeTracking" class="active-tracking hidden">
+            <div class="tracking-status-bar" id="trackingStatusBar">
+              <div class="status-step active" id="stepBooked">✓</div>
+              <div class="status-connector"></div>
+              <div class="status-step" id="stepOnWay">🚗</div>
+              <div class="status-connector"></div>
+              <div class="status-step" id="stepArrived">📍</div>
+              <div class="status-connector"></div>
+              <div class="status-step" id="stepInProgress">👤</div>
+              <div class="status-connector"></div>
+              <div class="status-step" id="stepComplete">✓</div>
+            </div>
+            <div class="tracking-status-text" id="trackingStatusText">
+              Driver is on the way
+            </div>
+            <div class="tracking-eta" id="trackingETA">
+              <span class="eta-label">ETA:</span>
+              <span class="eta-value" id="etaValue">--</span>
+            </div>
+            <div class="tracking-map-container">
+              <div id="trackingMap" class="tracking-map"></div>
+            </div>
+            <div class="driver-info-card" id="driverInfoCard">
+              <div class="driver-photo">
+                <span class="driver-avatar">👤</span>
+              </div>
+              <div class="driver-details">
+                <div class="driver-name" id="driverName">--</div>
+                <div class="driver-vehicle" id="driverVehicle">--</div>
+              </div>
+              <div class="driver-actions">
+                <a href="tel:" id="callDriverBtn" class="btn-icon btn-call">📞</a>
+                <a href="sms:" id="textDriverBtn" class="btn-icon btn-text">💬</a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Account Tab -->
+        <section id="accountTab" class="tab-panel">
+          <h2 class="section-title">👤 My Account</h2>
+          
+          <div class="account-section">
+            <h3 class="subsection-title">Profile Information</h3>
+            <div class="profile-card">
+              <div class="form-group">
+                <label class="form-label">First Name</label>
+                <input type="text" id="accountFirstName" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Last Name</label>
+                <input type="text" id="accountLastName" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" id="accountEmail" class="form-input" readonly>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Phone</label>
+                <input type="tel" id="accountPhone" class="form-input">
+              </div>
+              <button type="button" class="btn btn-primary" id="saveProfileBtn">
+                Save Profile
+              </button>
+            </div>
+          </div>
+
+          <div class="account-section">
+            <h3 class="subsection-title">Saved Passengers</h3>
+            <div id="savedPassengersList" class="saved-list">
+              <!-- Loaded dynamically -->
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="addSavedPassengerBtn">
+              + Add Passenger
+            </button>
+          </div>
+
+          <div class="account-section">
+            <h3 class="subsection-title">Saved Addresses</h3>
+            <div id="savedAddressesList" class="saved-list">
+              <!-- Loaded dynamically -->
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="addSavedAddressBtn">
+              + Add Address
+            </button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Trip Completed Overlay -->
+    <div id="tripCompletedOverlay" class="overlay hidden">
+      <div class="overlay-content thank-you-content">
+        <div class="thank-you-header">
+          <span class="thank-you-icon">🎉</span>
+          <h2>Thank You!</h2>
+          <p>You've arrived at your destination</p>
+        </div>
+        
+        <div class="tip-section">
+          <h3>Add a tip for your driver</h3>
+          <div class="tip-options">
+            <button class="tip-btn" data-tip="0">No Tip</button>
+            <button class="tip-btn" data-tip="15">15%</button>
+            <button class="tip-btn active" data-tip="20">20%</button>
+            <button class="tip-btn" data-tip="25">25%</button>
+            <button class="tip-btn" data-tip="custom">Custom</button>
+          </div>
+          <div id="customTipInput" class="custom-tip hidden">
+            <span class="currency">$</span>
+            <input type="number" id="customTipAmount" placeholder="0.00" step="0.01" min="0">
+          </div>
+        </div>
+
+        <div class="comment-section">
+          <h3>Leave a comment</h3>
+          <textarea id="tripComment" class="form-textarea" 
+                    placeholder="How was your ride?" rows="3"></textarea>
+        </div>
+
+        <div class="rating-section">
+          <h3>Rate your experience</h3>
+          <div class="star-rating" id="starRating">
+            <span class="star" data-rating="1">⭐</span>
+            <span class="star" data-rating="2">⭐</span>
+            <span class="star" data-rating="3">⭐</span>
+            <span class="star" data-rating="4">⭐</span>
+            <span class="star" data-rating="5">⭐</span>
+          </div>
+        </div>
+
+        <button type="button" id="submitFeedbackBtn" class="btn btn-primary btn-large">
+          Submit
+        </button>
+
+        <div class="review-link">
+          <p>Enjoyed your ride?</p>
+          <a href="#" id="googleReviewLink" class="btn btn-secondary" target="_blank">
+            ⭐ Leave a Google Review
+          </a>
+        </div>
+
+        <div class="thank-you-footer">
+          <img id="thankYouLogo" src="favicon.ico" alt="Logo" class="footer-logo">
+          <p class="footer-message">See you next time!</p>
+          <p class="footer-company" id="thankYouCompany">RELIALIMO thanks you</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Map Selection Modal -->
+    <div id="mapModal" class="modal hidden">
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h3>📍 Select Location on Map</h3>
+          <button type="button" class="btn-close" id="closeMapModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="selectionMap" class="selection-map"></div>
+          <div class="selected-address" id="selectedAddress">
+            <span class="address-label">Selected:</span>
+            <span class="address-text" id="selectedAddressText">Tap on the map to select a location</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="cancelMapSelection">Cancel</button>
+          <button type="button" class="btn btn-primary" id="confirmMapSelection" disabled>Confirm Location</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Passenger Modal -->
+    <div id="passengerModal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>👤 Add Passenger</h3>
+          <button type="button" class="btn-close" id="closePassengerModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">First Name*</label>
+            <input type="text" id="newPassengerFirstName" class="form-input" placeholder="First name">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Last Name*</label>
+            <input type="text" id="newPassengerLastName" class="form-input" placeholder="Last name">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone*</label>
+            <input type="tel" id="newPassengerPhone" class="form-input" placeholder="(555) 123-4567">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" id="newPassengerEmail" class="form-input" placeholder="email@example.com">
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="savePassengerForFuture" checked>
+              Save for future bookings
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="cancelPassenger">Cancel</button>
+          <button type="button" class="btn btn-primary" id="confirmPassenger">Add Passenger</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Address Modal -->
+    <div id="addressModal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>📍 Add Address</h3>
+          <button type="button" class="btn-close" id="closeAddressModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Label (e.g., Home, Work)*</label>
+            <input type="text" id="newAddressLabel" class="form-input" placeholder="Home">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Address*</label>
+            <input type="text" id="newAddressInput" class="form-input address-autocomplete" 
+                   placeholder="Start typing an address...">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="cancelAddress">Cancel</button>
+          <button type="button" class="btn btn-primary" id="confirmAddress">Save Address</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preferences Modal -->
+    <div id="preferencesModal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>⚙️ Preferences</h3>
+          <button type="button" class="btn-close" id="closePreferencesModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="pref-section">
+            <h4>Notifications</h4>
+            <label class="toggle-label">
+              <span>SMS Status Updates</span>
+              <input type="checkbox" id="prefSmsUpdates" checked>
+              <span class="toggle-switch"></span>
+            </label>
+            <label class="toggle-label">
+              <span>Email Confirmations</span>
+              <input type="checkbox" id="prefEmailConfirm" checked>
+              <span class="toggle-switch"></span>
+            </label>
+            <label class="toggle-label">
+              <span>Announce Status (Voice)</span>
+              <input type="checkbox" id="prefAnnounceStatus">
+              <span class="toggle-switch"></span>
+            </label>
+          </div>
+          <div class="pref-section">
+            <h4>Tracking</h4>
+            <label class="toggle-label">
+              <span>Show Driver on Map</span>
+              <input type="checkbox" id="prefShowDriverMap" checked>
+              <span class="toggle-switch"></span>
+            </label>
+            <label class="toggle-label">
+              <span>Auto-Refresh Tracking</span>
+              <input type="checkbox" id="prefAutoRefresh" checked>
+              <span class="toggle-switch"></span>
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" id="savePreferences">Save Preferences</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script src="customer-portal.js" type="module"></script>
+</body>
+</html>

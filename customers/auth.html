@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>Customer Login | RELIALIMO</title>
+  <link rel="icon" href="favicon.ico">
+  <link rel="manifest" href="customer-portal-manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="customer-portal.css">
+  <script src="../shared/env.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="screen active">
+      <div class="loading-content">
+        <div class="logo-pulse"><img src="favicon.ico" alt="Logo" class="favicon-logo"></div>
+        <h1 class="brand-name">RELIA<img src="favicon.ico" alt="" class="brand-icon">LIMO<span class="trademark">™</span></h1>
+        <p>Customer Portal</p>
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+
+    <!-- Auth Screen -->
+    <div id="authScreen" class="screen">
+      <div class="auth-container">
+        <div class="auth-header">
+          <img src="favicon.ico" alt="Logo" class="auth-logo">
+          <h1 class="brand-name">RELIA<img src="favicon.ico" alt="" class="brand-icon">LIMO<span class="trademark">™</span></h1>
+          <p>Customer Portal</p>
+        </div>
+
+        <!-- Login Form -->
+        <div id="loginForm" class="auth-form active">
+          <h2>Welcome Back</h2>
+          <div class="form-group">
+            <label for="loginEmail">Email</label>
+            <input type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label for="loginPassword">Password</label>
+            <div class="password-wrapper">
+              <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+              <button type="button" class="btn-show-password" data-target="loginPassword" aria-label="Show password">
+                <span class="eye-icon">👁️</span>
+              </button>
+            </div>
+          </div>
+          <button type="button" id="loginBtn" class="btn btn-primary btn-large">
+            Sign In
+          </button>
+          <div class="auth-switch">
+            <span>New customer?</span>
+            <button type="button" id="showRegisterBtn" class="btn-link">Create Account</button>
+          </div>
+          <div class="auth-switch" style="margin-top: 10px;">
+            <a href="#" id="forgotPasswordLink" class="btn-link">Forgot Password?</a>
+          </div>
+        </div>
+
+        <!-- Registration Form -->
+        <div id="registerForm" class="auth-form">
+          <h2>Create Account</h2>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="regFirstName">First Name*</label>
+              <input type="text" id="regFirstName" placeholder="John" autocomplete="given-name">
+            </div>
+            <div class="form-group">
+              <label for="regLastName">Last Name*</label>
+              <input type="text" id="regLastName" placeholder="Smith" autocomplete="family-name">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="regEmail">Email*</label>
+            <input type="email" id="regEmail" placeholder="your@email.com" autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label for="regPhone">Phone Number*</label>
+            <input type="tel" id="regPhone" placeholder="(555) 123-4567" autocomplete="tel">
+          </div>
+          <div class="form-group">
+            <label for="regPassword">Password*</label>
+            <div class="password-wrapper">
+              <input type="password" id="regPassword" placeholder="Min. 8 characters" autocomplete="new-password">
+              <button type="button" class="btn-show-password" data-target="regPassword" aria-label="Show password">
+                <span class="eye-icon">👁️</span>
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="regPasswordConfirm">Confirm Password*</label>
+            <div class="password-wrapper">
+              <input type="password" id="regPasswordConfirm" placeholder="Confirm password" autocomplete="new-password">
+              <button type="button" class="btn-show-password" data-target="regPasswordConfirm" aria-label="Show password">
+                <span class="eye-icon">👁️</span>
+              </button>
+            </div>
+          </div>
+          <button type="button" id="registerBtn" class="btn btn-success btn-large">
+            Create Account
+          </button>
+          <div class="auth-switch">
+            <span>Already have an account?</span>
+            <button type="button" id="showLoginBtn" class="btn-link">Sign In</button>
+          </div>
+        </div>
+
+        <!-- Forgot Password Form -->
+        <div id="forgotPasswordForm" class="auth-form">
+          <h2>Reset Password</h2>
+          <p class="form-description">Enter your email and we'll send you a password reset link.</p>
+          <div class="form-group">
+            <label for="resetEmail">Email</label>
+            <input type="email" id="resetEmail" placeholder="your@email.com" autocomplete="email">
+          </div>
+          <button type="button" id="resetPasswordBtn" class="btn btn-primary btn-large">
+            Send Reset Link
+          </button>
+          <div class="auth-switch">
+            <button type="button" id="backToLoginBtn" class="btn-link">← Back to Sign In</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script type="module">
+    import { getSupabaseCredentials } from '../shared/supabase-config.js';
+    
+    // Check if already authenticated and redirect
+    async function checkAuth() {
+      try {
+        const session = localStorage.getItem('customer_session');
+        if (session) {
+          const parsed = JSON.parse(session);
+          if (parsed?.access_token) {
+            const customerInfo = localStorage.getItem('current_customer');
+            if (customerInfo) {
+              const customer = JSON.parse(customerInfo);
+              const slug = customer.portal_slug || 
+                `${(customer.first_name || '').toLowerCase()}_${(customer.last_name || '').toLowerCase()}`.replace(/[^a-z0-9_]/g, '');
+              window.location.href = `/${slug}`;
+              return true;
+            }
+            
+            // Fetch customer info
+            try {
+              const creds = getSupabaseCredentials();
+              const userEmail = parsed.user?.email;
+              if (userEmail) {
+                const response = await fetch(
+                  `${creds.url}/rest/v1/accounts?email=eq.${encodeURIComponent(userEmail.toLowerCase())}&select=id,first_name,last_name,email,phone,portal_slug`,
+                  {
+                    headers: {
+                      'apikey': creds.anonKey,
+                      'Authorization': `Bearer ${parsed.access_token}`
+                    }
+                  }
+                );
+                if (response.ok) {
+                  const customers = await response.json();
+                  if (customers && customers.length > 0) {
+                    const customer = customers[0];
+                    localStorage.setItem('current_customer', JSON.stringify(customer));
+                    const slug = customer.portal_slug || 
+                      `${(customer.first_name || '').toLowerCase()}_${(customer.last_name || '').toLowerCase()}`.replace(/[^a-z0-9_]/g, '');
+                    window.location.href = `/${slug}`;
+                    return true;
+                  }
+                }
+              }
+            } catch (fetchErr) {
+              console.warn('Could not fetch customer:', fetchErr);
+            }
+            
+            window.location.href = 'customer-portal.html';
+            return true;
+          }
+        }
+      } catch (e) {
+        console.warn('Auth check failed:', e);
+      }
+      return false;
+    }
+
+    async function init() {
+      const isAuth = await checkAuth();
+      if (!isAuth) {
+        document.getElementById('loadingScreen').classList.remove('active');
+        document.getElementById('authScreen').classList.add('active');
+      }
+    }
+
+    // Toggle forms
+    document.getElementById('showRegisterBtn')?.addEventListener('click', () => {
+      document.getElementById('loginForm').classList.remove('active');
+      document.getElementById('registerForm').classList.add('active');
+    });
+
+    document.getElementById('showLoginBtn')?.addEventListener('click', () => {
+      document.getElementById('registerForm').classList.remove('active');
+      document.getElementById('forgotPasswordForm').classList.remove('active');
+      document.getElementById('loginForm').classList.add('active');
+    });
+
+    document.getElementById('forgotPasswordLink')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('loginForm').classList.remove('active');
+      document.getElementById('forgotPasswordForm').classList.add('active');
+    });
+
+    document.getElementById('backToLoginBtn')?.addEventListener('click', () => {
+      document.getElementById('forgotPasswordForm').classList.remove('active');
+      document.getElementById('loginForm').classList.add('active');
+    });
+
+    // Password toggle
+    document.querySelectorAll('.btn-show-password').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.dataset.target;
+        const input = document.getElementById(targetId);
+        if (input.type === 'password') {
+          input.type = 'text';
+          btn.querySelector('.eye-icon').textContent = '🙈';
+        } else {
+          input.type = 'password';
+          btn.querySelector('.eye-icon').textContent = '👁️';
+        }
+      });
+    });
+
+    // Login handler
+    document.getElementById('loginBtn')?.addEventListener('click', async () => {
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+
+      if (!email || !password) {
+        showToast('Please enter email and password', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('loginBtn');
+      btn.disabled = true;
+      btn.textContent = 'Signing In...';
+
+      try {
+        const creds = getSupabaseCredentials();
+        const response = await fetch(`${creds.url}/auth/v1/token?grant_type=password`, {
+          method: 'POST',
+          headers: {
+            'apikey': creds.anonKey,
+            'Authorization': `Bearer ${creds.anonKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error_description || data.msg || 'Login failed');
+        }
+
+        // Store session
+        localStorage.setItem('customer_session', JSON.stringify(data));
+
+        // Fetch customer info
+        const customerResp = await fetch(
+          `${creds.url}/rest/v1/accounts?email=eq.${encodeURIComponent(email.toLowerCase())}&select=id,first_name,last_name,email,phone,portal_slug`,
+          {
+            headers: {
+              'apikey': creds.anonKey,
+              'Authorization': `Bearer ${data.access_token}`
+            }
+          }
+        );
+
+        if (customerResp.ok) {
+          const customers = await customerResp.json();
+          if (customers && customers.length > 0) {
+            localStorage.setItem('current_customer', JSON.stringify(customers[0]));
+            const slug = customers[0].portal_slug || 
+              `${(customers[0].first_name || '').toLowerCase()}_${(customers[0].last_name || '').toLowerCase()}`.replace(/[^a-z0-9_]/g, '');
+            showToast('Welcome back!', 'success');
+            setTimeout(() => {
+              window.location.href = `/${slug}`;
+            }, 500);
+            return;
+          }
+        }
+
+        window.location.href = 'customer-portal.html';
+
+      } catch (err) {
+        console.error('Login error:', err);
+        showToast(err.message || 'Login failed', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
+    });
+
+    // Registration handler
+    document.getElementById('registerBtn')?.addEventListener('click', async () => {
+      const firstName = document.getElementById('regFirstName').value.trim();
+      const lastName = document.getElementById('regLastName').value.trim();
+      const email = document.getElementById('regEmail').value.trim();
+      const phone = document.getElementById('regPhone').value.trim();
+      const password = document.getElementById('regPassword').value;
+      const passwordConfirm = document.getElementById('regPasswordConfirm').value;
+
+      if (!firstName || !lastName || !email || !phone || !password) {
+        showToast('Please fill in all required fields', 'error');
+        return;
+      }
+
+      if (password !== passwordConfirm) {
+        showToast('Passwords do not match', 'error');
+        return;
+      }
+
+      if (password.length < 8) {
+        showToast('Password must be at least 8 characters', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('registerBtn');
+      btn.disabled = true;
+      btn.textContent = 'Creating Account...';
+
+      try {
+        const creds = getSupabaseCredentials();
+        
+        // Create auth user
+        const authResponse = await fetch(`${creds.url}/auth/v1/signup`, {
+          method: 'POST',
+          headers: {
+            'apikey': creds.anonKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ 
+            email, 
+            password,
+            data: { first_name: firstName, last_name: lastName }
+          })
+        });
+
+        const authData = await authResponse.json();
+
+        if (!authResponse.ok) {
+          throw new Error(authData.error_description || authData.msg || 'Registration failed');
+        }
+
+        // Create customer record in accounts table
+        const portalSlug = `${firstName.toLowerCase()}_${lastName.toLowerCase()}`.replace(/[^a-z0-9_]/g, '');
+        const customerData = {
+          first_name: firstName,
+          last_name: lastName,
+          email: email.toLowerCase(),
+          phone: phone,
+          portal_slug: portalSlug,
+          customer_type: 'individual',
+          is_active: true,
+          created_at: new Date().toISOString()
+        };
+
+        const token = authData.access_token || creds.anonKey;
+        const createResp = await fetch(`${creds.url}/rest/v1/accounts`, {
+          method: 'POST',
+          headers: {
+            'apikey': creds.anonKey,
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(customerData)
+        });
+
+        if (createResp.ok) {
+          const newCustomers = await createResp.json();
+          if (newCustomers && newCustomers.length > 0) {
+            localStorage.setItem('current_customer', JSON.stringify(newCustomers[0]));
+          }
+        }
+
+        // Store session if available
+        if (authData.access_token) {
+          localStorage.setItem('customer_session', JSON.stringify(authData));
+          showToast('Account created! Redirecting...', 'success');
+          setTimeout(() => {
+            window.location.href = `/${portalSlug}`;
+          }, 1000);
+        } else {
+          showToast('Account created! Please check your email to verify.', 'success');
+          setTimeout(() => {
+            document.getElementById('registerForm').classList.remove('active');
+            document.getElementById('loginForm').classList.add('active');
+          }, 2000);
+        }
+
+      } catch (err) {
+        console.error('Registration error:', err);
+        showToast(err.message || 'Registration failed', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Create Account';
+      }
+    });
+
+    // Password reset handler
+    document.getElementById('resetPasswordBtn')?.addEventListener('click', async () => {
+      const email = document.getElementById('resetEmail').value.trim();
+      
+      if (!email) {
+        showToast('Please enter your email', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('resetPasswordBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+
+      try {
+        const creds = getSupabaseCredentials();
+        const response = await fetch(`${creds.url}/auth/v1/recover`, {
+          method: 'POST',
+          headers: {
+            'apikey': creds.anonKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ 
+            email,
+            redirectTo: `${window.location.origin}/reset-password`
+          })
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error_description || 'Failed to send reset link');
+        }
+
+        showToast('Reset link sent! Check your email.', 'success');
+        setTimeout(() => {
+          document.getElementById('forgotPasswordForm').classList.remove('active');
+          document.getElementById('loginForm').classList.add('active');
+        }, 2000);
+
+      } catch (err) {
+        console.error('Reset error:', err);
+        showToast(err.message || 'Failed to send reset link', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Send Reset Link';
+      }
+    });
+
+    // Toast notification
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `toast ${type} show`;
+      setTimeout(() => {
+        toast.className = 'toast';
+      }, 3000);
+    }
+
+    // Enter key handlers
+    document.getElementById('loginPassword')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') document.getElementById('loginBtn').click();
+    });
+    document.getElementById('regPasswordConfirm')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') document.getElementById('registerBtn').click();
+    });
+    document.getElementById('resetEmail')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') document.getElementById('resetPasswordBtn').click();
+    });
+
+    // Initialize
+    init();
+  </script>
+</body>
+</html>

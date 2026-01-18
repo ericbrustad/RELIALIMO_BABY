@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Settings | RELIALIMO Admin</title>
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="global.css">
+  <link rel="stylesheet" href="portal-settings.css">
+  <script src="shared/env.js"></script>
+</head>
+<body>
+  <div class="admin-container">
+    <header class="admin-header">
+      <div class="header-left">
+        <a href="admin.html" class="back-link">← Back to Admin</a>
+        <h1>Portal Settings</h1>
+      </div>
+    </header>
+
+    <main class="settings-main">
+      <!-- Tabs -->
+      <div class="settings-tabs">
+        <button class="tab-btn active" data-tab="customer">Customer Portal</button>
+        <button class="tab-btn" data-tab="driver">Driver Portal</button>
+        <button class="tab-btn" data-tab="geofence">Geofence Settings</button>
+      </div>
+
+      <!-- Customer Portal Settings -->
+      <section id="customerTab" class="tab-panel active">
+        <div class="settings-card">
+          <h2>🎨 Branding</h2>
+          
+          <div class="form-group">
+            <label>Portal Logo</label>
+            <div class="logo-upload">
+              <img id="customerLogoPreview" src="favicon.ico" alt="Logo" class="logo-preview">
+              <div class="upload-controls">
+                <input type="file" id="customerLogoInput" accept="image/*" hidden>
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('customerLogoInput').click()">
+                  📁 Upload Logo
+                </button>
+                <button type="button" class="btn btn-outline" id="resetCustomerLogo">
+                  Reset to Default
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Header Title</label>
+            <input type="text" id="customerHeaderTitle" class="form-input" placeholder="RELIALIMO" value="RELIALIMO">
+          </div>
+
+          <div class="form-group">
+            <label>Welcome Message</label>
+            <input type="text" id="customerWelcomeMessage" class="form-input" placeholder="Welcome back!" value="Welcome back!">
+          </div>
+
+          <div class="form-group">
+            <label>Thank You Message</label>
+            <input type="text" id="customerThankYouMessage" class="form-input" placeholder="RELIALIMO thanks you" value="RELIALIMO thanks you">
+          </div>
+
+          <div class="form-group">
+            <label>Primary Color</label>
+            <div class="color-picker-group">
+              <input type="color" id="customerPrimaryColor" value="#4f46e5">
+              <input type="text" id="customerPrimaryColorHex" class="form-input color-hex" value="#4f46e5">
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2>🔗 Links & Reviews</h2>
+          
+          <div class="form-group">
+            <label>Google Review URL</label>
+            <input type="url" id="customerGoogleReviewUrl" class="form-input" placeholder="https://g.page/r/...">
+            <p class="form-hint">Customers will be prompted to leave a review after trip completion</p>
+          </div>
+
+          <div class="form-group">
+            <label>Terms & Conditions URL</label>
+            <input type="url" id="customerTermsUrl" class="form-input" placeholder="https://yoursite.com/terms">
+          </div>
+
+          <div class="form-group">
+            <label>Privacy Policy URL</label>
+            <input type="url" id="customerPrivacyUrl" class="form-input" placeholder="https://yoursite.com/privacy">
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2>✈️ Airports</h2>
+          <p class="form-hint">Configure airports available for pickup/dropoff selection</p>
+          
+          <div id="airportsList" class="items-list">
+            <!-- Loaded dynamically -->
+          </div>
+          
+          <button type="button" class="btn btn-secondary" id="addAirportBtn">
+            + Add Airport
+          </button>
+        </div>
+
+        <div class="settings-card">
+          <h2>🚗 Vehicle Types</h2>
+          <p class="form-hint">Configure vehicle options for customer booking</p>
+          
+          <div id="vehicleTypesList" class="items-list">
+            <!-- Loaded dynamically -->
+          </div>
+          
+          <button type="button" class="btn btn-secondary" id="addVehicleTypeBtn">
+            + Add Vehicle Type
+          </button>
+        </div>
+
+        <!-- Customer Booking Defaults Section -->
+        <div class="settings-card">
+          <h2>📋 Booking Defaults</h2>
+          <p class="form-hint">Configure default values for customer bookings created through the portal</p>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label>Default Vehicle Type</label>
+              <select id="defaultVehicleType" class="form-input">
+                <option value="Black SUV">Black SUV</option>
+                <option value="Sedan">Sedan</option>
+                <option value="Executive SUV">Executive SUV</option>
+                <option value="Sprinter Van">Sprinter Van</option>
+                <option value="Stretch Limo">Stretch Limo</option>
+                <option value="Party Bus">Party Bus</option>
+                <option value="Coach Bus">Coach Bus</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label>Default Service Type</label>
+              <select id="defaultServiceType" class="form-input">
+                <option value="Point to Point">Point to Point</option>
+                <option value="Hourly">Hourly</option>
+                <option value="Airport Transfer">Airport Transfer</option>
+                <option value="Wedding">Wedding</option>
+                <option value="Special Event">Special Event</option>
+                <option value="Corporate">Corporate</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label>Default Assignment Type</label>
+              <select id="defaultAssignmentType" class="form-input">
+                <option value="unassigned">Unassigned</option>
+                <option value="in-house">In-House</option>
+                <option value="farm-out">Farm Out</option>
+              </select>
+              <p class="form-hint">How new customer bookings are assigned</p>
+            </div>
+            
+            <div class="form-group">
+              <label>Default Affiliate</label>
+              <select id="defaultAffiliate" class="form-input">
+                <option value="in-house">In-House</option>
+                <!-- Additional affiliates loaded dynamically -->
+              </select>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>Confirmation Number Prefix</label>
+            <input type="text" id="confirmationPrefix" class="form-input" placeholder="RL" maxlength="10">
+            <p class="form-hint">Optional prefix for confirmation numbers (e.g., RL10001)</p>
+          </div>
+          
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Auto-Confirm Bookings</span>
+              <input type="checkbox" id="autoConfirmBookings" checked>
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="form-hint">Automatically set status to "confirmed" (otherwise "pending")</p>
+          </div>
+        </div>
+
+        <!-- Notification Settings -->
+        <div class="settings-card">
+          <h2>📧 Booking Notifications</h2>
+          
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Send Confirmation SMS</span>
+              <input type="checkbox" id="sendConfirmationSms" checked>
+              <span class="toggle-switch"></span>
+            </label>
+          </div>
+          
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Send Confirmation Email</span>
+              <input type="checkbox" id="sendConfirmationEmail" checked>
+              <span class="toggle-switch"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Flight Number Requirements -->
+        <div class="settings-card">
+          <h2>✈️ Flight Number Settings</h2>
+          
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Require Flight Number for Airport Pickups</span>
+              <input type="checkbox" id="requireFlightPickup" checked>
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="form-hint">Customer must enter flight number when pickup is at airport</p>
+          </div>
+          
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Require Flight Number for Airport Dropoffs</span>
+              <input type="checkbox" id="requireFlightDropoff">
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="form-hint">Optional - flight number shown as "optional" to customer</p>
+          </div>
+          
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Verify Flights via API</span>
+              <input type="checkbox" id="verifyFlightViaApi" checked>
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="form-hint">Validate flight numbers using FlightAware API</p>
+          </div>
+        </div>
+
+        <!-- Thank You & Tips Settings -->
+        <div class="settings-card">
+          <h2>🙏 Trip Completion Settings</h2>
+          
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Enable Tips</span>
+              <input type="checkbox" id="enableTips" checked>
+              <span class="toggle-switch"></span>
+            </label>
+          </div>
+          
+          <div class="form-group">
+            <label>Default Tip Options (%)</label>
+            <input type="text" id="defaultTipOptions" class="form-input" value="15, 18, 20, 25" placeholder="15, 18, 20, 25">
+            <p class="form-hint">Comma-separated tip percentages</p>
+          </div>
+          
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Enable Google Review Prompt</span>
+              <input type="checkbox" id="enableGoogleReview" checked>
+              <span class="toggle-switch"></span>
+            </label>
+          </div>
+          
+          <div class="form-group">
+            <label>Thank You Message</label>
+            <textarea id="thankYouMessage" class="form-textarea" rows="2" placeholder="Thank you for riding with us! See you next time.">Thank you for riding with us! See you next time.</textarea>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2>🗺️ Service Region</h2>
+          
+          <div class="form-group">
+            <label>Default Map Center (Latitude)</label>
+            <input type="number" id="mapCenterLat" class="form-input" step="0.000001" value="44.978">
+          </div>
+          
+          <div class="form-group">
+            <label>Default Map Center (Longitude)</label>
+            <input type="number" id="mapCenterLng" class="form-input" step="0.000001" value="-93.265">
+          </div>
+          
+          <div class="form-group">
+            <label>Default Map Zoom Level</label>
+            <input type="number" id="mapZoomLevel" class="form-input" min="1" max="20" value="12">
+          </div>
+
+          <div class="form-group">
+            <label>Service Area Description</label>
+            <textarea id="serviceAreaDescription" class="form-textarea" rows="3" 
+                      placeholder="We proudly serve the Minneapolis-St. Paul metropolitan area..."></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- Driver Portal Settings -->
+      <section id="driverTab" class="tab-panel">
+        <div class="settings-card">
+          <h2>🎨 Driver Portal Branding</h2>
+          
+          <div class="form-group">
+            <label>Portal Logo</label>
+            <div class="logo-upload">
+              <img id="driverLogoPreview" src="favicon.ico" alt="Logo" class="logo-preview">
+              <div class="upload-controls">
+                <input type="file" id="driverLogoInput" accept="image/*" hidden>
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('driverLogoInput').click()">
+                  📁 Upload Logo
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Header Title</label>
+            <input type="text" id="driverHeaderTitle" class="form-input" placeholder="RELIALIMO" value="RELIALIMO">
+          </div>
+
+          <div class="form-group">
+            <label>Primary Color</label>
+            <div class="color-picker-group">
+              <input type="color" id="driverPrimaryColor" value="#4f46e5">
+              <input type="text" id="driverPrimaryColorHex" class="form-input color-hex" value="#4f46e5">
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2>📱 SMS Settings</h2>
+          
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Send SMS Trip Reminders</span>
+              <input type="checkbox" id="driverSmsReminders" checked>
+              <span class="toggle-switch"></span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label>Reminder Time Before Pickup (minutes)</label>
+            <input type="number" id="driverReminderMinutes" class="form-input" value="60" min="15" max="180">
+          </div>
+        </div>
+      </section>
+
+      <!-- Geofence Settings -->
+      <section id="geofenceTab" class="tab-panel">
+        <div class="settings-card">
+          <h2>📍 Geofence Configuration</h2>
+          <p class="form-hint">Configure geofence radius for trip completion detection</p>
+          
+          <div class="form-group">
+            <label>Arrival Geofence Radius (meters)</label>
+            <input type="number" id="geofenceRadius" class="form-input" value="25" min="10" max="500">
+            <p class="form-hint">When customer enters this radius of the dropoff location, the trip will be marked as arrived</p>
+          </div>
+
+          <div class="form-group">
+            <label>Pickup Geofence Radius (meters)</label>
+            <input type="number" id="pickupGeofenceRadius" class="form-input" value="50" min="10" max="500">
+            <p class="form-hint">Radius for detecting driver arrival at pickup location</p>
+          </div>
+
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Auto-complete trip on arrival</span>
+              <input type="checkbox" id="autoCompleteTripOnArrival" checked>
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="form-hint">Automatically show the trip completion screen when customer arrives at destination</p>
+          </div>
+
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Require location permission</span>
+              <input type="checkbox" id="requireLocationPermission">
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="form-hint">Prompt customers to enable location for tracking features</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Save Button -->
+      <div class="settings-actions">
+        <button type="button" class="btn btn-primary btn-large" id="saveSettingsBtn">
+          💾 Save All Settings
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add Airport Modal -->
+  <div id="airportModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Add Airport</h3>
+        <button type="button" class="btn-close" id="closeAirportModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Airport Code (IATA)*</label>
+          <input type="text" id="airportCode" class="form-input" placeholder="MSP" maxlength="3">
+        </div>
+        <div class="form-group">
+          <label>Airport Name*</label>
+          <input type="text" id="airportName" class="form-input" placeholder="Minneapolis-St. Paul International">
+        </div>
+        <div class="form-group">
+          <label>Address*</label>
+          <input type="text" id="airportAddress" class="form-input" placeholder="4300 Glumack Dr, St Paul, MN 55111">
+        </div>
+        <div class="form-group">
+          <label class="toggle-label">
+            <span>Active</span>
+            <input type="checkbox" id="airportActive" checked>
+            <span class="toggle-switch"></span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="cancelAirport">Cancel</button>
+        <button type="button" class="btn btn-primary" id="saveAirport">Save Airport</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Vehicle Type Modal -->
+  <div id="vehicleTypeModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Add Vehicle Type</h3>
+        <button type="button" class="btn-close" id="closeVehicleTypeModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Vehicle Type Name*</label>
+          <input type="text" id="vehicleTypeName" class="form-input" placeholder="Sedan">
+        </div>
+        <div class="form-group">
+          <label>Icon (Emoji)</label>
+          <input type="text" id="vehicleTypeIcon" class="form-input" placeholder="🚗" maxlength="4">
+        </div>
+        <div class="form-group">
+          <label>Capacity Description</label>
+          <input type="text" id="vehicleTypeCapacity" class="form-input" placeholder="1-3 passengers">
+        </div>
+        <div class="form-group">
+          <label>Sort Order</label>
+          <input type="number" id="vehicleTypeSortOrder" class="form-input" value="0" min="0">
+        </div>
+        <div class="form-group">
+          <label class="toggle-label">
+            <span>Active</span>
+            <input type="checkbox" id="vehicleTypeActive" checked>
+            <span class="toggle-switch"></span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="cancelVehicleType">Cancel</button>
+        <button type="button" class="btn btn-primary" id="saveVehicleType">Save Vehicle Type</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { getSupabaseCredentials } from './shared/supabase-config.js';
+    
+    const state = {
+      airports: [],
+      vehicleTypes: [],
+      settings: {},
+      editingAirportId: null,
+      editingVehicleTypeId: null
+    };
+
+    const creds = getSupabaseCredentials();
+
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(`${btn.dataset.tab}Tab`).classList.add('active');
+      });
+    });
+
+    // Color picker sync
+    ['customer', 'driver'].forEach(prefix => {
+      const colorInput = document.getElementById(`${prefix}PrimaryColor`);
+      const hexInput = document.getElementById(`${prefix}PrimaryColorHex`);
+      
+      colorInput?.addEventListener('input', (e) => {
+        hexInput.value = e.target.value;
+      });
+      
+      hexInput?.addEventListener('input', (e) => {
+        const hex = e.target.value;
+        if (/^#[0-9A-Fa-f]{6}$/.test(hex)) {
+          colorInput.value = hex;
+        }
+      });
+    });
+
+    // Load settings
+    async function loadSettings() {
+      try {
+        // Load portal settings
+        const settingsResp = await fetch(`${creds.url}/rest/v1/portal_settings?select=*`, {
+          headers: { 'apikey': creds.anonKey }
+        });
+        
+        if (settingsResp.ok) {
+          const settings = await settingsResp.json();
+          settings.forEach(s => {
+            state.settings[s.portal_type] = s;
+          });
+          applySettings();
+        }
+
+        // Load booking defaults
+        const defaultsResp = await fetch(`${creds.url}/rest/v1/customer_booking_defaults?select=*`, {
+          headers: { 'apikey': creds.anonKey }
+        });
+        
+        if (defaultsResp.ok) {
+          const defaults = await defaultsResp.json();
+          applyBookingDefaults(defaults);
+        }
+
+        // Load airports
+        const airportsResp = await fetch(`${creds.url}/rest/v1/airports?select=*&order=name.asc`, {
+          headers: { 'apikey': creds.anonKey }
+        });
+        
+        if (airportsResp.ok) {
+          state.airports = await airportsResp.json();
+          renderAirports();
+        }
+
+        // Load vehicle types
+        const vehiclesResp = await fetch(`${creds.url}/rest/v1/vehicle_types?select=*&order=sort_order.asc`, {
+          headers: { 'apikey': creds.anonKey }
+        });
+        
+        if (vehiclesResp.ok) {
+          state.vehicleTypes = await vehiclesResp.json();
+          renderVehicleTypes();
+          populateDefaultVehicleDropdown();
+        }
+
+        // Load geofence settings
+        const geofenceResp = await fetch(`${creds.url}/rest/v1/app_settings?key=in.(geofence_radius,pickup_geofence_radius,auto_complete_on_arrival,require_location_permission)&select=*`, {
+          headers: { 'apikey': creds.anonKey }
+        });
+        
+        if (geofenceResp.ok) {
+          const geofenceSettings = await geofenceResp.json();
+          geofenceSettings.forEach(s => {
+            const el = document.getElementById(camelCase(s.key));
+            if (el) {
+              if (el.type === 'checkbox') {
+                el.checked = s.value === 'true';
+              } else {
+                el.value = s.value;
+              }
+            }
+          });
+        }
+
+      } catch (err) {
+        console.error('Failed to load settings:', err);
+        showToast('Failed to load settings', 'error');
+      }
+    }
+
+    // Apply booking defaults to form
+    function applyBookingDefaults(defaults) {
+      const settingsMap = {};
+      defaults.forEach(d => {
+        settingsMap[d.setting_key] = d;
+      });
+
+      // Vehicle & Service
+      if (settingsMap.default_vehicle_type) {
+        document.getElementById('defaultVehicleType').value = settingsMap.default_vehicle_type.setting_value;
+      }
+      if (settingsMap.default_service_type) {
+        document.getElementById('defaultServiceType').value = settingsMap.default_service_type.setting_value;
+      }
+      if (settingsMap.default_assignment_type) {
+        document.getElementById('defaultAssignmentType').value = settingsMap.default_assignment_type.setting_value;
+      }
+      if (settingsMap.default_affiliate) {
+        document.getElementById('defaultAffiliate').value = settingsMap.default_affiliate.setting_value;
+      }
+      if (settingsMap.confirmation_prefix) {
+        document.getElementById('confirmationPrefix').value = settingsMap.confirmation_prefix.setting_value;
+      }
+      if (settingsMap.auto_confirm) {
+        document.getElementById('autoConfirmBookings').checked = settingsMap.auto_confirm.setting_value === 'true';
+      }
+
+      // Notifications
+      if (settingsMap.send_confirmation_sms) {
+        document.getElementById('sendConfirmationSms').checked = settingsMap.send_confirmation_sms.setting_value === 'true';
+      }
+      if (settingsMap.send_confirmation_email) {
+        document.getElementById('sendConfirmationEmail').checked = settingsMap.send_confirmation_email.setting_value === 'true';
+      }
+
+      // Flight settings
+      if (settingsMap.require_flight_number_pickup) {
+        document.getElementById('requireFlightPickup').checked = settingsMap.require_flight_number_pickup.setting_value === 'true';
+      }
+      if (settingsMap.require_flight_number_dropoff) {
+        document.getElementById('requireFlightDropoff').checked = settingsMap.require_flight_number_dropoff.setting_value === 'true';
+      }
+      if (settingsMap.verify_flight_via_api) {
+        document.getElementById('verifyFlightViaApi').checked = settingsMap.verify_flight_via_api.setting_value === 'true';
+      }
+
+      // Trip completion
+      if (settingsMap.enable_tips) {
+        document.getElementById('enableTips').checked = settingsMap.enable_tips.setting_value === 'true';
+      }
+      if (settingsMap.default_tip_options) {
+        try {
+          const tips = JSON.parse(settingsMap.default_tip_options.setting_value);
+          document.getElementById('defaultTipOptions').value = tips.join(', ');
+        } catch (e) {}
+      }
+      if (settingsMap.enable_google_review) {
+        document.getElementById('enableGoogleReview').checked = settingsMap.enable_google_review.setting_value === 'true';
+      }
+      if (settingsMap.thank_you_message) {
+        document.getElementById('thankYouMessage').value = settingsMap.thank_you_message.setting_value;
+      }
+    }
+
+    // Populate vehicle type dropdown from loaded data
+    function populateDefaultVehicleDropdown() {
+      const select = document.getElementById('defaultVehicleType');
+      if (!select || state.vehicleTypes.length === 0) return;
+      
+      const currentValue = select.value;
+      select.innerHTML = state.vehicleTypes.map(v => 
+        `<option value="${v.name}">${v.icon || '🚗'} ${v.name}</option>`
+      ).join('');
+      
+      // Restore selected value if it exists
+      if (currentValue) {
+        select.value = currentValue;
+      }
+    }
+
+    function applySettings() {
+      const customer = state.settings.customer || {};
+      const driver = state.settings.driver || {};
+
+      // Customer settings
+      document.getElementById('customerHeaderTitle').value = customer.header_title || 'RELIALIMO';
+      document.getElementById('customerWelcomeMessage').value = customer.welcome_message || 'Welcome back!';
+      document.getElementById('customerThankYouMessage').value = customer.thank_you_message || 'RELIALIMO thanks you';
+      document.getElementById('customerPrimaryColor').value = customer.primary_color || '#4f46e5';
+      document.getElementById('customerPrimaryColorHex').value = customer.primary_color || '#4f46e5';
+      document.getElementById('customerGoogleReviewUrl').value = customer.google_review_url || '';
+      document.getElementById('customerTermsUrl').value = customer.terms_url || '';
+      document.getElementById('customerPrivacyUrl').value = customer.privacy_url || '';
+      if (customer.logo) document.getElementById('customerLogoPreview').src = customer.logo;
+
+      // Driver settings
+      document.getElementById('driverHeaderTitle').value = driver.header_title || 'RELIALIMO';
+      document.getElementById('driverPrimaryColor').value = driver.primary_color || '#4f46e5';
+      document.getElementById('driverPrimaryColorHex').value = driver.primary_color || '#4f46e5';
+      if (driver.logo) document.getElementById('driverLogoPreview').src = driver.logo;
+
+      // Map settings
+      document.getElementById('mapCenterLat').value = customer.map_center_lat || 44.978;
+      document.getElementById('mapCenterLng').value = customer.map_center_lng || -93.265;
+      document.getElementById('mapZoomLevel').value = customer.map_zoom || 12;
+      document.getElementById('serviceAreaDescription').value = customer.service_area_description || '';
+    }
+
+    function renderAirports() {
+      const container = document.getElementById('airportsList');
+      if (state.airports.length === 0) {
+        container.innerHTML = '<p class="empty-text">No airports configured</p>';
+        return;
+      }
+
+      container.innerHTML = state.airports.map(a => `
+        <div class="list-item ${a.is_active ? '' : 'inactive'}">
+          <div class="item-info">
+            <span class="item-code">${a.code}</span>
+            <span class="item-name">${a.name}</span>
+          </div>
+          <div class="item-actions">
+            <button class="btn-icon btn-edit" data-id="${a.id}" title="Edit">✏️</button>
+            <button class="btn-icon btn-delete" data-id="${a.id}" title="Delete">🗑️</button>
+          </div>
+        </div>
+      `).join('');
+
+      // Event listeners
+      container.querySelectorAll('.btn-edit').forEach(btn => {
+        btn.addEventListener('click', () => editAirport(btn.dataset.id));
+      });
+      container.querySelectorAll('.btn-delete').forEach(btn => {
+        btn.addEventListener('click', () => deleteAirport(btn.dataset.id));
+      });
+    }
+
+    function renderVehicleTypes() {
+      const container = document.getElementById('vehicleTypesList');
+      if (state.vehicleTypes.length === 0) {
+        container.innerHTML = '<p class="empty-text">No vehicle types configured</p>';
+        return;
+      }
+
+      container.innerHTML = state.vehicleTypes.map(v => `
+        <div class="list-item ${v.is_active ? '' : 'inactive'}">
+          <div class="item-info">
+            <span class="item-icon">${v.icon || '🚗'}</span>
+            <span class="item-name">${v.name}</span>
+            <span class="item-detail">${v.capacity || ''}</span>
+          </div>
+          <div class="item-actions">
+            <button class="btn-icon btn-edit" data-id="${v.id}" title="Edit">✏️</button>
+            <button class="btn-icon btn-delete" data-id="${v.id}" title="Delete">🗑️</button>
+          </div>
+        </div>
+      `).join('');
+
+      // Event listeners
+      container.querySelectorAll('.btn-edit').forEach(btn => {
+        btn.addEventListener('click', () => editVehicleType(btn.dataset.id));
+      });
+      container.querySelectorAll('.btn-delete').forEach(btn => {
+        btn.addEventListener('click', () => deleteVehicleType(btn.dataset.id));
+      });
+    }
+
+    // Airport CRUD
+    document.getElementById('addAirportBtn')?.addEventListener('click', () => {
+      state.editingAirportId = null;
+      document.getElementById('airportCode').value = '';
+      document.getElementById('airportName').value = '';
+      document.getElementById('airportAddress').value = '';
+      document.getElementById('airportActive').checked = true;
+      document.getElementById('airportModal').classList.remove('hidden');
+    });
+
+    function editAirport(id) {
+      const airport = state.airports.find(a => a.id == id);
+      if (!airport) return;
+
+      state.editingAirportId = id;
+      document.getElementById('airportCode').value = airport.code;
+      document.getElementById('airportName').value = airport.name;
+      document.getElementById('airportAddress').value = airport.address || '';
+      document.getElementById('airportActive').checked = airport.is_active !== false;
+      document.getElementById('airportModal').classList.remove('hidden');
+    }
+
+    async function saveAirport() {
+      const data = {
+        code: document.getElementById('airportCode').value.trim().toUpperCase(),
+        name: document.getElementById('airportName').value.trim(),
+        address: document.getElementById('airportAddress').value.trim(),
+        is_active: document.getElementById('airportActive').checked
+      };
+
+      if (!data.code || !data.name) {
+        showToast('Code and name are required', 'error');
+        return;
+      }
+
+      try {
+        let response;
+        if (state.editingAirportId) {
+          response = await fetch(`${creds.url}/rest/v1/airports?id=eq.${state.editingAirportId}`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': creds.anonKey,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+          });
+        } else {
+          response = await fetch(`${creds.url}/rest/v1/airports`, {
+            method: 'POST',
+            headers: {
+              'apikey': creds.anonKey,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=representation'
+            },
+            body: JSON.stringify(data)
+          });
+        }
+
+        if (response.ok) {
+          showToast('Airport saved', 'success');
+          document.getElementById('airportModal').classList.add('hidden');
+          await loadSettings();
+        } else {
+          throw new Error('Save failed');
+        }
+      } catch (err) {
+        console.error('Failed to save airport:', err);
+        showToast('Failed to save airport', 'error');
+      }
+    }
+
+    async function deleteAirport(id) {
+      if (!confirm('Delete this airport?')) return;
+
+      try {
+        await fetch(`${creds.url}/rest/v1/airports?id=eq.${id}`, {
+          method: 'DELETE',
+          headers: { 'apikey': creds.anonKey }
+        });
+        showToast('Airport deleted', 'success');
+        await loadSettings();
+      } catch (err) {
+        console.error('Failed to delete airport:', err);
+        showToast('Failed to delete airport', 'error');
+      }
+    }
+
+    // Vehicle Type CRUD
+    document.getElementById('addVehicleTypeBtn')?.addEventListener('click', () => {
+      state.editingVehicleTypeId = null;
+      document.getElementById('vehicleTypeName').value = '';
+      document.getElementById('vehicleTypeIcon').value = '🚗';
+      document.getElementById('vehicleTypeCapacity').value = '';
+      document.getElementById('vehicleTypeSortOrder').value = '0';
+      document.getElementById('vehicleTypeActive').checked = true;
+      document.getElementById('vehicleTypeModal').classList.remove('hidden');
+    });
+
+    function editVehicleType(id) {
+      const vt = state.vehicleTypes.find(v => v.id == id);
+      if (!vt) return;
+
+      state.editingVehicleTypeId = id;
+      document.getElementById('vehicleTypeName').value = vt.name;
+      document.getElementById('vehicleTypeIcon').value = vt.icon || '🚗';
+      document.getElementById('vehicleTypeCapacity').value = vt.capacity || '';
+      document.getElementById('vehicleTypeSortOrder').value = vt.sort_order || 0;
+      document.getElementById('vehicleTypeActive').checked = vt.is_active !== false;
+      document.getElementById('vehicleTypeModal').classList.remove('hidden');
+    }
+
+    async function saveVehicleType() {
+      const data = {
+        name: document.getElementById('vehicleTypeName').value.trim(),
+        icon: document.getElementById('vehicleTypeIcon').value.trim(),
+        capacity: document.getElementById('vehicleTypeCapacity').value.trim(),
+        sort_order: parseInt(document.getElementById('vehicleTypeSortOrder').value) || 0,
+        is_active: document.getElementById('vehicleTypeActive').checked
+      };
+
+      if (!data.name) {
+        showToast('Name is required', 'error');
+        return;
+      }
+
+      try {
+        let response;
+        if (state.editingVehicleTypeId) {
+          response = await fetch(`${creds.url}/rest/v1/vehicle_types?id=eq.${state.editingVehicleTypeId}`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': creds.anonKey,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+          });
+        } else {
+          response = await fetch(`${creds.url}/rest/v1/vehicle_types`, {
+            method: 'POST',
+            headers: {
+              'apikey': creds.anonKey,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=representation'
+            },
+            body: JSON.stringify(data)
+          });
+        }
+
+        if (response.ok) {
+          showToast('Vehicle type saved', 'success');
+          document.getElementById('vehicleTypeModal').classList.add('hidden');
+          await loadSettings();
+        } else {
+          throw new Error('Save failed');
+        }
+      } catch (err) {
+        console.error('Failed to save vehicle type:', err);
+        showToast('Failed to save vehicle type', 'error');
+      }
+    }
+
+    async function deleteVehicleType(id) {
+      if (!confirm('Delete this vehicle type?')) return;
+
+      try {
+        await fetch(`${creds.url}/rest/v1/vehicle_types?id=eq.${id}`, {
+          method: 'DELETE',
+          headers: { 'apikey': creds.anonKey }
+        });
+        showToast('Vehicle type deleted', 'success');
+        await loadSettings();
+      } catch (err) {
+        console.error('Failed to delete vehicle type:', err);
+        showToast('Failed to delete vehicle type', 'error');
+      }
+    }
+
+    // Save all settings
+    document.getElementById('saveSettingsBtn')?.addEventListener('click', saveAllSettings);
+
+    async function saveAllSettings() {
+      const btn = document.getElementById('saveSettingsBtn');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      try {
+        // Customer portal settings
+        const customerSettings = {
+          portal_type: 'customer',
+          header_title: document.getElementById('customerHeaderTitle').value,
+          welcome_message: document.getElementById('customerWelcomeMessage').value,
+          thank_you_message: document.getElementById('customerThankYouMessage').value,
+          primary_color: document.getElementById('customerPrimaryColor').value,
+          google_review_url: document.getElementById('customerGoogleReviewUrl').value,
+          terms_url: document.getElementById('customerTermsUrl').value,
+          privacy_url: document.getElementById('customerPrivacyUrl').value,
+          map_center_lat: parseFloat(document.getElementById('mapCenterLat').value),
+          map_center_lng: parseFloat(document.getElementById('mapCenterLng').value),
+          map_zoom: parseInt(document.getElementById('mapZoomLevel').value),
+          service_area_description: document.getElementById('serviceAreaDescription').value
+        };
+
+        // Driver portal settings
+        const driverSettings = {
+          portal_type: 'driver',
+          header_title: document.getElementById('driverHeaderTitle').value,
+          primary_color: document.getElementById('driverPrimaryColor').value
+        };
+
+        // Upsert portal settings
+        for (const settings of [customerSettings, driverSettings]) {
+          await fetch(`${creds.url}/rest/v1/portal_settings`, {
+            method: 'POST',
+            headers: {
+              'apikey': creds.anonKey,
+              'Content-Type': 'application/json',
+              'Prefer': 'resolution=merge-duplicates'
+            },
+            body: JSON.stringify(settings)
+          });
+        }
+
+        // Save booking defaults
+        const tipOptions = document.getElementById('defaultTipOptions').value
+          .split(',').map(t => parseInt(t.trim())).filter(t => !isNaN(t));
+        
+        const bookingDefaults = [
+          { setting_key: 'default_vehicle_type', setting_value: document.getElementById('defaultVehicleType').value, setting_type: 'string' },
+          { setting_key: 'default_service_type', setting_value: document.getElementById('defaultServiceType').value, setting_type: 'string' },
+          { setting_key: 'default_assignment_type', setting_value: document.getElementById('defaultAssignmentType').value, setting_type: 'string' },
+          { setting_key: 'default_affiliate', setting_value: document.getElementById('defaultAffiliate').value, setting_type: 'string' },
+          { setting_key: 'confirmation_prefix', setting_value: document.getElementById('confirmationPrefix').value, setting_type: 'string' },
+          { setting_key: 'auto_confirm', setting_value: document.getElementById('autoConfirmBookings').checked.toString(), setting_type: 'boolean' },
+          { setting_key: 'send_confirmation_sms', setting_value: document.getElementById('sendConfirmationSms').checked.toString(), setting_type: 'boolean' },
+          { setting_key: 'send_confirmation_email', setting_value: document.getElementById('sendConfirmationEmail').checked.toString(), setting_type: 'boolean' },
+          { setting_key: 'require_flight_number_pickup', setting_value: document.getElementById('requireFlightPickup').checked.toString(), setting_type: 'boolean' },
+          { setting_key: 'require_flight_number_dropoff', setting_value: document.getElementById('requireFlightDropoff').checked.toString(), setting_type: 'boolean' },
+          { setting_key: 'verify_flight_via_api', setting_value: document.getElementById('verifyFlightViaApi').checked.toString(), setting_type: 'boolean' },
+          { setting_key: 'enable_tips', setting_value: document.getElementById('enableTips').checked.toString(), setting_type: 'boolean' },
+          { setting_key: 'default_tip_options', setting_value: JSON.stringify(tipOptions), setting_type: 'json' },
+          { setting_key: 'enable_google_review', setting_value: document.getElementById('enableGoogleReview').checked.toString(), setting_type: 'boolean' },
+          { setting_key: 'thank_you_message', setting_value: document.getElementById('thankYouMessage').value, setting_type: 'string' }
+        ];
+
+        for (const setting of bookingDefaults) {
+          await fetch(`${creds.url}/rest/v1/customer_booking_defaults`, {
+            method: 'POST',
+            headers: {
+              'apikey': creds.anonKey,
+              'Content-Type': 'application/json',
+              'Prefer': 'resolution=merge-duplicates'
+            },
+            body: JSON.stringify(setting)
+          });
+        }
+
+        // Save geofence settings
+        const geofenceSettings = [
+          { key: 'geofence_radius', value: document.getElementById('geofenceRadius').value },
+          { key: 'pickup_geofence_radius', value: document.getElementById('pickupGeofenceRadius').value },
+          { key: 'auto_complete_on_arrival', value: document.getElementById('autoCompleteTripOnArrival').checked.toString() },
+          { key: 'require_location_permission', value: document.getElementById('requireLocationPermission').checked.toString() }
+        ];
+
+        for (const setting of geofenceSettings) {
+          await fetch(`${creds.url}/rest/v1/app_settings`, {
+            method: 'POST',
+            headers: {
+              'apikey': creds.anonKey,
+              'Content-Type': 'application/json',
+              'Prefer': 'resolution=merge-duplicates'
+            },
+            body: JSON.stringify(setting)
+          });
+        }
+
+        showToast('All settings saved!', 'success');
+      } catch (err) {
+        console.error('Failed to save settings:', err);
+        showToast('Failed to save some settings', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '💾 Save All Settings';
+      }
+    }
+
+    // Modal close handlers
+    document.getElementById('closeAirportModal')?.addEventListener('click', () => {
+      document.getElementById('airportModal').classList.add('hidden');
+    });
+    document.getElementById('cancelAirport')?.addEventListener('click', () => {
+      document.getElementById('airportModal').classList.add('hidden');
+    });
+    document.getElementById('saveAirport')?.addEventListener('click', saveAirport);
+
+    document.getElementById('closeVehicleTypeModal')?.addEventListener('click', () => {
+      document.getElementById('vehicleTypeModal').classList.add('hidden');
+    });
+    document.getElementById('cancelVehicleType')?.addEventListener('click', () => {
+      document.getElementById('vehicleTypeModal').classList.add('hidden');
+    });
+    document.getElementById('saveVehicleType')?.addEventListener('click', saveVehicleType);
+
+    // Toast
+    function showToast(message, type = 'info') {
+      const existing = document.querySelector('.toast');
+      if (existing) existing.remove();
+
+      const toast = document.createElement('div');
+      toast.className = `toast ${type} show`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    function camelCase(str) {
+      return str.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+    }
+
+    // Initialize
+    loadSettings();
+  </script>
+</body>
+</html>
