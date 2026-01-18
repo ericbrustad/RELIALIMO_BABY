@@ -9,5 +9,9 @@
 # Generated browser env (do NOT commit)
 env.js
 
+# Environment backup files (SENSITIVE - NEVER COMMIT)
+relialimo-env-backup*.json
+ENV_SAVE_AND_RESTORE.html
+
 .vercel
 .env*.local
