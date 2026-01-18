@@ -3,7 +3,6 @@
 A simple local network messaging system that allows you to send messages to all connected devices on your network.
 
 ## Features
-
 - 🌐 **Network-wide broadcasting** - Messages are sent to ALL connected devices
 - 📱 **Mobile-friendly** - Works on phones, tablets, and desktops
 - 🔔 **Sound notifications** - Audio alerts for incoming messages
