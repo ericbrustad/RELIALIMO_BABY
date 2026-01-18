@@ -405,6 +405,14 @@
         
         console.log('[Email] Settings saved:', { ...settings, smtpPass: '***' });
         
+        // Also sync to Supabase if available
+        if (window.SystemSettingsSync) {
+          window.SystemSettingsSync.saveEmailSettings(settings).then(() => {
+            console.log('[Email] Settings synced to Supabase');
+          }).catch(e => console.warn('[Email] Supabase sync failed:', e));
+          window.SystemSettingsSync.saveEmailConfig(settings).catch(() => {});
+        }
+        
         // Trigger storage event
         window.dispatchEvent(new StorageEvent('storage', {
           key: this.STORAGE_KEY,

@@ -386,6 +386,13 @@
           localStorage.setItem(this.STORAGE_KEY, JSON.stringify([provider]));
           console.log('[SMS] Settings saved to localStorage:', provider);
           
+          // Also sync to Supabase if available
+          if (window.SystemSettingsSync) {
+            window.SystemSettingsSync.saveSmsProviders([provider]).then(() => {
+              console.log('[SMS] Settings synced to Supabase');
+            }).catch(e => console.warn('[SMS] Supabase sync failed:', e));
+          }
+          
           // Trigger storage event for other tabs/windows
           window.dispatchEvent(new StorageEvent('storage', {
             key: this.STORAGE_KEY,
