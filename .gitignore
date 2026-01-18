@@ -6,8 +6,8 @@
 # secrets
 .env.*.local
 
-# Generated browser env (do NOT commit)
-env.js
+# NOTE: shared/env.js is committed because it contains only PUBLIC anon keys
+# These are client-side keys meant to be exposed in the browser
 
 # Environment backup files (SENSITIVE - NEVER COMMIT)
 relialimo-env-backup*.json
