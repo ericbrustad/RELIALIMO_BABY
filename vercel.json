@@ -1,11 +1,5 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "server.js",
-      "use": "@vercel/node"
-    }
-  ],
   "rewrites": [
     {
       "source": "/",
@@ -44,7 +38,7 @@
     },
     {
       "source": "/api/:path*",
-      "destination": "/server.js"
+      "destination": "/api/:path*"
     },
     {
       "source": "/driver/:driver_id",
