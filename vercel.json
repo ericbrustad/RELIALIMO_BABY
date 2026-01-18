@@ -41,28 +41,18 @@
       "source": "/:driver_slug",
       "has": [{ "type": "host", "value": "driver.relialimo.com" }],
       "destination": "/drivers/driver-portal.html?driver_slug=:driver_slug"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/server.js"
     },
     {
-      "src": "/driver/([^/]+)",
-      "dest": "/driver-portal.html?driver_id=$1"
+      "source": "/api/:path*",
+      "destination": "/server.js"
     },
     {
-      "src": "/portal/([^/]+)",
-      "dest": "/driver-portal.html?driver_id=$1"
+      "source": "/driver/:driver_id",
+      "destination": "/driver-portal.html?driver_id=:driver_id"
     },
     {
-      "src": "/([a-f0-9\\-]{8,})",
-      "dest": "/driver-portal.html?driver_id=$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
+      "source": "/portal/:driver_id",
+      "destination": "/driver-portal.html?driver_id=:driver_id"
     }
   ]
 }
