@@ -43,7 +43,7 @@
                     },
                     body: JSON.stringify({
                         to: '+17632838336', // Eric's real phone
-                        message: `🚗 NEW FARMOUT OFFER - Test from Vercel
+                        body: `🚗 NEW FARMOUT OFFER - Test from Vercel
 
 📅 Trip: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}
 📍 From: 123 Test St, Houston, TX
@@ -105,7 +105,7 @@ This is a test message from the live Vercel deployment.`
                 const apiTest = await fetch('/api/sms-send', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ to: '+17632838336', message: 'API test' })
+                    body: JSON.stringify({ to: '+17632838336', body: 'API test from farmout system' })
                 });
                 
                 if (apiTest.ok) {

@@ -49,7 +49,6 @@
             <button class="window-tab" data-tab="online-efarm-in">Online & eFarm-in</button>
             <button class="window-tab" data-tab="unfinalized">Unfinalized</button>
             <button class="window-tab" data-tab="deleted">Deleted Reservations</button>
-            <button class="window-tab" data-tab="import">Import/Res</button>
           </div>
         </div>
       </header>
@@ -615,62 +614,6 @@
           </div>
         </div>
 
-        <!-- Import Tab -->
-        <div class="reservations-layout" id="importTab" style="display: none;">
-          <div class="reservations-content" style="padding: 20px; background: #f5f5f5;">
-            <h2 style="color: #333; margin: 0 0 10px 0; font-size: 24px; font-weight: normal;">Manifest Upload</h2>
-            <p style="color: #666; margin: 0 0 30px 0; font-size: 14px;">Allows for the upload of a passenger manifest, including their names, contact information, and trip details.</p>
-            
-            <!-- Action Buttons -->
-            <div style="margin-bottom: 30px;">
-              <button style="background: #17a2b8; color: #fff; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px; font-size: 14px;">⚙ Settings</button>
-              <button style="background: #17a2b8; color: #fff; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">$ Limo/Anywhere Rate Mapping</button>
-            </div>
-
-            <!-- Form -->
-            <div style="background: #fff; padding: 30px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 20px;">
-                <!-- Service Type -->
-                <div>
-                  <label style="display: block; color: #333; font-weight: 600; margin-bottom: 8px; font-size: 14px;">
-                    Service Type <span style="color: red;">*</span>
-                  </label>
-                  <select style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; background: #fff;">
-                    <option>From Airport</option>
-                    <option>To Airport</option>
-                    <option>Point to Point</option>
-                    <option>Hourly</option>
-                  </select>
-                </div>
-
-                <!-- Group Name -->
-                <div>
-                  <label style="display: block; color: #333; font-weight: 600; margin-bottom: 8px; font-size: 14px;">Group Name</label>
-                  <input type="text" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;" />
-                </div>
-              </div>
-
-              <!-- Dispatch Notes -->
-              <div style="margin-bottom: 20px;">
-                <label style="display: block; color: #333; font-weight: 600; margin-bottom: 8px; font-size: 14px;">Dispatch Notes</label>
-                <textarea style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; min-height: 100px; box-sizing: border-box; font-family: inherit;"></textarea>
-              </div>
-
-              <!-- Spreadsheet Upload -->
-              <div style="margin-bottom: 20px;">
-                <label style="display: block; color: #333; font-weight: 600; margin-bottom: 8px; font-size: 14px;">
-                  Spreadsheet <span style="color: red;">*</span>
-                </label>
-                <input type="file" accept=".csv,.xlsx,.xls" style="font-size: 14px;" />
-              </div>
-
-              <!-- Upload Button -->
-              <div>
-                <button style="background: #17a2b8; color: #fff; border: none; padding: 10px 30px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 600;">Upload and Select</button>
-              </div>
-            </div>
-          </div>
-        </div>
       </main>
     </div>
 

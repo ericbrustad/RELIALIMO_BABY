@@ -28,15 +28,11 @@ class SMSService {
       throw new Error('SMS requires both "to" and "message" parameters');
     }
 
-    if (!provider) {
-      throw new Error('No SMS provider configured');
-    }
-
     const formattedPhone = this.formatPhoneNumber(to);
     console.log(`[SMSService] Sending SMS to ${formattedPhone}: ${message.substring(0, 50)}...`);
 
     try {
-      // Use server endpoint to avoid CORS issues
+      // Use server endpoint to avoid CORS issues (server has Twilio creds in env)
       const response = await fetch(`${this.baseUrl}/api/sms-send`, {
         method: 'POST',
         headers: {
@@ -49,8 +45,8 @@ class SMSService {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`SMS API error: ${response.status} ${errorText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `SMS API error: ${response.status}`);
       }
 
       const result = await response.json();
@@ -61,7 +57,7 @@ class SMSService {
       console.error('[SMSService] Failed to send SMS:', error);
       
       // Fallback: try direct Twilio API (may fail due to CORS)
-      if (provider.type === 'twilio') {
+      if (provider && provider.type === 'twilio') {
         return await this.sendViaTwilioDirect(to, message, provider);
       }
       

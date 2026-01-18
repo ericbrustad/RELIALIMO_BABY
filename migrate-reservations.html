@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Migrate Local Reservations to Supabase</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; background: #1a1a2e; color: #eee; }
+    h1 { color: #00d9ff; }
+    .status { padding: 15px; border-radius: 8px; margin: 10px 0; }
+    .success { background: #1b4332; border: 1px solid #40916c; }
+    .error { background: #4a1c1c; border: 1px solid #c0392b; }
+    .info { background: #1c3a4a; border: 1px solid #3498db; }
+    .warning { background: #4a3c1c; border: 1px solid #f39c12; }
+    button { background: #00d9ff; color: #000; border: none; padding: 15px 30px; font-size: 18px; cursor: pointer; border-radius: 8px; margin: 10px 5px; }
+    button:hover { background: #00b8d9; }
+    button:disabled { background: #666; cursor: not-allowed; }
+    #log { background: #0d0d1a; padding: 20px; border-radius: 8px; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 14px; }
+    .log-entry { margin: 5px 0; padding: 5px; border-left: 3px solid #333; padding-left: 10px; }
+    .log-success { border-left-color: #40916c; }
+    .log-error { border-left-color: #c0392b; }
+    .log-info { border-left-color: #3498db; }
+  </style>
+</head>
+<body>
+  <h1>🚀 Migrate Local Reservations to Supabase</h1>
+  
+  <div id="summary" class="status info">
+    <strong>Status:</strong> Ready to scan localStorage for reservations...
+  </div>
+
+  <button id="scanBtn" onclick="scanLocalStorage()">1. Scan localStorage</button>
+  <button id="migrateBtn" onclick="runMigration()" disabled>2. Migrate to Supabase</button>
+  <button onclick="dumpLocalData()">Show Raw Data</button>
+  <button onclick="clearLog()">Clear Log</button>
+
+  <h3>Log:</h3>
+  <div id="log"></div>
+
+  <script>
+    // Configuration
+    const SUPABASE_URL = 'https://siumiadylwcrkaqsfwkj.supabase.co';
+    const SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpdW1pYWR5bHdjcmthcXNmd2tqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTY2MzMxMywiZXhwIjoyMDgxMjM5MzEzfQ.AwUvDEQNb_U04OveQ6Ia9wFgoIatwV6wigdwSQnsOP4';
+    const ORG_ID = '54eb6ce7-ba97-4198-8566-6ac075828160'; // Default Org
+    const USER_ID = '99d34cd5-a593-4362-9846-db7167276592';
+
+    let reservationsToMigrate = [];
+
+    function log(message, type = 'info') {
+      const logDiv = document.getElementById('log');
+      const entry = document.createElement('div');
+      entry.className = `log-entry log-${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logDiv.appendChild(entry);
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+
+    function dumpLocalData() {
+      const data = JSON.parse(localStorage.getItem('dev_reservations') || '[]');
+      if (data.length > 0) {
+        log('First reservation raw data:', 'info');
+        log(JSON.stringify(data[0], null, 2), 'info');
+        console.log('Full localStorage data:', data);
+      } else {
+        log('No data in dev_reservations', 'error');
+      }
+    }
+
+    function updateSummary(text, type) {
+      const summary = document.getElementById('summary');
+      summary.innerHTML = `<strong>Status:</strong> ${text}`;
+      summary.className = `status ${type}`;
+    }
+
+    function scanLocalStorage() {
+      log('Scanning localStorage for reservations...', 'info');
+      
+      const keys = ['dev_reservations', 'local_reservations', 'relia_reservations', 'relia_dev_reservations'];
+      const allReservations = [];
+      
+      keys.forEach(key => {
+        try {
+          const data = localStorage.getItem(key);
+          if (data) {
+            const parsed = JSON.parse(data);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              log(`Found ${parsed.length} reservations in "${key}"`, 'success');
+              allReservations.push(...parsed);
+            } else {
+              log(`"${key}" is empty or not an array`, 'info');
+            }
+          } else {
+            log(`"${key}" not found`, 'info');
+          }
+        } catch (e) {
+          log(`Error reading "${key}": ${e.message}`, 'error');
+        }
+      });
+
+      // Deduplicate by confirmation_number
+      const seen = new Set();
+      reservationsToMigrate = allReservations.filter(r => {
+        const confNum = r.confirmation_number || r.confirmationNumber;
+        if (!confNum || seen.has(confNum)) return false;
+        seen.add(confNum);
+        return true;
+      });
+
+      if (reservationsToMigrate.length > 0) {
+        log(`Total unique reservations to migrate: ${reservationsToMigrate.length}`, 'success');
+        reservationsToMigrate.forEach(r => {
+          const cn = r.confirmation_number || r.confirmationNumber;
+          // Handle nested passenger structure
+          const passenger = r.passenger || {};
+          const name = [passenger.firstName, passenger.lastName].filter(Boolean).join(' ') || r.passenger_name || 'Unknown';
+          log(`  - ${cn}: ${name}`, 'info');
+        });
+        updateSummary(`Found ${reservationsToMigrate.length} reservations ready to migrate`, 'success');
+        document.getElementById('migrateBtn').disabled = false;
+      } else {
+        updateSummary('No reservations found in localStorage', 'warning');
+        log('No reservations found to migrate', 'warning');
+      }
+    }
+
+    async function runMigration() {
+      if (reservationsToMigrate.length === 0) {
+        log('No reservations to migrate!', 'error');
+        return;
+      }
+
+      document.getElementById('migrateBtn').disabled = true;
+      document.getElementById('scanBtn').disabled = true;
+      
+      log('Starting migration to Supabase...', 'info');
+      updateSummary('Migrating...', 'info');
+
+      let migrated = 0;
+      let failed = 0;
+      let skipped = 0;
+
+      for (const r of reservationsToMigrate) {
+        const confNum = r.confirmation_number || r.confirmationNumber;
+        
+        try {
+          // Check if already exists
+          const checkRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/reservations?confirmation_number=eq.${encodeURIComponent(confNum)}&select=id`,
+            { headers: { 'apikey': SERVICE_KEY, 'Authorization': `Bearer ${SERVICE_KEY}` } }
+          );
+          const existing = await checkRes.json();
+          
+          // Map to Supabase schema - handle nested localStorage structure
+          const mapped = mapLocalToSupabase(r);
+          
+          if (existing && existing.length > 0) {
+            // UPDATE existing record with full data
+            const existingId = existing[0].id;
+            log(`Found existing record ${confNum} (id: ${existingId.substring(0,8)}...), updating...`, 'info');
+            const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/reservations?id=eq.${existingId}`, {
+              method: 'PATCH',
+              headers: {
+                'apikey': SERVICE_KEY,
+                'Authorization': `Bearer ${SERVICE_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+              },
+              body: JSON.stringify(mapped)
+            });
+            
+            if (updateRes.ok) {
+              const updateResult = await updateRes.json();
+              log(`🔄 Updated ${confNum} - pickup: ${updateResult[0]?.pickup_address || 'none'}`, 'success');
+              migrated++;
+            } else {
+              const errText = await updateRes.text();
+              log(`❌ Failed to update ${confNum}: ${errText}`, 'error');
+              failed++;
+            }
+            continue;
+          }
+          
+          // No existing record - INSERT new
+          log(`No existing record for ${confNum}, inserting new...`, 'info');
+
+          // Insert new reservation
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/reservations`, {
+            method: 'POST',
+            headers: {
+              'apikey': SERVICE_KEY,
+              'Authorization': `Bearer ${SERVICE_KEY}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=representation'
+            },
+            body: JSON.stringify(mapped)
+          });
+
+          if (res.ok) {
+            const result = await res.json();
+            log(`✅ Migrated ${confNum} → ${result[0]?.id?.substring(0,8)}...`, 'success');
+            migrated++;
+          } else {
+            const errText = await res.text();
+            log(`❌ Failed ${confNum}: ${errText}`, 'error');
+            failed++;
+          }
+        } catch (e) {
+          log(`❌ Error migrating ${confNum}: ${e.message}`, 'error');
+          failed++;
+        }
+      }
+
+      const summary = `Migration complete: ${migrated} migrated, ${skipped} skipped, ${failed} failed`;
+      log(summary, migrated > 0 ? 'success' : 'error');
+      updateSummary(summary, failed === 0 ? 'success' : (migrated > 0 ? 'warning' : 'error'));
+      
+      document.getElementById('scanBtn').disabled = false;
+    }
+
+    function formatDateTime(date, time) {
+      if (!date) return null;
+      if (date.includes('T') || date.includes(' ')) return date;
+      if (time) return `${date}T${time}:00`;
+      return `${date}T00:00:00`;
+    }
+
+    function buildInstructions(r) {
+      const parts = [];
+      const name = r.passenger_name || r.passengerName || 
+        [r.passenger_first_name, r.passenger_last_name].filter(Boolean).join(' ');
+      if (name) parts.push(`Passenger: ${name}`);
+      
+      const phone = r.passenger_phone || r.passengerPhone || r.phone;
+      if (phone) parts.push(`Phone: ${phone}`);
+      
+      const email = r.passenger_email || r.email;
+      if (email) parts.push(`Email: ${email}`);
+      
+      if (r.special_instructions) parts.push(r.special_instructions);
+      
+      return parts.length > 0 ? parts.join('\n') : null;
+    }
+
+    // Map local status values to valid Supabase enum values
+    function mapStatus(localStatus) {
+      const statusMap = {
+        'unassigned': 'pending',
+        'farm_out_unassigned': 'pending',
+        'farm_out_assigned': 'confirmed',
+        'assigned': 'confirmed',
+        'dispatched': 'in_progress',
+        'en_route': 'in_progress',
+        'on_location': 'in_progress',
+        'passenger_on_board': 'in_progress',
+        'dropped_off': 'completed',
+        'done': 'completed',
+        'complete': 'completed',
+        'completed': 'completed',
+        'cancelled': 'cancelled',
+        'canceled': 'cancelled',
+        'no_show': 'cancelled'
+      };
+      
+      const normalized = (localStatus || '').toLowerCase().trim();
+      return statusMap[normalized] || statusMap[localStatus] || 'pending';
+    }
+
+    // Map nested localStorage structure to flat Supabase schema
+    function mapLocalToSupabase(r) {
+      // Extract passenger info
+      const passenger = r.passenger || {};
+      const passengerName = [passenger.firstName, passenger.lastName].filter(Boolean).join(' ') || null;
+      const passengerPhone = passenger.phone || passenger.cellPhone || null;
+      const passengerEmail = passenger.email || null;
+      
+      // Extract routing/stops
+      const routing = r.routing || {};
+      const stops = routing.stops || [];
+      const pickupStop = stops.find(s => s.stopType === 'pickup' || s.type === 'pickup') || {};
+      const dropoffStop = stops.find(s => s.stopType === 'dropoff' || s.type === 'dropoff') || {};
+      
+      // Build pickup address
+      const pickupAddress = pickupStop.fullAddress || pickupStop.address || 
+        [pickupStop.address1, pickupStop.city, pickupStop.state, pickupStop.zipCode].filter(Boolean).join(', ') || null;
+      
+      // Build dropoff address  
+      const dropoffAddress = dropoffStop.fullAddress || dropoffStop.address ||
+        [dropoffStop.address1, dropoffStop.city, dropoffStop.state, dropoffStop.zipCode].filter(Boolean).join(', ') || null;
+      
+      // Extract details
+      const details = r.details || {};
+      const status = details.status || r.status || 'unassigned';
+      const puDate = details.puDate || r.puDate;
+      const puTime = details.puTime || r.puTime;
+      const doTime = details.doTime || r.doTime;
+      
+      // Extract costs
+      const costs = r.costs || {};
+      const flatRate = parseFloat(costs.flat?.rate) || 0;
+      const flatQty = parseFloat(costs.flat?.qty) || 0;
+      const grandTotal = r.grandTotal || (flatRate * flatQty) || null;
+      
+      // Build pickup datetime
+      let pickupDatetime = null;
+      if (puDate && puTime) {
+        pickupDatetime = `${puDate}T${puTime}:00`;
+      }
+      
+      // Build dropoff datetime (same date, different time)
+      let dropoffDatetime = null;
+      if (puDate && doTime) {
+        dropoffDatetime = `${puDate}T${doTime}:00`;
+      }
+      
+      // Build notes from various sources
+      const notesParts = [];
+      if (routing.tripNotes) notesParts.push(`Trip: ${routing.tripNotes}`);
+      if (routing.dispatchNotes) notesParts.push(`Dispatch: ${routing.dispatchNotes}`);
+      if (routing.partnerNotes) notesParts.push(`Partner: ${routing.partnerNotes}`);
+      
+      // Build special instructions
+      const instructionParts = [];
+      if (passengerName) instructionParts.push(`Passenger: ${passengerName}`);
+      if (passengerPhone) instructionParts.push(`Phone: ${passengerPhone}`);
+      if (passengerEmail) instructionParts.push(`Email: ${passengerEmail}`);
+      if (passenger.altContactName) instructionParts.push(`Alt Contact: ${passenger.altContactName} ${passenger.altContactPhone || ''}`);
+      if (pickupStop.flightNumber) instructionParts.push(`Flight: ${pickupStop.flightNumber}`);
+      if (dropoffStop.flightNumber) instructionParts.push(`Flight: ${dropoffStop.flightNumber}`);
+      if (pickupStop.airportCode) instructionParts.push(`Airport: ${pickupStop.airportCode}`);
+      if (dropoffStop.airportCode) instructionParts.push(`Airport: ${dropoffStop.airportCode}`);
+      
+      // Billing account info
+      const billing = r.billingAccount || {};
+      
+      return {
+        organization_id: ORG_ID,
+        booked_by_user_id: USER_ID,
+        confirmation_number: r.confirmation_number || r.confirmationNumber,
+        status: mapStatus(status),
+        trip_type: details.farmOption === 'in-house' ? 'standard' : 'farm_out',
+        pickup_address: pickupAddress,
+        pickup_city: pickupStop.city || null,
+        pickup_state: pickupStop.state || null,
+        pickup_zip: pickupStop.zipCode || null,
+        pickup_datetime: pickupDatetime,
+        dropoff_address: dropoffAddress,
+        dropoff_city: dropoffStop.city || null,
+        dropoff_state: dropoffStop.state || null,
+        dropoff_zip: dropoffStop.zipCode || null,
+        dropoff_datetime: dropoffDatetime,
+        passenger_count: 1,
+        passenger_name: passengerName,
+        special_instructions: instructionParts.length > 0 ? instructionParts.join('\n') : null,
+        notes: notesParts.length > 0 ? notesParts.join('\n') : null,
+        rate_amount: grandTotal,
+        rate_type: costs.flat?.qty > 0 ? 'flat' : (costs.hour?.qty > 0 ? 'hourly' : null),
+        grand_total: grandTotal
+      };
+    }
+
+    // Auto-scan on load
+    window.onload = () => {
+      setTimeout(scanLocalStorage, 500);
+    };
+  </script>
+</body>
+</html>

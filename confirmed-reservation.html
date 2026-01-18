@@ -365,8 +365,9 @@
     </div>
 
     <script type="module">
-      import supabaseDb from './supabase-db.js';
+      import supabaseDb from './supabase-db.js?v=' + Date.now();
       const db = supabaseDb;
+      console.log('📋 [ConfirmedReservation] db module loaded, getReservationById:', typeof db.getReservationById);
 
       let currentConf = null;
 
@@ -437,7 +438,7 @@
         };
       }
 
-      function init() {
+      async function init() {
         currentConf = resolveConfNumber();
 
         if (!currentConf) {
@@ -445,13 +446,16 @@
           return;
         }
 
-        loadReservationDetails(currentConf);
+        await loadReservationDetails(currentConf);
       }
 
-      function loadReservationDetails(conf) {
-        const reservation = db.getReservationById(conf);
+      async function loadReservationDetails(conf) {
+        console.log('📋 [ConfirmedReservation] loadReservationDetails called for conf:', conf);
+        const reservation = await db.getReservationById(conf);
+        console.log('📋 [ConfirmedReservation] db.getReservationById result:', reservation ? 'found' : 'null');
 
         if (!reservation) {
+          console.error('❌ [ConfirmedReservation] Reservation not found for conf:', conf);
           document.body.innerHTML = '<p style="padding: 20px; color: red;">Error: Reservation not found.</p>';
           return;
         }

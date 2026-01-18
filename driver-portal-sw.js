@@ -3,7 +3,7 @@
  * Enables offline functionality and caching
  */
 
-const CACHE_NAME = 'driver-portal-v4';
+const CACHE_NAME = 'driver-portal-v5';
 const OFFLINE_URL = '/driver-portal-offline.html';
 
 const PRECACHE_ASSETS = [
@@ -48,17 +48,43 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
-  // Skip non-GET requests
-  if (event.request.method !== 'GET') return;
+  // Skip non-GET requests - let browser handle normally
+  if (event.request.method !== 'GET') {
+    return;
+  }
   
-  // Skip API calls - always go to network
+  // Skip API calls - let browser handle normally (no respondWith)
   if (event.request.url.includes('supabase.co')) {
     return;
   }
   
+  // Skip chrome-extension and other non-http(s) URLs
+  if (!event.request.url.startsWith('http://') && !event.request.url.startsWith('https://')) {
+    return;
+  }
+  
+  // Helper to check if response can be cached
+  function canCache(response) {
+    if (!response || !response.ok) return false;
+    // Responses with Vary: * cannot be cached
+    const vary = response.headers.get('Vary');
+    if (vary && vary === '*') return false;
+    return true;
+  }
+  
+  // Helper to create offline response
+  function createOfflineResponse() {
+    return new Response(
+      '<!DOCTYPE html><html><head><title>Offline</title></head><body><h1>You are offline</h1><p>Please check your connection and try again.</p></body></html>',
+      { status: 503, headers: { 'Content-Type': 'text/html' } }
+    );
+  }
+  
   event.respondWith(
-    caches.match(event.request)
-      .then((cachedResponse) => {
+    (async () => {
+      try {
+        // Try cache first
+        const cachedResponse = await caches.match(event.request);
         if (cachedResponse) {
           // Return cached version and update in background
           event.waitUntil(updateCache(event.request));
@@ -66,24 +92,31 @@ self.addEventListener('fetch', (event) => {
         }
         
         // Not in cache, fetch from network
-        return fetch(event.request)
-          .then((response) => {
-            // Cache successful responses
-            if (response.ok) {
-              const responseClone = response.clone();
-              caches.open(CACHE_NAME)
-                .then((cache) => cache.put(event.request, responseClone));
-            }
-            return response;
-          })
-          .catch(() => {
-            // Network failed, return offline page for navigation requests
-            if (event.request.mode === 'navigate') {
-              return caches.match(OFFLINE_URL);
-            }
-            return new Response('Offline', { status: 503 });
-          });
-      })
+        const response = await fetch(event.request);
+        
+        // Cache successful responses that can be cached
+        if (canCache(response)) {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME)
+            .then((cache) => cache.put(event.request, responseClone))
+            .catch(() => {}); // Ignore cache errors
+        }
+        
+        return response;
+      } catch (err) {
+        // Network failed
+        if (event.request.mode === 'navigate') {
+          // Try offline page first, then create one
+          const offlinePage = await caches.match(OFFLINE_URL);
+          if (offlinePage) {
+            return offlinePage;
+          }
+          return createOfflineResponse();
+        }
+        // Return simple offline response for non-navigation requests
+        return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+      }
+    })()
   );
 });
 
@@ -91,7 +124,9 @@ self.addEventListener('fetch', (event) => {
 async function updateCache(request) {
   try {
     const response = await fetch(request);
-    if (response.ok) {
+    // Only cache if response is ok and doesn't have Vary: *
+    const vary = response.headers.get('Vary');
+    if (response.ok && (!vary || vary !== '*')) {
       const cache = await caches.open(CACHE_NAME);
       await cache.put(request, response);
     }

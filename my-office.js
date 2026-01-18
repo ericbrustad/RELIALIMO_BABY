@@ -1,5 +1,5 @@
 // Import API service
-import { setupAPI, apiFetch, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, fetchVehicleTypes, upsertVehicleType, deleteVehicleType, fetchActiveVehicles, fetchFleetVehicles, uploadVehicleTypeImage, fetchVehicleTypeImages, deleteVehicleTypeImage, updateVehicleTypeImage, updateFleetVehicle } from './api-service.js';
+import { setupAPI, apiFetch, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, fetchVehicleTypes, upsertVehicleType, deleteVehicleType, fetchActiveVehicles, fetchFleetVehicles, uploadVehicleTypeImage, fetchVehicleTypeImages, deleteVehicleTypeImage, updateVehicleTypeImage, updateFleetVehicle, createFleetVehicle } from './api-service.js';
 import { wireMainNav } from './navigation.js';
 import { loadServiceTypes, SERVICE_TYPES_STORAGE_KEY } from './service-types-store.js';
 import { getSupabaseConfig } from './config.js';
@@ -316,10 +316,18 @@ class MyOffice {
     // Check if URL has a tab parameter
     const urlParams = new URLSearchParams(window.location.search);
     const tab = urlParams.get('tab');
+    const setting = urlParams.get('setting');
     
     if (tab) {
       // Switch to the requested tab
       this.switchTab(tab);
+      
+      // If a specific system setting is requested, navigate to it
+      if (tab === 'system-settings' && setting) {
+        setTimeout(() => {
+          this.navigateToSystemSettingsPage(setting);
+        }, 100);
+      }
     }
 
   }
@@ -1853,6 +1861,21 @@ class MyOffice {
       // User chose to navigate anyway, clear the flag
       this.clearRatesUnsaved();
     }
+
+    // Ensure normalLayout is visible (required for company-settings sections like system-settings)
+    const normalLayout = document.getElementById('normalLayout');
+    const resourcesContainer = document.getElementById('companyResourcesContainer');
+    if (normalLayout) normalLayout.style.display = 'block';
+    if (resourcesContainer) resourcesContainer.style.display = 'none';
+
+    // Update tab button state to show Company Settings as active
+    document.querySelectorAll('.window-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === 'company-settings');
+    });
+
+    // Show the Company Settings sidebar group
+    const companySettingsGroup = document.getElementById('companySettingsGroup');
+    if (companySettingsGroup) companySettingsGroup.style.display = 'block';
 
     // Update sidebar active state (only within Company Settings group)
     document.querySelectorAll('#companySettingsGroup .sidebar-btn').forEach(btn => {
@@ -5210,6 +5233,44 @@ class MyOffice {
         }
       });
     }
+    
+    // Auto-update Vehicle Title when Year, Make, or Model changes
+    this.setupFleetTitleAutoUpdate();
+  }
+  
+  /**
+   * Auto-update the Vehicle Title field when Year, Make, or Model changes
+   */
+  setupFleetTitleAutoUpdate() {
+    const yearSelect = document.getElementById('fleetYear');
+    const makeInput = document.getElementById('fleetMake');
+    const modelInput = document.getElementById('fleetModel');
+    const titleInput = document.getElementById('fleetVehTitle');
+    
+    if (!titleInput) return;
+    
+    const updateTitle = () => {
+      const year = yearSelect?.value || '';
+      const make = makeInput?.value || '';
+      const model = modelInput?.value || '';
+      const newTitle = [year, make, model].filter(Boolean).join(' ').trim();
+      titleInput.value = newTitle;
+      console.log('[Fleet] Auto-updated veh_title to:', newTitle);
+    };
+    
+    // Attach listeners if not already bound
+    if (yearSelect && !yearSelect.dataset.titleBound) {
+      yearSelect.addEventListener('change', updateTitle);
+      yearSelect.dataset.titleBound = 'true';
+    }
+    if (makeInput && !makeInput.dataset.titleBound) {
+      makeInput.addEventListener('input', updateTitle);
+      makeInput.dataset.titleBound = 'true';
+    }
+    if (modelInput && !modelInput.dataset.titleBound) {
+      modelInput.addEventListener('input', updateTitle);
+      modelInput.dataset.titleBound = 'true';
+    }
   }
 
   populateFleetYearOptions() {
@@ -5363,8 +5424,9 @@ class MyOffice {
       const localFleet = this.loadFleetFromStorage();
       const localIds = new Set(localFleet.map(v => v.id));
       
-      // Use fetchActiveVehicles to get Supabase vehicles
-      const vehicles = await fetchActiveVehicles({ includeInactive: false });
+      // Use fetchFleetVehicles to get from fleet_vehicles table (has assigned_driver_id)
+      const vehicles = await fetchFleetVehicles({ includeInactive: true });
+      console.log('[Fleet] Loaded', vehicles.length, 'vehicles from fleet_vehicles table');
       
       // Filter out placeholder vehicles (unit_number starting with "UNIT-" are vehicle type placeholders, not real fleet)
       const realVehicles = vehicles.filter(v => {
@@ -5374,48 +5436,69 @@ class MyOffice {
         return true;
       });
       
-      // Start with local fleet (preserves edits)
-      this.fleetRecords = [...localFleet];
+      // Start with Supabase fleet as primary source (has assigned_driver_id)
+      this.fleetRecords = [];
       
-      // Add Supabase vehicles that aren't already in local fleet
+      // Add Supabase vehicles first (they have current assigned_driver_id)
       for (const v of realVehicles) {
-        if (!localIds.has(v.id)) {
-          this.fleetRecords.push({
-            id: v.id,
-            unit_number: v.unit_number,
-            status: v.status || (v.veh_active === 'Y' ? 'ACTIVE' : 'INACTIVE'),
-            vehicle_type: v.vehicle_type || v.veh_type,
-            vehicle_type_id: v.vehicle_type_id,
-            veh_type: v.veh_type || v.vehicle_type,
-            veh_title: v.veh_title,
-            year: v.year,
-            make: v.make,
-            model: v.model,
-            color: v.color,
-            license_plate: v.license_plate,
-            vin: v.vin,
-            veh_disp_name: v.veh_disp_name || `${v.unit_number || ''} ${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim(),
-            // Capacity - use passenger_capacity as primary, fallback to capacity
-            passenger_capacity: v.passenger_capacity || v.capacity || v.veh_pax_capacity,
-            veh_pax_capacity: v.passenger_capacity || v.veh_pax_capacity || v.capacity,
-            capacity: v.capacity || v.passenger_capacity,
-            // Driver assignment
-            assigned_driver_id: v.assigned_driver_id,
-            assigned_at: v.assigned_at,
-            // Insurance fields
-            insurance_company: v.insurance_company,
-            insurance_policy_number: v.insurance_policy_number,
-            // Permit fields
-            limo_permit_number: v.limo_permit_number,
-            permit_expiration_month: v.permit_expiration_month,
-            permit_expiration_year: v.permit_expiration_year,
-            us_dot_number: v.us_dot_number,
-            // Organization
-            organization_id: v.organization_id,
-            affiliate_id: v.affiliate_id,
-            created_at: v.created_at,
-            updated_at: v.updated_at
-          });
+        this.fleetRecords.push({
+          id: v.id,
+          unit_number: v.unit_number,
+          status: v.status || (v.veh_active === 'Y' ? 'ACTIVE' : 'INACTIVE'),
+          vehicle_type: v.vehicle_type || v.veh_type,
+          vehicle_type_id: v.vehicle_type_id,
+          veh_type: v.veh_type || v.vehicle_type,
+          veh_title: v.veh_title,
+          year: v.year,
+          make: v.make,
+          model: v.model,
+          color: v.color,
+          license_plate: v.license_plate,
+          vin: v.vin,
+          veh_disp_name: v.veh_disp_name || `${v.unit_number || ''} ${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim(),
+          // Capacity - use passenger_capacity as primary, fallback to capacity
+          passenger_capacity: v.passenger_capacity || v.capacity || v.veh_pax_capacity,
+          veh_pax_capacity: v.passenger_capacity || v.veh_pax_capacity || v.capacity,
+          capacity: v.capacity || v.passenger_capacity,
+          // Driver assignment - this is the key field!
+          assigned_driver_id: v.assigned_driver_id,
+          assigned_at: v.assigned_at,
+          // Insurance fields
+          insurance_company: v.insurance_company,
+          insurance_policy_number: v.insurance_policy_number,
+          // Permit fields
+          limo_permit_number: v.limo_permit_number,
+          permit_expiration_month: v.permit_expiration_month,
+          permit_expiration_year: v.permit_expiration_year,
+          us_dot_number: v.us_dot_number,
+          // Service fields
+          garaged_location: v.garaged_location,
+          mileage: v.mileage,
+          next_service_miles: v.next_service_miles,
+          last_service_date: v.last_service_date,
+          next_service_date: v.next_service_date,
+          service_notes: v.service_notes,
+          internal_notes: v.internal_notes,
+          // Insurance expiration
+          registration_expiration: v.registration_expiration,
+          insurance_expiration: v.insurance_expiration,
+          insurance_contact: v.insurance_contact,
+          // Features
+          features: v.features,
+          // Organization
+          organization_id: v.organization_id,
+          affiliate_id: v.affiliate_id,
+          created_at: v.created_at,
+          updated_at: v.updated_at
+        });
+        console.log('[Fleet] Vehicle:', v.veh_title || v.make, '- assigned_driver_id:', v.assigned_driver_id);
+      }
+      
+      // Add local fleet entries that aren't in Supabase (preserves local-only vehicles)
+      const supabaseIds = new Set(this.fleetRecords.map(v => v.id));
+      for (const local of localFleet) {
+        if (!supabaseIds.has(local.id)) {
+          this.fleetRecords.push(local);
         }
       }
       
@@ -5543,7 +5626,20 @@ class MyOffice {
     item.style.marginBottom = '10px';
     item.dataset.fleetId = record.id;
 
-    const name = record.veh_disp_name || `${record.make || ''} ${record.model || ''}`.trim() || 'Untitled Vehicle';
+    // Use veh_title [license_plate] format for display name
+    const vehTitle = record.veh_title || '';
+    const licensePlate = record.license_plate || '';
+    let name = '';
+    if (vehTitle && licensePlate) {
+      name = `${vehTitle} [${licensePlate}]`;
+    } else if (vehTitle) {
+      name = vehTitle;
+    } else if (licensePlate) {
+      name = `Vehicle [${licensePlate}]`;
+    } else {
+      // Fallback to veh_disp_name, make/model, or default
+      name = record.veh_disp_name || `${record.make || ''} ${record.model || ''}`.trim() || 'Untitled Vehicle';
+    }
     
     // Get assigned driver info instead of unit number
     let driverLabel = '';
@@ -5647,6 +5743,7 @@ class MyOffice {
     };
 
     setValue('fleetUnitNumber', record.unit_number);
+    // Note: fleetVehTitle is set later after Year/Make/Model are populated
     setValue('fleetStatus', record.status || 'ACTIVE');
     
     // Populate vehicle type dropdown first, then set value
@@ -5669,6 +5766,12 @@ class MyOffice {
     setValue('fleetYear', record.year || '');
     setValue('fleetMake', record.make);
     setValue('fleetModel', record.model);
+    
+    // Auto-compute Vehicle Title from Year Make Model
+    const computedTitle = [record.year, record.make, record.model].filter(Boolean).join(' ').trim();
+    setValue('fleetVehTitle', computedTitle || record.veh_title || '');
+    console.log('[Fleet] Set veh_title to:', computedTitle || record.veh_title);
+    
     setValue('fleetColor', record.color);
     setValue('fleetPassengers', record.passenger_capacity || record.passengers || record.capacity || record.veh_pax_capacity);
     setValue('fleetVin', record.vin);
@@ -5742,7 +5845,7 @@ class MyOffice {
 
   clearFleetForm() {
     const fields = [
-      'fleetUnitNumber', 'fleetStatus', 'fleetVehicleType', 'fleetYear', 'fleetMake', 'fleetModel',
+      'fleetUnitNumber', 'fleetVehTitle', 'fleetStatus', 'fleetVehicleType', 'fleetYear', 'fleetMake', 'fleetModel',
       'fleetColor', 'fleetPassengers', 'fleetVin', 'fleetLicense', 'fleetRegExp', 'fleetInsExp',
       'fleetInsCompany', 'fleetPolicyNumber', 'fleetInsContact', 'fleetMileage', 'fleetNextServiceMiles',
       'fleetLastServiceDate', 'fleetNextServiceDate', 'fleetServiceNotes', 'fleetGaragedLocation',
@@ -5768,6 +5871,7 @@ class MyOffice {
     };
 
     const unitNumber = getValue('fleetUnitNumber');
+    const vehTitle = getValue('fleetVehTitle');
     const year = getValue('fleetYear');
     const make = getValue('fleetMake');
     const model = getValue('fleetModel');
@@ -5779,6 +5883,7 @@ class MyOffice {
     return {
       id: this.activeFleetId || crypto.randomUUID(),
       unit_number: unitNumber,
+      veh_title: vehTitle,
       status: getValue('fleetStatus') || 'ACTIVE',
       vehicle_type: getValue('fleetVehicleType'),
       year: year,
@@ -5828,6 +5933,7 @@ class MyOffice {
     const existingIndex = this.fleetRecords.findIndex((r) => r.id === this.activeFleetId);
     const previousDriverId = existingIndex >= 0 ? this.fleetRecords[existingIndex].assigned_driver_id : null;
     const newDriverId = data.assigned_driver_id;
+    const isNewVehicle = existingIndex < 0;
     
     if (existingIndex >= 0) {
       this.fleetRecords[existingIndex] = { ...this.fleetRecords[existingIndex], ...data };
@@ -5839,6 +5945,41 @@ class MyOffice {
     this.persistFleet();
     this.renderFleetList();
     this.setActiveFleet(data.id);
+    
+    // Sync to Supabase fleet_vehicles table
+    try {
+      // Prepare data for Supabase - only include valid fields
+      const supabaseData = {
+        id: data.id,
+        unit_number: data.unit_number || null,
+        veh_title: data.veh_title || null,
+        status: data.status || 'ACTIVE',
+        vehicle_type: data.vehicle_type || null,
+        year: data.year || null,
+        make: data.make || null,
+        model: data.model || null,
+        color: data.color || null,
+        passenger_capacity: data.passengers ? parseInt(data.passengers, 10) : null,
+        vin: data.vin || null,
+        license_plate: data.license_plate || null,
+        veh_disp_name: data.veh_disp_name || null,
+        assigned_driver_id: data.assigned_driver_id || null,
+        updated_at: new Date().toISOString()
+      };
+      
+      if (isNewVehicle) {
+        supabaseData.created_at = new Date().toISOString();
+        console.log('🚗 Creating new vehicle in Supabase:', supabaseData);
+        await createFleetVehicle(supabaseData);
+        console.log('✅ Vehicle created in Supabase');
+      } else {
+        console.log('🚗 Updating vehicle in Supabase:', data.id, supabaseData);
+        await updateFleetVehicle(data.id, supabaseData);
+        console.log('✅ Vehicle updated in Supabase');
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not sync vehicle to Supabase (saved locally):', err);
+    }
     
     // Update driver's assigned_vehicle_id when assigning/unassigning from Fleet
     const vehicleId = data.id;
@@ -7767,7 +7908,26 @@ class MyOffice {
 
     try {
       const showAll = document.getElementById('showAllDriversCheckbox')?.checked || false;
-      const data = await fetchDrivers();
+      
+      // Fetch drivers and fleet vehicles in parallel
+      const [data, fleetVehicles] = await Promise.all([
+        fetchDrivers(),
+        fetchFleetVehicles().catch(() => [])
+      ]);
+      
+      // Build vehicle lookup map
+      const vehicleMap = {};
+      if (Array.isArray(fleetVehicles)) {
+        fleetVehicles.forEach(v => {
+          if (v.id) {
+            vehicleMap[v.id] = {
+              display_name: v.veh_title || v.veh_disp_name || `${v.make || ''} ${v.model || ''}`.trim() || 'Vehicle',
+              vehicle_type: v.vehicle_type || v.veh_type || '',
+              license_plate: v.license_plate || ''
+            };
+          }
+        });
+      }
 
       // Pull overrides so UI reflects last-known availability even if API doesn't persist it
       let overrideMap = {};
@@ -7794,6 +7954,11 @@ class MyOffice {
           // Determine if driver is active based on status field (ACTIVE/INACTIVE) and is_active field
           const employmentStatus = (driver?.status || 'ACTIVE').toString().toUpperCase();
           const driverIsActive = driver?.is_active !== false && employmentStatus !== 'INACTIVE';
+          
+          // Look up assigned vehicle info
+          const assignedVehicleId = driver?.assigned_vehicle_id;
+          const vehicleInfo = assignedVehicleId ? vehicleMap[assignedVehicleId] : null;
+          
           return {
             ...driver,
             cell_phone: driver?.cell_phone || driver?.mobile_phone || driver?.phone || driver?.phone_number || driver?.primary_phone || '',
@@ -7802,6 +7967,10 @@ class MyOffice {
             fax: driver?.fax || driver?.fax_number || driver?.fax_phone || '',
             driver_status: mergedStatus,
             status: employmentStatus,
+            // Add vehicle display info
+            vehicle: vehicleInfo?.display_name || driver?.vehicle_type || driver?.vehicle || '',
+            vehicle_type: vehicleInfo?.vehicle_type || driver?.vehicle_type || '',
+            vehicle_license_plate: vehicleInfo?.license_plate || '',
             is_active: driverIsActive
           };
         });

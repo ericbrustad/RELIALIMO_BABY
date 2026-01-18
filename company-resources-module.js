@@ -153,13 +153,80 @@ export class CompanyResourcesManager {
     this.els.leftBtns.forEach(btn => btn.classList.remove('active'));
     this.container.querySelector(`[data-section="${sectionKey}"]`).classList.add('active');
 
-    // Render center and right
-    this.renderCenter();
+    // For fleet section, sync from Supabase first
+    if (sectionKey === 'fleet') {
+      this.loadFleetFromSupabase().then(() => {
+        this.renderCenter();
+      }).catch(err => {
+        console.warn('[CompanyResources] Failed to load fleet from Supabase:', err);
+        this.renderCenter();
+      });
+    } else {
+      // Render center and right
+      this.renderCenter();
+    }
+    
     this.setFormMode('add');
     this.renderForm(null);
     
     // Perform real-time sync check when switching sections
-    if (this.realTimeSyncEnabled) {\n      this.performRealTimeSync();\n    }\n  }
+    if (this.realTimeSyncEnabled) {
+      this.performRealTimeSync();
+    }
+  }
+  
+  /**
+   * Load fleet vehicles from Supabase and merge with localStorage
+   */
+  async loadFleetFromSupabase() {
+    const SUPABASE_URL = window.ENV?.SUPABASE_URL;
+    const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY;
+    
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      console.warn('[CompanyResources] Supabase not configured, using localStorage only');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/fleet_vehicles?select=*&order=created_at.desc`, {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const supabaseVehicles = await response.json();
+      console.log('[CompanyResources] Loaded', supabaseVehicles.length, 'fleet vehicles from Supabase');
+      
+      // Map Supabase schema to local schema
+      const mappedVehicles = supabaseVehicles.map(v => ({
+        id: v.id,
+        plate: v.license_plate || '',
+        vin: v.vin || '',
+        year: v.year || '',
+        make: v.make || '',
+        model: v.model || '',
+        color: v.color || '',
+        title: v.veh_title || [v.year, v.make, v.model].filter(Boolean).join(' ') || '',
+        type: v.vehicle_type_id || '',
+        driver: v.assigned_driver_id || '',
+        affiliate: v.affiliate_id || '',
+        status: v.status || 'AVAILABLE'
+      }));
+      
+      // Save to localStorage (replace existing)
+      localStorage.setItem('cr_fleet', JSON.stringify(mappedVehicles));
+      console.log('[CompanyResources] Saved', mappedVehicles.length, 'fleet vehicles to localStorage');
+      
+    } catch (err) {
+      console.error('[CompanyResources] Error loading fleet from Supabase:', err);
+      throw err;
+    }
+  }
 
   renderCenter() {
     const config = this.getSectionConfig(this.currentSection);
@@ -228,6 +295,11 @@ export class CompanyResourcesManager {
         this.els.tableBody.querySelectorAll('tr').forEach(tr => tr.classList.remove('selected'));
         row.classList.add('selected');
         this.els.tableBody.dataset.selectedId = item.id;
+        
+        // Auto-load the item into the form when clicked
+        this.editingId = item.id;
+        this.renderForm(item);
+        this.setFormMode('edit');
       });
       this.els.tableBody.appendChild(row);
     });
@@ -354,6 +426,43 @@ export class CompanyResourcesManager {
       blockEl.appendChild(bodyEl);
       this.els.formContent.appendChild(blockEl);
     });
+    
+    // For fleet section: auto-update title from year/make/model
+    if (this.currentSection === 'fleet') {
+      this.setupFleetTitleAutoUpdate();
+    }
+  }
+  
+  /**
+   * Auto-update the Vehicle Title field when Year, Make, or Model changes
+   */
+  setupFleetTitleAutoUpdate() {
+    const yearField = document.getElementById('field_year');
+    const makeField = document.getElementById('field_make');
+    const modelField = document.getElementById('field_model');
+    const titleField = document.getElementById('field_title');
+    
+    if (!titleField) return;
+    
+    const updateTitle = () => {
+      const parts = [
+        yearField?.value,
+        makeField?.value,
+        modelField?.value
+      ].filter(Boolean);
+      titleField.value = parts.join(' ');
+    };
+    
+    // Add listeners to year, make, model fields
+    [yearField, makeField, modelField].forEach(field => {
+      if (field) {
+        field.addEventListener('input', updateTitle);
+        field.addEventListener('change', updateTitle);
+      }
+    });
+    
+    // Initial update
+    updateTitle();
   }
 
   createFieldEl(field, value) {
@@ -405,10 +514,23 @@ export class CompanyResourcesManager {
       } else {
         input = document.createElement('input');
         input.type = field.type || 'text';
+        // Handle readonly/computed fields
+        if (field.readonly) {
+          input.readOnly = true;
+          input.style.backgroundColor = '#f5f5f5';
+          input.style.color = '#666';
+        }
       }
 
       input.id = `field_${field.id}`;
       input.value = value || '';
+      
+      // For computed 'title' field in fleet, auto-update from year/make/model
+      if (field.computed && field.id === 'title' && this.currentSection === 'fleet') {
+        // Show computed value or placeholder
+        input.placeholder = 'Auto-generated from Year Make Model';
+      }
+      
       wrap.appendChild(input);
     }
 
@@ -418,8 +540,6 @@ export class CompanyResourcesManager {
   humanizeLabel(str) {
     return str.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   }
-
-import { fetchVehicleTypes, upsertVehicleType, deleteVehicleType } from './api-service.js';
 
   getSectionConfig(section) {
     const configs = {
@@ -437,6 +557,7 @@ import { fetchVehicleTypes, upsertVehicleType, deleteVehicleType } from './api-s
               { id: 'first_name', label: 'First Name', type: 'text' },
               { id: 'last_name', label: 'Last Name', type: 'text' },
               { id: 'phone', label: 'Phone', type: 'tel' },
+              { id: 'assigned_vehicle_id', label: 'Assign Driver to Car', type: 'select', dataSource: 'fleet' },
             ],
           },
         ],
@@ -476,14 +597,15 @@ import { fetchVehicleTypes, upsertVehicleType, deleteVehicleType } from './api-s
       fleet: {
         title: 'Fleet',
         listType: 'table',
-        tableColumns: ['plate', 'type', 'driver', 'affiliate'],
+        tableColumns: ['title', 'plate', 'type', 'driver', 'affiliate'],
         formTitle: (mode) => mode === 'edit' ? 'Edit Vehicle' : 'Add New Vehicle',
-        listLabel: (x) => `${x.plate || 'No Plate'} - ${x.type || 'No Type'} (${x.driver || 'Unassigned'})`,
+        listLabel: (x) => `${x.title || x.plate || 'No Plate'} - ${x.type || 'No Type'} (${x.driver || 'Unassigned'})`,
         blocks: [
           { 
             head: 'Vehicle Information', 
             columns: 2, 
             fields: [
+              { id: 'title', label: 'Vehicle Title', type: 'text', readonly: true, computed: true },
               { id: 'plate', label: 'License Plate', type: 'text' }, 
               { id: 'vin', label: 'VIN', type: 'text' },
               { id: 'year', label: 'Year', type: 'number' },
@@ -661,6 +783,12 @@ import { fetchVehicleTypes, upsertVehicleType, deleteVehicleType } from './api-s
       });
     });
 
+    // Special handling for fleet: auto-generate 'title' from Year Make Model
+    if (this.currentSection === 'fleet') {
+      const titleParts = [newItem.year, newItem.make, newItem.model].filter(Boolean);
+      newItem.title = titleParts.join(' ') || '';
+    }
+
     // Special handling: vehicle-types -> use API when available (do NOT persist locally)
     if (this.currentSection === 'vehicle-types') {
       try {
@@ -712,9 +840,19 @@ import { fetchVehicleTypes, upsertVehicleType, deleteVehicleType } from './api-s
       try {
         await this.syncFleetVehicleToSupabase(newItem);
         console.log('✅ Fleet vehicle synced to Supabase:', newItem.id);
+        
+        // Also update driver's assigned_vehicle_id in relia_driver_directory
+        if (newItem.driver) {
+          this.updateDriverVehicleAssignment(newItem.driver, newItem.id);
+        }
       } catch (err) {
         console.error('❌ Failed to sync fleet vehicle to Supabase:', err);
       }
+    }
+    
+    // Special handling for drivers: sync assigned_vehicle_id bidirectionally
+    if (this.currentSection === 'drivers' && newItem.assigned_vehicle_id) {
+      this.updateFleetDriverAssignment(newItem.assigned_vehicle_id, newItem.id);
     }
     
     // Special handling for airports: also save to office.Airports structure
@@ -804,6 +942,9 @@ import { fetchVehicleTypes, upsertVehicleType, deleteVehicleType } from './api-s
     // Note: vehicle_type_id and affiliate_id have FK constraints - only include if valid UUID
     const isValidUUID = (val) => val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
     
+    // Generate veh_title from Year Make Model
+    const vehTitle = [fleetItem.year, fleetItem.make, fleetItem.model].filter(Boolean).join(' ') || null;
+    
     const payload = {
       id: fleetItem.id,
       organization_id: organizationId,
@@ -812,6 +953,9 @@ import { fetchVehicleTypes, upsertVehicleType, deleteVehicleType } from './api-s
       year: fleetItem.year ? parseInt(fleetItem.year, 10) : null,
       make: fleetItem.make || null,
       model: fleetItem.model || null,
+      // Vehicle title (Year Make Model)
+      veh_title: vehTitle,
+      veh_disp_name: vehTitle,
       // Only include FK fields if they're valid UUIDs to avoid FK constraint violations
       vehicle_type_id: isValidUUID(fleetItem.type) ? fleetItem.type : null,
       assigned_driver_id: isValidUUID(fleetItem.driver) ? fleetItem.driver : null,
@@ -875,6 +1019,75 @@ import { fetchVehicleTypes, upsertVehicleType, deleteVehicleType } from './api-s
     return { synced, failed };
   }
 
+  /**
+   * Update driver's assigned_vehicle_id in relia_driver_directory when fleet vehicle is assigned
+   */
+  updateDriverVehicleAssignment(driverId, vehicleId) {
+    try {
+      const driverDir = JSON.parse(localStorage.getItem('relia_driver_directory') || '[]');
+      let updated = false;
+      
+      // Clear previous assignment from other drivers
+      driverDir.forEach(d => {
+        if (d.assigned_vehicle_id === vehicleId && d.id !== driverId) {
+          d.assigned_vehicle_id = null;
+          updated = true;
+        }
+      });
+      
+      // Set assignment for target driver
+      const driver = driverDir.find(d => d.id === driverId);
+      if (driver) {
+        driver.assigned_vehicle_id = vehicleId;
+        updated = true;
+      }
+      
+      if (updated) {
+        localStorage.setItem('relia_driver_directory', JSON.stringify(driverDir));
+        console.log('[CompanyResources] Updated driver vehicle assignment:', driverId, '->', vehicleId);
+      }
+    } catch (e) {
+      console.warn('[CompanyResources] Could not update driver vehicle assignment:', e);
+    }
+  }
+
+  /**
+   * Update fleet vehicle's assigned_driver_id when driver is assigned to vehicle
+   */
+  updateFleetDriverAssignment(vehicleId, driverId) {
+    try {
+      const fleetData = JSON.parse(localStorage.getItem('cr_fleet') || '[]');
+      let updated = false;
+      
+      // Clear previous assignment from other vehicles
+      fleetData.forEach(v => {
+        if (v.driver === driverId && v.id !== vehicleId) {
+          v.driver = '';
+          updated = true;
+        }
+      });
+      
+      // Set assignment for target vehicle
+      const vehicle = fleetData.find(v => v.id === vehicleId);
+      if (vehicle) {
+        vehicle.driver = driverId;
+        updated = true;
+        
+        // Also sync to Supabase
+        this.syncFleetVehicleToSupabase(vehicle).catch(err => {
+          console.warn('[CompanyResources] Could not sync fleet after driver assignment:', err);
+        });
+      }
+      
+      if (updated) {
+        localStorage.setItem('cr_fleet', JSON.stringify(fleetData));
+        console.log('[CompanyResources] Updated fleet driver assignment:', vehicleId, '->', driverId);
+      }
+    } catch (e) {
+      console.warn('[CompanyResources] Could not update fleet driver assignment:', e);
+    }
+  }
+
   populateSelectField(selectEl, dataSource, selectedValue) {
     // Clear existing options
     selectEl.innerHTML = '<option value="">-- Select --</option>';
@@ -893,6 +1106,11 @@ import { fetchVehicleTypes, upsertVehicleType, deleteVehicleType } from './api-s
         option.textContent = item.name || `Type ${item.id}`;
       } else if (dataSource === 'affiliates') {
         option.textContent = item.name || `Affiliate ${item.id}`;
+      } else if (dataSource === 'fleet') {
+        // Fleet vehicles - show title (Year Make Model) and license plate
+        const title = item.title || item.veh_title || [item.year, item.make, item.model].filter(Boolean).join(' ') || '';
+        const plate = item.plate || item.license_plate || '';
+        option.textContent = title && plate ? `${title} [${plate}]` : title || plate || `Vehicle ${item.id}`;
       } else {
         option.textContent = item.name || item.label || item.id;
       }
@@ -907,6 +1125,33 @@ import { fetchVehicleTypes, upsertVehicleType, deleteVehicleType } from './api-s
 
   loadItemsFromSource(dataSource) {
     const config = this.getSectionConfig(dataSource);
+
+    // For drivers, prefer relia_driver_directory (populated from Supabase via my-office.js)
+    if (dataSource === 'drivers') {
+      try {
+        const driverDir = JSON.parse(localStorage.getItem('relia_driver_directory') || '[]');
+        if (Array.isArray(driverDir) && driverDir.length > 0) {
+          return driverDir;
+        }
+      } catch (e) {
+        console.warn('[CompanyResources] Could not read relia_driver_directory:', e);
+      }
+      // Fallback to cr_drivers
+      return JSON.parse(localStorage.getItem(config?.storageKey || 'cr_drivers') || '[]');
+    }
+    
+    // For fleet vehicles, use cr_fleet localStorage
+    if (dataSource === 'fleet') {
+      try {
+        const fleetData = JSON.parse(localStorage.getItem('cr_fleet') || '[]');
+        if (Array.isArray(fleetData) && fleetData.length > 0) {
+          return fleetData;
+        }
+      } catch (e) {
+        console.warn('[CompanyResources] Could not read cr_fleet:', e);
+      }
+      return [];
+    }
 
     // For vehicle-types, prefer remote API (no local persistence) when available
     if (dataSource === 'vehicle-types') {
@@ -955,6 +1200,10 @@ import { fetchVehicleTypes, upsertVehicleType, deleteVehicleType } from './api-s
             if (typeof this.renderCenter === 'function') this.renderCenter();
             if (typeof this.refreshAllSelectFields === 'function') this.refreshAllSelectFields();
           })();
+        }
+      } catch (e) {
+        console.warn('[CompanyResources] Error fetching vehicle types:', e);
+      }
     }
 
     return JSON.parse(localStorage.getItem(config.storageKey) || '[]');

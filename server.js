@@ -1,7 +1,8 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
-require('dotenv').config();
+require('dotenv').config(); // Load .env first
+require('dotenv').config({ path: '.env.local', override: true }); // Then override with .env.local
 
 const app = express();
 const PORT = process.env.PORT || 3002; // Changed port to avoid conflicts
@@ -289,6 +290,13 @@ app.delete('/api/vehicle-types/:id', async (req, res) => {
 // Serve static files
 
 // Serve static files
+
+// Driver portal - serve driver-portal.html for any /drivers/:slug route
+app.get('/drivers/:slug', (req, res) => {
+  console.log(`🚗 Driver portal request for slug: ${req.params.slug}`);
+  res.sendFile(path.join(__dirname, 'drivers', 'driver-portal.html'));
+});
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });

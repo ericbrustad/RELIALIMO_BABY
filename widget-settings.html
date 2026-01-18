@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Widget Settings - RELIALIMO</title>
+    <link rel="stylesheet" href="global.css">
+    <link rel="stylesheet" href="widget-settings.css">
+</head>
+<body>
+    <div class="settings-container">
+        <header class="settings-header">
+            <div class="header-left">
+                <a href="system-settings.html" class="back-link">← Back to System Settings</a>
+                <h1>🎛️ Widget Settings</h1>
+                <p class="header-subtitle">Configure clock and farmout timer widgets - position, size, and appearance</p>
+            </div>
+            <div class="header-actions">
+                <button type="button" id="resetDefaults" class="btn btn-secondary">Reset to Defaults</button>
+                <button type="button" id="saveSettings" class="btn btn-primary">💾 Save Settings</button>
+            </div>
+        </header>
+
+        <div class="settings-content">
+            <!-- Left Column: Widget Settings -->
+            <div class="settings-main">
+                
+                <!-- Farmout Timer Settings Section -->
+                <section class="settings-section">
+                    <h2 class="section-title">
+                        <span class="section-icon">⏱️</span>
+                        Farmout Timer Widget
+                    </h2>
+                    
+                    <div class="toggle-grid">
+                        <label class="toggle-item">
+                            <input type="checkbox" id="timerAlwaysVisible">
+                            <span class="toggle-slider"></span>
+                            <div class="toggle-content">
+                                <span class="toggle-label">Keep Timer Visible</span>
+                                <span class="toggle-desc">Always show the farmout countdown timer, even when not active</span>
+                            </div>
+                        </label>
+                        
+                        <label class="toggle-item">
+                            <input type="checkbox" id="timerDraggable" checked>
+                            <span class="toggle-slider"></span>
+                            <div class="toggle-content">
+                                <span class="toggle-label">Movable Widget</span>
+                                <span class="toggle-desc">Allow dragging the timer to any position on screen</span>
+                            </div>
+                        </label>
+                        
+                        <label class="toggle-item">
+                            <input type="checkbox" id="timerPlayChime" checked>
+                            <span class="toggle-slider"></span>
+                            <div class="toggle-content">
+                                <span class="toggle-label">Play Chime Sound</span>
+                                <span class="toggle-desc">Play an audio chime when a new farmout offer is sent</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <!-- Next Driver/Affiliate Display -->
+                    <div class="subsection">
+                        <h3 class="subsection-title">Next Driver/Affiliate to Receive Offer</h3>
+                        <div class="next-driver-display">
+                            <div class="driver-info-card" id="nextDriverCard">
+                                <div class="driver-avatar">👤</div>
+                                <div class="driver-details">
+                                    <span class="driver-name" id="nextDriverName">No active farmout</span>
+                                    <span class="driver-company" id="nextDriverCompany">-</span>
+                                    <span class="driver-rating" id="nextDriverRating">-</span>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-secondary" id="refreshNextDriver">🔄 Refresh</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Timer Size -->
+                    <div class="subsection">
+                        <h3 class="subsection-title">Timer Size</h3>
+                        <div class="size-slider-group">
+                            <input type="range" id="timerSize" min="75" max="150" value="100" step="5">
+                            <div class="size-labels">
+                                <span>Small</span>
+                                <span id="timerSizeValue">100%</span>
+                                <span>Large</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Timer Color Theme -->
+                    <div class="subsection">
+                        <h3 class="subsection-title">Timer Color Theme</h3>
+                        <div class="color-theme-grid">
+                            <button type="button" class="color-theme-btn active" data-theme="amber">
+                                <span class="color-swatch amber"></span>
+                                <span>Amber (Default)</span>
+                            </button>
+                            <button type="button" class="color-theme-btn" data-theme="blue">
+                                <span class="color-swatch blue"></span>
+                                <span>Blue</span>
+                            </button>
+                            <button type="button" class="color-theme-btn" data-theme="green">
+                                <span class="color-swatch green"></span>
+                                <span>Green</span>
+                            </button>
+                            <button type="button" class="color-theme-btn" data-theme="purple">
+                                <span class="color-swatch purple"></span>
+                                <span>Purple</span>
+                            </button>
+                            <button type="button" class="color-theme-btn" data-theme="dark">
+                                <span class="color-swatch dark"></span>
+                                <span>Dark</span>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Clock Widget Settings Section -->
+                <section class="settings-section">
+                    <h2 class="section-title">
+                        <span class="section-icon">🕐</span>
+                        Clock Widget
+                    </h2>
+                    
+                    <div class="toggle-grid">
+                        <label class="toggle-item">
+                            <input type="checkbox" id="clockVisible" checked>
+                            <span class="toggle-slider"></span>
+                            <div class="toggle-content">
+                                <span class="toggle-label">Show Clock</span>
+                                <span class="toggle-desc">Display the clock widget in the header area</span>
+                            </div>
+                        </label>
+                        
+                        <label class="toggle-item">
+                            <input type="checkbox" id="clockDraggable">
+                            <span class="toggle-slider"></span>
+                            <div class="toggle-content">
+                                <span class="toggle-label">Movable Widget</span>
+                                <span class="toggle-desc">Allow dragging the clock to any position on screen</span>
+                            </div>
+                        </label>
+                        
+                        <label class="toggle-item">
+                            <input type="checkbox" id="clockShowDate" checked>
+                            <span class="toggle-slider"></span>
+                            <div class="toggle-content">
+                                <span class="toggle-label">Show Date</span>
+                                <span class="toggle-desc">Display the current date below the clock</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <!-- Clock Style Selector -->
+                    <div class="subsection">
+                        <h3 class="subsection-title">Clock Style</h3>
+                        <div class="clock-style-grid">
+                            <div class="clock-style-card" data-style="digital-modern">
+                                <div class="clock-preview digital">
+                                    <span class="preview-time">14:32:45</span>
+                                </div>
+                                <span class="style-name">Digital Modern</span>
+                            </div>
+                            <div class="clock-style-card" data-style="digital-classic">
+                                <div class="clock-preview digital classic">
+                                    <span class="preview-time">2:32:45 PM</span>
+                                </div>
+                                <span class="style-name">Digital Classic</span>
+                            </div>
+                            <div class="clock-style-card" data-style="digital-minimal">
+                                <div class="clock-preview digital minimal">
+                                    <span class="preview-time">14:32</span>
+                                </div>
+                                <span class="style-name">Digital Minimal</span>
+                            </div>
+                            <div class="clock-style-card" data-style="analog-classic">
+                                <div class="clock-preview analog classic">
+                                    <div class="analog-face">
+                                        <div class="hand hour"></div>
+                                        <div class="hand minute"></div>
+                                        <div class="center-dot"></div>
+                                    </div>
+                                </div>
+                                <span class="style-name">Analog Classic</span>
+                            </div>
+                            <div class="clock-style-card" data-style="analog-modern">
+                                <div class="clock-preview analog modern">
+                                    <div class="analog-face">
+                                        <div class="hand hour"></div>
+                                        <div class="hand minute"></div>
+                                        <div class="center-dot"></div>
+                                    </div>
+                                </div>
+                                <span class="style-name">Analog Modern</span>
+                            </div>
+                            <div class="clock-style-card" data-style="analog-minimal">
+                                <div class="clock-preview analog minimal">
+                                    <div class="analog-face">
+                                        <div class="hand hour"></div>
+                                        <div class="hand minute"></div>
+                                        <div class="center-dot"></div>
+                                    </div>
+                                </div>
+                                <span class="style-name">Analog Minimal</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Clock Size -->
+                    <div class="subsection">
+                        <h3 class="subsection-title">Clock Size</h3>
+                        <div class="size-slider-group">
+                            <input type="range" id="clockSize" min="75" max="150" value="100" step="5">
+                            <div class="size-labels">
+                                <span>Small</span>
+                                <span id="clockSizeValue">100%</span>
+                                <span>Large</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Clock Color -->
+                    <div class="subsection">
+                        <h3 class="subsection-title">Clock Text Color</h3>
+                        <div class="color-picker-group">
+                            <input type="color" id="clockTextColor" value="#1f2937">
+                            <span class="color-label" id="clockTextColorLabel">#1f2937</span>
+                            <button type="button" class="btn btn-sm btn-secondary" id="resetClockColor">Reset</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Widget Position Section -->
+                <section class="settings-section">
+                    <h2 class="section-title">
+                        <span class="section-icon">📍</span>
+                        Widget Positions
+                    </h2>
+                    
+                    <div class="position-info">
+                        <p>When widgets are set to "Movable", drag them to your preferred position. Positions are saved automatically.</p>
+                    </div>
+                    
+                    <div class="position-controls">
+                        <div class="position-control-group">
+                            <label>Timer Position</label>
+                            <div class="position-display">
+                                <span id="timerPositionDisplay">Default (Header)</span>
+                                <button type="button" class="btn btn-sm btn-secondary" id="resetTimerPosition">Reset</button>
+                            </div>
+                        </div>
+                        
+                        <div class="position-control-group">
+                            <label>Clock Position</label>
+                            <div class="position-display">
+                                <span id="clockPositionDisplay">Default (Header)</span>
+                                <button type="button" class="btn btn-sm btn-secondary" id="resetClockPosition">Reset</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Column: Preview -->
+            <aside class="settings-sidebar">
+                <div class="preview-panel">
+                    <h3>Live Preview</h3>
+                    <div class="preview-area">
+                        <div class="preview-header-mock">
+                            <span class="mock-logo">RELIALIMO</span>
+                            <div class="preview-widgets">
+                                <!-- Clock Preview -->
+                                <div class="preview-clock" id="previewClock">
+                                    <span class="preview-clock-time">14:32:45</span>
+                                    <span class="preview-clock-date">Sat, Jan 18, 2026</span>
+                                </div>
+                                
+                                <!-- Timer Preview -->
+                                <div class="preview-timer" id="previewTimer">
+                                    <div class="timer-icon">🔔</div>
+                                    <div class="timer-content">
+                                        <span class="timer-driver">John Smith</span>
+                                        <span class="timer-company">ABC Limo</span>
+                                        <span class="timer-countdown">14:32</span>
+                                        <span class="timer-label">until next offer</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="preview-actions">
+                        <button type="button" class="btn btn-secondary" id="testTimer">
+                            🔔 Test Timer
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="testChime">
+                            🔊 Test Chime
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="help-panel">
+                    <h3>💡 Tips</h3>
+                    <ul>
+                        <li><strong>Movable widgets</strong> can be dragged anywhere on screen. Double-click to reset position.</li>
+                        <li><strong>Timer visibility</strong>: When "Keep Visible" is off, timer only appears during active farmout offers.</li>
+                        <li><strong>Clock click</strong>: Click the clock to cycle through styles.</li>
+                        <li><strong>Chime sound</strong>: Plays when a farmout offer is sent to the next driver.</li>
+                    </ul>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <script type="module" src="widget-settings.js"></script>
+</body>
+</html>

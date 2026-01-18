@@ -3,13 +3,21 @@
 ## Overview
 Updated the "Assign Driver to Car" functionality in the Drivers section to display vehicles using `veh_title` and `license_plate` fields from the `fleet_vehicles` table, providing clearer and more meaningful vehicle identification.
 
+**Bidirectional Sync:** When a driver is assigned to a vehicle (from either the Driver form or Fleet form), the assignment is stored on BOTH the driver record (`assigned_vehicle_id`) AND the vehicle record (`assigned_driver_id`).
+
 ## Changes Made
 
 ### Files Modified
-- **[my-office.js](my-office.js)** - Updated vehicle display logic in three places:
+- **[my-office.js](my-office.js)** - Updated vehicle display logic in multiple places:
   - `populateDriverVehicleDropdown()` - Vehicle dropdown options
   - `updateAssignedVehicleDisplay()` - Bold display above dropdown
+  - `buildFleetListItem()` - Fleet list now shows `veh_title [license_plate]` format
+  - `handleFleetSave()` - Syncs to Supabase `fleet_vehicles` table with `veh_title`
   - Inactive vehicle handling - Shows inactive vehicles with proper format
+
+- **[my-office.html](my-office.html)** - Added Vehicle Title and Unit Number fields to Fleet form:
+  - Added `fleetVehTitle` input for vehicle display name
+  - Added `fleetUnitNumber` input for internal unit tracking
 
 - **[api-service.js](api-service.js)** - Enhanced `fetchActiveVehicles()` to include required fields:
   - Added `veh_title` and `license_plate` to select statement
@@ -49,6 +57,22 @@ Executive Sedan [ABC-123] (Inactive)
 
 ## User Interface Locations
 
+### Fleet Section - Vehicle Form
+**Location:** Office → Fleet → Select/Add Vehicle
+
+New fields added at top of Vehicle Details section:
+- **Vehicle Title** - Display name for dropdowns (e.g., "Executive Sedan", "Town Car")
+- **Unit Number** - Internal unit tracking (e.g., "V001", "CAR-01")
+
+### Fleet Section - Vehicle List
+**Location:** Office → Fleet → Left sidebar
+
+Shows vehicles using the new format:
+```
+Executive Sedan [ABC-123]
+🚗 John Smith
+```
+
 ### Dropdown Display
 **Location:** Office → Drivers → Select Driver → Assign Driver to Car dropdown
 
@@ -61,6 +85,22 @@ Shows the assigned vehicle in a prominent blue display:
 ```
 🚗 Executive Sedan [ABC-123]
 ```
+
+## Bidirectional Synchronization
+
+### From Driver Form
+When you assign a vehicle to a driver:
+1. Driver's `assigned_vehicle_id` is set to the vehicle ID
+2. Vehicle's `assigned_driver_id` is set to the driver ID
+3. If vehicle was assigned to another driver, that driver is unassigned first
+4. Both Supabase and localStorage are updated
+
+### From Fleet Form
+When you assign a driver to a vehicle:
+1. Vehicle's `assigned_driver_id` is set to the driver ID
+2. Driver's `assigned_vehicle_id` is set to the vehicle ID
+3. If driver was assigned to another vehicle, that vehicle is unassigned first
+4. Both Supabase and localStorage are updated
 
 ## Technical Implementation
 

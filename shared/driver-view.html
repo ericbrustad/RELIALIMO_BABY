@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Driver View - RELIALIMO</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="env.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #121212;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    .driver-view-container {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .split-layout {
+      display: grid;
+      grid-template-columns: 450px 1fr;
+      gap: 20px;
+      height: 100%;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    
+    .form-panel {
+      background: #242424;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    
+    .panel-title {
+      font-size: 16px;
+      color: #ffffff;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #3a3a3a;
+    }
+    
+    .reservations-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .reservation-card {
+      background: #1a1a1a;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      padding: 15px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .reservation-card:hover {
+      border-color: #4a90e2;
+      background: #222;
+    }
+    
+    .reservation-card.selected {
+      border-color: #4a90e2;
+      background: #1a2a3a;
+    }
+    
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    
+    .card-conf {
+      font-size: 14px;
+      font-weight: 600;
+      color: #4a90e2;
+    }
+    
+    .card-status {
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    
+    .card-status.pending {
+      background: #f39c12;
+      color: #000;
+    }
+    
+    .card-status.accepted {
+      background: #27ae60;
+      color: #fff;
+    }
+    
+    .card-passenger {
+      font-size: 14px;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    
+    .card-route {
+      font-size: 12px;
+      color: #888;
+    }
+    
+    .card-time {
+      font-size: 11px;
+      color: #666;
+      margin-top: 8px;
+    }
+    
+    .map-panel {
+      background: #242424;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    
+    .map-controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(26, 26, 26, 0.95);
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .map-controls label {
+      font-size: 12px;
+      color: #b0b0b0;
+    }
+    
+    .map-view-selector {
+      padding: 6px 8px;
+      background: #1a1a1a;
+      border: 1px solid #3a3a3a;
+      border-radius: 3px;
+      color: #e0e0e0;
+      font-size: 12px;
+    }
+    
+    #driverMap {
+      width: 100%;
+      height: 100%;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+    
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 15px;
+    }
+    
+    .empty-state-text {
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="driver-view-container">
+    <div class="split-layout">
+      <div class="form-panel">
+        <h2 class="panel-title">Available Reservations</h2>
+        <div id="availableReservations" class="reservations-list">
+          <div class="empty-state">
+            <div class="empty-state-icon">📋</div>
+            <div class="empty-state-text">Loading reservations...</div>
+          </div>
+        </div>
+      </div>
+      <div class="map-panel">
+        <div class="map-controls">
+          <label for="driverMapView">Map View:</label>
+          <select id="driverMapView" class="map-view-selector">
+            <option value="OpenStreetMap">OpenStreetMap</option>
+            <option value="OpenStreetMap Dark">OpenStreetMap Dark</option>
+            <option value="Satellite">Satellite</option>
+            <option value="Street (Carto Light)">Street (Carto Light)</option>
+            <option value="Street (Carto Dark)">Street (Carto Dark)</option>
+            <option value="Topographic">Topographic</option>
+          </select>
+        </div>
+        <div id="driverMap"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="CompanySettingsManager.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module">
+    import { setupAPI, fetchReservations } from './api-service.js';
+
+    class DriverViewApp {
+      constructor() {
+        this.map = null;
+        this.reservations = [];
+        this.markers = new Map();
+        this.baseLocation = [44.8848, -93.2223];
+        this.currentLayer = null;
+        
+        this.mapLayers = {
+          'OpenStreetMap': {
+            url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            attribution: '© OpenStreetMap contributors'
+          },
+          'OpenStreetMap Dark': {
+            url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+            attribution: '© OpenStreetMap contributors, © CARTO'
+          },
+          'Satellite': {
+            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            attribution: '© Esri, Maxar, Earthstar Geographics'
+          },
+          'Street (Carto Light)': {
+            url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+            attribution: '© OpenStreetMap contributors, © CARTO'
+          },
+          'Street (Carto Dark)': {
+            url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+            attribution: '© OpenStreetMap contributors, © CARTO'
+          },
+          'Topographic': {
+            url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+            attribution: '© OpenStreetMap contributors, SRTM | © OpenTopoMap'
+          }
+        };
+      }
+
+      async init() {
+        await setupAPI();
+        this.loadCompanyLocation();
+        this.initMap();
+        this.setupEventListeners();
+        await this.loadReservations();
+      }
+
+      loadCompanyLocation() {
+        try {
+          if (window.CompanySettingsManager) {
+            const settingsManager = new window.CompanySettingsManager();
+            const settings = settingsManager.settings || {};
+            if (settings.companyLat && settings.companyLng) {
+              this.baseLocation = [parseFloat(settings.companyLat), parseFloat(settings.companyLng)];
+            }
+          }
+        } catch (e) {
+          console.warn('[DriverView] Could not load company location:', e.message);
+        }
+      }
+
+      initMap() {
+        this.map = L.map('driverMap').setView(this.baseLocation, 11);
+        this.changeMapLayer('OpenStreetMap');
+      }
+
+      changeMapLayer(layerName) {
+        if (this.currentLayer) {
+          this.map.removeLayer(this.currentLayer);
+        }
+        const config = this.mapLayers[layerName];
+        if (config) {
+          this.currentLayer = L.tileLayer(config.url, {
+            attribution: config.attribution,
+            maxZoom: 19
+          }).addTo(this.map);
+        }
+      }
+
+      async loadReservations() {
+        const listEl = document.getElementById('availableReservations');
+        
+        try {
+          const reservations = await fetchReservations();
+          
+          if (!reservations || reservations.length === 0) {
+            listEl.innerHTML = `
+              <div class="empty-state">
+                <div class="empty-state-icon">📋</div>
+                <div class="empty-state-text">No available reservations</div>
+              </div>
+            `;
+            return;
+          }
+          
+          // Filter for pending/unassigned reservations
+          this.reservations = reservations.filter(r => 
+            !r.driver_id && (r.status === 'pending' || r.status === 'unassigned' || !r.status)
+          );
+          
+          if (this.reservations.length === 0) {
+            listEl.innerHTML = `
+              <div class="empty-state">
+                <div class="empty-state-icon">✅</div>
+                <div class="empty-state-text">All reservations are assigned</div>
+              </div>
+            `;
+            return;
+          }
+          
+          this.renderReservations();
+          
+        } catch (error) {
+          console.error('[DriverView] Error loading reservations:', error);
+          listEl.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">⚠️</div>
+              <div class="empty-state-text">Error loading reservations</div>
+            </div>
+          `;
+        }
+      }
+
+      renderReservations() {
+        const listEl = document.getElementById('availableReservations');
+        
+        listEl.innerHTML = this.reservations.map(res => {
+          const confNum = res.confirmation_number || res.id;
+          const passenger = res.passenger_name || res.passenger_first_name || 'Unknown';
+          const pickup = res.pickup_location || res.pickup_address || 'TBD';
+          const dropoff = res.dropoff_location || res.dropoff_address || 'TBD';
+          const date = res.pickup_date ? new Date(res.pickup_date).toLocaleDateString() : '';
+          const time = res.pickup_time || '';
+          const status = res.status || 'pending';
+          
+          return `
+            <div class="reservation-card" data-id="${res.id}">
+              <div class="card-header">
+                <span class="card-conf">#${confNum}</span>
+                <span class="card-status ${status}">${status}</span>
+              </div>
+              <div class="card-passenger">${passenger}</div>
+              <div class="card-route">
+                <div>📍 ${pickup}</div>
+                <div>🏁 ${dropoff}</div>
+              </div>
+              <div class="card-time">${date} ${time}</div>
+            </div>
+          `;
+        }).join('');
+        
+        // Add click handlers
+        listEl.querySelectorAll('.reservation-card').forEach(card => {
+          card.addEventListener('click', () => {
+            const id = card.dataset.id;
+            this.selectReservation(id);
+          });
+        });
+      }
+
+      selectReservation(id) {
+        // Update UI
+        document.querySelectorAll('.reservation-card').forEach(c => c.classList.remove('selected'));
+        document.querySelector(`.reservation-card[data-id="${id}"]`)?.classList.add('selected');
+        
+        // TODO: Show route on map
+        const res = this.reservations.find(r => r.id === id);
+        if (res) {
+          console.log('Selected reservation:', res);
+        }
+      }
+
+      setupEventListeners() {
+        const mapLayerSelect = document.getElementById('driverMapView');
+        if (mapLayerSelect) {
+          mapLayerSelect.addEventListener('change', (e) => {
+            this.changeMapLayer(e.target.value);
+          });
+        }
+      }
+    }
+
+    const app = new DriverViewApp();
+    app.init().catch(console.error);
+  </script>
+</body>
+</html>

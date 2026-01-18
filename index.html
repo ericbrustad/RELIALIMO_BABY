@@ -532,7 +532,7 @@
 
       <!-- FARMOUT DASHBOARD SECTION (User View, Driver View, Farm-out) -->
       <div id="dashboardSection" class="app-main-section">
-        <iframe src="index-reservations.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+        <iframe src="index-reservations.html?view=reservations" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
       </div>
 
       <!-- OFFICE SECTION -->
@@ -904,6 +904,17 @@
             reservationsIframe.contentWindow.postMessage({
               action: 'refreshReservations'
             }, '*');
+          }
+          
+          // Also refresh farmout table in case farmout status changed
+          if (typeof window.uiManager !== 'undefined' && window.uiManager) {
+            window.uiManager.updateFarmoutTable();
+          }
+        } else if (event.data.action === 'farmoutCleared') {
+          // Farmout fields were cleared - refresh the farmout table
+          console.log('📥 Received farmoutCleared message, refreshing farmout table...');
+          if (typeof window.uiManager !== 'undefined' && window.uiManager) {
+            window.uiManager.updateFarmoutTable();
           }
         } else if (event.data.action === 'relia:accountSaved' || event.data.action === 'accountSaved') {
           // Account was saved - refresh the reservations list to show updated account data

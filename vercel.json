@@ -6,6 +6,43 @@
       "use": "@vercel/node"
     }
   ],
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/auth.html"
+    },
+    {
+      "source": "/auth.html",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/auth.html"
+    },
+    {
+      "source": "/index.html",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/index.html"
+    },
+    {
+      "source": "/driver-portal.html",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/driver-portal.html"
+    },
+    {
+      "source": "/driver-portal.css",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/driver-portal.css"
+    },
+    {
+      "source": "/driver-portal.js",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/driver-portal.js"
+    },
+    {
+      "source": "/:driver_slug",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/driver-portal.html?driver_slug=:driver_slug"
+    }
+  ],
   "routes": [
     {
       "src": "/api/(.*)",

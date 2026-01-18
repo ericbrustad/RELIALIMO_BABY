@@ -213,6 +213,7 @@ create index idx_passengers_email on public.passengers(email);
 create table if not exists public.booking_agents (
   id uuid primary key default uuid_generate_v4(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
+  company_name text,
   first_name text not null,
   last_name text not null,
   phone text,

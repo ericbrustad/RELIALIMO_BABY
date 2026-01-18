@@ -116,40 +116,7 @@ function logSuccess(operation, data) {
 export async function saveReservation(reservationData) {
   console.log('💾 saveReservation called with data:', reservationData?.confirmation_number || 'no confirmation');
   
-  // Development mode bypass for localhost
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    console.log('🔧 Development mode: Simulating successful reservation save');
-    
-    // Generate a fake ID if needed
-    const fakeResult = {
-      ...reservationData,
-      id: reservationData.id || 'dev-' + Date.now(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    // Store in localStorage for development
-    try {
-      const existingReservations = JSON.parse(localStorage.getItem('dev_reservations') || '[]');
-      const existingIndex = existingReservations.findIndex(r => r.id === fakeResult.id);
-      
-      if (existingIndex >= 0) {
-        existingReservations[existingIndex] = fakeResult;
-        console.log('🔄 Updated reservation in localStorage');
-      } else {
-        existingReservations.push(fakeResult);
-        console.log('➕ Added new reservation to localStorage');
-      }
-      
-      localStorage.setItem('dev_reservations', JSON.stringify(existingReservations));
-    } catch (e) {
-      console.warn('⚠️ Failed to store in localStorage:', e);
-    }
-    
-    showDatabaseSuccess('Save Reservation', fakeResult);
-    return fakeResult;
-  }
-  
+  // Always use Supabase for reservations (removed localhost bypass)
   try {
     console.log('🔧 Setting up API...');
     await setupAPI();
@@ -297,6 +264,8 @@ export async function deleteReservation(reservationIdOrConf) {
 
     if (data && data.length > 0) {
       logSuccess('Reservation deleted from Supabase', data);
+      // Sync confirmation counter after successful delete
+      syncConfirmationCounterFromDB().catch(() => {});
     } else {
       console.log('ℹ️ Reservation was not in Supabase (local-only or already deleted)');
     }
@@ -318,6 +287,9 @@ export async function getAllReservations() {
     // Always try to fetch from Supabase first
     await setupAPI();
     const supabaseResult = await fetchReservations();
+    
+    // Sync confirmation counter in background
+    syncConfirmationCounterFromDB().catch(() => {});
     
     // Collect any local-only reservations that aren't in Supabase
     const localReservations = [];
@@ -373,11 +345,34 @@ export async function getReservationById(reservationId) {
   try {
     await setupAPI();
     const result = await getReservation(reservationId);
-    return result;
+    if (result) return result;
   } catch (error) {
-    showDatabaseError('Get Reservation', error);
-    return null;
+    console.warn('⚠️ Supabase lookup failed, checking localStorage:', error.message);
   }
+  
+  // Fallback: Check localStorage for local-only reservations
+  try {
+    const devData = JSON.parse(localStorage.getItem('relia_dev_reservations') || '[]');
+    const localData = JSON.parse(localStorage.getItem('relia_reservations') || '[]');
+    const allLocal = [...devData, ...localData];
+    
+    // Search by confirmation_number or id
+    const found = allLocal.find(r => 
+      String(r.confirmation_number) === String(reservationId) ||
+      r.id === reservationId
+    );
+    
+    if (found) {
+      console.log('✅ Found reservation in localStorage:', reservationId);
+      return found;
+    }
+    
+    console.log('⚠️ Reservation not found in Supabase or localStorage:', reservationId);
+  } catch (e) {
+    console.warn('⚠️ Failed to check localStorage for reservation:', e);
+  }
+  
+  return null;
 }
 
 // ========================================
@@ -824,6 +819,93 @@ export async function getAccountAddresses(accountId) {
 // CONFIRMATION / ACCOUNT NUMBER SEQUENCES
 // ========================================
 
+// Local counter key for background sync
+const CONF_COUNTER_KEY = 'relia_confirmation_counter';
+
+/**
+ * Get local confirmation counter
+ */
+function getLocalConfirmationCounter() {
+  try {
+    const stored = localStorage.getItem(CONF_COUNTER_KEY);
+    if (stored) {
+      const data = JSON.parse(stored);
+      return {
+        lastUsed: parseInt(data.lastUsed, 10) || 0,
+        syncedAt: data.syncedAt || null
+      };
+    }
+  } catch (e) {
+    console.warn('⚠️ Could not read local confirmation counter:', e);
+  }
+  return { lastUsed: 0, syncedAt: null };
+}
+
+/**
+ * Update local confirmation counter
+ */
+function updateLocalConfirmationCounter(lastUsed) {
+  try {
+    const data = {
+      lastUsed: lastUsed,
+      syncedAt: new Date().toISOString()
+    };
+    localStorage.setItem(CONF_COUNTER_KEY, JSON.stringify(data));
+    console.log('🔢 Local confirmation counter updated:', lastUsed);
+  } catch (e) {
+    console.warn('⚠️ Could not update local confirmation counter:', e);
+  }
+}
+
+/**
+ * Reset confirmation counter (call when all reservations are deleted)
+ */
+export function resetConfirmationCounter() {
+  try {
+    localStorage.removeItem(CONF_COUNTER_KEY);
+    console.log('🔢 Confirmation counter reset');
+  } catch (e) {
+    console.warn('⚠️ Could not reset confirmation counter:', e);
+  }
+}
+
+/**
+ * Sync confirmation counter from database in background
+ * Call this periodically or after operations that might change reservation count
+ */
+export async function syncConfirmationCounterFromDB() {
+  try {
+    await setupAPI();
+    const client = getSupabaseClient();
+    if (!client) return;
+    
+    const { data, error } = await client
+      .from('reservations')
+      .select('confirmation_number');
+    
+    if (error) throw error;
+    
+    if (!data || data.length === 0) {
+      // No reservations - reset counter
+      resetConfirmationCounter();
+      console.log('🔢 [Sync] No reservations in DB - counter reset');
+      return;
+    }
+    
+    const confirmationNumbers = data
+      .map(r => parseInt(r.confirmation_number, 10))
+      .filter(n => !isNaN(n));
+    
+    if (confirmationNumbers.length > 0) {
+      const maxFromDb = Math.max(...confirmationNumbers);
+      updateLocalConfirmationCounter(maxFromDb);
+      console.log('🔢 [Sync] Counter synced from DB, max:', maxFromDb);
+    }
+  } catch (error) {
+    console.warn('⚠️ Background confirmation sync failed:', error);
+  }
+}
+
 export async function getNextConfirmationNumber() {
   console.log('🔢 getNextConfirmationNumber called');
   try {
@@ -831,6 +913,9 @@ export async function getNextConfirmationNumber() {
     const settingsRaw = localStorage.getItem('relia_company_settings');
     const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
     const confirmationStartNumber = parseInt(settings.confirmationStartNumber, 10) || 100000;
+    
+    // Get local counter first (fast path)
+    const localCounter = getLocalConfirmationCounter();
     
     await setupAPI();
     const client = getSupabaseClient();
@@ -844,6 +929,7 @@ export async function getNextConfirmationNumber() {
     if (error) throw error;
     
     let nextNum;
+    let dbMax = 0;
     
     if (data && data.length > 0) {
       // Reservations exist - find the highest and increment
@@ -852,25 +938,37 @@ export async function getNextConfirmationNumber() {
         .filter(n => !isNaN(n));
       
       if (confirmationNumbers.length > 0) {
-        const maxFromDb = Math.max(...confirmationNumbers);
-        nextNum = maxFromDb + 1;
-        console.log('🔢 getNextConfirmationNumber: Found', confirmationNumbers.length, 'reservations, max is', maxFromDb, '→ next:', nextNum);
+        dbMax = Math.max(...confirmationNumbers);
+        // Use the higher of DB max or local counter
+        const effectiveMax = Math.max(dbMax, localCounter.lastUsed);
+        nextNum = effectiveMax + 1;
+        console.log('🔢 getNextConfirmationNumber: DB max:', dbMax, ', local counter:', localCounter.lastUsed, '→ next:', nextNum);
       } else {
         // Reservations exist but no valid numbers - use start number
         nextNum = confirmationStartNumber;
         console.log('🔢 getNextConfirmationNumber: No valid confirmation numbers found, starting at:', nextNum);
       }
     } else {
-      // No reservations exist - use configured start number
+      // No reservations exist - reset counter and use configured start number
+      resetConfirmationCounter();
       nextNum = confirmationStartNumber;
-      console.log('🔢 getNextConfirmationNumber: No reservations in database, starting at:', nextNum);
+      console.log('🔢 getNextConfirmationNumber: No reservations in database, counter reset, starting at:', nextNum);
     }
+    
+    // Update local counter to track this number (will be saved after successful reservation)
+    updateLocalConfirmationCounter(nextNum);
     
     return nextNum;
   } catch (error) {
     console.error('❌ Error getting next confirmation number:', error);
-    // Fall back to start number or default
+    // Fall back to local counter or start number
     try {
+      const localCounter = getLocalConfirmationCounter();
+      if (localCounter.lastUsed > 0) {
+        const nextFromLocal = localCounter.lastUsed + 1;
+        console.log('🔢 Using local counter fallback:', nextFromLocal);
+        return nextFromLocal;
+      }
       const settingsRaw = localStorage.getItem('relia_company_settings');
       const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
       return parseInt(settings.confirmationStartNumber, 10) || 100000;
@@ -1064,6 +1162,8 @@ export default {
   searchAccounts,
   searchAccountsByCompany,
   getNextConfirmationNumber,
+  syncConfirmationCounterFromDB,
+  resetConfirmationCounter,
   getNextAccountNumber,
   incrementAccountCounter,
   resetAccountCounter,
