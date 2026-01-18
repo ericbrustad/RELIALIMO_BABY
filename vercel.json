@@ -116,6 +116,30 @@
   ],
   "redirects": [
     {
+      "source": "/",
+      "has": [{ "type": "host", "value": "relialimo.com" }],
+      "destination": "https://admin.relialimo.com",
+      "permanent": true
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "www.relialimo.com" }],
+      "destination": "https://admin.relialimo.com",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "relialimo.com" }],
+      "destination": "https://admin.relialimo.com/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.relialimo.com" }],
+      "destination": "https://admin.relialimo.com/:path*",
+      "permanent": true
+    },
+    {
       "source": "/drivers/:path*",
       "has": [{ "type": "host", "value": "driver.relialimo.com" }],
       "destination": "/",
