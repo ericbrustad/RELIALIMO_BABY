@@ -5807,10 +5807,11 @@ window.sendQuickNote = async function(tripId) {
 // ============================================
 async function sendTripReminderSMS(trip, driverId) {
   // Build the trip status URL for the driver
-  const baseUrl = window.location.origin;
+  // Driver portal is at driver.relialimo.com/firstname_lastname
+  const driverBaseUrl = 'https://driver.relialimo.com';
   const driverSlug = state.portalSlug || state.driver?.portal_slug || '';
-  const tripStatusUrl = `${baseUrl}/driver-trip-status.html?reservation=${trip.id}&driver=${driverId}`;
-  const portalUrl = driverSlug ? `${baseUrl}/${driverSlug}` : `${baseUrl}/driver-portal.html`;
+  const tripStatusUrl = `${driverBaseUrl}/${driverSlug}?trip=${trip.id}`;
+  const portalUrl = driverSlug ? `${driverBaseUrl}/${driverSlug}` : driverBaseUrl;
   
   // Get driver's phone number
   const driverPhone = state.driver?.phone || state.driver?.cell_phone;
