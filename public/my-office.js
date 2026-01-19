@@ -1135,8 +1135,105 @@ class MyOffice {
       });
     }
 
+    // Setup size slider and preview
+    this.setupLogoSizePreview();
+
     // Load saved settings and images on init
     this.loadLogoSettings();
+  }
+
+  setupLogoSizePreview() {
+    const sizeSlider = document.getElementById('logoSizeSlider');
+    const sizeInput = document.getElementById('logoSizeInput');
+    const previewLogoDark = document.getElementById('previewLogoDark');
+    const previewLogoLight = document.getElementById('previewLogoLight');
+    const previewContextSelect = document.getElementById('previewContextSelect');
+    const sizePresetBtns = document.querySelectorAll('.size-preset');
+
+    // Sync slider and input
+    if (sizeSlider && sizeInput) {
+      sizeSlider.addEventListener('input', (e) => {
+        const size = e.target.value;
+        sizeInput.value = size;
+        this.updatePreviewSize(size);
+      });
+
+      sizeInput.addEventListener('change', (e) => {
+        let size = parseInt(e.target.value) || 160;
+        size = Math.max(50, Math.min(300, size));
+        e.target.value = size;
+        sizeSlider.value = size;
+        this.updatePreviewSize(size);
+      });
+    }
+
+    // Size preset buttons
+    sizePresetBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const size = btn.dataset.size;
+        if (sizeSlider) sizeSlider.value = size;
+        if (sizeInput) sizeInput.value = size;
+        this.updatePreviewSize(size);
+      });
+    });
+
+    // Preview context selector
+    if (previewContextSelect) {
+      previewContextSelect.addEventListener('change', (e) => {
+        this.updatePreviewLogo(e.target.value);
+      });
+    }
+
+    // Initial preview update
+    setTimeout(() => this.updatePreviewLogo('allPortals'), 600);
+  }
+
+  updatePreviewSize(size) {
+    const previewLogoDark = document.getElementById('previewLogoDark');
+    const previewLogoLight = document.getElementById('previewLogoLight');
+    
+    if (previewLogoDark) {
+      previewLogoDark.style.height = `${size}px`;
+      previewLogoDark.style.width = 'auto';
+    }
+    if (previewLogoLight) {
+      previewLogoLight.style.height = `${size}px`;
+      previewLogoLight.style.width = 'auto';
+    }
+  }
+
+  updatePreviewLogo(context) {
+    const previewLogoDark = document.getElementById('previewLogoDark');
+    const previewLogoLight = document.getElementById('previewLogoLight');
+    const applyToAll = document.getElementById('applyToAllPortals')?.checked;
+    
+    let logoUrl = '';
+    
+    if (context === 'allPortals' || (applyToAll && context !== 'email')) {
+      logoUrl = document.getElementById('allPortalsLogoSelect')?.value || '';
+    } else {
+      const selectId = `${context}LogoSelect`;
+      logoUrl = document.getElementById(selectId)?.value || 
+                document.getElementById('allPortalsLogoSelect')?.value || '';
+    }
+
+    if (logoUrl) {
+      if (previewLogoDark) {
+        previewLogoDark.src = logoUrl;
+        previewLogoDark.style.display = 'block';
+      }
+      if (previewLogoLight) {
+        previewLogoLight.src = logoUrl;
+        previewLogoLight.style.display = 'block';
+      }
+      
+      // Apply current size
+      const size = document.getElementById('logoSizeSlider')?.value || 160;
+      this.updatePreviewSize(size);
+    } else {
+      if (previewLogoDark) previewLogoDark.style.display = 'none';
+      if (previewLogoLight) previewLogoLight.style.display = 'none';
+    }
   }
 
   async loadSupabaseImages() {
@@ -1329,6 +1426,7 @@ class MyOffice {
     const customer = document.getElementById('customerLogoSelect')?.value || '';
     const admin = document.getElementById('adminLogoSelect')?.value || '';
     const email = document.getElementById('emailLogoSelect')?.value || '';
+    const logoSize = parseInt(document.getElementById('logoSizeSlider')?.value) || 160;
 
     const logoSettings = {
       applyToAll,
@@ -1337,6 +1435,7 @@ class MyOffice {
       customer: applyToAll ? '' : customer,
       admin: applyToAll ? '' : admin,
       email,
+      logoSize,
       updatedAt: new Date().toISOString()
     };
 
@@ -1380,6 +1479,13 @@ class MyOffice {
         applyToAllCheckbox.checked = settings.applyToAll ?? true;
       }
 
+      // Restore logo size
+      const logoSize = settings.logoSize || 160;
+      const sizeSlider = document.getElementById('logoSizeSlider');
+      const sizeInput = document.getElementById('logoSizeInput');
+      if (sizeSlider) sizeSlider.value = logoSize;
+      if (sizeInput) sizeInput.value = logoSize;
+
       // Set select values after images load
       setTimeout(() => {
         const selects = {
@@ -1412,13 +1518,16 @@ class MyOffice {
             this.updateLogoPreview(key, settings.allPortals);
           });
         }
+
+        // Update preview with saved size
+        this.updatePreviewLogo('allPortals');
+        this.updatePreviewSize(logoSize);
       }, 500);
       
     } catch (err) {
       console.error('Error loading logo settings:', err);
     }
   }
-
   loadSavedLogo() {
     // Legacy support - load from old format
     const savedLogo = localStorage.getItem('companyLogo');

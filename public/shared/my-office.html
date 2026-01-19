@@ -372,6 +372,56 @@
                     </div>
                   </div>
 
+                  <!-- Logo Size & Preview Section -->
+                  <div class="logo-preview-section">
+                    <h4>📐 Logo Size & Preview</h4>
+                    <p class="form-hint">Adjust logo size and see how it will appear on different screens.</p>
+                    
+                    <div class="size-controls">
+                      <div class="size-control-group">
+                        <label>Logo Size (pixels)</label>
+                        <div class="size-slider-row">
+                          <input type="range" id="logoSizeSlider" min="50" max="300" value="160" class="size-slider" />
+                          <input type="number" id="logoSizeInput" min="50" max="300" value="160" class="size-input" />
+                          <span class="size-unit">px</span>
+                        </div>
+                      </div>
+                      <div class="size-presets">
+                        <button class="btn btn-sm btn-secondary size-preset" data-size="80">Small (80px)</button>
+                        <button class="btn btn-sm btn-secondary size-preset" data-size="120">Medium (120px)</button>
+                        <button class="btn btn-sm btn-secondary size-preset" data-size="160">Default (160px)</button>
+                        <button class="btn btn-sm btn-secondary size-preset" data-size="200">Large (200px)</button>
+                        <button class="btn btn-sm btn-secondary size-preset" data-size="250">XL (250px)</button>
+                      </div>
+                    </div>
+
+                    <div class="live-preview-container">
+                      <div class="preview-panel preview-dark">
+                        <div class="preview-label">Dark Background</div>
+                        <div class="preview-content">
+                          <img id="previewLogoDark" src="" alt="Logo preview" />
+                        </div>
+                      </div>
+                      <div class="preview-panel preview-light">
+                        <div class="preview-label">Light Background</div>
+                        <div class="preview-content">
+                          <img id="previewLogoLight" src="" alt="Logo preview" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="preview-context-selector">
+                      <label>Preview Context:</label>
+                      <select id="previewContextSelect" class="form-control" style="max-width: 200px; display: inline-block;">
+                        <option value="allPortals">All Portals</option>
+                        <option value="driver">Driver Portal</option>
+                        <option value="customer">Customer Portal</option>
+                        <option value="admin">Admin Portal</option>
+                        <option value="email">Email</option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div class="form-actions" style="margin-top: 20px;">
                     <button class="btn btn-primary btn-large" id="saveLogoSettingsBtn">💾 Save Logo Settings</button>
                   </div>
