@@ -23,11 +23,66 @@ class Calendar {
   async init() {
     await this.resolveUserSettingsKey();
     await this.loadDbModule();
+    this.populateDateSelector();
     this.setupEventListeners();
     this.syncCurrentDateFromSelector();
     this.loadSettingsIntoUi();
     this.render();
     this.startAutoRefresh();
+  }
+
+  populateDateSelector() {
+    const dateSelector = document.getElementById('dateSelector');
+    if (!dateSelector) return;
+
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
+
+    // Clear existing options
+    dateSelector.innerHTML = '';
+
+    // Generate months: 12 months back and 24 months forward
+    const months = [];
+    for (let offset = -12; offset <= 24; offset++) {
+      const date = new Date(currentYear, currentMonth + offset, 1);
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                          'July', 'August', 'September', 'October', 'November', 'December'];
+      const value = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const label = `${year} - ${monthNames[month]}`;
+      months.push({ value, label, isCurrent: offset === 0 });
+    }
+
+    // Add options
+    months.forEach(m => {
+      const option = document.createElement('option');
+      option.value = m.value;
+      option.textContent = m.label;
+      if (m.isCurrent) {
+        option.selected = true;
+      }
+      dateSelector.appendChild(option);
+    });
+
+    console.log('✅ Date selector populated with current month selected');
+  }
+
+  goToToday() {
+    const today = new Date();
+    this.currentDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    
+    // Update the selector to current month
+    const dateSelector = document.getElementById('dateSelector');
+    if (dateSelector) {
+      const value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+      dateSelector.value = value;
+    }
+    
+    this.render();
+    console.log('📅 Navigated to today:', today.toDateString());
+  }
   }
 
   // Auto-refresh calendar every 60 seconds to keep data current
@@ -108,6 +163,14 @@ class Calendar {
       goToDateBtn.addEventListener('click', () => {
         this.goToSelectedDate();
         this.saveSettingsFromUi();
+      });
+    }
+
+    // Today button
+    const goToTodayBtn = document.getElementById('goToToday');
+    if (goToTodayBtn) {
+      goToTodayBtn.addEventListener('click', () => {
+        this.goToToday();
       });
     }
 
