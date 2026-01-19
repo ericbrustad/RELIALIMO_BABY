@@ -5,12 +5,8 @@ export function middleware(request: NextRequest) {
   const host = request.headers.get('host') || ''
   const pathname = request.nextUrl.pathname
   
-  // Skip Next.js internal paths and API routes
-  if (
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/api') ||
-    pathname.includes('.')  // Static files with extensions
-  ) {
+  // Skip Next.js internal paths
+  if (pathname.startsWith('/_next')) {
     return NextResponse.next()
   }
 
@@ -19,7 +15,7 @@ export function middleware(request: NextRequest) {
     if (pathname === '/' || pathname === '') {
       return NextResponse.rewrite(new URL('/drivers/driver-portal.html', request.url))
     }
-    // Rewrite paths to /drivers folder
+    // Rewrite all paths to /drivers folder (except /shared and /drivers)
     if (!pathname.startsWith('/drivers') && !pathname.startsWith('/shared')) {
       return NextResponse.rewrite(new URL(`/drivers${pathname}`, request.url))
     }
@@ -30,17 +26,18 @@ export function middleware(request: NextRequest) {
     if (pathname === '/' || pathname === '') {
       return NextResponse.rewrite(new URL('/customers/customer-portal.html', request.url))
     }
-    // Rewrite paths to /customers folder
+    // Rewrite all paths to /customers folder (except /shared and /customers)
     if (!pathname.startsWith('/customers') && !pathname.startsWith('/shared')) {
       return NextResponse.rewrite(new URL(`/customers${pathname}`, request.url))
     }
   }
 
-  // Admin subdomain: admin.relialimo.com - serve from root
+  // Admin subdomain: admin.relialimo.com - serve from root public folder
   if (host.startsWith('admin.')) {
     if (pathname === '/' || pathname === '') {
       return NextResponse.rewrite(new URL('/admin.html', request.url))
     }
+    // Admin files are at the root of public, no rewrite needed
   }
 
   // Main domain without subdomain - show landing page
@@ -58,12 +55,9 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder files with extensions
+     * Match all paths for subdomain routing
+     * Except _next internal paths
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)',
+    '/((?!_next/static|_next/image).*)',
   ],
 }
