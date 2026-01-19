@@ -11,25 +11,10 @@
 CREATE TABLE IF NOT EXISTS email_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
-    description TEXT,
-    trigger_event VARCHAR(50) NOT NULL,
     subject VARCHAR(500) NOT NULL,
     body_html TEXT NOT NULL,
-    body_text TEXT,
-    send_via_email BOOLEAN DEFAULT TRUE,
-    send_via_sms BOOLEAN DEFAULT FALSE,
-    sms_body VARCHAR(160),
-    send_to_billing BOOLEAN DEFAULT TRUE,
-    send_to_passenger BOOLEAN DEFAULT TRUE,
-    send_to_booking_contact BOOLEAN DEFAULT FALSE,
-    send_to_driver BOOLEAN DEFAULT FALSE,
-    timing_offset_minutes INTEGER DEFAULT 0,
-    is_active BOOLEAN DEFAULT TRUE,
-    is_default BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    created_by UUID,
-    updated_by UUID
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Add missing columns to existing email_templates table
@@ -38,9 +23,54 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'organization_id') THEN
         ALTER TABLE email_templates ADD COLUMN organization_id UUID;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'description') THEN
+        ALTER TABLE email_templates ADD COLUMN description TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'trigger_event') THEN
+        ALTER TABLE email_templates ADD COLUMN trigger_event VARCHAR(50);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'body_text') THEN
+        ALTER TABLE email_templates ADD COLUMN body_text TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'send_via_email') THEN
+        ALTER TABLE email_templates ADD COLUMN send_via_email BOOLEAN DEFAULT TRUE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'send_via_sms') THEN
+        ALTER TABLE email_templates ADD COLUMN send_via_sms BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'sms_body') THEN
+        ALTER TABLE email_templates ADD COLUMN sms_body VARCHAR(160);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'send_to_billing') THEN
+        ALTER TABLE email_templates ADD COLUMN send_to_billing BOOLEAN DEFAULT TRUE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'send_to_passenger') THEN
+        ALTER TABLE email_templates ADD COLUMN send_to_passenger BOOLEAN DEFAULT TRUE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'send_to_booking_contact') THEN
+        ALTER TABLE email_templates ADD COLUMN send_to_booking_contact BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'send_to_driver') THEN
+        ALTER TABLE email_templates ADD COLUMN send_to_driver BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'timing_offset_minutes') THEN
+        ALTER TABLE email_templates ADD COLUMN timing_offset_minutes INTEGER DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'is_active') THEN
+        ALTER TABLE email_templates ADD COLUMN is_active BOOLEAN DEFAULT TRUE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'is_default') THEN
+        ALTER TABLE email_templates ADD COLUMN is_default BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'created_by') THEN
+        ALTER TABLE email_templates ADD COLUMN created_by UUID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'updated_by') THEN
+        ALTER TABLE email_templates ADD COLUMN updated_by UUID;
+    END IF;
 END $$;
 
--- Indexes
+-- Indexes (will skip if already exist)
 CREATE INDEX IF NOT EXISTS idx_email_templates_org ON email_templates(organization_id);
 CREATE INDEX IF NOT EXISTS idx_email_templates_trigger ON email_templates(trigger_event);
 CREATE INDEX IF NOT EXISTS idx_email_templates_active ON email_templates(is_active) WHERE is_active = TRUE;
