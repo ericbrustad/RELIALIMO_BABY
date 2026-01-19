@@ -314,17 +314,27 @@ CREATE INDEX IF NOT EXISTS idx_account_addresses_type ON account_addresses(addre
 
 CREATE TABLE IF NOT EXISTS account_booking_contacts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    booking_contact_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    can_book BOOLEAN DEFAULT TRUE,
-    can_view_billing BOOLEAN DEFAULT FALSE,
-    can_modify BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Add missing columns to existing account_booking_contacts table
 DO $$ 
 BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_booking_contacts' AND column_name = 'account_id') THEN
+        ALTER TABLE account_booking_contacts ADD COLUMN account_id UUID REFERENCES accounts(id) ON DELETE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_booking_contacts' AND column_name = 'booking_contact_id') THEN
+        ALTER TABLE account_booking_contacts ADD COLUMN booking_contact_id UUID REFERENCES accounts(id) ON DELETE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_booking_contacts' AND column_name = 'can_book') THEN
+        ALTER TABLE account_booking_contacts ADD COLUMN can_book BOOLEAN DEFAULT TRUE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_booking_contacts' AND column_name = 'can_view_billing') THEN
+        ALTER TABLE account_booking_contacts ADD COLUMN can_view_billing BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_booking_contacts' AND column_name = 'can_modify') THEN
+        ALTER TABLE account_booking_contacts ADD COLUMN can_modify BOOLEAN DEFAULT FALSE;
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_booking_contacts' AND column_name = 'organization_id') THEN
         ALTER TABLE account_booking_contacts ADD COLUMN organization_id UUID;
     END IF;
