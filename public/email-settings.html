@@ -114,6 +114,7 @@
             <span class="status-icon">⏳</span>
             <span class="status-text">Checking...</span>
           </div>
+          <button id="quickSetupBothBtn" class="btn primary" style="background: linear-gradient(135deg, #9c27b0, #673ab7); font-weight: bold;" title="Quick setup both SMS and Email with demo values">🔧 Quick Setup SMS + Email</button>
           <button id="saveSettingsBtn" class="btn primary">💾 Save Settings</button>
           <button id="saveSecureBtn" class="btn primary" style="background:#2e7d32;" title="Save to Supabase & create backup">🔒 Save Secure</button>
           <button id="downloadEnvBtn" class="btn primary" style="background:#1565c0;" title="Download .env file">⬇️ Download .env</button>
@@ -744,6 +745,14 @@
       EmailSettingsDirect.init();
       EmailConfigChecker.init();
       
+      // Quick Setup Both SMS + Email button
+      const quickSetupBtn = document.getElementById('quickSetupBothBtn');
+      if (quickSetupBtn) {
+        quickSetupBtn.addEventListener('click', () => {
+          QuickSetupManager.showModal();
+        });
+      }
+      
       // Save Secure button
       const saveSecureBtn = document.getElementById('saveSecureBtn');
       if (saveSecureBtn) {
@@ -810,6 +819,254 @@
         });
       }
     });
+    
+    // ============================================
+    // Quick Setup Manager - Configure Both SMS & Email
+    // ============================================
+    const QuickSetupManager = {
+      showModal() {
+        // Remove existing modal
+        const existing = document.getElementById('quickSetupModal');
+        if (existing) existing.remove();
+        
+        const modal = document.createElement('div');
+        modal.id = 'quickSetupModal';
+        modal.innerHTML = `
+          <div class="quick-setup-overlay" onclick="QuickSetupManager.close()"></div>
+          <div class="quick-setup-dialog">
+            <h2 style="margin: 0 0 15px 0; color: #333; display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 28px;">🔧</span> Quick Setup - SMS & Email
+            </h2>
+            <p style="color: #666; margin-bottom: 20px; font-size: 14px;">
+              Configure both SMS (Twilio) and Email (SMTP) with your credentials. Leave fields blank to skip that service.
+            </p>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+              <!-- SMS Section -->
+              <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; border: 2px solid #1976d2;">
+                <h3 style="margin: 0 0 12px 0; color: #1565c0; font-size: 15px;">📱 SMS (Twilio)</h3>
+                <label style="display: block; margin-bottom: 10px; font-size: 13px;">
+                  Account SID
+                  <input id="qs_accountSid" type="text" placeholder="ACxxxxxxxxxxxxxxxx" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px;">
+                </label>
+                <label style="display: block; margin-bottom: 10px; font-size: 13px;">
+                  Auth Token
+                  <input id="qs_authToken" type="password" placeholder="Your auth token" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px;">
+                </label>
+                <label style="display: block; margin-bottom: 10px; font-size: 13px;">
+                  From Number / Messaging Service SID
+                  <input id="qs_fromNumber" type="text" placeholder="+15551234567 or MGxxxxxxxx" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px;">
+                </label>
+              </div>
+              
+              <!-- Email Section -->
+              <div style="background: #e8f5e9; padding: 15px; border-radius: 10px; border: 2px solid #4caf50;">
+                <h3 style="margin: 0 0 12px 0; color: #2e7d32; font-size: 15px;">📧 Email (SMTP)</h3>
+                <label style="display: block; margin-bottom: 10px; font-size: 13px;">
+                  SMTP Host
+                  <input id="qs_smtpHost" type="text" placeholder="smtp.gmail.com or smtp.sendgrid.net" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px;">
+                </label>
+                <label style="display: block; margin-bottom: 10px; font-size: 13px;">
+                  SMTP Port
+                  <input id="qs_smtpPort" type="number" placeholder="587" value="587" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px;">
+                </label>
+                <label style="display: block; margin-bottom: 10px; font-size: 13px;">
+                  From Email
+                  <input id="qs_fromEmail" type="email" placeholder="noreply@yourdomain.com" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px;">
+                </label>
+                <label style="display: block; margin-bottom: 10px; font-size: 13px;">
+                  Username / API Key
+                  <input id="qs_smtpUser" type="text" placeholder="apikey or your@email.com" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px;">
+                </label>
+                <label style="display: block; font-size: 13px;">
+                  Password / Token
+                  <input id="qs_smtpPass" type="password" placeholder="App password or API key" style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px;">
+                </label>
+              </div>
+            </div>
+            
+            <div style="margin-top: 20px; display: flex; gap: 12px; justify-content: flex-end;">
+              <button onclick="QuickSetupManager.close()" style="padding: 10px 20px; background: #9e9e9e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">Cancel</button>
+              <button onclick="QuickSetupManager.applySettings()" style="padding: 10px 24px; background: linear-gradient(135deg, #9c27b0, #673ab7); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold;">✅ Apply Both Settings</button>
+            </div>
+          </div>
+        `;
+        
+        // Add styles
+        const style = document.createElement('style');
+        style.textContent = `
+          .quick-setup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9998;
+          }
+          .quick-setup-dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            z-index: 9999;
+            max-width: 700px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+          }
+        `;
+        modal.appendChild(style);
+        document.body.appendChild(modal);
+        
+        // Pre-fill from existing settings
+        this.prefillFromExisting();
+      },
+      
+      prefillFromExisting() {
+        // SMS
+        const smsRaw = localStorage.getItem('smsProviders');
+        if (smsRaw) {
+          try {
+            const providers = JSON.parse(smsRaw);
+            const sms = providers.find(p => p.isDefault) || providers[0];
+            if (sms) {
+              document.getElementById('qs_accountSid').value = sms.accountSid || '';
+              document.getElementById('qs_authToken').value = sms.authToken || '';
+              document.getElementById('qs_fromNumber').value = sms.messagingServiceSid || sms.fromNumber || '';
+            }
+          } catch (e) {}
+        }
+        
+        // Email
+        const emailRaw = localStorage.getItem('emailSettings');
+        if (emailRaw) {
+          try {
+            const email = JSON.parse(emailRaw);
+            document.getElementById('qs_smtpHost').value = email.smtpHost || '';
+            document.getElementById('qs_smtpPort').value = email.smtpPort || 587;
+            document.getElementById('qs_fromEmail').value = email.fromEmail || '';
+            document.getElementById('qs_smtpUser').value = email.smtpUser || '';
+            document.getElementById('qs_smtpPass').value = email.smtpPass || '';
+          } catch (e) {}
+        }
+      },
+      
+      applySettings() {
+        const $ = id => document.getElementById(id)?.value?.trim() || '';
+        
+        let smsConfigured = false;
+        let emailConfigured = false;
+        
+        // Save SMS settings
+        const accountSid = $('qs_accountSid');
+        const authToken = $('qs_authToken');
+        const fromNumber = $('qs_fromNumber');
+        
+        if (accountSid && authToken) {
+          const smsProvider = {
+            id: 'twilio',
+            name: 'Twilio',
+            type: 'twilio',
+            accountSid: accountSid,
+            authToken: authToken,
+            apiKeySid: '',
+            apiKeySecret: '',
+            messagingServiceSid: fromNumber.startsWith('MG') ? fromNumber : '',
+            fromNumber: fromNumber.startsWith('+') ? fromNumber : '',
+            statusCallbackUrl: '',
+            requestDeliveryReceipts: true,
+            useApiKey: false,
+            isDefault: true
+          };
+          localStorage.setItem('smsProviders', JSON.stringify([smsProvider]));
+          smsConfigured = true;
+          console.log('[QuickSetup] SMS settings saved');
+          
+          // Update form if on SMS page
+          if (document.getElementById('twilioAccountSid')) {
+            document.getElementById('twilioAccountSid').value = accountSid;
+            document.getElementById('twilioAuthToken').value = authToken;
+            if (fromNumber.startsWith('MG')) {
+              document.getElementById('twilioMessagingServiceSid').value = fromNumber;
+            } else {
+              document.getElementById('twilioFromNumber').value = fromNumber;
+            }
+          }
+        }
+        
+        // Save Email settings
+        const smtpHost = $('qs_smtpHost');
+        const smtpPort = parseInt($('qs_smtpPort')) || 587;
+        const fromEmail = $('qs_fromEmail');
+        const smtpUser = $('qs_smtpUser');
+        const smtpPass = $('qs_smtpPass');
+        
+        if (smtpHost && fromEmail) {
+          const emailSettings = {
+            smtpHost: smtpHost,
+            smtpPort: smtpPort,
+            fromEmail: fromEmail,
+            fromName: 'ReliaLimo',
+            replyTo: fromEmail,
+            smtpUser: smtpUser,
+            smtpPass: smtpPass,
+            tls: true
+          };
+          localStorage.setItem('emailSettings', JSON.stringify(emailSettings));
+          localStorage.setItem('emailSettingsConfig', JSON.stringify(emailSettings));
+          emailConfigured = true;
+          console.log('[QuickSetup] Email settings saved');
+          
+          // Update form if on Email page
+          if (document.getElementById('smtpHostInput')) {
+            document.getElementById('smtpHostInput').value = smtpHost;
+            document.getElementById('smtpPortInput').value = smtpPort;
+            document.getElementById('fromEmailInput').value = fromEmail;
+            document.getElementById('smtpUserInput').value = smtpUser;
+            document.getElementById('smtpPassInput').value = smtpPass;
+          }
+        }
+        
+        // Close modal
+        this.close();
+        
+        // Show result
+        if (smsConfigured && emailConfigured) {
+          showToast('✅ Both SMS and Email configured!', 'success');
+        } else if (smsConfigured) {
+          showToast('✅ SMS configured! (Email skipped)', 'success');
+        } else if (emailConfigured) {
+          showToast('✅ Email configured! (SMS skipped)', 'success');
+        } else {
+          showToast('⚠️ No settings were saved - fill in required fields', 'warning');
+        }
+        
+        // Refresh status indicators
+        if (typeof SMSConfigChecker !== 'undefined') {
+          setTimeout(() => SMSConfigChecker.checkConfiguration(), 100);
+        }
+        if (typeof EmailConfigChecker !== 'undefined') {
+          setTimeout(() => EmailConfigChecker.checkConfiguration(), 100);
+        }
+        
+        // Trigger storage event for other tabs
+        window.dispatchEvent(new StorageEvent('storage', { key: 'smsProviders' }));
+        window.dispatchEvent(new StorageEvent('storage', { key: 'emailSettings' }));
+      },
+      
+      close() {
+        const modal = document.getElementById('quickSetupModal');
+        if (modal) modal.remove();
+      }
+    };
+    
+    // Make it globally accessible
+    window.QuickSetupManager = QuickSetupManager;
   </script>
 </body>
 </html>
