@@ -239,36 +239,68 @@ END $$;
 
 -- =====================================================
 -- 4. ACCOUNT ADDRESSES TABLE
--- Multiple addresses per account
+-- Multiple addresses per account (handle existing table)
 -- =====================================================
 
+-- Create table if it doesn't exist
 CREATE TABLE IF NOT EXISTS account_addresses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
-    
-    -- Address details
-    address_type VARCHAR(50) NOT NULL DEFAULT 'primary' CHECK (address_type IN (
-        'primary', 'billing', 'home', 'pickup', 'dropoff', 'other'
-    )),
-    address_name VARCHAR(100),  -- e.g., "Home", "Office", "Airport"
-    
+    address_type VARCHAR(50) NOT NULL DEFAULT 'primary',
+    address_name VARCHAR(100),
     address_line1 TEXT NOT NULL,
     address_line2 TEXT,
     city VARCHAR(100),
     state VARCHAR(10),
-    zip VARCHAR(20),
+    zip_code VARCHAR(20),
     country VARCHAR(50) DEFAULT 'United States',
-    
-    -- Flags
+    latitude NUMERIC,
+    longitude NUMERIC,
     is_default BOOLEAN DEFAULT FALSE,
     is_verified BOOLEAN DEFAULT FALSE,
     verified_at TIMESTAMPTZ,
-    
-    -- Audit
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add missing columns to existing table
+DO $$ 
+BEGIN
+    -- Add organization_id if missing (nullable for backwards compatibility)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_addresses' AND column_name = 'organization_id') THEN
+        ALTER TABLE account_addresses ADD COLUMN organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
+    END IF;
+    
+    -- Add latitude if missing
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_addresses' AND column_name = 'latitude') THEN
+        ALTER TABLE account_addresses ADD COLUMN latitude NUMERIC;
+    END IF;
+    
+    -- Add longitude if missing
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_addresses' AND column_name = 'longitude') THEN
+        ALTER TABLE account_addresses ADD COLUMN longitude NUMERIC;
+    END IF;
+    
+    -- Add zip_code if missing (some schemas use 'zip' instead)
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_addresses' AND column_name = 'zip_code') THEN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_addresses' AND column_name = 'zip') THEN
+            -- Rename zip to zip_code for consistency
+            ALTER TABLE account_addresses RENAME COLUMN zip TO zip_code;
+        ELSE
+            ALTER TABLE account_addresses ADD COLUMN zip_code VARCHAR(20);
+        END IF;
+    END IF;
+    
+    -- Add use_count if missing
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_addresses' AND column_name = 'use_count') THEN
+        ALTER TABLE account_addresses ADD COLUMN use_count INTEGER DEFAULT 1;
+    END IF;
+    
+    -- Add last_used_at if missing
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_addresses' AND column_name = 'last_used_at') THEN
+        ALTER TABLE account_addresses ADD COLUMN last_used_at TIMESTAMPTZ DEFAULT NOW();
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_account_addresses_account ON account_addresses(account_id);
 CREATE INDEX IF NOT EXISTS idx_account_addresses_type ON account_addresses(address_type);
