@@ -62,7 +62,7 @@ body::before {
 }
 
 .auth-logo img {
-  height: 160px;
+  height: 213px;
   width: auto;
   filter: drop-shadow(0 4px 20px rgba(201, 162, 39, 0.3));
 }
