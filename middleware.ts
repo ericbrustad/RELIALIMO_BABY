@@ -38,10 +38,10 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // Admin subdomain: admin.relialimo.com - serve from root public folder
+  // Admin subdomain: admin.relialimo.com - serve index.html directly
   if (host.startsWith('admin.')) {
     if (pathname === '/' || pathname === '') {
-      return NextResponse.rewrite(new URL('/admin.html', request.url))
+      return NextResponse.rewrite(new URL('/index.html', request.url))
     }
     // Admin files are at the root of public, no rewrite needed
   }
