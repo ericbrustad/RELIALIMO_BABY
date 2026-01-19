@@ -20,7 +20,16 @@ const DEFAULT_SETTINGS = {
   clockStyle: 'digital-modern',
   clockSize: 100,
   clockTextColor: '#1f2937',
-  clockPosition: null
+  clockPosition: null,
+  
+  // System Monitor settings
+  sysMonitorVisible: false,
+  sysMonitorDraggable: true,
+  sysMonitorShowCpu: true,
+  sysMonitorShowRam: true,
+  sysMonitorSize: 100,
+  sysMonitorStyle: 'bars',
+  sysMonitorPosition: null
 };
 
 // Current settings state
@@ -119,6 +128,19 @@ function applySettingsToForm() {
   // Clock color
   setColorPicker('clockTextColor', currentSettings.clockTextColor);
   
+  // System Monitor toggles
+  setCheckbox('sysMonitorVisible', currentSettings.sysMonitorVisible);
+  setCheckbox('sysMonitorDraggable', currentSettings.sysMonitorDraggable);
+  setCheckbox('sysMonitorShowCpu', currentSettings.sysMonitorShowCpu);
+  setCheckbox('sysMonitorShowRam', currentSettings.sysMonitorShowRam);
+  
+  // System Monitor size
+  setRange('sysMonitorSize', currentSettings.sysMonitorSize);
+  updateSizeLabel('sysMonitorSize', 'sysMonitorSizeValue');
+  
+  // System Monitor style
+  setActiveMonitorStyle(currentSettings.sysMonitorStyle);
+  
   // Position displays
   updatePositionDisplays();
   
@@ -174,9 +196,16 @@ function setActiveClockStyle(style) {
   });
 }
 
+function setActiveMonitorStyle(style) {
+  document.querySelectorAll('.sys-monitor-style').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.style === style);
+  });
+}
+
 function updatePositionDisplays() {
   const timerPos = document.getElementById('timerPositionDisplay');
   const clockPos = document.getElementById('clockPositionDisplay');
+  const sysMonitorPos = document.getElementById('sysMonitorPositionDisplay');
   
   if (timerPos) {
     timerPos.textContent = currentSettings.timerPosition 
@@ -189,6 +218,12 @@ function updatePositionDisplays() {
       ? `Custom (${currentSettings.clockPosition.x}, ${currentSettings.clockPosition.y})`
       : 'Default (Header)';
   }
+  
+  if (sysMonitorPos) {
+    sysMonitorPos.textContent = currentSettings.sysMonitorPosition
+      ? `Custom (${currentSettings.sysMonitorPosition.x}, ${currentSettings.sysMonitorPosition.y})`
+      : 'Default (Below Clock)';
+  }
 }
 
 // Read settings from form
@@ -198,7 +233,7 @@ function readSettingsFromForm() {
   currentSettings.timerPlayChime = getCheckbox('timerPlayChime');
   currentSettings.timerSize = getRange('timerSize');
   
-  const activeTheme = document.querySelector('.color-theme-btn.active');
+  const activeTheme = document.querySelector('.color-theme-btn:not(.sys-monitor-style).active');
   currentSettings.timerTheme = activeTheme ? activeTheme.dataset.theme : 'amber';
   
   currentSettings.clockVisible = getCheckbox('clockVisible');
@@ -211,6 +246,16 @@ function readSettingsFromForm() {
   
   const activeClockStyle = document.querySelector('.clock-style-card.active');
   currentSettings.clockStyle = activeClockStyle ? activeClockStyle.dataset.style : 'digital-modern';
+  
+  // System Monitor settings
+  currentSettings.sysMonitorVisible = getCheckbox('sysMonitorVisible');
+  currentSettings.sysMonitorDraggable = getCheckbox('sysMonitorDraggable');
+  currentSettings.sysMonitorShowCpu = getCheckbox('sysMonitorShowCpu');
+  currentSettings.sysMonitorShowRam = getCheckbox('sysMonitorShowRam');
+  currentSettings.sysMonitorSize = getRange('sysMonitorSize');
+  
+  const activeMonitorStyle = document.querySelector('.sys-monitor-style.active');
+  currentSettings.sysMonitorStyle = activeMonitorStyle ? activeMonitorStyle.dataset.style : 'bars';
 }
 
 // Update preview panel
@@ -248,6 +293,21 @@ function updatePreview() {
     if (dateEl) {
       dateEl.style.display = currentSettings.clockShowDate ? 'block' : 'none';
     }
+  }
+  
+  // System Monitor preview
+  const previewSysMonitor = document.getElementById('previewSysMonitor');
+  if (previewSysMonitor) {
+    // Visibility
+    previewSysMonitor.style.display = currentSettings.sysMonitorVisible ? 'flex' : 'none';
+    // Size
+    previewSysMonitor.style.transform = `scale(${currentSettings.sysMonitorSize / 100})`;
+    previewSysMonitor.style.transformOrigin = 'top right';
+    // CPU/RAM visibility
+    const cpuRow = previewSysMonitor.querySelector('.preview-cpu');
+    const ramRow = previewSysMonitor.querySelector('.preview-ram');
+    if (cpuRow) cpuRow.style.display = currentSettings.sysMonitorShowCpu ? 'flex' : 'none';
+    if (ramRow) ramRow.style.display = currentSettings.sysMonitorShowRam ? 'flex' : 'none';
   }
 }
 
@@ -393,9 +453,39 @@ function initEventListeners() {
   });
   
   // Toggle changes
-  ['timerAlwaysVisible', 'timerDraggable', 'timerPlayChime', 'clockVisible', 'clockDraggable', 'clockShowDate'].forEach(id => {
+  ['timerAlwaysVisible', 'timerDraggable', 'timerPlayChime', 'clockVisible', 'clockDraggable', 'clockShowDate',
+   'sysMonitorVisible', 'sysMonitorDraggable', 'sysMonitorShowCpu', 'sysMonitorShowRam'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', () => {
       readSettingsFromForm();
+      updatePreview();
+      
+      // Also update localStorage for sysMonitor settings immediately
+      if (id.startsWith('sysMonitor')) {
+        const sysSettings = {
+          visible: currentSettings.sysMonitorVisible,
+          draggable: currentSettings.sysMonitorDraggable,
+          showCpu: currentSettings.sysMonitorShowCpu,
+          showRam: currentSettings.sysMonitorShowRam,
+          size: currentSettings.sysMonitorSize,
+          style: currentSettings.sysMonitorStyle
+        };
+        localStorage.setItem('sysMonitorSettings', JSON.stringify(sysSettings));
+      }
+    });
+  });
+  
+  // System Monitor size slider
+  document.getElementById('sysMonitorSize')?.addEventListener('input', (e) => {
+    updateSizeLabel('sysMonitorSize', 'sysMonitorSizeValue');
+    currentSettings.sysMonitorSize = parseInt(e.target.value, 10);
+    updatePreview();
+  });
+  
+  // System Monitor style buttons
+  document.querySelectorAll('.sys-monitor-style').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setActiveMonitorStyle(btn.dataset.style);
+      currentSettings.sysMonitorStyle = btn.dataset.style;
       updatePreview();
     });
   });
@@ -408,6 +498,15 @@ function initEventListeners() {
   
   document.getElementById('resetClockPosition')?.addEventListener('click', () => {
     currentSettings.clockPosition = null;
+    updatePositionDisplays();
+  });
+  
+  document.getElementById('resetSysMonitorPosition')?.addEventListener('click', () => {
+    currentSettings.sysMonitorPosition = null;
+    localStorage.setItem('sysMonitorSettings', JSON.stringify({
+      ...JSON.parse(localStorage.getItem('sysMonitorSettings') || '{}'),
+      position: null
+    }));
     updatePositionDisplays();
   });
   

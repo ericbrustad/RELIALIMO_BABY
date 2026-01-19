@@ -161,6 +161,248 @@ function cycleClockStyle() {
   setClockStyle(styles[nextIndex]);
 }
 
+// =====================================================
+// SYSTEM MONITOR (CPU/RAM)
+// =====================================================
+const SystemMonitor = {
+  lastCpuTime: 0,
+  lastIdleTime: 0,
+  cpuHistory: [],
+  updateInterval: null,
+  isDragging: false,
+  dragOffset: { x: 0, y: 0 },
+
+  getSettings() {
+    try {
+      return JSON.parse(localStorage.getItem('sysMonitorSettings') || '{}');
+    } catch {
+      return {};
+    }
+  },
+
+  saveSettings(settings) {
+    const current = this.getSettings();
+    localStorage.setItem('sysMonitorSettings', JSON.stringify({ ...current, ...settings }));
+  },
+
+  init() {
+    const widget = document.getElementById('systemMonitorWidget');
+    if (!widget) return;
+
+    const settings = this.getSettings();
+    
+    // Show/hide based on settings
+    if (settings.visible) {
+      widget.style.display = 'flex';
+    }
+
+    // Apply saved position if draggable and position exists
+    if (settings.draggable && settings.position) {
+      widget.style.position = 'fixed';
+      widget.style.left = settings.position.x + 'px';
+      widget.style.top = settings.position.y + 'px';
+      widget.style.zIndex = '9999';
+    }
+
+    // Apply size
+    if (settings.size) {
+      widget.style.transform = `scale(${settings.size / 100})`;
+    }
+
+    // Setup dragging if enabled
+    if (settings.draggable) {
+      this.setupDragging(widget);
+    }
+
+    // Start monitoring
+    this.startMonitoring();
+  },
+
+  setupDragging(widget) {
+    widget.style.cursor = 'move';
+    
+    widget.addEventListener('mousedown', (e) => {
+      if (e.target.closest('button')) return;
+      this.isDragging = true;
+      const rect = widget.getBoundingClientRect();
+      this.dragOffset = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
+      widget.style.position = 'fixed';
+      widget.style.zIndex = '99999';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!this.isDragging) return;
+      const x = e.clientX - this.dragOffset.x;
+      const y = e.clientY - this.dragOffset.y;
+      widget.style.left = x + 'px';
+      widget.style.top = y + 'px';
+      widget.style.right = 'auto';
+      widget.style.bottom = 'auto';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (this.isDragging) {
+        this.isDragging = false;
+        const rect = widget.getBoundingClientRect();
+        this.saveSettings({ position: { x: rect.left, y: rect.top } });
+      }
+    });
+
+    // Double-click to reset position
+    widget.addEventListener('dblclick', () => {
+      widget.style.position = '';
+      widget.style.left = '';
+      widget.style.top = '';
+      widget.style.right = '';
+      widget.style.bottom = '';
+      this.saveSettings({ position: null });
+    });
+  },
+
+  startMonitoring() {
+    // Update immediately
+    this.updateMetrics();
+    
+    // Update every 2 seconds
+    this.updateInterval = setInterval(() => this.updateMetrics(), 2000);
+  },
+
+  async updateMetrics() {
+    const settings = this.getSettings();
+    const widget = document.getElementById('systemMonitorWidget');
+    if (!widget || !settings.visible) return;
+
+    // CPU estimation using performance timing
+    const cpuPercent = await this.estimateCpu();
+    const ramPercent = this.getMemoryUsage();
+
+    // Update CPU display
+    if (settings.showCpu !== false) {
+      const cpuBar = document.getElementById('cpuBar');
+      const cpuValue = document.getElementById('cpuValue');
+      if (cpuBar) {
+        cpuBar.style.width = cpuPercent + '%';
+        cpuBar.style.background = this.getColorForPercent(cpuPercent, 'cpu');
+      }
+      if (cpuValue) cpuValue.textContent = Math.round(cpuPercent) + '%';
+      
+      const cpuRow = widget.querySelector('.cpu-row');
+      if (cpuRow) cpuRow.style.display = 'flex';
+    } else {
+      const cpuRow = widget.querySelector('.cpu-row');
+      if (cpuRow) cpuRow.style.display = 'none';
+    }
+
+    // Update RAM display
+    if (settings.showRam !== false) {
+      const ramBar = document.getElementById('ramBar');
+      const ramValue = document.getElementById('ramValue');
+      if (ramBar) {
+        ramBar.style.width = ramPercent + '%';
+        ramBar.style.background = this.getColorForPercent(ramPercent, 'ram');
+      }
+      if (ramValue) {
+        if (ramPercent > 0) {
+          ramValue.textContent = Math.round(ramPercent) + '%';
+        } else {
+          ramValue.textContent = 'N/A';
+        }
+      }
+      
+      const ramRow = widget.querySelector('.ram-row');
+      if (ramRow) ramRow.style.display = 'flex';
+    } else {
+      const ramRow = widget.querySelector('.ram-row');
+      if (ramRow) ramRow.style.display = 'none';
+    }
+  },
+
+  async estimateCpu() {
+    // Use requestAnimationFrame timing to estimate CPU load
+    return new Promise((resolve) => {
+      const startTime = performance.now();
+      let frames = 0;
+      const measureFrames = () => {
+        frames++;
+        if (performance.now() - startTime < 100) {
+          requestAnimationFrame(measureFrames);
+        } else {
+          // ~60fps = low CPU, fewer frames = higher CPU
+          const fps = frames * 10;
+          const cpuEstimate = Math.max(0, Math.min(100, 100 - (fps / 60 * 100) + 15));
+          
+          // Smooth with history
+          this.cpuHistory.push(cpuEstimate);
+          if (this.cpuHistory.length > 5) this.cpuHistory.shift();
+          const avg = this.cpuHistory.reduce((a, b) => a + b, 0) / this.cpuHistory.length;
+          
+          resolve(Math.max(5, Math.min(95, avg)));
+        }
+      };
+      requestAnimationFrame(measureFrames);
+    });
+  },
+
+  getMemoryUsage() {
+    // Use performance.memory if available (Chrome only)
+    if (performance.memory) {
+      const used = performance.memory.usedJSHeapSize;
+      const total = performance.memory.jsHeapSizeLimit;
+      return Math.round((used / total) * 100);
+    }
+    
+    // Fallback: estimate based on DOM size
+    const domNodes = document.querySelectorAll('*').length;
+    const estimatedMB = domNodes * 0.005; // rough estimate
+    const assumedTotalMB = 512;
+    return Math.min(95, Math.round((estimatedMB / assumedTotalMB) * 100));
+  },
+
+  getColorForPercent(percent, type) {
+    if (percent < 50) {
+      return type === 'cpu' 
+        ? 'linear-gradient(90deg, #10b981, #34d399)' 
+        : 'linear-gradient(90deg, #3b82f6, #60a5fa)';
+    } else if (percent < 75) {
+      return 'linear-gradient(90deg, #f59e0b, #fbbf24)';
+    } else {
+      return 'linear-gradient(90deg, #ef4444, #f87171)';
+    }
+  },
+
+  show() {
+    const widget = document.getElementById('systemMonitorWidget');
+    if (widget) {
+      widget.style.display = 'flex';
+      this.saveSettings({ visible: true });
+    }
+  },
+
+  hide() {
+    const widget = document.getElementById('systemMonitorWidget');
+    if (widget) {
+      widget.style.display = 'none';
+      this.saveSettings({ visible: false });
+    }
+  },
+
+  toggle() {
+    const settings = this.getSettings();
+    if (settings.visible) {
+      this.hide();
+    } else {
+      this.show();
+    }
+  }
+};
+
+// Expose globally
+window.SystemMonitor = SystemMonitor;
+
 function renderSkeleton(container) {
   container.innerHTML = `
     <div class="user-menu-wrapper">
@@ -188,6 +430,24 @@ function renderSkeleton(container) {
         
         <!-- Clock Display below login pill -->
         <div id="headerClock" class="header-clock" onclick="window.cycleClockStyle && window.cycleClockStyle()"></div>
+        
+        <!-- System Monitor Widget -->
+        <div id="systemMonitorWidget" class="system-monitor-widget" style="display: none;">
+          <div class="sys-monitor-row cpu-row">
+            <span class="sys-monitor-icon">🖥️</span>
+            <div class="sys-monitor-bar-container">
+              <div class="sys-monitor-bar cpu-bar" id="cpuBar"></div>
+            </div>
+            <span class="sys-monitor-value" id="cpuValue">0%</span>
+          </div>
+          <div class="sys-monitor-row ram-row">
+            <span class="sys-monitor-icon">💾</span>
+            <div class="sys-monitor-bar-container">
+              <div class="sys-monitor-bar ram-bar" id="ramBar"></div>
+            </div>
+            <span class="sys-monitor-value" id="ramValue">0%</span>
+          </div>
+        </div>
         
         <!-- Farmout Offer Countdown Timer -->
         <div id="farmoutCountdownTimer" class="farmout-countdown-timer" style="display: none;">
@@ -931,6 +1191,9 @@ async function init() {
   
   // Start the clock
   startClock();
+  
+  // Initialize system monitor
+  SystemMonitor.init();
   
   // Initialize farmout countdown listener
   initFarmoutCountdownListener();

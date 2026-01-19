@@ -858,11 +858,170 @@
    =================================== */
 
 .farmout-countdown-timer[style*="position: fixed"],
-#headerClock[style*="position: fixed"] {
+#headerClock[style*="position: fixed"],
+#systemMonitorWidget[style*="position: fixed"] {
   z-index: 9999;
 }
 
 .farmout-countdown-timer:active,
-#headerClock:active {
+#headerClock:active,
+#systemMonitorWidget:active {
   cursor: grabbing !important;
+}
+
+/* ===================================
+   SYSTEM MONITOR WIDGET STYLES
+   =================================== */
+
+.system-monitor-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 11px;
+  min-width: 140px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transition: all 0.3s ease;
+  margin-top: 6px;
+}
+
+.system-monitor-widget:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  transform: translateY(-1px);
+}
+
+.sys-monitor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sys-monitor-icon {
+  font-size: 14px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.sys-monitor-bar-container {
+  flex: 1;
+  height: 10px;
+  background: #e2e8f0;
+  border-radius: 5px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.sys-monitor-bar {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.5s ease, background 0.3s ease;
+  min-width: 2px;
+}
+
+.sys-monitor-bar.cpu-bar {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.sys-monitor-bar.ram-bar {
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+}
+
+.sys-monitor-value {
+  min-width: 32px;
+  text-align: right;
+  font-weight: 600;
+  color: #475569;
+  font-size: 10px;
+  font-family: 'SF Mono', 'Consolas', monospace;
+}
+
+/* Compact Style */
+.system-monitor-widget.style-compact {
+  flex-direction: row;
+  gap: 12px;
+  padding: 6px 10px;
+  min-width: auto;
+}
+
+.system-monitor-widget.style-compact .sys-monitor-row {
+  flex: 1;
+}
+
+.system-monitor-widget.style-compact .sys-monitor-bar-container {
+  height: 6px;
+}
+
+/* Circle Style */
+.system-monitor-widget.style-circles {
+  flex-direction: row;
+  gap: 12px;
+  padding: 8px 12px;
+}
+
+.system-monitor-widget.style-circles .sys-monitor-row {
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.system-monitor-widget.style-circles .sys-monitor-bar-container {
+  display: none;
+}
+
+.system-monitor-widget.style-circles .sys-monitor-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: conic-gradient(var(--progress-color) var(--progress), #e2e8f0 0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.system-monitor-widget.style-circles .sys-monitor-circle::before {
+  content: '';
+  width: 28px;
+  height: 28px;
+  background: #f8fafc;
+  border-radius: 50%;
+  position: absolute;
+}
+
+.system-monitor-widget.style-circles .sys-monitor-value {
+  position: relative;
+  z-index: 1;
+  font-size: 9px;
+  min-width: auto;
+}
+
+/* Dark theme for system monitor */
+.system-monitor-widget.theme-dark {
+  background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+  border-color: #4b5563;
+}
+
+.system-monitor-widget.theme-dark .sys-monitor-bar-container {
+  background: #4b5563;
+}
+
+.system-monitor-widget.theme-dark .sys-monitor-value {
+  color: #e5e7eb;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .system-monitor-widget {
+    min-width: 120px;
+    padding: 8px 10px;
+    font-size: 10px;
+  }
+  
+  .sys-monitor-bar-container {
+    height: 8px;
+  }
 }

@@ -233,6 +233,84 @@
                     </div>
                 </section>
 
+                <!-- System Monitor Widget Settings Section -->
+                <section class="settings-section">
+                    <h2 class="section-title">
+                        <span class="section-icon">📊</span>
+                        System Monitor Widget
+                    </h2>
+                    
+                    <div class="toggle-grid">
+                        <label class="toggle-item">
+                            <input type="checkbox" id="sysMonitorVisible">
+                            <span class="toggle-slider"></span>
+                            <div class="toggle-content">
+                                <span class="toggle-label">Show System Monitor</span>
+                                <span class="toggle-desc">Display CPU and RAM usage monitors below the clock</span>
+                            </div>
+                        </label>
+                        
+                        <label class="toggle-item">
+                            <input type="checkbox" id="sysMonitorDraggable" checked>
+                            <span class="toggle-slider"></span>
+                            <div class="toggle-content">
+                                <span class="toggle-label">Movable Widget</span>
+                                <span class="toggle-desc">Allow dragging the system monitor to any position on screen</span>
+                            </div>
+                        </label>
+                        
+                        <label class="toggle-item">
+                            <input type="checkbox" id="sysMonitorShowCpu" checked>
+                            <span class="toggle-slider"></span>
+                            <div class="toggle-content">
+                                <span class="toggle-label">Show CPU Usage</span>
+                                <span class="toggle-desc">Display estimated CPU usage based on page performance</span>
+                            </div>
+                        </label>
+                        
+                        <label class="toggle-item">
+                            <input type="checkbox" id="sysMonitorShowRam" checked>
+                            <span class="toggle-slider"></span>
+                            <div class="toggle-content">
+                                <span class="toggle-label">Show RAM Usage</span>
+                                <span class="toggle-desc">Display browser memory usage (when available)</span>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <!-- Monitor Size -->
+                    <div class="subsection">
+                        <h3 class="subsection-title">Monitor Size</h3>
+                        <div class="size-slider-group">
+                            <input type="range" id="sysMonitorSize" min="75" max="150" value="100" step="5">
+                            <div class="size-labels">
+                                <span>Small</span>
+                                <span id="sysMonitorSizeValue">100%</span>
+                                <span>Large</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Monitor Style -->
+                    <div class="subsection">
+                        <h3 class="subsection-title">Monitor Style</h3>
+                        <div class="color-theme-grid">
+                            <button type="button" class="color-theme-btn sys-monitor-style active" data-style="bars">
+                                <span class="color-swatch" style="background: linear-gradient(to right, #10b981, #3b82f6);">▮</span>
+                                <span>Bars</span>
+                            </button>
+                            <button type="button" class="color-theme-btn sys-monitor-style" data-style="circles">
+                                <span class="color-swatch" style="background: linear-gradient(to right, #10b981, #3b82f6);">●</span>
+                                <span>Circles</span>
+                            </button>
+                            <button type="button" class="color-theme-btn sys-monitor-style" data-style="compact">
+                                <span class="color-swatch" style="background: linear-gradient(to right, #10b981, #3b82f6);">▪</span>
+                                <span>Compact</span>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- Widget Position Section -->
                 <section class="settings-section">
                     <h2 class="section-title">
@@ -260,6 +338,14 @@
                                 <button type="button" class="btn btn-sm btn-secondary" id="resetClockPosition">Reset</button>
                             </div>
                         </div>
+                        
+                        <div class="position-control-group">
+                            <label>System Monitor Position</label>
+                            <div class="position-display">
+                                <span id="sysMonitorPositionDisplay">Default (Below Clock)</span>
+                                <button type="button" class="btn btn-sm btn-secondary" id="resetSysMonitorPosition">Reset</button>
+                            </div>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -276,6 +362,24 @@
                                 <div class="preview-clock" id="previewClock">
                                     <span class="preview-clock-time">14:32:45</span>
                                     <span class="preview-clock-date">Sat, Jan 18, 2026</span>
+                                </div>
+                                
+                                <!-- System Monitor Preview -->
+                                <div class="preview-sys-monitor" id="previewSysMonitor" style="display: flex; flex-direction: column; gap: 4px; padding: 8px; background: rgba(0,0,0,0.05); border-radius: 8px; font-size: 11px;">
+                                    <div class="preview-cpu" style="display: flex; align-items: center; gap: 6px;">
+                                        <span style="width: 28px;">🖥️</span>
+                                        <div style="flex: 1; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+                                            <div id="previewCpuBar" style="width: 35%; height: 100%; background: linear-gradient(90deg, #10b981, #34d399); transition: width 0.3s;"></div>
+                                        </div>
+                                        <span id="previewCpuValue" style="width: 35px; text-align: right;">35%</span>
+                                    </div>
+                                    <div class="preview-ram" style="display: flex; align-items: center; gap: 6px;">
+                                        <span style="width: 28px;">💾</span>
+                                        <div style="flex: 1; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+                                            <div id="previewRamBar" style="width: 62%; height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); transition: width 0.3s;"></div>
+                                        </div>
+                                        <span id="previewRamValue" style="width: 35px; text-align: right;">62%</span>
+                                    </div>
                                 </div>
                                 
                                 <!-- Timer Preview -->
