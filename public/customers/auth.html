@@ -6,7 +6,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#1a1a2e">
+  <meta name="theme-color" content="#0a0a0a">
   <title>Customer Login | RELIALIMO</title>
   <link rel="icon" href="favicon.ico">
   <link rel="manifest" href="customer-portal-manifest.json">
@@ -22,9 +22,8 @@
     <!-- Loading Screen -->
     <div id="loadingScreen" class="screen active">
       <div class="loading-content">
-        <div class="logo-pulse"><img src="favicon.ico" alt="Logo" class="favicon-logo"></div>
-        <h1 class="brand-name">RELIA<img src="favicon.ico" alt="" class="brand-icon">LIMO<span class="trademark">™</span></h1>
-        <p>Customer Portal</p>
+        <div class="logo-pulse"><img src="https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/relialimo-logo-dark.png" alt="RELIALIMO" class="auth-logo" onerror="this.src='favicon.ico'"></div>
+        <p style="color: #c9a227; margin-top: 16px;">Customer Portal</p>
         <div class="loading-spinner"></div>
       </div>
     </div>
@@ -32,101 +31,107 @@
     <!-- Auth Screen -->
     <div id="authScreen" class="screen">
       <div class="auth-container">
-        <div class="auth-header">
-          <img src="favicon.ico" alt="Logo" class="auth-logo">
-          <h1 class="brand-name">RELIA<img src="favicon.ico" alt="" class="brand-icon">LIMO<span class="trademark">™</span></h1>
-          <p>Customer Portal</p>
-        </div>
+        <div class="auth-card">
+          <div class="auth-header">
+            <img src="https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/relialimo-logo-dark.png" 
+                 alt="RELIALIMO" 
+                 class="auth-logo"
+                 onerror="this.src='favicon.ico'">
+            <p class="auth-subtitle">Customer Portal</p>
+          </div>
 
-        <!-- Login Form -->
-        <div id="loginForm" class="auth-form active">
-          <h2>Welcome Back</h2>
-          <div class="form-group">
-            <label for="loginEmail">Email</label>
-            <input type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email">
-          </div>
-          <div class="form-group">
-            <label for="loginPassword">Password</label>
-            <div class="password-wrapper">
-              <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
-              <button type="button" class="btn-show-password" data-target="loginPassword" aria-label="Show password">
-                <span class="eye-icon">👁️</span>
-              </button>
-            </div>
-          </div>
-          <button type="button" id="loginBtn" class="btn btn-primary btn-large">
-            Sign In
-          </button>
-          <div class="auth-switch">
-            <span>New customer?</span>
-            <button type="button" id="showRegisterBtn" class="btn-link">Create Account</button>
-          </div>
-          <div class="auth-switch" style="margin-top: 10px;">
-            <a href="#" id="forgotPasswordLink" class="btn-link">Forgot Password?</a>
-          </div>
-        </div>
-
-        <!-- Registration Form -->
-        <div id="registerForm" class="auth-form">
-          <h2>Create Account</h2>
-          <div class="form-row">
+          <!-- Login Form -->
+          <div id="loginForm" class="auth-form active">
+            <h2 class="auth-title">Welcome Back</h2>
             <div class="form-group">
-              <label for="regFirstName">First Name*</label>
-              <input type="text" id="regFirstName" placeholder="John" autocomplete="given-name">
+              <label for="loginEmail">Email Address</label>
+              <input type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email">
             </div>
             <div class="form-group">
-              <label for="regLastName">Last Name*</label>
-              <input type="text" id="regLastName" placeholder="Smith" autocomplete="family-name">
+              <label for="loginPassword">Password</label>
+              <div class="password-input-wrapper">
+                <input type="password" id="loginPassword" placeholder="Enter your password" autocomplete="current-password">
+                <button type="button" class="password-toggle" data-target="loginPassword" aria-label="Show password">
+                  👁️
+                </button>
+              </div>
+              <a href="#" id="forgotPasswordLink" class="forgot-password-link">Forgot Password?</a>
+            </div>
+            <button type="button" id="loginBtn" class="auth-btn auth-btn-primary">
+              Sign In
+            </button>
+            <div class="auth-switch">
+              <span>New customer?</span>
+              <button type="button" id="showRegisterBtn" class="btn-link">Create Account</button>
             </div>
           </div>
-          <div class="form-group">
-            <label for="regEmail">Email*</label>
-            <input type="email" id="regEmail" placeholder="your@email.com" autocomplete="email">
-          </div>
-          <div class="form-group">
-            <label for="regPhone">Phone Number*</label>
-            <input type="tel" id="regPhone" placeholder="(555) 123-4567" autocomplete="tel">
-          </div>
-          <div class="form-group">
-            <label for="regPassword">Password*</label>
-            <div class="password-wrapper">
-              <input type="password" id="regPassword" placeholder="Min. 8 characters" autocomplete="new-password">
-              <button type="button" class="btn-show-password" data-target="regPassword" aria-label="Show password">
-                <span class="eye-icon">👁️</span>
-              </button>
-            </div>
-          </div>
-          <div class="form-group">
-            <label for="regPasswordConfirm">Confirm Password*</label>
-            <div class="password-wrapper">
-              <input type="password" id="regPasswordConfirm" placeholder="Confirm password" autocomplete="new-password">
-              <button type="button" class="btn-show-password" data-target="regPasswordConfirm" aria-label="Show password">
-                <span class="eye-icon">👁️</span>
-              </button>
-            </div>
-          </div>
-          <button type="button" id="registerBtn" class="btn btn-success btn-large">
-            Create Account
-          </button>
-          <div class="auth-switch">
-            <span>Already have an account?</span>
-            <button type="button" id="showLoginBtn" class="btn-link">Sign In</button>
-          </div>
-        </div>
 
-        <!-- Forgot Password Form -->
-        <div id="forgotPasswordForm" class="auth-form">
-          <h2>Reset Password</h2>
-          <p class="form-description">Enter your email and we'll send you a password reset link.</p>
-          <div class="form-group">
-            <label for="resetEmail">Email</label>
-            <input type="email" id="resetEmail" placeholder="your@email.com" autocomplete="email">
+          <!-- Registration Form -->
+          <div id="registerForm" class="auth-form">
+            <h2 class="auth-title">Create Account</h2>
+            <div class="form-row" style="display: flex; gap: 12px;">
+              <div class="form-group" style="flex: 1;">
+                <label for="regFirstName">First Name*</label>
+                <input type="text" id="regFirstName" placeholder="John" autocomplete="given-name">
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <label for="regLastName">Last Name*</label>
+                <input type="text" id="regLastName" placeholder="Smith" autocomplete="family-name">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="regEmail">Email Address*</label>
+              <input type="email" id="regEmail" placeholder="your@email.com" autocomplete="email">
+            </div>
+            <div class="form-group">
+              <label for="regPhone">Phone Number*</label>
+              <input type="tel" id="regPhone" placeholder="(555) 123-4567" autocomplete="tel">
+            </div>
+            <div class="form-group">
+              <label for="regPassword">Password*</label>
+              <div class="password-input-wrapper">
+                <input type="password" id="regPassword" placeholder="Min. 8 characters" autocomplete="new-password">
+                <button type="button" class="password-toggle" data-target="regPassword" aria-label="Show password">
+                  👁️
+                </button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="regPasswordConfirm">Confirm Password*</label>
+              <div class="password-input-wrapper">
+                <input type="password" id="regPasswordConfirm" placeholder="Confirm password" autocomplete="new-password">
+                <button type="button" class="password-toggle" data-target="regPasswordConfirm" aria-label="Show password">
+                  👁️
+                </button>
+              </div>
+            </div>
+            <button type="button" id="registerBtn" class="auth-btn auth-btn-primary">
+              Create Account
+            </button>
+            <div class="auth-switch">
+              <span>Already have an account?</span>
+              <button type="button" id="showLoginBtn" class="btn-link">Sign In</button>
+            </div>
           </div>
-          <button type="button" id="resetPasswordBtn" class="btn btn-primary btn-large">
-            Send Reset Link
-          </button>
-          <div class="auth-switch">
-            <button type="button" id="backToLoginBtn" class="btn-link">← Back to Sign In</button>
+
+          <!-- Forgot Password Form -->
+          <div id="forgotPasswordForm" class="auth-form">
+            <h2 class="auth-title">Reset Password</h2>
+            <p class="form-description">Enter your email and we'll send you a password reset link.</p>
+            <div class="form-group">
+              <label for="resetEmail">Email Address</label>
+              <input type="email" id="resetEmail" placeholder="your@email.com" autocomplete="email">
+            </div>
+            <button type="button" id="resetPasswordBtn" class="auth-btn auth-btn-primary">
+              Send Reset Link
+            </button>
+            <div class="auth-switch">
+              <button type="button" id="backToLoginBtn" class="btn-link">← Back to Sign In</button>
+            </div>
+          </div>
+          
+          <div class="auth-footer">
+            <a href="https://relialimo.com">relialimo.com</a>
           </div>
         </div>
       </div>
