@@ -698,6 +698,7 @@ window.EmailService = {
 const ImageUploader = {
   BUCKET_NAME: 'images',
   savedSelection: null,
+  bucketImages: [],
 
   async init() {
     const insertBtn = $('insertImageBtn');
@@ -707,8 +708,39 @@ const ImageUploader = {
     const fileInput = $('imageUploadInput');
     const urlInput = $('imageUrlInput');
     const insertUrlBtn = $('insertUrlImageBtn');
+    const tabUpload = $('tabUpload');
+    const tabBrowse = $('tabBrowse');
+    const uploadTabContent = $('uploadTab');
+    const browseTabContent = $('browseTab');
+    const refreshBucketBtn = $('refreshBucketBtn');
 
     if (!insertBtn || !modal) return;
+
+    // Tab switching
+    tabUpload?.addEventListener('click', () => {
+      tabUpload.style.background = '#1a237e';
+      tabUpload.style.color = 'white';
+      tabBrowse.style.background = '#e0e0e0';
+      tabBrowse.style.color = '#333';
+      uploadTabContent.style.display = 'block';
+      browseTabContent.style.display = 'none';
+    });
+
+    tabBrowse?.addEventListener('click', () => {
+      tabBrowse.style.background = '#1a237e';
+      tabBrowse.style.color = 'white';
+      tabUpload.style.background = '#e0e0e0';
+      tabUpload.style.color = '#333';
+      browseTabContent.style.display = 'block';
+      uploadTabContent.style.display = 'none';
+      // Auto-load bucket images on first switch
+      if (this.bucketImages.length === 0) {
+        this.loadBucketImages();
+      }
+    });
+
+    // Refresh bucket button
+    refreshBucketBtn?.addEventListener('click', () => this.loadBucketImages());
 
     // Open modal
     insertBtn.addEventListener('click', () => {
@@ -879,6 +911,143 @@ const ImageUploader = {
         progressBar.style.width = '0%';
         progressBar.style.background = 'linear-gradient(90deg, #1a237e, #0d47a1)';
       }, 3000);
+    }
+  },
+
+  async loadBucketImages() {
+    const grid = $('bucketImageGrid');
+    const countEl = $('bucketImageCount');
+    const refreshBtn = $('refreshBucketBtn');
+    
+    if (!grid) return;
+
+    // Show loading state
+    grid.innerHTML = `
+      <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #666;">
+        <div style="font-size: 36px; margin-bottom: 10px;">🔄</div>
+        <p style="margin: 0;">Loading images from bucket...</p>
+      </div>
+    `;
+    
+    if (refreshBtn) {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = '⏳ Loading...';
+    }
+
+    try {
+      // Get Supabase credentials
+      const { getSupabaseCredentials } = await import('./supabase-config.js');
+      const { url: supabaseUrl, anonKey } = getSupabaseCredentials();
+
+      // Get auth token
+      let authToken = anonKey;
+      if (window.__reliaGetValidSession) {
+        const session = await window.__reliaGetValidSession();
+        if (session?.access_token) authToken = session.access_token;
+      } else if (localStorage.getItem('supabase_access_token')) {
+        authToken = localStorage.getItem('supabase_access_token');
+      }
+
+      // List files from bucket - try multiple paths
+      const pathsToTry = ['', 'email-images', 'logos', 'company'];
+      let allFiles = [];
+      
+      for (const prefix of pathsToTry) {
+        try {
+          const listUrl = `${supabaseUrl}/storage/v1/object/list/${this.BUCKET_NAME}`;
+          const response = await fetch(listUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${authToken}`,
+              'apikey': anonKey,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              prefix: prefix,
+              limit: 100,
+              offset: 0,
+              sortBy: { column: 'created_at', order: 'desc' }
+            })
+          });
+
+          if (response.ok) {
+            const files = await response.json();
+            // Filter to only image files
+            const imageFiles = files.filter(f => 
+              !f.id?.includes('.emptyFolderPlaceholder') &&
+              f.name && 
+              /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(f.name)
+            ).map(f => ({
+              ...f,
+              folder: prefix,
+              publicUrl: `${supabaseUrl}/storage/v1/object/public/${this.BUCKET_NAME}/${prefix ? prefix + '/' : ''}${f.name}`
+            }));
+            allFiles = allFiles.concat(imageFiles);
+          }
+        } catch (e) {
+          console.warn(`Failed to list ${prefix || 'root'}:`, e);
+        }
+      }
+
+      this.bucketImages = allFiles;
+      
+      if (countEl) {
+        countEl.textContent = `${allFiles.length} image${allFiles.length !== 1 ? 's' : ''} found`;
+      }
+
+      if (allFiles.length === 0) {
+        grid.innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #666;">
+            <div style="font-size: 36px; margin-bottom: 10px;">📭</div>
+            <p style="margin: 0 0 10px 0;">No images found in bucket</p>
+            <p style="margin: 0; font-size: 12px; color: #999;">Upload images using the "Upload New" tab</p>
+          </div>
+        `;
+      } else {
+        grid.innerHTML = allFiles.map((file, idx) => `
+          <div class="bucket-image-item" data-url="${file.publicUrl}" style="
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #fff;
+          " onmouseover="this.style.borderColor='#1a237e'; this.style.transform='scale(1.03)';" onmouseout="this.style.borderColor='#e0e0e0'; this.style.transform='scale(1)';">
+            <div style="aspect-ratio: 1; overflow: hidden; background: #f5f5f5; display: flex; align-items: center; justify-content: center;">
+              <img src="${file.publicUrl}" alt="${file.name}" style="max-width: 100%; max-height: 100%; object-fit: contain;" onerror="this.parentElement.innerHTML='<span style=font-size:24px>❌</span>'">
+            </div>
+            <div style="padding: 6px; font-size: 10px; color: #666; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; text-align: center;" title="${file.name}">
+              ${file.name.length > 15 ? file.name.substring(0, 12) + '...' : file.name}
+            </div>
+          </div>
+        `).join('');
+
+        // Add click handlers
+        grid.querySelectorAll('.bucket-image-item').forEach(item => {
+          item.addEventListener('click', () => {
+            const url = item.dataset.url;
+            if (url) {
+              this.insertImage(url);
+              $('imageUploadModal').style.display = 'none';
+            }
+          });
+        });
+      }
+
+    } catch (error) {
+      console.error('Error loading bucket images:', error);
+      grid.innerHTML = `
+        <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #c62828;">
+          <div style="font-size: 36px; margin-bottom: 10px;">❌</div>
+          <p style="margin: 0 0 10px 0;">Failed to load images</p>
+          <p style="margin: 0; font-size: 12px;">${error.message}</p>
+        </div>
+      `;
+    } finally {
+      if (refreshBtn) {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = '🔄 Refresh';
+      }
     }
   },
 
