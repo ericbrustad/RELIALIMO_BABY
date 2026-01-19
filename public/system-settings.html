@@ -62,10 +62,10 @@
       <h4>Farmout Automation</h4>
       <p>Configure driver ratings, offer timing, SMS templates, and auto-dispatch settings</p>
     </div>
-    <div class="settings-card" onclick="window.location.href='sms-settings.html'">
+    <div class="settings-card" onclick="window.location.href='sms-provider.html'">
       <div class="icon">📱</div>
-      <h4>SMS Settings</h4>
-      <p>Configure SMS provider, templates, and messaging preferences</p>
+      <h4>SMS Provider</h4>
+      <p>Configure Twilio SMS credentials and messaging settings</p>
     </div>
     <div class="settings-card" onclick="window.location.href='email-settings.html'">
       <div class="icon">📧</div>
@@ -84,223 +84,40 @@
     <div class="settings-card" onclick="window.location.href='widget-settings.html'">
       <div class="icon">🎛️</div>
       <h4>Widget Settings</h4>
-      <p>Configure clock & farmout timer - position, size, color, and movability</p>
-    </div>
-    <div class="settings-card" onclick="openClockSettings()">
-      <div class="icon">🕐</div>
-      <h4>Clock Display</h4>
-      <p>Choose from 3 digital and 3 analog clock styles</p>
+      <p>Configure clock, system monitor, and farmout timer - position, size, and style</p>
     </div>
   </div>
   
-  <!-- Clock Settings Modal -->
-  <div id="clockSettingsModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
-    <div style="background:white; border-radius:16px; padding:24px; max-width:600px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-        <h3 style="margin:0; font-size:20px; color:#1f2937;">Clock Display Settings</h3>
-        <button onclick="closeClockSettings()" style="border:none; background:none; font-size:24px; cursor:pointer; color:#6b7280;">&times;</button>
-      </div>
-      
-      <p style="color:#6b7280; margin-bottom:20px;">Click on a clock style to apply it. The clock appears in the top right corner.</p>
-      
-      <h4 style="font-size:14px; color:#374151; margin:16px 0 12px 0;">Digital Clocks</h4>
-      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:24px;">
-        <div class="clock-option" data-style="digital-modern" onclick="selectClockStyle('digital-modern')">
-          <div class="clock-preview digital-preview modern">
-            <span class="preview-time">14:32:45</span>
-          </div>
-          <span class="clock-label">Modern (24h)</span>
-        </div>
-        <div class="clock-option" data-style="digital-classic" onclick="selectClockStyle('digital-classic')">
-          <div class="clock-preview digital-preview classic">
-            <span class="preview-time">2:32:45 PM</span>
-          </div>
-          <span class="clock-label">Classic (12h)</span>
-        </div>
-        <div class="clock-option" data-style="digital-minimal" onclick="selectClockStyle('digital-minimal')">
-          <div class="clock-preview digital-preview minimal">
-            <span class="preview-time">14:32</span>
-          </div>
-          <span class="clock-label">Minimal</span>
-        </div>
-      </div>
-      
-      <h4 style="font-size:14px; color:#374151; margin:16px 0 12px 0;">Analog Clocks</h4>
-      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px;">
-        <div class="clock-option" data-style="analog-classic" onclick="selectClockStyle('analog-classic')">
-          <div class="clock-preview analog-preview classic-analog"></div>
-          <span class="clock-label">Classic</span>
-        </div>
-        <div class="clock-option" data-style="analog-modern" onclick="selectClockStyle('analog-modern')">
-          <div class="clock-preview analog-preview modern-analog"></div>
-          <span class="clock-label">Modern</span>
-        </div>
-        <div class="clock-option" data-style="analog-minimal" onclick="selectClockStyle('analog-minimal')">
-          <div class="clock-preview analog-preview minimal-analog"></div>
-          <span class="clock-label">Minimal</span>
-        </div>
-      </div>
-      
-      <div style="margin-top:24px; padding-top:16px; border-top:1px solid #e5e7eb; text-align:right;">
-        <button onclick="closeClockSettings()" style="background:#3b82f6; color:white; border:none; padding:10px 24px; border-radius:8px; cursor:pointer; font-weight:600;">Done</button>
-      </div>
+  <div class="settings-section">
+    <h3>Utilities & Tools</h3>
+    <div class="settings-card" onclick="toggleUtilitiesPanel()">
+      <div class="icon">🔧</div>
+      <h4>Advanced Utilities</h4>
+      <p>Test tools, database management, and developer options</p>
     </div>
   </div>
   
-  <style>
-    .clock-option {
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      padding:16px;
-      border:2px solid #e5e7eb;
-      border-radius:12px;
-      cursor:pointer;
-      transition:all 0.2s;
-    }
-    .clock-option:hover {
-      border-color:#3b82f6;
-      background:#f0f9ff;
-    }
-    .clock-option.selected {
-      border-color:#3b82f6;
-      background:#eff6ff;
-      box-shadow:0 0 0 3px rgba(59,130,246,0.2);
-    }
-    .clock-preview {
-      margin-bottom:8px;
-    }
-    .clock-label {
-      font-size:12px;
-      color:#6b7280;
-      font-weight:500;
-    }
-    .digital-preview {
-      font-family:'Consolas','Monaco','Courier New',monospace;
-      padding:8px 12px;
-      border-radius:6px;
-      font-weight:700;
-    }
-    .digital-preview.modern {
-      background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);
-      color:#22c55e;
-      text-shadow:0 0 8px rgba(34,197,94,0.5);
-    }
-    .digital-preview.classic {
-      background:linear-gradient(135deg,#292524 0%,#1c1917 100%);
-      color:#fbbf24;
-      text-shadow:0 0 8px rgba(251,191,36,0.5);
-    }
-    .digital-preview.minimal {
-      background:#0f172a;
-      color:#60a5fa;
-    }
-    .analog-preview {
-      width:50px;
-      height:50px;
-      border-radius:50%;
-      position:relative;
-    }
-    .analog-preview::before {
-      content:'';
-      position:absolute;
-      top:50%;
-      left:50%;
-      width:3px;
-      height:14px;
-      background:#1e293b;
-      transform-origin:bottom center;
-      transform:translate(-50%,-100%) rotate(60deg);
-    }
-    .analog-preview::after {
-      content:'';
-      position:absolute;
-      top:50%;
-      left:50%;
-      width:2px;
-      height:18px;
-      background:#64748b;
-      transform-origin:bottom center;
-      transform:translate(-50%,-100%) rotate(200deg);
-    }
-    .classic-analog {
-      background:linear-gradient(135deg,#fefce8 0%,#fef9c3 100%);
-      border:2px solid #92400e;
-    }
-    .classic-analog::before { background:#78350f; }
-    .classic-analog::after { background:#92400e; }
-    .modern-analog {
-      background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);
-      border:2px solid #3b82f6;
-      box-shadow:0 0 8px rgba(59,130,246,0.3);
-    }
-    .modern-analog::before { background:#f8fafc; }
-    .modern-analog::after { background:#94a3b8; }
-    .minimal-analog {
-      background:white;
-      border:1px solid #e2e8f0;
-    }
-  </style>
-  
-  <script>
-    function openClockSettings() {
-      const modal = document.getElementById('clockSettingsModal');
-      modal.style.display = 'flex';
-      highlightCurrentStyle();
-    }
-    
-    function closeClockSettings() {
-      document.getElementById('clockSettingsModal').style.display = 'none';
-    }
-    
-    function highlightCurrentStyle() {
-      const current = localStorage.getItem('clockStyle') || 'digital-modern';
-      document.querySelectorAll('.clock-option').forEach(opt => {
-        opt.classList.toggle('selected', opt.dataset.style === current);
-      });
-    }
-    
-    function selectClockStyle(style) {
-      localStorage.setItem('clockStyle', style);
-      highlightCurrentStyle();
-      // Notify parent window to update clock
-      try {
-        if (window.parent && window.parent.cycleClockStyle) {
-          // Force refresh by setting and triggering
-          window.parent.localStorage.setItem('clockStyle', style);
-          // Trigger the clock update
-          const event = new Event('storage');
-          window.parent.dispatchEvent(event);
-        }
-      } catch(e) {
-        console.log('Could not notify parent window');
-      }
-    }
-    
-    // Close modal on backdrop click
-    document.getElementById('clockSettingsModal')?.addEventListener('click', function(e) {
-      if (e.target === this) closeClockSettings();
-    });
-  </script>
-  
-  <button id="utilitiesBtn" class="btn">Advanced Utilities</button>
-  <div id="utilitiesPanel" style="display:none; margin-top:20px;">
-    <h3>Utilities</h3>
-    <ul>
-      <li><button id="testChecklistUtilBtn" class="btn">Test Checklist</button></li>
-      <li><button id="supabaseTestUtilBtn" class="btn">Supabase Integration Test</button></li>
-      <li><button id="deleteAllReservationsSupabaseBtn" class="btn btn-danger">Delete ALL Reservations (Supabase)</button></li>
-      <li><button id="deleteAllAccountsSupabaseBtn" class="btn btn-danger">Delete ALL Accounts (Supabase)</button></li>
-      <li><button id="deleteAllDriversSupabaseBtn" class="btn btn-danger">Delete ALL Drivers (Supabase)</button></li>
-      <li><button id="deleteAllRatesSupabaseBtn" class="btn btn-danger">Delete ALL Rate Data (Supabase)</button></li>
-    </ul>
+  <div id="utilitiesPanel" style="display:none; margin-top:20px; padding: 20px; background: #fff; border-radius: 12px; border: 1px solid #e0e0e0;">
+    <h3 style="margin-bottom: 16px;">🔧 Developer Utilities</h3>
+    <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+      <button id="testChecklistUtilBtn" class="btn">📋 Test Checklist</button>
+      <button id="supabaseTestUtilBtn" class="btn">🔌 Supabase Test</button>
+    </div>
+    <h4 style="margin-top: 20px; color: #dc2626;">⚠️ Danger Zone</h4>
+    <p style="color: #6b7280; margin-bottom: 12px;">These actions are permanent and cannot be undone.</p>
+    <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+      <button id="deleteAllReservationsSupabaseBtn" class="btn btn-danger">Delete ALL Reservations</button>
+      <button id="deleteAllAccountsSupabaseBtn" class="btn btn-danger">Delete ALL Accounts</button>
+      <button id="deleteAllDriversSupabaseBtn" class="btn btn-danger">Delete ALL Drivers</button>
+      <button id="deleteAllRatesSupabaseBtn" class="btn btn-danger">Delete ALL Rate Data</button>
+    </div>
   </div>
 </div>
 <script>
-  document.getElementById('utilitiesBtn').onclick = function() {
+  function toggleUtilitiesPanel() {
     const panel = document.getElementById('utilitiesPanel');
     panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-  };
+  }
   document.getElementById('testChecklistUtilBtn').onclick = function() {
     window.location.href = 'full-site-test-checklist.html';
   };
