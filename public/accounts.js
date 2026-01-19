@@ -1754,6 +1754,20 @@ class Accounts {
           console.log('✅ Selected newly created account in listbox:', saved.id);
         }
         
+        // 🎉 Send Welcome Email and SMS to new account
+        try {
+          if (window.CustomerNotificationService) {
+            console.log('📧 Sending welcome notifications to new account...');
+            const welcomeResults = await window.CustomerNotificationService.sendAccountWelcome(saved);
+            console.log('📬 Welcome notification results:', welcomeResults);
+          } else {
+            console.warn('⚠️ CustomerNotificationService not loaded, skipping welcome notifications');
+          }
+        } catch (welcomeError) {
+          console.error('❌ Failed to send welcome notifications:', welcomeError);
+          // Don't block the save operation if notification fails
+        }
+        
         // Show success notification
         const btn = document.getElementById('saveAccountBtn');
         if (btn) {

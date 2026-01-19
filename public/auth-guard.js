@@ -13,6 +13,89 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
+// =====================================================
+// PROACTIVE SESSION REFRESH - Prevent JWT Expiration
+// =====================================================
+const REFRESH_BUFFER_MS = 5 * 60 * 1000; // Refresh 5 minutes before expiry
+let refreshTimer = null;
+
+async function scheduleTokenRefresh() {
+  // Clear any existing timer
+  if (refreshTimer) {
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.expires_at) return;
+
+    const expiresAtMs = session.expires_at * 1000;
+    const now = Date.now();
+    const timeUntilExpiry = expiresAtMs - now;
+    const refreshIn = Math.max(timeUntilExpiry - REFRESH_BUFFER_MS, 10000); // Min 10 seconds
+
+    console.log(`AuthGuard: Token expires in ${Math.round(timeUntilExpiry / 60000)} min, scheduling refresh in ${Math.round(refreshIn / 60000)} min`);
+
+    refreshTimer = setTimeout(async () => {
+      console.log('AuthGuard: Proactively refreshing session...');
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) {
+        console.error('AuthGuard: Proactive refresh failed:', error.message);
+        // If refresh fails, redirect to login
+        const isAuthPage = window.location.pathname.endsWith('/auth.html');
+        if (!isAuthPage) {
+          window.location.replace('/auth.html');
+        }
+      } else if (data?.session) {
+        console.log('AuthGuard: Session refreshed proactively');
+        scheduleTokenRefresh(); // Schedule next refresh
+      }
+    }, refreshIn);
+  } catch (e) {
+    console.warn('AuthGuard: Failed to schedule token refresh:', e);
+  }
+}
+
+// Refresh token when user returns to the tab (visibility change)
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible') {
+      console.log('AuthGuard: Tab became visible, checking session...');
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const expiresAtMs = session.expires_at ? session.expires_at * 1000 : null;
+          const remaining = expiresAtMs ? (expiresAtMs - Date.now()) : null;
+          
+          // If less than 5 minutes remaining or already expired, refresh immediately
+          if (remaining !== null && remaining < REFRESH_BUFFER_MS) {
+            console.log('AuthGuard: Session expiring soon, refreshing now...');
+            const { data, error } = await supabase.auth.refreshSession();
+            if (error) {
+              console.error('AuthGuard: Visibility refresh failed:', error.message);
+              const isAuthPage = window.location.pathname.endsWith('/auth.html');
+              if (!isAuthPage) {
+                window.location.replace('/auth.html');
+              }
+            } else if (data?.session) {
+              console.log('AuthGuard: Session refreshed on visibility change');
+              scheduleTokenRefresh();
+            }
+          } else {
+            scheduleTokenRefresh(); // Reschedule based on current expiry
+          }
+        }
+      } catch (e) {
+        console.warn('AuthGuard: Visibility check failed:', e);
+      }
+    }
+  });
+}
+
+// Start the proactive refresh timer on load
+scheduleTokenRefresh();
+
 // Expose a single, SDK-managed session refresher for the rest of the app.
 // This prevents refresh-token races between multiple auth implementations.
 if (typeof window !== 'undefined') {
@@ -25,14 +108,35 @@ if (typeof window !== 'undefined') {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return null;
+      if (!session) {
+        console.warn('AuthGuard: No session found, user may need to re-login');
+        return null;
+      }
 
       const expiresAtMs = session.expires_at ? session.expires_at * 1000 : null;
       const remaining = expiresAtMs ? (expiresAtMs - Date.now()) : null;
 
+      // Check if token is already expired or about to expire
       if (force || (remaining != null && remaining < minimumRemainingMs)) {
+        console.log('AuthGuard: Refreshing session (force:', force, ', remaining:', remaining, 'ms)');
         const { data, error } = await supabase.auth.refreshSession();
-        if (!error && data?.session) return data.session;
+        if (error) {
+          console.error('AuthGuard: Session refresh failed:', error.message);
+          // If refresh fails due to expired refresh token, redirect to login
+          if (error.message?.includes('expired') || error.message?.includes('invalid')) {
+            console.warn('AuthGuard: Refresh token expired/invalid, redirecting to login');
+            const isAuthPage = window.location.pathname.endsWith('/auth.html');
+            if (!isAuthPage) {
+              window.location.replace('/auth.html');
+            }
+            return null;
+          }
+          return session; // Return existing session, it might still work
+        }
+        if (data?.session) {
+          console.log('AuthGuard: Session refreshed successfully');
+          return data.session;
+        }
       }
       return session;
     } catch (e) {
@@ -155,6 +259,11 @@ supabase.auth.onAuthStateChange((event, session) => {
   const isAuthPage = window.location.pathname.endsWith('/auth.html');
 
   if (event === 'SIGNED_OUT') {
+    // Clear refresh timer on sign out
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
     if (!isAuthPage) {
       window.location.replace('/auth.html');
     }
@@ -169,6 +278,9 @@ supabase.auth.onAuthStateChange((event, session) => {
     if (session.access_token) {
       localStorage.setItem('supabase_access_token', session.access_token);
     }
+
+    // Schedule proactive token refresh for new session
+    scheduleTokenRefresh();
 
     // Notify any buildless REST helpers listening for auth updates in this same window.
     try {

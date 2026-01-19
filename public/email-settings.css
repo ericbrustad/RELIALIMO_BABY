@@ -203,6 +203,15 @@ body {
 
 .tool-btn:hover { background: #eef3f7; }
 
+#insertImageBtn {
+  font-size: 16px;
+  padding: 6px 10px;
+}
+
+#insertImageBtn:hover {
+  background: #e3f2fd;
+}
+
 .editor {
   border: 1px solid #cfd8dc;
   border-radius: 4px;

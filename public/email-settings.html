@@ -193,6 +193,132 @@
             <input id="subjectInput" type="text" placeholder="Your trip on #TRIP_DATE#" />
           </label>
 
+          <!-- Send Rules Section -->
+          <div id="sendRulesSection" class="send-rules-section" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 10px; padding: 20px; margin: 20px 0; border: 1px solid #90caf9;">
+            <h3 style="margin: 0 0 15px 0; color: #1565c0; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+              <span>⚙️</span> Send Rules
+              <span style="font-size: 12px; font-weight: normal; color: #666;">(When should this template be sent?)</span>
+            </h3>
+            
+            <div style="display: grid; gap: 12px;">
+              <!-- Trigger Events -->
+              <div style="background: #fff; border-radius: 8px; padding: 15px;">
+                <label style="font-weight: 600; color: #333; font-size: 14px; display: block; margin-bottom: 10px;">📌 Trigger Events</label>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;">
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 6px; background: #f5f5f5;">
+                    <input type="checkbox" id="ruleNewAccount" class="send-rule-checkbox" value="new_account">
+                    <span style="font-size: 13px;">🆕 New Account Created</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 6px; background: #f5f5f5;">
+                    <input type="checkbox" id="ruleNewReservation" class="send-rule-checkbox" value="new_reservation">
+                    <span style="font-size: 13px;">📅 New Reservation Saved</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 6px; background: #f5f5f5;">
+                    <input type="checkbox" id="ruleReservationUpdated" class="send-rule-checkbox" value="reservation_updated">
+                    <span style="font-size: 13px;">✏️ Reservation Updated</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 6px; background: #f5f5f5;">
+                    <input type="checkbox" id="ruleDriverAssigned" class="send-rule-checkbox" value="driver_assigned">
+                    <span style="font-size: 13px;">🚗 Driver Assigned</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 6px; background: #f5f5f5;">
+                    <input type="checkbox" id="ruleTripReminder" class="send-rule-checkbox" value="trip_reminder">
+                    <span style="font-size: 13px;">⏰ Trip Reminder</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 6px; background: #f5f5f5;">
+                    <input type="checkbox" id="ruleTripComplete" class="send-rule-checkbox" value="trip_complete">
+                    <span style="font-size: 13px;">✅ Trip Completed</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 6px; background: #f5f5f5;">
+                    <input type="checkbox" id="rulePaymentReceived" class="send-rule-checkbox" value="payment_received">
+                    <span style="font-size: 13px;">💳 Payment Received</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 6px; background: #f5f5f5;">
+                    <input type="checkbox" id="ruleManualSend" class="send-rule-checkbox" value="manual" checked>
+                    <span style="font-size: 13px;">👆 Manual Send Only</span>
+                  </label>
+                </div>
+              </div>
+              
+              <!-- Recipient Options -->
+              <div style="background: #fff; border-radius: 8px; padding: 15px;">
+                <label style="font-weight: 600; color: #333; font-size: 14px; display: block; margin-bottom: 10px;">📧 Send To</label>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px;">
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 6px; background: #f5f5f5;">
+                    <input type="checkbox" id="recipientBilling" class="recipient-checkbox" value="billing" checked>
+                    <span style="font-size: 13px;">💼 Billing Contact</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 6px; background: #f5f5f5;">
+                    <input type="checkbox" id="recipientPassenger" class="recipient-checkbox" value="passenger">
+                    <span style="font-size: 13px;">🧳 Passenger</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 6px; background: #f5f5f5;">
+                    <input type="checkbox" id="recipientDriver" class="recipient-checkbox" value="driver">
+                    <span style="font-size: 13px;">🚗 Driver</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 6px; background: #f5f5f5;">
+                    <input type="checkbox" id="recipientBooking" class="recipient-checkbox" value="booking">
+                    <span style="font-size: 13px;">📋 Booking Contact</span>
+                  </label>
+                </div>
+              </div>
+              
+              <!-- Channel Options -->
+              <div style="background: #fff; border-radius: 8px; padding: 15px;">
+                <label style="font-weight: 600; color: #333; font-size: 14px; display: block; margin-bottom: 10px;">📱 Send Via</label>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 15px; border-radius: 6px; background: #e8f5e9; border: 2px solid #4caf50;">
+                    <input type="checkbox" id="channelEmail" class="channel-checkbox" value="email" checked>
+                    <span style="font-size: 13px; font-weight: 600; color: #2e7d32;">📧 Email</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 15px; border-radius: 6px; background: #e3f2fd; border: 2px solid #1976d2;">
+                    <input type="checkbox" id="channelSms" class="channel-checkbox" value="sms">
+                    <span style="font-size: 13px; font-weight: 600; color: #1565c0;">📱 SMS/Text</span>
+                  </label>
+                </div>
+              </div>
+              
+              <!-- Timing Options -->
+              <div style="background: #fff; border-radius: 8px; padding: 15px;">
+                <label style="font-weight: 600; color: #333; font-size: 14px; display: block; margin-bottom: 10px;">⏱️ Timing (for reminders)</label>
+                <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                  <select id="reminderTiming" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px;">
+                    <option value="immediate">Immediately</option>
+                    <option value="1hour">1 hour before</option>
+                    <option value="2hours">2 hours before</option>
+                    <option value="1day" selected>1 day before</option>
+                    <option value="2days">2 days before</option>
+                    <option value="1week">1 week before</option>
+                  </select>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="ruleEnabled" checked>
+                    <span style="font-size: 13px; font-weight: 600; color: #333;">✅ Rule Enabled</span>
+                  </label>
+                </div>
+              </div>
+              
+              <!-- Conditions -->
+              <div style="background: #fff; border-radius: 8px; padding: 15px;">
+                <label style="font-weight: 600; color: #333; font-size: 14px; display: block; margin-bottom: 10px;">🎯 Conditions (optional)</label>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 6px; background: #fff3e0;">
+                    <input type="checkbox" id="conditionIncludePrice" class="condition-checkbox" value="include_price">
+                    <span style="font-size: 13px;">💰 Include Price (billing only)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 6px; background: #fce4ec;">
+                    <input type="checkbox" id="conditionExcludePrice" class="condition-checkbox" value="exclude_price">
+                    <span style="font-size: 13px;">🚫 Exclude Price (passengers)</span>
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 6px; background: #e8eaf6;">
+                    <input type="checkbox" id="conditionDifferentEmail" class="condition-checkbox" value="different_email">
+                    <span style="font-size: 13px;">📨 Only if passenger email differs</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- End Send Rules Section -->
+
           <div class="editor-toolbar">
             <div class="toolbar-left">
               <button data-cmd="bold" class="tool-btn">B</button>
@@ -200,6 +326,9 @@
               <button data-cmd="underline" class="tool-btn">U</button>
               <button data-cmd="insertUnorderedList" class="tool-btn">• List</button>
               <button data-cmd="insertOrderedList" class="tool-btn">1. List</button>
+              <span style="width: 1px; height: 20px; background: #ddd; margin: 0 8px;"></span>
+              <button type="button" id="insertImageBtn" class="tool-btn" title="Insert Image">🖼️</button>
+              <input type="file" id="imageUploadInput" accept="image/*" style="display: none;">
             </div>
             <div class="toolbar-right">
               <select id="tripTagSelect">
@@ -208,6 +337,61 @@
               <select id="rateTagSelect">
                 <option value="">Insert Rate Tag…</option>
               </select>
+            </div>
+          </div>
+          
+          <!-- Image Upload Modal -->
+          <div id="imageUploadModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+            <div style="background: #fff; border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0; color: #1a237e; font-size: 18px;">🖼️ Insert Image</h3>
+                <button type="button" id="closeImageModal" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+              </div>
+              
+              <!-- Upload Tab -->
+              <div id="uploadTab" style="margin-bottom: 20px;">
+                <div id="imageDropZone" style="border: 2px dashed #1a237e; border-radius: 8px; padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.3s;">
+                  <div style="font-size: 48px; margin-bottom: 10px;">📤</div>
+                  <p style="margin: 0 0 10px 0; color: #333; font-weight: 600;">Drop image here or click to upload</p>
+                  <p style="margin: 0; color: #666; font-size: 13px;">PNG, JPG, GIF up to 5MB</p>
+                </div>
+                <div id="uploadProgress" style="display: none; margin-top: 15px;">
+                  <div style="background: #e0e0e0; border-radius: 4px; height: 8px; overflow: hidden;">
+                    <div id="uploadProgressBar" style="background: linear-gradient(90deg, #1a237e, #0d47a1); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                  </div>
+                  <p id="uploadStatusText" style="margin: 10px 0 0 0; text-align: center; font-size: 13px; color: #666;">Uploading...</p>
+                </div>
+              </div>
+              
+              <div style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 10px;">
+                <p style="margin: 0 0 10px 0; font-size: 13px; color: #666;">Or enter image URL:</p>
+                <div style="display: flex; gap: 10px;">
+                  <input type="text" id="imageUrlInput" placeholder="https://example.com/image.png" style="flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                  <button type="button" id="insertUrlImageBtn" style="padding: 10px 20px; background: #1a237e; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Insert</button>
+                </div>
+              </div>
+              
+              <!-- Image Size Options -->
+              <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+                <label style="display: block; margin-bottom: 8px; font-size: 13px; color: #333; font-weight: 600;">Image Width:</label>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    <input type="radio" name="imageWidth" value="100" checked> 100px
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    <input type="radio" name="imageWidth" value="200"> 200px
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    <input type="radio" name="imageWidth" value="300"> 300px
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    <input type="radio" name="imageWidth" value="100%"> Full Width
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    <input type="radio" name="imageWidth" value="auto"> Auto
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
 

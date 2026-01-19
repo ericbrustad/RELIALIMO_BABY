@@ -6,6 +6,7 @@ import { getSupabaseConfig } from './config.js';
 import { loadPolicies, upsertPolicy, deletePolicyById, getActivePolicies, POLICIES_STORAGE_KEY, normalizePolicy } from './policies-store.js';
 import { MapboxService } from './MapboxService.js';
 import { googleMapsService } from './GoogleMapsService.js';
+import { setupPhoneEmailValidation, validateAllFields, isValidPhone, isValidEmail, formatPhone } from './validation-utils.js';
 
 class MyOffice {
   constructor() {
@@ -135,6 +136,8 @@ class MyOffice {
     this.updateVehicleTypeTabLockState();
     this.renderLoggedInEmail();
     this.checkURLParameters();
+    // Setup phone/email validation for all forms
+    this.setupAllPhoneEmailValidation();
     // Initialize API
     this.initializeAPI();
   }
@@ -1355,6 +1358,56 @@ class MyOffice {
   }
 
   // ===================================
+  // PHONE & EMAIL VALIDATION (All Forms)
+  // ===================================
+
+  setupAllPhoneEmailValidation() {
+    // Company Info phone/email fields
+    const companyPhoneFields = [
+      'companyPrimaryPhone',
+      'companySecondaryPhone'
+    ];
+    
+    const companyEmailFields = [
+      'companyGeneralEmail',
+      'companyReservationEmail',
+      'companyQuoteEmail',
+      'companyBillingEmail'
+    ];
+
+    // System Users phone/email fields
+    const userPhoneFields = ['userPhone', 'userSms'];
+    const userEmailFields = ['userEmail'];
+
+    // Drivers phone/email fields
+    const driverPhoneFields = ['driverCellPhone'];
+    const driverEmailFields = ['driverEmail'];
+
+    // Affiliates phone/email fields
+    const affiliatePhoneFields = ['affPhone', 'affAltPhone'];
+    const affiliateEmailFields = ['affEmail', 'affAltEmail'];
+
+    // Combine all fields
+    const allPhoneFields = [
+      ...companyPhoneFields,
+      ...userPhoneFields,
+      ...driverPhoneFields,
+      ...affiliatePhoneFields
+    ];
+
+    const allEmailFields = [
+      ...companyEmailFields,
+      ...userEmailFields,
+      ...driverEmailFields,
+      ...affiliateEmailFields
+    ];
+
+    // Setup validation listeners
+    setupPhoneEmailValidation(allPhoneFields, allEmailFields);
+    console.log('✅ My Office phone/email validation setup complete');
+  }
+
+  // ===================================
   // COMPANY INFORMATION FORM
   // ===================================
 
@@ -1696,6 +1749,15 @@ class MyOffice {
   }
 
   async saveCompanyInfo() {
+    // Validate phone and email fields before saving
+    const phoneFields = ['companyPrimaryPhone', 'companySecondaryPhone'];
+    const emailFields = ['companyGeneralEmail', 'companyReservationEmail', 'companyQuoteEmail', 'companyBillingEmail'];
+    
+    if (!validateAllFields(phoneFields, emailFields)) {
+      alert('Please correct invalid phone or email fields before saving.');
+      return;
+    }
+
     const info = {
       name: document.getElementById('companyName')?.value?.trim() || '',
       street_address: document.getElementById('companyStreetAddress')?.value?.trim() || '',
@@ -1972,7 +2034,7 @@ class MyOffice {
       'data-reduction': null,
       'electronic-fax': null,
       'sms-provider': 'sms-provider.html',
-      'email-settings': 'email-settings.html',
+      'email-settings': 'email-settings.html?v=' + Date.now(),
       'farmout-automation': 'farmout-settings.html',
       'portal-links': 'portal-links.html',
       'limoanywhere-pay': null,
@@ -2264,17 +2326,27 @@ class MyOffice {
     const user = this.users.find(u => u.id === this.selectedUserId);
     if (!user) return;
 
+    // Validate phone and email fields
+    const phoneFields = ['userPhone', 'userSms'];
+    const emailFields = ['userEmail'];
+    
+    if (!validateAllFields(phoneFields, emailFields)) {
+      alert('Please correct invalid phone or email fields before saving.');
+      return;
+    }
+
     const { username, status, firstName, lastName, email, phone, login, password, sms } = this.userInputs;
 
+    // Format phone numbers before saving
     user.username = username?.value || '';
     user.status = status?.value || 'active';
     user.firstName = firstName?.value || '';
     user.lastName = lastName?.value || '';
     user.email = email?.value || '';
-    user.phone = phone?.value || '';
+    user.phone = formatPhone(phone?.value || '');
     user.login = login?.value || 'user';
     user.password = password?.value || '';
-    user.sms = sms?.value || '';
+    user.sms = formatPhone(sms?.value || '');
     user.displayName = user.firstName || user.lastName
       ? `${user.firstName} ${user.lastName}`.trim()
       : 'New User';
@@ -9086,6 +9158,15 @@ class MyOffice {
         return;
       }
 
+      // Validate phone and email fields first
+      const driverPhoneFields = ['driverCellPhone'];
+      const driverEmailFields = ['driverEmail'];
+      
+      if (!validateAllFields(driverPhoneFields, driverEmailFields)) {
+        alert('Please correct invalid phone or email fields before saving.');
+        return;
+      }
+
       // CRITICAL: Capture the vehicle dropdown value IMMEDIATELY before any async operations
       // This prevents race conditions where the dropdown might be reset during async calls
       const vehicleDropdown = document.getElementById('driverAssignedVehicle');
@@ -9110,12 +9191,20 @@ class MyOffice {
       if (!cellPhone?.value?.trim()) {
         errors.push('Cellular Phone is required');
         cellPhone?.classList.add('validation-error');
+      } else if (!isValidPhone(cellPhone.value)) {
+        errors.push('Cellular Phone is invalid');
+        cellPhone?.classList.add('validation-error');
       } else {
+        // Format the phone number
+        cellPhone.value = formatPhone(cellPhone.value);
         cellPhone?.classList.remove('validation-error');
       }
 
       if (!email?.value?.trim()) {
         errors.push('Email Address is required');
+        email?.classList.add('validation-error');
+      } else if (!isValidEmail(email.value)) {
+        errors.push('Email Address is invalid');
         email?.classList.add('validation-error');
       } else {
         email?.classList.remove('validation-error');

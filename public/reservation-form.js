@@ -7341,6 +7341,35 @@ class ReservationForm {
           // Keep form open for further editing; just show a toast/notification
           this.showSaveNotification('Reservation saved');
           
+          // 📧 Send confirmation emails (billing with price, passenger without price if different)
+          try {
+            if (window.CustomerNotificationService) {
+              console.log('📧 Sending reservation confirmation emails...');
+              // Build reservation data for notification
+              const reservationForNotification = {
+                confirmation_number: currentConfNumber,
+                passenger_name: passengerFullName,
+                pickup_datetime: pickupAt,
+                pickup_address: document.getElementById('puAddress')?.value || '',
+                dropoff_address: document.getElementById('doAddress')?.value || '',
+                vehicle_type: vehicleTypeValue,
+                passenger_count: parseInt(document.getElementById("numPax")?.value || "1") || 1,
+                grand_total: grandTotalValue,
+                base_fare: document.getElementById('baseRate')?.value || '0',
+                gratuity: document.getElementById('gratuity')?.value || '0',
+                taxes: document.getElementById('tax')?.value || '0',
+                billing_email: document.getElementById('acctEmail')?.value || document.getElementById('bookByEmail')?.value || '',
+                passenger_email: document.getElementById('paxEmail')?.value || '',
+                passenger_phone: document.getElementById('paxPhone')?.value || document.getElementById('paxCell')?.value || ''
+              };
+              const confirmResults = await window.CustomerNotificationService.sendReservationConfirmation(reservationForNotification);
+              console.log('📬 Confirmation notification results:', confirmResults);
+            }
+          } catch (notifyError) {
+            console.error('❌ Failed to send confirmation emails:', notifyError);
+            // Don't block the save operation if notification fails
+          }
+          
           // Auto Farmout Mode: After save, auto-set farmout options if enabled
           await this.applyAutoFarmoutIfEnabled();
         } else {

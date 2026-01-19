@@ -85,12 +85,46 @@ async function request(path, options = {}) {
     // Extract headers from options separately to prevent overwriting
     const { headers: optionHeaders, ...restOptions } = options;
     
+    // Get user's access token for Authorization header (required for RLS)
+    let authToken = apiKey; // Default to anon key
+    try {
+      // First, try the shared session helper from auth-guard.js
+      if (window.__reliaGetValidSession) {
+        const session = await window.__reliaGetValidSession();
+        if (session?.access_token) {
+          authToken = session.access_token;
+          console.debug('[api-service] Using user access token for auth (from __reliaGetValidSession)');
+        }
+      }
+      // Fallback: try localStorage (auth-guard.js saves it there)
+      else if (localStorage.getItem('supabase_access_token')) {
+        authToken = localStorage.getItem('supabase_access_token');
+        console.debug('[api-service] Using user access token for auth (from localStorage)');
+      }
+      // Fallback: try to get from Supabase client if available
+      else if (window.__supabaseClient) {
+        const { data: { session } } = await window.__supabaseClient.auth.getSession();
+        if (session?.access_token) {
+          authToken = session.access_token;
+          console.debug('[api-service] Using user access token for auth (from __supabaseClient)');
+        }
+      } else if (window.supabase?.auth) {
+        const { data: { session } } = await window.supabase.auth.getSession();
+        if (session?.access_token) {
+          authToken = session.access_token;
+          console.debug('[api-service] Using user access token for auth (from window.supabase)');
+        }
+      }
+    } catch (authErr) {
+      console.warn('[api-service] Could not get user session, using anon key:', authErr.message);
+    }
+    
     const res = await fetch(finalUrl, {
       ...restOptions,
       headers: {
         "Content-Type": "application/json",
         apikey: apiKey,
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        Authorization: `Bearer ${authToken}`,
         ...optionHeaders
       }
     });
@@ -135,12 +169,27 @@ export async function apiFetch(path, options = {}) {
   // Destructure headers from options to merge properly
   const { headers: optionHeaders, ...restOptions } = options;
   
+  // Get user's access token for Authorization header (required for RLS)
+  let authToken = apiKey; // Default to anon key
+  try {
+    if (window.__reliaGetValidSession) {
+      const session = await window.__reliaGetValidSession();
+      if (session?.access_token) {
+        authToken = session.access_token;
+      }
+    } else if (localStorage.getItem('supabase_access_token')) {
+      authToken = localStorage.getItem('supabase_access_token');
+    }
+  } catch (authErr) {
+    console.warn('[apiFetch] Could not get user session:', authErr.message);
+  }
+  
   const res = await fetch(url, {
     ...restOptions,
     headers: {
       'Content-Type': 'application/json',
       apikey: apiKey,
-      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      Authorization: `Bearer ${authToken}`,
       ...(optionHeaders || {})
     }
   });
