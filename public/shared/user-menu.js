@@ -191,26 +191,32 @@ const SystemMonitor = {
 
     const settings = this.getSettings();
     
+    // Also load from unified widgetSettings
+    loadWidgetSettings();
+    
     // Show/hide based on settings
-    if (settings.visible) {
+    if (settings.visible || widgetSettings.sysMonitorVisible) {
       widget.style.display = 'flex';
     }
 
-    // Apply saved position if draggable and position exists
-    if (settings.draggable && settings.position) {
+    // Apply saved position - prefer widgetSettings (unified) over legacy sysMonitorSettings
+    const position = widgetSettings.sysMonitorPosition || settings.position;
+    if (position) {
       widget.style.position = 'fixed';
-      widget.style.left = settings.position.x + 'px';
-      widget.style.top = settings.position.y + 'px';
+      widget.style.left = position.x + 'px';
+      widget.style.top = position.y + 'px';
       widget.style.zIndex = '9999';
     }
 
-    // Apply size
-    if (settings.size) {
-      widget.style.transform = `scale(${settings.size / 100})`;
-    }
+    // Apply size - prefer widgetSettings
+    const size = widgetSettings.sysMonitorSize || settings.size || 100;
+    widget.style.transform = `scale(${size / 100})`;
 
     // Setup dragging if enabled
-    if (settings.draggable) {
+    const draggable = widgetSettings.sysMonitorDraggable !== undefined 
+      ? widgetSettings.sysMonitorDraggable 
+      : settings.draggable;
+    if (draggable) {
       this.setupDragging(widget);
     }
 
@@ -248,7 +254,17 @@ const SystemMonitor = {
       if (this.isDragging) {
         this.isDragging = false;
         const rect = widget.getBoundingClientRect();
-        this.saveSettings({ position: { x: rect.left, y: rect.top } });
+        const position = { x: rect.left, y: rect.top };
+        // Save to legacy sysMonitorSettings
+        this.saveSettings({ position });
+        // Also save to unified widgetSettings
+        try {
+          loadWidgetSettings();
+          widgetSettings.sysMonitorPosition = position;
+          localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
+        } catch (e) {
+          console.warn('[SystemMonitor] Failed to save to widgetSettings:', e);
+        }
       }
     });
 
@@ -259,7 +275,16 @@ const SystemMonitor = {
       widget.style.top = '';
       widget.style.right = '';
       widget.style.bottom = '';
+      // Reset in legacy sysMonitorSettings
       this.saveSettings({ position: null });
+      // Also reset in unified widgetSettings
+      try {
+        loadWidgetSettings();
+        widgetSettings.sysMonitorPosition = null;
+        localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
+      } catch (e) {
+        console.warn('[SystemMonitor] Failed to reset position in widgetSettings:', e);
+      }
     });
   },
 
@@ -860,7 +885,11 @@ const widgetSettings = {
   clockDraggable: false,
   clockSize: 100,
   clockTextColor: '#1f2937',
-  clockPosition: null
+  clockPosition: null,
+  sysMonitorVisible: false,
+  sysMonitorDraggable: true,
+  sysMonitorSize: 100,
+  sysMonitorPosition: null
 };
 
 function loadWidgetSettings() {
@@ -902,12 +931,13 @@ function applyWidgetSettings() {
       if (countdownTimeEl) countdownTimeEl.textContent = '--:--';
     }
     
-    // Position
-    if (widgetSettings.timerPosition && widgetSettings.timerDraggable) {
+    // Position - apply saved position if exists (regardless of draggable setting)
+    if (widgetSettings.timerPosition) {
       timerEl.style.position = 'fixed';
       timerEl.style.left = widgetSettings.timerPosition.x + 'px';
       timerEl.style.top = widgetSettings.timerPosition.y + 'px';
       timerEl.style.right = 'auto';
+      timerEl.style.zIndex = '9999';
     }
     
     // Draggable
@@ -928,12 +958,13 @@ function applyWidgetSettings() {
     // Color (for digital clocks)
     clockEl.style.setProperty('--clock-text-color', widgetSettings.clockTextColor);
     
-    // Position
-    if (widgetSettings.clockPosition && widgetSettings.clockDraggable) {
+    // Position - apply saved position if exists (regardless of draggable setting)
+    if (widgetSettings.clockPosition) {
       clockEl.style.position = 'fixed';
       clockEl.style.left = widgetSettings.clockPosition.x + 'px';
       clockEl.style.top = widgetSettings.clockPosition.y + 'px';
       clockEl.style.right = 'auto';
+      clockEl.style.zIndex = '9999';
     }
     
     // Draggable
