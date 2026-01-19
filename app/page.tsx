@@ -1,3 +1,5 @@
+'use client';
+
 export default function LandingPage() {
   // Supabase storage URL for logos
   const supabaseUrl = 'https://siumiadylwcrkaqsfwkj.supabase.co';
