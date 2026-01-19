@@ -1039,33 +1039,393 @@ class MyOffice {
           if (logoFileInput) {
             logoFileInput.value = '';
           }
-          // Reset to default placeholder
-          if (logoPreviewImg) {
-            logoPreviewImg.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100' viewBox='0 0 200 100'%3E%3Crect fill='%23000' width='200' height='100'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23fff' font-family='Arial' font-size='24' font-weight='bold'%3EERIX%3C/text%3E%3C/svg%3E";
-          }
-          alert('Logo deleted.');
+          alert('Logo deleted from local storage.');
         }
       });
     }
 
+    // Setup new logo management features
+    this.setupLogoManagement();
+    
     // Load existing logo on page load
     this.loadSavedLogo();
   }
 
-  loadSavedLogo() {
-    const logoPreviewImg = document.getElementById('logoPreviewImg');
-    const logoFileName = document.getElementById('logoFileName');
+  // ===================================
+  // LOGO MANAGEMENT (Supabase Integration)
+  // ===================================
+  
+  async setupLogoManagement() {
+    const refreshBtn = document.getElementById('refreshImagesBtn');
+    const applyToAllCheckbox = document.getElementById('applyToAllPortals');
+    const allPortalsSelect = document.getElementById('allPortalsLogoSelect');
+    const driverSelect = document.getElementById('driverLogoSelect');
+    const customerSelect = document.getElementById('customerLogoSelect');
+    const adminSelect = document.getElementById('adminLogoSelect');
+    const emailSelect = document.getElementById('emailLogoSelect');
+    const saveLogoSettingsBtn = document.getElementById('saveLogoSettingsBtn');
+    const logoUploadBtn = document.getElementById('logoUploadBtn');
+
+    // Refresh images button
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => this.loadSupabaseImages());
+    }
+
+    // Apply to all checkbox toggle
+    if (applyToAllCheckbox) {
+      applyToAllCheckbox.addEventListener('change', (e) => {
+        const disabled = e.target.checked;
+        if (driverSelect) driverSelect.disabled = disabled;
+        if (customerSelect) customerSelect.disabled = disabled;
+        if (adminSelect) adminSelect.disabled = disabled;
+        
+        if (disabled && allPortalsSelect) {
+          // Apply master selection to all
+          const masterValue = allPortalsSelect.value;
+          if (driverSelect) driverSelect.value = '';
+          if (customerSelect) customerSelect.value = '';
+          if (adminSelect) adminSelect.value = '';
+          this.updateLogoPreview('driver', masterValue);
+          this.updateLogoPreview('customer', masterValue);
+          this.updateLogoPreview('admin', masterValue);
+        }
+      });
+    }
+
+    // All portals select change
+    if (allPortalsSelect) {
+      allPortalsSelect.addEventListener('change', (e) => {
+        const url = e.target.value;
+        this.updateLogoPreview('allPortals', url);
+        
+        if (applyToAllCheckbox?.checked) {
+          this.updateLogoPreview('driver', url);
+          this.updateLogoPreview('customer', url);
+          this.updateLogoPreview('admin', url);
+        }
+      });
+    }
+
+    // Individual portal selects
+    [
+      { el: driverSelect, key: 'driver' },
+      { el: customerSelect, key: 'customer' },
+      { el: adminSelect, key: 'admin' },
+      { el: emailSelect, key: 'email' }
+    ].forEach(({ el, key }) => {
+      if (el) {
+        el.addEventListener('change', (e) => {
+          this.updateLogoPreview(key, e.target.value);
+        });
+      }
+    });
+
+    // Upload to Supabase
+    if (logoUploadBtn) {
+      logoUploadBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await this.uploadLogoToSupabase();
+      });
+    }
+
+    // Save logo settings
+    if (saveLogoSettingsBtn) {
+      saveLogoSettingsBtn.addEventListener('click', async () => {
+        await this.saveLogoSettings();
+      });
+    }
+
+    // Load saved settings and images on init
+    this.loadLogoSettings();
+  }
+
+  async loadSupabaseImages() {
+    const gallery = document.getElementById('supabaseImageGallery');
+    if (!gallery) return;
+
+    gallery.innerHTML = '<p class="loading-text">Loading images...</p>';
+
+    try {
+      const { supabase } = await import('./supabase-client.js');
+      const SUPABASE_URL = 'https://siumiadylwcrkaqsfwkj.supabase.co';
+      
+      // List files in images bucket
+      const { data: files, error } = await supabase.storage
+        .from('images')
+        .list('', { limit: 50, sortBy: { column: 'name', order: 'asc' } });
+
+      if (error) {
+        console.error('Error loading images:', error);
+        gallery.innerHTML = `<p class="loading-text" style="color: #c00;">Error: ${error.message}</p>`;
+        return;
+      }
+
+      if (!files || files.length === 0) {
+        gallery.innerHTML = '<p class="loading-text">No images found. Upload some logos first!</p>';
+        return;
+      }
+
+      // Filter only image files
+      const imageFiles = files.filter(f => 
+        f.name.match(/\.(png|jpg|jpeg|gif|svg|webp)$/i)
+      );
+
+      if (imageFiles.length === 0) {
+        gallery.innerHTML = '<p class="loading-text">No image files found in bucket.</p>';
+        return;
+      }
+
+      // Build gallery HTML
+      gallery.innerHTML = imageFiles.map(file => {
+        const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/images/${file.name}`;
+        return `
+          <div class="gallery-item" data-url="${publicUrl}" data-name="${file.name}">
+            <img src="${publicUrl}" alt="${file.name}" loading="lazy" />
+            <div class="gallery-item-name">${file.name}</div>
+          </div>
+        `;
+      }).join('');
+
+      // Add click handlers
+      gallery.querySelectorAll('.gallery-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const url = item.dataset.url;
+          const name = item.dataset.name;
+          
+          // Toggle selection
+          gallery.querySelectorAll('.gallery-item').forEach(i => i.classList.remove('selected'));
+          item.classList.add('selected');
+          
+          // Show in upload preview
+          const previewContainer = document.getElementById('uploadPreviewContainer');
+          const previewImg = document.getElementById('uploadPreviewImg');
+          if (previewContainer && previewImg) {
+            previewImg.src = url;
+            previewContainer.style.display = 'block';
+          }
+
+          // Prompt to use this image
+          this.selectedGalleryImage = { url, name };
+        });
+      });
+
+      // Populate select dropdowns
+      this.populateLogoSelects(imageFiles);
+
+    } catch (err) {
+      console.error('Error loading Supabase images:', err);
+      gallery.innerHTML = `<p class="loading-text" style="color: #c00;">Error: ${err.message}</p>`;
+    }
+  }
+
+  populateLogoSelects(imageFiles) {
+    const SUPABASE_URL = 'https://siumiadylwcrkaqsfwkj.supabase.co';
+    const selects = [
+      'allPortalsLogoSelect',
+      'driverLogoSelect',
+      'customerLogoSelect', 
+      'adminLogoSelect',
+      'emailLogoSelect'
+    ];
+
+    selects.forEach(selectId => {
+      const select = document.getElementById(selectId);
+      if (!select) return;
+
+      const currentValue = select.value;
+      
+      // Keep first option
+      const firstOption = select.options[0];
+      select.innerHTML = '';
+      select.appendChild(firstOption);
+
+      // Add image options
+      imageFiles.forEach(file => {
+        const option = document.createElement('option');
+        option.value = `${SUPABASE_URL}/storage/v1/object/public/images/${file.name}`;
+        option.textContent = file.name;
+        select.appendChild(option);
+      });
+
+      // Restore value if it exists
+      if (currentValue) {
+        select.value = currentValue;
+      }
+    });
+  }
+
+  updateLogoPreview(key, url) {
+    const previewImg = document.getElementById(`${key}LogoPreview`);
+    const noLogoText = document.getElementById(`${key}NoLogo`);
+
+    if (previewImg && url) {
+      previewImg.src = url;
+      previewImg.style.display = 'block';
+      if (noLogoText) noLogoText.style.display = 'none';
+    } else if (previewImg) {
+      previewImg.style.display = 'none';
+      if (noLogoText) noLogoText.style.display = 'block';
+    }
+  }
+
+  async uploadLogoToSupabase() {
+    const fileInput = document.getElementById('logoFileInput');
+    const file = fileInput?.files?.[0];
     
+    if (!file) {
+      alert('Please choose a file first.');
+      return;
+    }
+
+    // Validate
+    if (!file.type.match(/^image\/(jpeg|png|gif|svg|webp)$/i)) {
+      alert('Please select a valid image file (JPG, PNG, GIF, SVG, or WebP).');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be less than 5MB.');
+      return;
+    }
+
+    try {
+      const { supabase } = await import('./supabase-client.js');
+      
+      // Generate unique filename
+      const ext = file.name.split('.').pop();
+      const timestamp = Date.now();
+      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_').replace(/\.[^.]+$/, '');
+      const fileName = `${safeName}_${timestamp}.${ext}`;
+
+      const { data, error } = await supabase.storage
+        .from('images')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) {
+        alert(`Upload failed: ${error.message}`);
+        return;
+      }
+
+      alert(`✅ Logo uploaded successfully as: ${fileName}`);
+      
+      // Clear input and refresh gallery
+      fileInput.value = '';
+      document.getElementById('logoFileName').textContent = 'No file chosen';
+      
+      await this.loadSupabaseImages();
+
+    } catch (err) {
+      console.error('Upload error:', err);
+      alert(`Upload error: ${err.message}`);
+    }
+  }
+
+  async saveLogoSettings() {
+    const applyToAll = document.getElementById('applyToAllPortals')?.checked ?? true;
+    const allPortals = document.getElementById('allPortalsLogoSelect')?.value || '';
+    const driver = document.getElementById('driverLogoSelect')?.value || '';
+    const customer = document.getElementById('customerLogoSelect')?.value || '';
+    const admin = document.getElementById('adminLogoSelect')?.value || '';
+    const email = document.getElementById('emailLogoSelect')?.value || '';
+
+    const logoSettings = {
+      applyToAll,
+      allPortals,
+      driver: applyToAll ? '' : driver,
+      customer: applyToAll ? '' : customer,
+      admin: applyToAll ? '' : admin,
+      email,
+      updatedAt: new Date().toISOString()
+    };
+
+    // Save to localStorage
+    localStorage.setItem('logoSettings', JSON.stringify(logoSettings));
+
+    // Try to save to Supabase organization record
+    try {
+      const { supabase } = await import('./supabase-client.js');
+      const orgId = localStorage.getItem('currentOrganizationId');
+      
+      if (orgId) {
+        const { error } = await supabase
+          .from('organizations')
+          .update({
+            logo_url: applyToAll ? allPortals : (driver || allPortals),
+            logo_settings: logoSettings
+          })
+          .eq('id', orgId);
+
+        if (error) {
+          console.warn('Could not save to Supabase:', error);
+        }
+      }
+    } catch (err) {
+      console.warn('Supabase save error:', err);
+    }
+
+    alert('✅ Logo settings saved successfully!');
+  }
+
+  loadLogoSettings() {
+    const saved = localStorage.getItem('logoSettings');
+    if (!saved) return;
+
+    try {
+      const settings = JSON.parse(saved);
+      
+      const applyToAllCheckbox = document.getElementById('applyToAllPortals');
+      if (applyToAllCheckbox) {
+        applyToAllCheckbox.checked = settings.applyToAll ?? true;
+      }
+
+      // Set select values after images load
+      setTimeout(() => {
+        const selects = {
+          allPortalsLogoSelect: settings.allPortals,
+          driverLogoSelect: settings.driver,
+          customerLogoSelect: settings.customer,
+          adminLogoSelect: settings.admin,
+          emailLogoSelect: settings.email
+        };
+
+        Object.entries(selects).forEach(([id, value]) => {
+          const el = document.getElementById(id);
+          if (el && value) {
+            el.value = value;
+            const key = id.replace('LogoSelect', '');
+            this.updateLogoPreview(key, value);
+          }
+        });
+
+        // Update disabled state
+        const disabled = settings.applyToAll;
+        ['driverLogoSelect', 'customerLogoSelect', 'adminLogoSelect'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.disabled = disabled;
+        });
+
+        // If apply to all, show master logo in sub-portals
+        if (disabled && settings.allPortals) {
+          ['driver', 'customer', 'admin'].forEach(key => {
+            this.updateLogoPreview(key, settings.allPortals);
+          });
+        }
+      }, 500);
+      
+    } catch (err) {
+      console.error('Error loading logo settings:', err);
+    }
+  }
+
+  loadSavedLogo() {
+    // Legacy support - load from old format
     const savedLogo = localStorage.getItem('companyLogo');
     if (savedLogo) {
       try {
         const logoData = JSON.parse(savedLogo);
-        if (logoPreviewImg && logoData.data) {
-          logoPreviewImg.src = logoData.data;
-        }
-        if (logoFileName && logoData.name) {
-          logoFileName.textContent = logoData.name;
-        }
+        console.log('Legacy logo found:', logoData.name);
       } catch (e) {
         console.error('Error loading saved logo:', e);
       }

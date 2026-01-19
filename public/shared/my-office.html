@@ -270,21 +270,110 @@
                   </div>
                 </div>
 
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>Company Logo</label>
-                    <p class="form-hint">This will be used in outbox web by 1280px logo, or smaller.</p>
-                    <p class="form-hint">Supported: .JPG, .PNG</p>
+                <!-- Enhanced Logo Management Section -->
+                <div class="logo-management-section">
+                  <h3 class="form-section-title">Logo Management</h3>
+                  <p class="form-hint">Manage logos for different portals. Logos are stored in Supabase storage.</p>
+                  
+                  <!-- Upload New Logo -->
+                  <div class="logo-upload-card">
+                    <h4>Upload New Logo</h4>
+                    <p class="form-hint">Supported: .JPG, .PNG (max 5MB, recommended 1280px width)</p>
                     <input type="file" id="logoFileInput" accept="image/jpeg,image/png" style="display: none;" />
                     <div class="file-upload-group">
                       <button class="btn btn-secondary" id="logoChooseBtn">Choose File</button>
                       <span class="file-name" id="logoFileName">No file chosen</span>
-                      <button class="btn btn-primary" id="logoUploadBtn">Upload >></button>
+                      <button class="btn btn-primary" id="logoUploadBtn">Upload to Supabase</button>
                     </div>
-                    <div class="logo-preview">
-                      <img id="logoPreviewImg" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100' viewBox='0 0 200 100'%3E%3Crect fill='%23000' width='200' height='100'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23fff' font-family='Arial' font-size='24' font-weight='bold'%3EERIX%3C/text%3E%3C/svg%3E" alt="Company Logo" />
-                      <a href="#" class="logo-link" id="logoDeleteBtn">>> Delete Logo <<</a>
+                    <div class="upload-preview" id="uploadPreviewContainer" style="display: none;">
+                      <img id="uploadPreviewImg" alt="Upload preview" />
                     </div>
+                  </div>
+
+                  <!-- Browse Supabase Images -->
+                  <div class="logo-browser-card">
+                    <h4>Browse Supabase Images</h4>
+                    <p class="form-hint">Select from existing images in your Supabase storage bucket.</p>
+                    <button class="btn btn-secondary" id="refreshImagesBtn">🔄 Refresh Images</button>
+                    <div class="image-gallery" id="supabaseImageGallery">
+                      <p class="loading-text">Click "Refresh Images" to load available logos...</p>
+                    </div>
+                  </div>
+
+                  <!-- Logo Selection Grid -->
+                  <div class="logo-selection-grid">
+                    <!-- All Online Portals -->
+                    <div class="logo-selector-card logo-selector-master">
+                      <h4>🌐 All Online Portals</h4>
+                      <p class="form-hint">Sets default logo for all portals (drivers, customers, admin)</p>
+                      <div class="logo-selector-preview">
+                        <img id="allPortalsLogoPreview" src="" alt="All Portals Logo" onerror="this.style.display='none'" />
+                        <span class="no-logo-text" id="allPortalsNoLogo">No logo selected</span>
+                      </div>
+                      <select class="form-control logo-select" id="allPortalsLogoSelect">
+                        <option value="">-- Select Logo --</option>
+                      </select>
+                      <label class="checkbox-label">
+                        <input type="checkbox" id="applyToAllPortals" checked />
+                        Apply to all portals below
+                      </label>
+                    </div>
+
+                    <!-- Driver Portal -->
+                    <div class="logo-selector-card">
+                      <h4>🚗 Driver Portal</h4>
+                      <p class="form-hint">Logo for driver.relialimo.com</p>
+                      <div class="logo-selector-preview">
+                        <img id="driverLogoPreview" src="" alt="Driver Logo" onerror="this.style.display='none'" />
+                        <span class="no-logo-text" id="driverNoLogo">Using All Portals default</span>
+                      </div>
+                      <select class="form-control logo-select" id="driverLogoSelect" disabled>
+                        <option value="">-- Use All Portals Default --</option>
+                      </select>
+                    </div>
+
+                    <!-- Customer Portal -->
+                    <div class="logo-selector-card">
+                      <h4>👤 Customer Portal</h4>
+                      <p class="form-hint">Logo for account.relialimo.com</p>
+                      <div class="logo-selector-preview">
+                        <img id="customerLogoPreview" src="" alt="Customer Logo" onerror="this.style.display='none'" />
+                        <span class="no-logo-text" id="customerNoLogo">Using All Portals default</span>
+                      </div>
+                      <select class="form-control logo-select" id="customerLogoSelect" disabled>
+                        <option value="">-- Use All Portals Default --</option>
+                      </select>
+                    </div>
+
+                    <!-- Admin Portal -->
+                    <div class="logo-selector-card">
+                      <h4>🔧 Admin Portal</h4>
+                      <p class="form-hint">Logo for admin.relialimo.com</p>
+                      <div class="logo-selector-preview">
+                        <img id="adminLogoPreview" src="" alt="Admin Logo" onerror="this.style.display='none'" />
+                        <span class="no-logo-text" id="adminNoLogo">Using All Portals default</span>
+                      </div>
+                      <select class="form-control logo-select" id="adminLogoSelect" disabled>
+                        <option value="">-- Use All Portals Default --</option>
+                      </select>
+                    </div>
+
+                    <!-- Email Logo -->
+                    <div class="logo-selector-card">
+                      <h4>📧 Email Logo</h4>
+                      <p class="form-hint">Logo for email headers and templates</p>
+                      <div class="logo-selector-preview">
+                        <img id="emailLogoPreview" src="" alt="Email Logo" onerror="this.style.display='none'" />
+                        <span class="no-logo-text" id="emailNoLogo">No logo selected</span>
+                      </div>
+                      <select class="form-control logo-select" id="emailLogoSelect">
+                        <option value="">-- Select Logo --</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="form-actions" style="margin-top: 20px;">
+                    <button class="btn btn-primary btn-large" id="saveLogoSettingsBtn">💾 Save Logo Settings</button>
                   </div>
                 </div>
 
