@@ -336,6 +336,9 @@ async function loadCustomerData() {
   
   // Update account tab
   updateAccountTab();
+  
+  // Prefill booking form with customer defaults
+  prefillBookingDefaults();
 }
 
 async function loadSavedPassengers() {
@@ -884,6 +887,105 @@ async function saveNewAddress() {
 // ============================================
 // Stops Management
 // ============================================
+
+// ============================================
+// PREFILL BOOKING DEFAULTS
+// Auto-fills booking form with customer profile data
+// ============================================
+function prefillBookingDefaults() {
+  console.log('[CustomerPortal] Prefilling booking defaults...');
+  
+  if (!state.customer) {
+    console.warn('[CustomerPortal] No customer data for prefill');
+    return;
+  }
+  
+  // 1. Prefill passenger details (default to "Myself")
+  fillPassengerDetails('self');
+  
+  // 2. Prefill home address as pickup if available
+  const homeAddress = findHomeAddress();
+  if (homeAddress) {
+    // Show the saved addresses section
+    const pickupSelect = document.getElementById('pickupAddressSelect');
+    if (pickupSelect) {
+      pickupSelect.value = 'saved';
+      // Trigger change to show saved addresses
+      const event = new Event('change', { bubbles: true });
+      pickupSelect.dispatchEvent(event);
+    }
+    
+    // Select the home address
+    setTimeout(() => {
+      selectSavedAddress(homeAddress.id, homeAddress.full_address || homeAddress.address, 'pickup');
+    }, 100);
+  }
+  
+  // 3. Set preferred airport if available
+  if (state.customer.preferred_pickup_airport) {
+    const pickupAirport = document.getElementById('pickupAirport');
+    if (pickupAirport) {
+      pickupAirport.value = state.customer.preferred_pickup_airport;
+    }
+  }
+  
+  if (state.customer.preferred_dropoff_airport) {
+    const dropoffAirport = document.getElementById('dropoffAirport');
+    if (dropoffAirport) {
+      dropoffAirport.value = state.customer.preferred_dropoff_airport;
+    }
+  }
+  
+  // 4. Set default passenger count
+  const passengerCount = state.customer.default_passenger_count || 1;
+  const countInput = document.getElementById('passengerCount');
+  if (countInput) {
+    countInput.value = passengerCount;
+  }
+  
+  // 5. Set preferred vehicle type if available
+  if (state.customer.preferred_vehicle_type) {
+    setTimeout(() => {
+      selectVehicleType(state.customer.preferred_vehicle_type);
+    }, 200);
+  }
+  
+  // 6. Set default date to tomorrow
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dateInput = document.getElementById('pickupDate');
+  if (dateInput) {
+    dateInput.value = tomorrow.toISOString().split('T')[0];
+    dateInput.min = new Date().toISOString().split('T')[0]; // Can't book past dates
+  }
+  
+  console.log('[CustomerPortal] Booking defaults prefilled');
+}
+
+// Find the home address from saved addresses
+function findHomeAddress() {
+  // Priority: 1. label = 'Home', 2. address_type = 'home', 3. is_favorite
+  return state.savedAddresses.find(a => a.label?.toLowerCase() === 'home') ||
+         state.savedAddresses.find(a => a.address_type === 'home') ||
+         state.savedAddresses.find(a => a.is_favorite);
+}
+
+// Select a vehicle type by ID or name
+function selectVehicleType(typeIdOrName) {
+  const container = document.getElementById('vehicleTypeSelector');
+  if (!container) return;
+  
+  const cards = container.querySelectorAll('.vehicle-card');
+  cards.forEach(card => {
+    const isMatch = card.dataset.id === typeIdOrName || 
+                    card.dataset.name?.toLowerCase() === typeIdOrName?.toLowerCase();
+    card.classList.toggle('selected', isMatch);
+    if (isMatch) {
+      state.selectedVehicleType = card.dataset.id;
+    }
+  });
+}
+
 function addStop() {
   const stopIndex = state.stops.length + 1;
   state.stops.push({ address: '', order: stopIndex });
@@ -2016,8 +2118,174 @@ function updateAccountTab() {
   document.getElementById('accountEmail').value = state.customer.email || '';
   document.getElementById('accountPhone').value = state.customer.phone || '';
   
+  // Booking defaults
+  document.getElementById('accountHomeAddress').value = state.customer.home_address || '';
+  document.getElementById('accountDefaultPassengers').value = state.customer.default_passenger_count || 1;
+  
+  // Populate airport and vehicle dropdowns
+  populateAccountAirportSelects();
+  populateAccountVehicleSelect();
+  
   renderSavedPassengers();
   renderSavedAddresses();
+}
+
+function populateAccountAirportSelects() {
+  const pickupSelect = document.getElementById('accountPreferredPickupAirport');
+  const dropoffSelect = document.getElementById('accountPreferredDropoffAirport');
+  
+  if (!pickupSelect || !dropoffSelect) return;
+  
+  // Get airports from state (loaded elsewhere)
+  const airports = state.airports || [];
+  
+  [pickupSelect, dropoffSelect].forEach(select => {
+    select.innerHTML = '<option value="">- Select preferred airport -</option>';
+    airports.forEach(airport => {
+      const opt = document.createElement('option');
+      opt.value = airport.code || airport.iata_code || airport.id;
+      opt.textContent = `${airport.code || airport.iata_code || ''} - ${airport.name || airport.airport_name || ''}`;
+      select.appendChild(opt);
+    });
+  });
+  
+  // Set selected values
+  if (state.customer.preferred_pickup_airport) {
+    pickupSelect.value = state.customer.preferred_pickup_airport;
+  }
+  if (state.customer.preferred_dropoff_airport) {
+    dropoffSelect.value = state.customer.preferred_dropoff_airport;
+  }
+}
+
+function populateAccountVehicleSelect() {
+  const select = document.getElementById('accountPreferredVehicle');
+  if (!select) return;
+  
+  select.innerHTML = '<option value="">- Select preferred vehicle -</option>';
+  state.vehicleTypes.forEach(vt => {
+    const opt = document.createElement('option');
+    opt.value = vt.id || vt.name;
+    opt.textContent = vt.name || vt.type_name;
+    select.appendChild(opt);
+  });
+  
+  // Set selected value
+  if (state.customer.preferred_vehicle_type) {
+    select.value = state.customer.preferred_vehicle_type;
+  }
+}
+
+async function saveBookingDefaults() {
+  const homeAddress = document.getElementById('accountHomeAddress').value.trim();
+  const preferredPickupAirport = document.getElementById('accountPreferredPickupAirport').value;
+  const preferredDropoffAirport = document.getElementById('accountPreferredDropoffAirport').value;
+  const defaultPassengers = parseInt(document.getElementById('accountDefaultPassengers').value) || 1;
+  const preferredVehicle = document.getElementById('accountPreferredVehicle').value;
+  
+  try {
+    const creds = getSupabaseCredentials();
+    const response = await fetch(`${creds.url}/rest/v1/accounts?id=eq.${state.customer.id}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': creds.anonKey,
+        'Authorization': `Bearer ${state.session?.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        home_address: homeAddress,
+        preferred_pickup_airport: preferredPickupAirport,
+        preferred_dropoff_airport: preferredDropoffAirport,
+        default_passenger_count: defaultPassengers,
+        preferred_vehicle_type: preferredVehicle,
+        updated_at: new Date().toISOString()
+      })
+    });
+    
+    if (response.ok) {
+      // Update local state
+      state.customer.home_address = homeAddress;
+      state.customer.preferred_pickup_airport = preferredPickupAirport;
+      state.customer.preferred_dropoff_airport = preferredDropoffAirport;
+      state.customer.default_passenger_count = defaultPassengers;
+      state.customer.preferred_vehicle_type = preferredVehicle;
+      
+      // Save home address as a saved address if not exists
+      if (homeAddress) {
+        await saveHomeAddressAsSaved(homeAddress);
+      }
+      
+      showToast('Booking defaults saved!', 'success');
+    } else {
+      throw new Error('Failed to save');
+    }
+  } catch (err) {
+    console.error('[CustomerPortal] Failed to save booking defaults:', err);
+    showToast('Failed to save booking defaults', 'error');
+  }
+}
+
+async function saveHomeAddressAsSaved(homeAddress) {
+  // Check if home address already exists
+  const existingHome = state.savedAddresses.find(a => 
+    a.label?.toLowerCase() === 'home' || a.address_type === 'home'
+  );
+  
+  if (existingHome) {
+    // Update existing
+    try {
+      const creds = getSupabaseCredentials();
+      await fetch(`${creds.url}/rest/v1/customer_addresses?id=eq.${existingHome.id}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': creds.anonKey,
+          'Authorization': `Bearer ${state.session?.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          full_address: homeAddress,
+          updated_at: new Date().toISOString()
+        })
+      });
+      existingHome.full_address = homeAddress;
+    } catch (err) {
+      console.error('[CustomerPortal] Failed to update home address:', err);
+    }
+  } else {
+    // Create new home address
+    try {
+      const creds = getSupabaseCredentials();
+      const response = await fetch(`${creds.url}/rest/v1/customer_addresses`, {
+        method: 'POST',
+        headers: {
+          'apikey': creds.anonKey,
+          'Authorization': `Bearer ${state.session?.access_token}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({
+          account_id: state.customer.id,
+          label: 'Home',
+          full_address: homeAddress,
+          address_type: 'home',
+          is_favorite: true,
+          is_deleted: false,
+          is_visible: true
+        })
+      });
+      
+      if (response.ok) {
+        const newAddresses = await response.json();
+        if (newAddresses?.length > 0) {
+          state.savedAddresses.unshift(newAddresses[0]);
+          populateAddressDropdowns();
+          renderSavedAddresses();
+        }
+      }
+    } catch (err) {
+      console.error('[CustomerPortal] Failed to save home address:', err);
+    }
+  }
 }
 
 function renderSavedPassengers() {
@@ -2174,7 +2442,7 @@ function setupEventListeners() {
     const val = e.target.value;
     document.getElementById('pickupAddressNew').classList.toggle('hidden', val !== 'new');
     document.getElementById('airportPickupDetails').classList.toggle('hidden', val !== 'airport');
-    document.getElementById('savedPickupAddresses').classList.toggle('hidden', !val || val === 'airport' || val === 'new');
+    document.getElementById('savedPickupAddresses').classList.toggle('hidden', val !== 'saved');
     
     if (!val || val === 'airport' || val === 'new') {
       state.selectedPickupAddress = null;
@@ -2185,7 +2453,7 @@ function setupEventListeners() {
     const val = e.target.value;
     document.getElementById('dropoffAddressNew').classList.toggle('hidden', val !== 'new');
     document.getElementById('airportDropoffDetails').classList.toggle('hidden', val !== 'airport');
-    document.getElementById('savedDropoffAddresses').classList.toggle('hidden', !val || val === 'airport' || val === 'new');
+    document.getElementById('savedDropoffAddresses').classList.toggle('hidden', val !== 'saved');
     
     if (!val || val === 'airport' || val === 'new') {
       state.selectedDropoffAddress = null;
@@ -2254,6 +2522,9 @@ function setupEventListeners() {
   
   // Save profile
   document.getElementById('saveProfileBtn')?.addEventListener('click', saveProfile);
+  
+  // Save booking defaults
+  document.getElementById('saveBookingDefaultsBtn')?.addEventListener('click', saveBookingDefaults);
   
   // Add passenger in account tab
   document.getElementById('addSavedPassengerBtn')?.addEventListener('click', () => {
