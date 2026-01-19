@@ -9,14 +9,20 @@ export function middleware(request: NextRequest) {
   if (pathname.startsWith('/_next')) {
     return NextResponse.next()
   }
+  
+  // Shared resources that should never be rewritten
+  const sharedPaths = ['/shared/', '/api/', '/lib/', '/assets/', '/env.js', '/favicon']
+  if (sharedPaths.some(p => pathname.startsWith(p))) {
+    return NextResponse.next()
+  }
 
   // Driver subdomain: driver.relialimo.com
   if (host.startsWith('driver.')) {
     if (pathname === '/' || pathname === '') {
       return NextResponse.rewrite(new URL('/drivers/driver-portal.html', request.url))
     }
-    // Rewrite all paths to /drivers folder (except /shared and /drivers)
-    if (!pathname.startsWith('/drivers') && !pathname.startsWith('/shared')) {
+    // Rewrite all paths to /drivers folder (except /drivers paths)
+    if (!pathname.startsWith('/drivers')) {
       return NextResponse.rewrite(new URL(`/drivers${pathname}`, request.url))
     }
   }
@@ -26,8 +32,8 @@ export function middleware(request: NextRequest) {
     if (pathname === '/' || pathname === '') {
       return NextResponse.rewrite(new URL('/customers/customer-portal.html', request.url))
     }
-    // Rewrite all paths to /customers folder (except /shared and /customers)
-    if (!pathname.startsWith('/customers') && !pathname.startsWith('/shared')) {
+    // Rewrite all paths to /customers folder (except /customers paths)
+    if (!pathname.startsWith('/customers')) {
       return NextResponse.rewrite(new URL(`/customers${pathname}`, request.url))
     }
   }

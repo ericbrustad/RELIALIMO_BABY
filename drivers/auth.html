@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>Driver Login | RELIALIMO</title>
+  <link rel="icon" href="favicon.ico">
+  <link rel="manifest" href="driver-portal-manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="driver-portal.css">
+  <!-- Load ENV first -->
+  <script src="/shared/env.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="screen active">
+      <div class="loading-content">
+        <div class="logo-pulse"><img src="favicon.ico" alt="Logo" class="favicon-logo"></div>
+        <h1 class="brand-name">RELIA<img src="favicon.ico" alt="" class="brand-icon">LIMO<span class="trademark">™</span></h1>
+        <p>Driver Portal</p>
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+
+    <!-- Auth Screen -->
+    <div id="authScreen" class="screen">
+      <div class="auth-container">
+        <div class="auth-header">
+          <img src="favicon.ico" alt="Logo" class="auth-logo">
+          <h1 class="brand-name">RELIA<img src="favicon.ico" alt="" class="brand-icon">LIMO<span class="trademark">™</span></h1>
+          <p>Driver Portal</p>
+        </div>
+
+        <!-- Login Form -->
+        <div id="loginForm" class="auth-form active">
+          <h2>Welcome Back</h2>
+          <div class="form-group">
+            <label for="loginEmail">Email</label>
+            <input type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label for="loginPassword">Password</label>
+            <div class="password-wrapper">
+              <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+              <button type="button" class="btn-show-password" data-target="loginPassword" aria-label="Show password">
+                <span class="eye-icon">👁️</span>
+              </button>
+            </div>
+          </div>
+          <button type="button" id="loginBtn" class="btn btn-primary btn-large">
+            Sign In
+          </button>
+          <div class="auth-switch">
+            <span>New driver?</span>
+            <button type="button" id="showRegisterBtn" class="btn-link">Create Account</button>
+          </div>
+          <div class="auth-switch" style="margin-top: 10px;">
+            <a href="#" id="forgotPasswordLink" class="btn-link">Forgot Password?</a>
+          </div>
+        </div>
+
+        <!-- Registration Link -->
+        <div id="registerPrompt" class="auth-form">
+          <h2>Join Our Team</h2>
+          <p style="margin-bottom: 20px; color: var(--text-secondary);">
+            Ready to start driving with RELIALIMO? Our registration process only takes a few minutes.
+          </p>
+          <button type="button" id="goToRegisterBtn" class="btn btn-success btn-large">
+            🚀 Start Registration
+          </button>
+          <div class="auth-switch">
+            <span>Already have an account?</span>
+            <button type="button" id="showLoginBtn" class="btn-link">Sign In</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script type="module">
+    import { getSupabaseCredentials } from '/shared/supabase-config.js';
+    
+    // Check if already authenticated and redirect to driver's portal
+    async function checkAuth() {
+      try {
+        const session = localStorage.getItem('supabase_session');
+        if (session) {
+          const parsed = JSON.parse(session);
+          if (parsed?.access_token) {
+            // Check if we have driver info stored
+            const driverInfo = localStorage.getItem('current_driver');
+            if (driverInfo) {
+              const driver = JSON.parse(driverInfo);
+              const slug = driver.portal_slug || 
+                `${(driver.first_name || '').toLowerCase()}_${(driver.last_name || '').toLowerCase()}`.replace(/[^a-z0-9_]/g, '');
+              window.location.href = `/${slug}`;
+              return true;
+            }
+            
+            // Fetch driver info if not stored
+            try {
+              const creds = getSupabaseCredentials();
+              const userEmail = parsed.user?.email;
+              if (userEmail) {
+                const response = await fetch(
+                  `${creds.url}/rest/v1/drivers?email=eq.${encodeURIComponent(userEmail.toLowerCase())}&select=id,first_name,last_name,portal_slug`,
+                  {
+                    headers: {
+                      'apikey': creds.anonKey,
+                      'Authorization': `Bearer ${parsed.access_token}`
+                    }
+                  }
+                );
+                if (response.ok) {
+                  const drivers = await response.json();
+                  if (drivers && drivers.length > 0) {
+                    const driver = drivers[0];
+                    localStorage.setItem('current_driver', JSON.stringify(driver));
+                    const slug = driver.portal_slug || 
+                      `${(driver.first_name || '').toLowerCase()}_${(driver.last_name || '').toLowerCase()}`.replace(/[^a-z0-9_]/g, '');
+                    window.location.href = `/${slug}`;
+                    return true;
+                  }
+                }
+              }
+            } catch (fetchErr) {
+              console.warn('Could not fetch driver:', fetchErr);
+            }
+            
+            // Fallback to generic portal
+            window.location.href = 'driver-portal.html';
+            return true;
+          }
+        }
+      } catch (e) {
+        console.warn('Auth check failed:', e);
+      }
+      return false;
+    }
+
+    // Show auth screen after loading
+    async function init() {
+      const isAuth = await checkAuth();
+      if (!isAuth) {
+        document.getElementById('loadingScreen').classList.remove('active');
+        document.getElementById('authScreen').classList.add('active');
+      }
+    }
+
+    // Toggle between login and register forms
+    document.getElementById('showRegisterBtn')?.addEventListener('click', () => {
+      document.getElementById('loginForm').classList.remove('active');
+      document.getElementById('registerPrompt').classList.add('active');
+    });
+
+    document.getElementById('showLoginBtn')?.addEventListener('click', () => {
+      document.getElementById('registerPrompt').classList.remove('active');
+      document.getElementById('loginForm').classList.add('active');
+    });
+
+    // Go to full registration
+    document.getElementById('goToRegisterBtn')?.addEventListener('click', () => {
+      window.location.href = 'driver-portal.html?register=true';
+    });
+
+    // Login handler
+    document.getElementById('loginBtn')?.addEventListener('click', async () => {
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+
+      if (!email || !password) {
+        showToast('Please enter email and password', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('loginBtn');
+      btn.disabled = true;
+      btn.textContent = 'Signing In...';
+
+      try {
+        const creds = getSupabaseCredentials();
+        const response = await fetch(`${creds.url}/auth/v1/token?grant_type=password`, {
+          method: 'POST',
+          headers: {
+            'apikey': creds.anonKey,
+            'Authorization': `Bearer ${creds.anonKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || data.error) {
+          throw new Error(data.error_description || data.error || 'Login failed');
+        }
+
+        // Store session
+        localStorage.setItem('supabase_session', JSON.stringify(data));
+        localStorage.setItem('supabase_access_token', data.access_token);
+
+        showToast('Login successful!', 'success');
+        
+        // Fetch driver record to get their portal_slug
+        try {
+          const driverResponse = await fetch(
+            `${creds.url}/rest/v1/drivers?email=eq.${encodeURIComponent(email.toLowerCase())}&select=id,first_name,last_name,portal_slug`,
+            {
+              headers: {
+                'apikey': creds.anonKey,
+                'Authorization': `Bearer ${data.access_token}`
+              }
+            }
+          );
+          
+          if (driverResponse.ok) {
+            const drivers = await driverResponse.json();
+            if (drivers && drivers.length > 0) {
+              const driver = drivers[0];
+              // Generate slug if not set
+              const slug = driver.portal_slug || 
+                `${(driver.first_name || '').toLowerCase()}_${(driver.last_name || '').toLowerCase()}`.replace(/[^a-z0-9_]/g, '');
+              
+              // Store driver info
+              localStorage.setItem('current_driver', JSON.stringify(driver));
+              
+              // Redirect to their personal portal
+              setTimeout(() => {
+                window.location.href = `/${slug}`;
+              }, 500);
+              return;
+            }
+          }
+        } catch (driverErr) {
+          console.warn('Could not fetch driver info:', driverErr);
+        }
+        
+        // Fallback: redirect to generic portal
+        setTimeout(() => {
+          window.location.href = 'driver-portal.html';
+        }, 500);
+
+      } catch (err) {
+        console.error('Login error:', err);
+        showToast(err.message || 'Login failed', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
+    });
+
+    // Password visibility toggle
+    document.querySelectorAll('.btn-show-password').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.dataset.target;
+        const input = document.getElementById(targetId);
+        if (input) {
+          input.type = input.type === 'password' ? 'text' : 'password';
+          btn.querySelector('.eye-icon').textContent = input.type === 'password' ? '👁️' : '🙈';
+        }
+      });
+    });
+
+    // Enter key to submit
+    document.getElementById('loginPassword')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('loginBtn')?.click();
+      }
+    });
+
+    // Toast helper
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      if (toast) {
+        toast.textContent = message;
+        toast.className = `toast ${type} show`;
+        setTimeout(() => toast.classList.remove('show'), 3000);
+      }
+    }
+
+    // Initialize
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>Driver Portal | RELIALIMO</title>
+  <link rel="manifest" href="driver-portal-manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="driver-portal.css">
+  <!-- Mapbox GL JS -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+  <!-- Load ENV first so window.ENV is available -->
+  <script src="/shared/env.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Registration Splash Screen -->
+    <div id="registrationSplash" class="screen splash-screen">
+      <!-- Phase 1: Logo Reveal -->
+      <div class="splash-logo-phase" id="splashLogoPhase">
+        <div class="splash-logo-container">
+          <img src="/favicon.ico" alt="RELIALIMO" class="splash-logo" id="splashLogo">
+        </div>
+        <div class="splash-brand">
+          <h1 class="splash-brand-name">RELIA<img src="/favicon.ico" alt="" class="splash-brand-icon">LIMO<span class="trademark">™</span></h1>
+          <p class="splash-tagline">Driver Portal</p>
+        </div>
+      </div>
+      
+      <!-- Phase 2: Welcome Message with Map Background -->
+      <div class="splash-welcome-phase" id="splashWelcomePhase" style="display: none;">
+        <div class="splash-map-bg" id="splashMapBg">
+          <iframe 
+            id="splashMapIframe"
+            src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d50000!2d-95.3698!3d29.7604!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sen!2sus!4v1600000000000!5m2!1sen!2sus"
+            style="border:0; width: 100%; height: 100%; opacity: 0.3;"
+            allowfullscreen="" 
+            loading="lazy">
+          </iframe>
+        </div>
+        <div class="splash-welcome-content">
+          <div class="splash-welcome-icon">🚗</div>
+          <h1 class="splash-welcome-title">We're Excited to Have You Join!</h1>
+          <p class="splash-welcome-subtitle">Get ready to hit the road with RELIALIMO</p>
+        </div>
+      </div>
+      
+      <!-- Phase 3: Checklist -->
+      <div class="splash-checklist-phase" id="splashChecklistPhase" style="display: none;">
+        <div class="splash-checklist-container">
+          <div class="splash-checklist-header">
+            <h2>📋 Before You Start</h2>
+            <p>Please have the following ready for registration:</p>
+          </div>
+          <div class="splash-checklist-items">
+            <label class="splash-checklist-item">
+              <input type="checkbox" class="splash-checkbox" data-item="email">
+              <span class="splash-checkbox-mark"></span>
+              <span class="splash-checkbox-text">Valid Email Address</span>
+            </label>
+            <label class="splash-checklist-item">
+              <input type="checkbox" class="splash-checkbox" data-item="phone">
+              <span class="splash-checkbox-mark"></span>
+              <span class="splash-checkbox-text">Cell Phone for Verification</span>
+            </label>
+            <label class="splash-checklist-item">
+              <input type="checkbox" class="splash-checkbox" data-item="license">
+              <span class="splash-checkbox-mark"></span>
+              <span class="splash-checkbox-text">Driver's License Information</span>
+            </label>
+            <label class="splash-checklist-item">
+              <input type="checkbox" class="splash-checkbox" data-item="vehicle">
+              <span class="splash-checkbox-mark"></span>
+              <span class="splash-checkbox-text">Vehicle Details (Make, Model, Plate)</span>
+            </label>
+            <label class="splash-checklist-item">
+              <input type="checkbox" class="splash-checkbox" data-item="insurance">
+              <span class="splash-checkbox-mark"></span>
+              <span class="splash-checkbox-text">Insurance Information</span>
+            </label>
+          </div>
+          <button type="button" id="splashLetsGoBtn" class="btn btn-success btn-large splash-lets-go" disabled>
+            🚀 Let's Go!
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="screen active">
+      <div class="loading-content">
+        <div class="logo-pulse"><img src="/favicon.ico" alt="Logo" class="favicon-logo"></div>
+        <h1 class="brand-name">RELIA<img src="/favicon.ico" alt="" class="brand-icon">LIMO<span class="trademark">™</span></h1>
+        <p>Driver Portal</p>
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+
+    <!-- Login/Register Screen -->
+    <div id="authScreen" class="screen">
+      <div class="auth-container">
+        <div class="auth-header">
+          <img src="/favicon.ico" alt="Logo" class="auth-logo">
+          <h1 class="brand-name">RELIA<img src="/favicon.ico" alt="" class="brand-icon">LIMO<span class="trademark">™</span></h1>
+          <p>Driver Portal</p>
+        </div>
+
+        <!-- Login Form -->
+        <div id="loginForm" class="auth-form active">
+          <h2>Welcome to Professional</h2>
+          <div class="form-group">
+            <label for="loginEmail">Email</label>
+            <input type="email" id="loginEmail" placeholder="your@email.com" autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label for="loginPassword">Password</label>
+            <div class="password-wrapper">
+              <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+              <button type="button" class="btn-show-password" data-target="loginPassword" aria-label="Show password">
+                <span class="eye-icon">👁️</span>
+              </button>
+            </div>
+          </div>
+          <button type="button" id="loginBtn" class="btn btn-primary btn-large">
+            Sign In
+          </button>
+          <div class="auth-switch">
+            <span>New driver?</span>
+            <button type="button" id="showRegisterBtn" class="btn-link">Create Account</button>
+          </div>
+        </div>
+
+        <!-- Registration Form (Multi-step) -->
+        <div id="registerForm" class="auth-form">
+          <div class="step-indicator">
+            <div class="step active" data-step="1">1</div>
+            <div class="step" data-step="2">2</div>
+            <div class="step" data-step="2b">✓</div>
+            <div class="step" data-step="3">3</div>
+          </div>
+
+          <!-- Step 1: Personal Info + Email Verification -->
+          <div id="registerStep1" class="register-step active">
+            <h2>About You</h2>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="regFirstName">First Name *</label>
+                <input type="text" id="regFirstName" placeholder="John" required>
+              </div>
+              <div class="form-group">
+                <label for="regLastName">Last Name *</label>
+                <input type="text" id="regLastName" placeholder="Doe" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="regEmail">Email *</label>
+              <input type="email" id="regEmail" placeholder="john@example.com" required>
+              <small class="field-hint">We'll send a verification code to this email</small>
+            </div>
+            <div class="form-group">
+              <label for="regPhone">Cell Phone *</label>
+              <input type="tel" id="regPhone" placeholder="(555) 123-4567" required>
+              <small class="field-hint">We'll send a verification code to this number</small>
+            </div>
+            <div class="form-group">
+              <label for="regPassword">Create Password *</label>
+              <div class="password-wrapper">
+                <input type="password" id="regPassword" placeholder="Min 8 characters" required>
+                <button type="button" class="btn-show-password" data-target="regPassword" aria-label="Show password">
+                  <span class="eye-icon">👁️</span>
+                </button>
+              </div>
+            </div>
+            <button type="button" id="regNextStep1" class="btn btn-primary btn-large">
+              Continue →
+            </button>
+          </div>
+
+          <!-- Step 1b: Email Verification -->
+          <div id="registerStep1b" class="register-step">
+            <h2>📧 Verify Your Email</h2>
+            <p class="step-subtitle">Enter the 6-digit code sent to <strong id="emailOtpDisplay"></strong></p>
+            
+            <div class="otp-input-group">
+              <input type="text" class="email-otp-digit" id="emailOtpDigit1" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="one-time-code">
+              <input type="text" class="email-otp-digit" id="emailOtpDigit2" maxlength="1" inputmode="numeric" pattern="[0-9]">
+              <input type="text" class="email-otp-digit" id="emailOtpDigit3" maxlength="1" inputmode="numeric" pattern="[0-9]">
+              <input type="text" class="email-otp-digit" id="emailOtpDigit4" maxlength="1" inputmode="numeric" pattern="[0-9]">
+              <input type="text" class="email-otp-digit" id="emailOtpDigit5" maxlength="1" inputmode="numeric" pattern="[0-9]">
+              <input type="text" class="email-otp-digit" id="emailOtpDigit6" maxlength="1" inputmode="numeric" pattern="[0-9]">
+            </div>
+            
+            <div id="emailOtpStatus" class="otp-status"></div>
+            
+            <div class="otp-actions">
+              <button type="button" id="resendEmailOtpBtn" class="btn btn-link">Resend Code</button>
+              <span id="emailOtpTimer" class="otp-timer"></span>
+            </div>
+            
+            <div class="btn-row">
+              <button type="button" id="regBackStep1b" class="btn btn-secondary">← Back</button>
+              <button type="button" id="verifyEmailOtpBtn" class="btn btn-primary">Verify & Continue →</button>
+            </div>
+          </div>
+
+          <!-- Step 2: Company Info with Matching -->
+          <div id="registerStep2" class="register-step">
+            <h2>Your Company</h2>
+            <p class="step-subtitle">Optional - Leave blank if independent</p>
+            
+            <!-- Company Search/Matching -->
+            <div class="form-group">
+              <label for="regCompanyName">Company Name</label>
+              <input type="text" id="regCompanyName" placeholder="ABC Transportation LLC" autocomplete="off">
+              <div id="companyMatchResults" class="match-results" style="display: none;">
+                <!-- Matching companies will appear here -->
+              </div>
+            </div>
+            
+            <!-- Selected Company Display (hidden initially) -->
+            <div id="selectedCompanyCard" class="selected-company-card" style="display: none;">
+              <div class="company-card-header">
+                <span class="company-icon">🏢</span>
+                <span class="company-name" id="selectedCompanyName"></span>
+                <button type="button" id="clearSelectedCompany" class="btn-icon-small" title="Choose different company">✕</button>
+              </div>
+              <div class="company-card-details">
+                <span id="selectedCompanyAddress"></span>
+                <span id="selectedCompanyPhone"></span>
+              </div>
+              <input type="hidden" id="selectedCompanyId" value="">
+            </div>
+            
+            <!-- New Company Form (visible when creating new or no match selected) -->
+            <div id="newCompanyForm">
+              <div class="form-group">
+                <label for="regCompanyAddress">Address</label>
+                <input type="text" id="regCompanyAddress" placeholder="123 Main Street">
+              </div>
+              <div class="form-row form-row-3">
+                <div class="form-group">
+                  <label for="regCompanyCity">City</label>
+                  <input type="text" id="regCompanyCity" placeholder="City">
+                </div>
+                <div class="form-group">
+                  <label for="regCompanyState">State</label>
+                  <select id="regCompanyState">
+                    <option value="">--</option>
+                    <option value="AL">AL</option><option value="AK">AK</option><option value="AZ">AZ</option>
+                    <option value="AR">AR</option><option value="CA">CA</option><option value="CO">CO</option>
+                    <option value="CT">CT</option><option value="DE">DE</option><option value="FL">FL</option>
+                    <option value="GA">GA</option><option value="HI">HI</option><option value="ID">ID</option>
+                    <option value="IL">IL</option><option value="IN">IN</option><option value="IA">IA</option>
+                    <option value="KS">KS</option><option value="KY">KY</option><option value="LA">LA</option>
+                    <option value="ME">ME</option><option value="MD">MD</option><option value="MA">MA</option>
+                    <option value="MI">MI</option><option value="MN">MN</option><option value="MS">MS</option>
+                    <option value="MO">MO</option><option value="MT">MT</option><option value="NE">NE</option>
+                    <option value="NV">NV</option><option value="NH">NH</option><option value="NJ">NJ</option>
+                    <option value="NM">NM</option><option value="NY">NY</option><option value="NC">NC</option>
+                    <option value="ND">ND</option><option value="OH">OH</option><option value="OK">OK</option>
+                    <option value="OR">OR</option><option value="PA">PA</option><option value="RI">RI</option>
+                    <option value="SC">SC</option><option value="SD">SD</option><option value="TN">TN</option>
+                    <option value="TX">TX</option><option value="UT">UT</option><option value="VT">VT</option>
+                    <option value="VA">VA</option><option value="WA">WA</option><option value="WV">WV</option>
+                    <option value="WI">WI</option><option value="WY">WY</option><option value="DC">DC</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="regCompanyZip">Zip</label>
+                  <input type="text" id="regCompanyZip" placeholder="12345">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="regCompanyPhone">Company Phone</label>
+                <input type="tel" id="regCompanyPhone" placeholder="(555) 987-6543">
+              </div>
+            </div>
+            
+            <div class="btn-row">
+              <button type="button" id="regBackStep2" class="btn btn-secondary">← Back</button>
+              <button type="button" id="regNextStep2" class="btn btn-primary">Verify Phone →</button>
+            </div>
+          </div>
+          
+          <!-- Step 2b: Phone OTP Verification -->
+          <div id="registerStep2b" class="register-step">
+            <h2>📱 Verify Your Phone</h2>
+            <p class="step-subtitle">Enter the 6-digit code sent to <strong id="otpPhoneDisplay"></strong></p>
+            
+            <div class="otp-input-group">
+              <input type="text" class="otp-digit" id="otpDigit1" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="one-time-code">
+              <input type="text" class="otp-digit" id="otpDigit2" maxlength="1" inputmode="numeric" pattern="[0-9]">
+              <input type="text" class="otp-digit" id="otpDigit3" maxlength="1" inputmode="numeric" pattern="[0-9]">
+              <input type="text" class="otp-digit" id="otpDigit4" maxlength="1" inputmode="numeric" pattern="[0-9]">
+              <input type="text" class="otp-digit" id="otpDigit5" maxlength="1" inputmode="numeric" pattern="[0-9]">
+              <input type="text" class="otp-digit" id="otpDigit6" maxlength="1" inputmode="numeric" pattern="[0-9]">
+            </div>
+            
+            <div id="otpStatus" class="otp-status"></div>
+            
+            <div class="otp-actions">
+              <button type="button" id="resendOtpBtn" class="btn btn-link">Resend Code</button>
+              <span id="otpTimer" class="otp-timer"></span>
+            </div>
+            
+            <div class="btn-row">
+              <button type="button" id="regBackStep2b" class="btn btn-secondary">← Back</button>
+              <button type="button" id="verifyOtpBtn" class="btn btn-primary">Verify & Continue →</button>
+            </div>
+          </div>
+
+          <!-- Step 3: Vehicle Info -->
+          <div id="registerStep3" class="register-step">
+            <h2>Your Vehicle</h2>
+            <div class="form-group">
+              <label for="regVehicleType">Vehicle Type *</label>
+              <select id="regVehicleType" required>
+                <option value="">Select type...</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="regVehicleMake">Make</label>
+                <input type="text" id="regVehicleMake" placeholder="Lincoln">
+              </div>
+              <div class="form-group">
+                <label for="regVehicleModel">Model</label>
+                <input type="text" id="regVehicleModel" placeholder="Navigator">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="regVehicleYear">Year</label>
+                <input type="number" id="regVehicleYear" placeholder="2024" min="1990" max="2030">
+              </div>
+              <div class="form-group">
+                <label for="regVehicleColor">Color</label>
+                <input type="text" id="regVehicleColor" placeholder="Black">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="regVehiclePlate">License Plate *</label>
+              <input type="text" id="regVehiclePlate" placeholder="ABC-1234" required>
+            </div>
+            <div class="form-group">
+              <label for="regVehicleCapacity">Passenger Capacity</label>
+              <select id="regVehicleCapacity">
+                <option value="3">3 passengers</option>
+                <option value="4" selected>4 passengers</option>
+                <option value="5">5 passengers</option>
+                <option value="6">6 passengers</option>
+                <option value="7">7 passengers</option>
+                <option value="8">8+ passengers</option>
+              </select>
+            </div>
+            
+            <h3 class="section-title">Permits & Compliance</h3>
+            <div class="form-group">
+              <label for="regLimoPermit">Limo Permit Number</label>
+              <input type="text" id="regLimoPermit" placeholder="MN Limo Permit #">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="regPermitExpMonth">Permit Exp. Month</label>
+                <select id="regPermitExpMonth">
+                  <option value="">Month...</option>
+                  <option value="1">January</option>
+                  <option value="2">February</option>
+                  <option value="3">March</option>
+                  <option value="4">April</option>
+                  <option value="5">May</option>
+                  <option value="6">June</option>
+                  <option value="7">July</option>
+                  <option value="8">August</option>
+                  <option value="9">September</option>
+                  <option value="10">October</option>
+                  <option value="11">November</option>
+                  <option value="12">December</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="regPermitExpYear">Permit Exp. Year</label>
+                <select id="regPermitExpYear">
+                  <option value="">Year...</option>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                  <option value="2027">2027</option>
+                  <option value="2028">2028</option>
+                  <option value="2029">2029</option>
+                  <option value="2030">2030</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="regDotNumber">US DOT Number</label>
+              <input type="text" id="regDotNumber" placeholder="USDOT #">
+            </div>
+            
+            <h3 class="section-title">Insurance Information</h3>
+            <div class="form-group">
+              <label for="regInsuranceCompany">Insurance Company *</label>
+              <input type="text" id="regInsuranceCompany" placeholder="e.g. Progressive, State Farm" required>
+            </div>
+            <div class="form-group">
+              <label for="regInsurancePolicyNumber">Policy Number *</label>
+              <input type="text" id="regInsurancePolicyNumber" placeholder="Policy #" required>
+            </div>
+            
+            <div class="btn-row">
+              <button type="button" id="regBackStep3" class="btn btn-secondary">← Back</button>
+              <button type="button" id="regSubmit" class="btn btn-success btn-large">
+                🚀 Create Account
+              </button>
+            </div>
+          </div>
+
+          <div class="auth-switch">
+            <span>Already have an account?</span>
+            <button type="button" id="showLoginBtn" class="btn-link">Sign In</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Welcome/Congratulations Screen -->
+    <div id="welcomeScreen" class="screen">
+      <div class="welcome-container">
+        <div class="welcome-icon">🎉</div>
+        <h1>Congratulations!</h1>
+        <p class="welcome-subtitle">Your driver account has been created successfully</p>
+        
+        <div class="welcome-card">
+          <div class="welcome-driver-name" id="welcomeDriverName">Welcome, Driver!</div>
+          <p>You're now part of the RELIALIMO driver network</p>
+        </div>
+        
+        <div class="portal-url-box">
+          <p class="portal-url-label">📱 Your Personal Portal URL:</p>
+          <a href="#" id="welcomePortalUrl" class="portal-url-link" target="_blank">driver.relialimo.com/your_name</a>
+          <p class="portal-url-hint">Bookmark this link to access your portal anytime!</p>
+        </div>
+        
+        <div class="location-permission-box" id="locationPermissionBox">
+          <div class="permission-icon">📍</div>
+          <h3>Enable Location Services</h3>
+          <p>We need your location to show you nearby trip offers and help dispatch track your progress.</p>
+          <button type="button" id="enableLocationBtn" class="btn btn-primary btn-large">
+            📍 Enable Location
+          </button>
+          <button type="button" id="skipLocationBtn" class="btn-link">Skip for now</button>
+        </div>
+        
+        <div class="location-granted" id="locationGranted" style="display: none;">
+          <div class="success-check">✓</div>
+          <p>Location services enabled!</p>
+        </div>
+        
+        <button type="button" id="goToDashboardBtn" class="btn btn-success btn-large" style="display: none;">
+          🚀 Go to Dashboard
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Dashboard Screen -->
+    <div id="dashboardScreen" class="screen">
+      <!-- Online/Offline Toggle Bar -->
+      <div class="online-toggle-bar">
+        <label class="online-toggle">
+          <input type="checkbox" id="onlineToggle" checked>
+          <span class="toggle-slider"></span>
+          <span class="toggle-label" id="onlineLabel">ONLINE</span>
+        </label>
+      </div>
+      
+      <!-- Top Header -->
+      <header class="dashboard-header">
+        <div class="header-left">
+          <div class="driver-avatar" id="driverAvatar">JD</div>
+          <div class="driver-info">
+            <span class="driver-name" id="driverName">John Doe</span>
+            <span class="driver-status" id="driverStatusBadge">
+              <span class="status-dot available"></span>
+              Available
+            </span>
+          </div>
+        </div>
+        <button type="button" id="menuBtn" class="btn-icon" aria-label="Menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+      </header>
+
+      <!-- Tab Navigation -->
+      <nav class="tab-nav">
+        <button class="tab active" data-tab="driverview">
+          <span class="tab-icon">🗺️</span>
+          <span class="tab-label">Driver View</span>
+        </button>
+        <button class="tab" data-tab="offered">
+          <span class="tab-icon">📨</span>
+          <span class="tab-label">Offered</span>
+          <span class="tab-badge" id="offeredBadge">0</span>
+        </button>
+        <button class="tab" data-tab="upcoming">
+          <span class="tab-icon">📅</span>
+          <span class="tab-label">Upcoming</span>
+          <span class="tab-badge" id="upcomingBadge">0</span>
+        </button>
+        <button class="tab" data-tab="active">
+          <span class="tab-icon">🚗</span>
+          <span class="tab-label">Active</span>
+          <span class="tab-badge" id="activeBadge">0</span>
+        </button>
+      </nav>
+
+      <!-- Tab Content -->
+      <main class="tab-content">
+        <!-- Driver View Tab (Map with Pinned Trips) -->
+        <div id="driverviewTab" class="tab-panel active">
+          <div class="driver-view-container">
+            <div class="driver-view-map" id="driverViewMap">
+              <!-- Map will be initialized here -->
+              <div class="map-placeholder">
+                <div class="map-loading">
+                  <span>🗺️</span>
+                  <p>Loading map...</p>
+                </div>
+              </div>
+            </div>
+            <div class="driver-view-trips" id="driverViewTrips">
+              <div class="pinned-trips-header">
+                <h3>📌 Assigned Trips</h3>
+              </div>
+              <div class="pinned-trips-list" id="pinnedTripsList">
+                <!-- Pinned trips will be populated here -->
+                <div class="empty-state" id="pinnedTripsEmpty">
+                  <div class="empty-icon">📍</div>
+                  <p>No assigned trips yet</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Offered Trips Tab -->
+        <div id="offeredTab" class="tab-panel">
+          <div class="empty-state" id="offeredEmpty">
+            <div class="empty-icon">📭</div>
+            <h3>No Trip Offers</h3>
+            <p>New trip offers will appear here</p>
+          </div>
+          <div class="trip-list" id="offeredList"></div>
+        </div>
+
+        <!-- Upcoming Trips Tab -->
+        <div id="upcomingTab" class="tab-panel">
+          <div class="empty-state" id="upcomingEmpty">
+            <div class="empty-icon">📆</div>
+            <h3>No Upcoming Trips</h3>
+            <p>Accepted trips will appear here</p>
+          </div>
+          <div class="trip-list" id="upcomingList"></div>
+        </div>
+
+        <!-- Active Trip Tab -->
+        <div id="activeTab" class="tab-panel">
+          <div class="empty-state" id="activeEmpty">
+            <div class="empty-icon">🏁</div>
+            <h3>No Active Trip</h3>
+            <p>Start a trip to see it here</p>
+          </div>
+          <div id="activeTripCard" class="active-trip-card" style="display: none;">
+            <!-- Will be populated by JS -->
+          </div>
+        </div>
+      </main>
+
+      <!-- Quick Actions FAB -->
+      <div class="fab-container">
+        <button type="button" id="fabRefresh" class="fab fab-secondary" aria-label="Refresh">
+          🔄
+        </button>
+      </div>
+    </div>
+
+    <!-- Trip Detail Modal -->
+    <div id="tripDetailModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Trip Details</h2>
+          <button type="button" class="modal-close" id="closeTripDetail">&times;</button>
+        </div>
+        <div class="modal-body" id="tripDetailBody">
+          <!-- Populated by JS -->
+        </div>
+        <div class="modal-footer" id="tripDetailFooter">
+          <!-- Action buttons populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Change Modal -->
+    <div id="statusModal" class="modal">
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h2>Update Status</h2>
+          <button type="button" class="modal-close" id="closeStatusModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="status-options" id="statusOptions">
+            <!-- Populated by JS based on current status -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Post-Trip Modal -->
+    <div id="postTripModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Complete Trip</h2>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="waitTime">Wait Time (minutes)</label>
+            <input type="number" id="waitTime" value="0" min="0">
+          </div>
+          <div class="form-group">
+            <label for="extraStops">Extra Stops</label>
+            <input type="number" id="extraStops" value="0" min="0">
+          </div>
+          <div class="form-group">
+            <label for="tollsParking">Tolls/Parking ($)</label>
+            <input type="number" id="tollsParking" value="0" min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label for="tipAmount">Tip Amount ($)</label>
+            <input type="number" id="tipAmount" value="0" min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label for="driverNotes">Notes</label>
+            <textarea id="driverNotes" rows="3" placeholder="Any notes about the trip..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="submitPostTrip" class="btn btn-success btn-large">
+            ✓ Complete Trip
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- My Vehicle Screen -->
+    <div id="vehicleScreen" class="screen">
+      <header class="screen-header">
+        <button type="button" id="vehicleBackBtn" class="btn-icon" aria-label="Back">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <h1>My Vehicle</h1>
+        <button type="button" id="editVehicleBtn" class="btn-icon" aria-label="Edit">
+          ✏️
+        </button>
+      </header>
+      
+      <main class="screen-content">
+        <!-- Vehicle Card -->
+        <div class="vehicle-card" id="vehicleCard">
+          <div class="vehicle-image">
+            <img id="vehicleImg" src="" alt="Vehicle" class="vehicle-photo" onerror="this.style.display='none';document.getElementById('vehicleIconFallback').style.display='flex';">
+            <div id="vehicleIconFallback" class="vehicle-icon">🚗</div>
+          </div>
+          <div class="vehicle-main-info">
+            <h2 id="vehicleTitle">Loading...</h2>
+            <p id="vehiclePlate" class="vehicle-plate">---</p>
+          </div>
+        </div>
+        
+        <!-- Vehicle Details -->
+        <div class="info-section">
+          <h3>Vehicle Details</h3>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Type</span>
+              <span class="info-value" id="vehicleType">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Year</span>
+              <span class="info-value" id="vehicleYear">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Make</span>
+              <span class="info-value" id="vehicleMake">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Model</span>
+              <span class="info-value" id="vehicleModel">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Color</span>
+              <span class="info-value" id="vehicleColor">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Capacity</span>
+              <span class="info-value" id="vehicleCapacity">--</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="info-section">
+          <h3>Identification</h3>
+          <div class="info-grid">
+            <div class="info-item full-width">
+              <span class="info-label">License Plate</span>
+              <span class="info-value" id="vehicleLicensePlate">--</span>
+            </div>
+            <div class="info-item full-width">
+              <span class="info-label">VIN</span>
+              <span class="info-value" id="vehicleVin">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Unit Number</span>
+              <span class="info-value" id="vehicleUnitNumber">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Status</span>
+              <span class="info-value" id="vehicleStatus">--</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="info-section">
+          <h3>Permits & Compliance</h3>
+          <div class="info-grid">
+            <div class="info-item full-width">
+              <span class="info-label">Limo Permit Number</span>
+              <span class="info-value" id="vehiclePermitNumber">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Permit Expiration</span>
+              <span class="info-value" id="vehiclePermitExp">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">US DOT Number</span>
+              <span class="info-value" id="vehicleDotNumber">--</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="info-section">
+          <h3>Insurance Information</h3>
+          <div class="info-grid">
+            <div class="info-item full-width">
+              <span class="info-label">Insurance Company</span>
+              <span class="info-value" id="vehicleInsuranceCompany">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Policy Number</span>
+              <span class="info-value" id="vehicleInsurancePolicyNumber">--</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Expiration</span>
+              <span class="info-value" id="vehicleInsExp">--</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="info-section" id="vehicleFeaturesSection" style="display:none;">
+          <h3>Features</h3>
+          <div class="feature-tags" id="vehicleFeatures">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+        
+        <!-- No Vehicle Message -->
+        <div class="empty-state" id="noVehicleMessage" style="display:none;">
+          <div class="empty-icon">🚗</div>
+          <h3>No Vehicle Registered</h3>
+          <p>Contact dispatch to add your vehicle</p>
+        </div>
+      </main>
+    </div>
+
+    <!-- My Profile Screen -->
+    <div id="profileScreen" class="screen">
+      <header class="screen-header">
+        <button type="button" id="profileBackBtn" class="btn-icon" aria-label="Back">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <h1>My Profile</h1>
+        <button type="button" id="saveProfileBtn" class="btn-icon" aria-label="Save" style="display:none;">
+          ✓
+        </button>
+      </header>
+      
+      <main class="screen-content profile-content">
+        <!-- Profile Photo Section -->
+        <div class="profile-photo-section">
+          <div class="profile-photo-wrapper">
+            <img id="profilePhoto" src="" alt="Profile Photo" class="profile-photo" style="display:none;">
+            <div id="profilePhotoPlaceholder" class="profile-photo-placeholder">
+              <span class="placeholder-icon">👤</span>
+              <span class="placeholder-text">Add Photo</span>
+            </div>
+            <input type="file" id="profilePhotoInput" accept="image/*" capture="user" style="display:none;">
+            <button type="button" id="changePhotoBtn" class="change-photo-btn" aria-label="Change photo">
+              📷
+            </button>
+          </div>
+          <p class="photo-hint">Upload your best professional photo</p>
+        </div>
+        
+        <!-- Basic Info (Read-only) -->
+        <div class="info-section">
+          <h3>Contact Information</h3>
+          <div class="info-grid">
+            <div class="info-item full-width">
+              <span class="info-label">Full Name</span>
+              <span class="info-value" id="profileFullName">--</span>
+            </div>
+            <div class="info-item full-width">
+              <span class="info-label">Email</span>
+              <span class="info-value" id="profileEmail">--</span>
+            </div>
+            <div class="info-item full-width">
+              <span class="info-label">Phone</span>
+              <span class="info-value" id="profilePhone">--</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Company Info Section (only shown if driver belongs to a company) -->
+        <div id="companyInfoSection" class="info-section profile-editable" style="display: none;">
+          <h3>🏢 Company Information</h3>
+          <p class="section-hint">Update your company details. Changes will be saved to your company profile.</p>
+          <div class="form-group">
+            <label for="profileCompanyName">Company Name</label>
+            <input type="text" id="profileCompanyName" maxlength="100" placeholder="Your company name">
+          </div>
+          <div class="form-group">
+            <label for="profileCompanyAddress">Company Address</label>
+            <input type="text" id="profileCompanyAddress" maxlength="200" placeholder="123 Main St, City, State ZIP">
+          </div>
+          <div class="form-group">
+            <label for="profileCompanyPhone">Company Phone</label>
+            <input type="tel" id="profileCompanyPhone" maxlength="20" placeholder="(555) 123-4567">
+          </div>
+          <button type="button" id="saveCompanyInfoBtn" class="btn btn-secondary" style="margin-top: 10px;">
+            💾 Save Company Info
+          </button>
+        </div>
+        
+        <!-- Bio Section -->
+        <div class="info-section profile-editable">
+          <h3>About Me</h3>
+          <div class="form-group">
+            <label for="profileBio">Short Bio</label>
+            <textarea id="profileBio" rows="4" maxlength="500" 
+              placeholder="Tell clients about yourself. What makes you a great driver? Keep it professional and friendly..."></textarea>
+            <small class="char-count"><span id="bioCharCount">0</span>/500</small>
+          </div>
+        </div>
+        
+        <!-- Experience & Skills -->
+        <div class="info-section profile-editable">
+          <h3>Experience & Skills</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="profileYearsExp">Years of Experience</label>
+              <select id="profileYearsExp">
+                <option value="">Select...</option>
+                <option value="0">Less than 1 year</option>
+                <option value="1">1-2 years</option>
+                <option value="3">3-5 years</option>
+                <option value="6">6-10 years</option>
+                <option value="10">10+ years</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>Languages Spoken</label>
+            <div class="checkbox-grid" id="languagesGrid">
+              <label class="checkbox-item">
+                <input type="checkbox" name="languages" value="English" checked> English
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="languages" value="Spanish"> Spanish
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="languages" value="French"> French
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="languages" value="German"> German
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="languages" value="Mandarin"> Mandarin
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="languages" value="Arabic"> Arabic
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="languages" value="Portuguese"> Portuguese
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="languages" value="Other"> Other
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Specialties -->
+        <div class="info-section profile-editable">
+          <h3>Service Specialties</h3>
+          <p class="section-hint">Select the types of service you excel at:</p>
+          <div class="checkbox-grid" id="specialtiesGrid">
+            <label class="checkbox-item">
+              <input type="checkbox" name="specialties" value="Airport Transfers"> ✈️ Airport Transfers
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="specialties" value="Corporate/Executive"> 💼 Corporate/Executive
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="specialties" value="Weddings"> 💒 Weddings
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="specialties" value="Proms/Events"> 🎉 Proms/Events
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="specialties" value="Wine Tours"> 🍷 Wine Tours
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="specialties" value="Night Out"> 🌙 Night Out
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="specialties" value="Long Distance"> 🛣️ Long Distance
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="specialties" value="Medical Transport"> 🏥 Medical Transport
+            </label>
+          </div>
+        </div>
+        
+        <!-- Certifications -->
+        <div class="info-section profile-editable">
+          <h3>Certifications & Credentials</h3>
+          <div class="checkbox-grid" id="certificationsGrid">
+            <label class="checkbox-item">
+              <input type="checkbox" name="certifications" value="CDL"> CDL License
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="certifications" value="Defensive Driving"> Defensive Driving
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="certifications" value="First Aid/CPR"> First Aid/CPR
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="certifications" value="TSA Certified"> TSA Certified
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="certifications" value="Background Checked"> Background Checked
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="certifications" value="Drug Tested"> Drug Tested
+            </label>
+          </div>
+        </div>
+        
+        <!-- Availability Preferences -->
+        <div class="info-section profile-editable">
+          <h3>Availability Preferences</h3>
+          <div class="checkbox-grid" id="availabilityGrid">
+            <label class="checkbox-item">
+              <input type="checkbox" name="availability" value="Weekday Mornings"> 🌅 Weekday Mornings
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="availability" value="Weekday Evenings"> 🌆 Weekday Evenings
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="availability" value="Weekends"> 📅 Weekends
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="availability" value="Late Night"> 🌙 Late Night
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="availability" value="Early Morning"> ☀️ Early Morning (4-7am)
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="availability" value="24/7 Available"> ⏰ 24/7 Available
+            </label>
+          </div>
+        </div>
+        
+        <!-- Service Areas -->
+        <div class="info-section profile-editable">
+          <h3>Preferred Service Areas</h3>
+          <div class="form-group">
+            <label for="profileServiceAreas">Areas you prefer to service</label>
+            <textarea id="profileServiceAreas" rows="2" maxlength="200"
+              placeholder="e.g., Downtown Chicago, O'Hare, North Shore suburbs..."></textarea>
+          </div>
+        </div>
+        
+        <!-- Portal URL -->
+        <div class="info-section">
+          <h3>Your Driver Portal</h3>
+          <div class="portal-url-box">
+            <span class="info-label">Share your profile link:</span>
+            <a id="profilePortalUrl" href="#" target="_blank" class="portal-url-link">--</a>
+          </div>
+        </div>
+        
+        <!-- Save Button -->
+        <div class="profile-actions">
+          <button type="button" id="saveProfileMainBtn" class="btn btn-primary btn-large">
+            💾 Save Profile
+          </button>
+        </div>
+      </main>
+    </div>
+
+    <!-- Settings Screen -->
+    <div id="settingsScreen" class="screen">
+      <header class="screen-header">
+        <button type="button" id="settingsBackBtn" class="btn-icon" aria-label="Back">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <h1>Settings</h1>
+        <div style="width: 40px;"></div>
+      </header>
+      
+      <main class="screen-content settings-content">
+        
+        <!-- Payment Methods Section -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <span class="settings-icon">💳</span>
+            <h3>Payment Methods</h3>
+          </div>
+          <p class="settings-section-hint">Set up how you want to receive payments from clients and dispatch.</p>
+          
+          <!-- Zelle Payment -->
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <div class="payment-method-icon zelle">Z</div>
+              <div class="payment-method-info">
+                <span class="payment-method-name">Zelle</span>
+                <span class="payment-method-status" id="zelleStatus">Not configured</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="zelleEnabled">
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+            <div class="settings-card-body" id="zelleDetails" style="display:none;">
+              <div class="form-group">
+                <label for="zelleEmail">Zelle Email or Phone</label>
+                <input type="text" id="zelleEmail" placeholder="email@example.com or (555) 123-4567">
+                <small class="field-hint">Enter the email or phone registered with your bank for Zelle</small>
+              </div>
+              <div class="form-group">
+                <label for="zelleName">Account Holder Name</label>
+                <input type="text" id="zelleName" placeholder="John Doe">
+                <small class="field-hint">Name on your bank account (for verification)</small>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Venmo Payment -->
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <div class="payment-method-icon venmo">V</div>
+              <div class="payment-method-info">
+                <span class="payment-method-name">Venmo</span>
+                <span class="payment-method-status" id="venmoStatus">Not configured</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="venmoEnabled">
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+            <div class="settings-card-body" id="venmoDetails" style="display:none;">
+              <div class="form-group">
+                <label for="venmoUsername">Venmo Username</label>
+                <input type="text" id="venmoUsername" placeholder="@username">
+                <small class="field-hint">Your Venmo @username (without the @)</small>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Cash App Payment -->
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <div class="payment-method-icon cashapp">$</div>
+              <div class="payment-method-info">
+                <span class="payment-method-name">Cash App</span>
+                <span class="payment-method-status" id="cashappStatus">Not configured</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="cashappEnabled">
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+            <div class="settings-card-body" id="cashappDetails" style="display:none;">
+              <div class="form-group">
+                <label for="cashappTag">Cash Tag</label>
+                <input type="text" id="cashappTag" placeholder="$cashtag">
+                <small class="field-hint">Your $cashtag (without the $)</small>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Direct Deposit / Bank -->
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <div class="payment-method-icon bank">🏦</div>
+              <div class="payment-method-info">
+                <span class="payment-method-name">Direct Deposit</span>
+                <span class="payment-method-status" id="bankStatus">Not configured</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="bankEnabled">
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+            <div class="settings-card-body" id="bankDetails" style="display:none;">
+              <div class="form-group">
+                <label for="bankName">Bank Name</label>
+                <input type="text" id="bankName" placeholder="Chase, Bank of America, etc.">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="bankRouting">Routing Number</label>
+                  <input type="text" id="bankRouting" placeholder="9 digits" maxlength="9" pattern="[0-9]{9}">
+                </div>
+                <div class="form-group">
+                  <label for="bankAccount">Account Number</label>
+                  <input type="password" id="bankAccount" placeholder="Account #">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="bankAccountType">Account Type</label>
+                <select id="bankAccountType">
+                  <option value="checking">Checking</option>
+                  <option value="savings">Savings</option>
+                </select>
+              </div>
+              <small class="field-hint">⚠️ Bank details are encrypted and securely stored</small>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Navigation & Maps Section -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <span class="settings-icon">🗺️</span>
+            <h3>Navigation & Maps</h3>
+          </div>
+          <p class="settings-section-hint">Choose your preferred navigation method for directions.</p>
+          
+          <div class="settings-card">
+            <div class="form-group">
+              <label for="preferredMapApp">Default Navigation App</label>
+              <select id="preferredMapApp">
+                <option value="internal">📍 RELIALIMO Internal Map</option>
+                <option value="google_maps">🗺️ Google Maps</option>
+                <option value="apple_maps">🍎 Apple Maps</option>
+                <option value="waze">🚗 Waze</option>
+                <option value="mapbox">📦 Mapbox Navigation</option>
+                <option value="ask">❓ Ask Every Time</option>
+              </select>
+              <small class="field-hint">App used when you tap "Navigate" on a trip</small>
+            </div>
+            
+            <div class="form-group">
+              <label for="trafficUpdates">Traffic Updates</label>
+              <select id="trafficUpdates">
+                <option value="always">Always show traffic</option>
+                <option value="trips_only">Only during active trips</option>
+                <option value="never">Never</option>
+              </select>
+            </div>
+            
+            <div class="checkbox-item standalone">
+              <input type="checkbox" id="avoidTolls" name="mapOptions">
+              <span>Prefer routes without tolls</span>
+            </div>
+            
+            <div class="checkbox-item standalone">
+              <input type="checkbox" id="avoidHighways" name="mapOptions">
+              <span>Prefer routes without highways</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Notifications Section -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <span class="settings-icon">🔔</span>
+            <h3>Notifications</h3>
+          </div>
+          
+          <div class="settings-card">
+            <div class="settings-toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">Push Notifications</span>
+                <small>Receive trip offers and updates</small>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="pushNotifications" checked>
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+            
+            <div class="settings-toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">SMS Notifications</span>
+                <small>Text messages for urgent updates</small>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="smsNotifications" checked>
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+            
+            <div class="settings-toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">Email Notifications</span>
+                <small>Trip summaries and receipts</small>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="emailNotifications" checked>
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+            
+            <div class="settings-toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">Sound Alerts</span>
+                <small>Audio for new trip offers</small>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="soundAlerts" checked>
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Trip Preferences Section -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <span class="settings-icon">🚗</span>
+            <h3>Trip Preferences</h3>
+          </div>
+          
+          <div class="settings-card">
+            <div class="form-group">
+              <label for="autoAcceptRadius">Auto-Accept Trips Within</label>
+              <select id="autoAcceptRadius">
+                <option value="0">Never auto-accept</option>
+                <option value="5">5 miles</option>
+                <option value="10">10 miles</option>
+                <option value="15">15 miles</option>
+                <option value="25">25 miles</option>
+              </select>
+              <small class="field-hint">Automatically accept trips starting within this distance</small>
+            </div>
+            
+            <div class="form-group">
+              <label for="minTripFare">Minimum Trip Fare ($)</label>
+              <input type="number" id="minTripFare" min="0" step="5" value="0" placeholder="0">
+              <small class="field-hint">Only show trips with fares above this amount (0 = no minimum)</small>
+            </div>
+            
+            <div class="form-group">
+              <label for="maxPickupDistance">Maximum Pickup Distance (miles)</label>
+              <input type="number" id="maxPickupDistance" min="0" step="5" value="50" placeholder="50">
+              <small class="field-hint">Don't show trips with pickups farther than this</small>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Privacy & Security Section -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <span class="settings-icon">🔒</span>
+            <h3>Privacy & Security</h3>
+          </div>
+          
+          <div class="settings-card">
+            <div class="settings-toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">Location Sharing</span>
+                <small>Share location during active trips only</small>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="locationSharing" checked>
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+            
+            <div class="settings-toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">Show Phone to Passengers</span>
+                <small>Allow passengers to see your phone number</small>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="showPhoneToPassengers">
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+            
+            <button type="button" id="changePasswordBtn" class="btn btn-secondary btn-block">
+              🔑 Change Password
+            </button>
+          </div>
+        </div>
+        
+        <!-- App Preferences Section -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <span class="settings-icon">📱</span>
+            <h3>App Preferences</h3>
+          </div>
+          
+          <div class="settings-card">
+            <div class="form-group">
+              <label for="themePreference">Theme</label>
+              <select id="themePreference">
+                <option value="dark">Dark Mode</option>
+                <option value="light">Light Mode</option>
+                <option value="system">System Default</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="distanceUnit">Distance Unit</label>
+              <select id="distanceUnit">
+                <option value="miles">Miles</option>
+                <option value="km">Kilometers</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="timeFormat">Time Format</label>
+              <select id="timeFormat">
+                <option value="12h">12-hour (1:30 PM)</option>
+                <option value="24h">24-hour (13:30)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Save Button -->
+        <div class="settings-actions">
+          <button type="button" id="saveSettingsBtn" class="btn btn-primary btn-large">
+            💾 Save Settings
+          </button>
+        </div>
+        
+        <!-- App Info -->
+        <div class="settings-footer">
+          <p>RELIALIMO Driver Portal v1.0</p>
+          <p class="text-muted">© 2026 RELIALIMO. All rights reserved.</p>
+        </div>
+      </main>
+    </div>
+
+    <!-- Menu Sidebar -->
+    <div id="menuSidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="driver-avatar large" id="sidebarAvatar">JD</div>
+        <div class="driver-name" id="sidebarName">John Doe</div>
+        <div class="driver-email" id="sidebarEmail">john@example.com</div>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="sidebar-link" id="menuProfile">
+          <span>👤</span> My Profile
+        </a>
+        <a href="#" class="sidebar-link" id="menuVehicle">
+          <span>🚗</span> My Vehicle
+        </a>
+        <a href="#" class="sidebar-link" id="menuHistory">
+          <span>📋</span> Trip History
+        </a>
+        <a href="#" class="sidebar-link" id="menuEarnings">
+          <span>💰</span> Earnings
+        </a>
+        <hr>
+        <a href="#" class="sidebar-link" id="menuSettings">
+          <span>⚙️</span> Settings
+        </a>
+        <a href="#" class="sidebar-link" id="menuHelp">
+          <span>❓</span> Help & Support
+        </a>
+        <a href="#" class="sidebar-link danger" id="menuLogout">
+          <span>🚪</span> Sign Out
+        </a>
+        <hr>
+        <a href="#" class="sidebar-link danger" id="menuDeleteAccount">
+          <span>🗑️</span> Delete Account (Testing)
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <small>RELIALIMO Driver Portal v1.0</small>
+      </div>
+    </div>
+    <div id="menuOverlay" class="sidebar-overlay"></div>
+
+    <!-- Delete Account Confirmation Modal -->
+    <div id="deleteAccountModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header danger-header">
+          <h2>⚠️ Delete Driver Account</h2>
+        </div>
+        <div class="modal-body">
+          <p style="margin-bottom: 16px;"><strong>This will permanently delete:</strong></p>
+          <ul style="margin: 0 0 16px 20px; line-height: 1.8;">
+            <li>Your driver profile</li>
+            <li>Your registered vehicle(s)</li>
+            <li>All trip assignments</li>
+          </ul>
+          <p style="color: #ff6b6b; font-weight: 600;">This action cannot be undone!</p>
+          <div class="form-group" style="margin-top: 20px;">
+            <label>Type your email to confirm:</label>
+            <input type="email" id="deleteConfirmEmail" placeholder="Enter your email">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="cancelDeleteBtn" class="btn btn-secondary">Cancel</button>
+          <button type="button" id="confirmDeleteBtn" class="btn btn-danger">🗑️ Delete My Account</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script src="/shared/sms-service.js"></script>
+  <script type="module" src="driver-portal.js"></script>
+</body>
+</html>
