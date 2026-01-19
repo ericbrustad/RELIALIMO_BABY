@@ -10,57 +10,35 @@
 
 CREATE TABLE IF NOT EXISTS email_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
-    
-    -- Template identification
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    
-    -- Template type (driver status based)
-    trigger_event VARCHAR(50) NOT NULL CHECK (trigger_event IN (
-        'driver_on_the_way',
-        'driver_arrived',
-        'passenger_on_board',
-        'passenger_dropped_off',
-        'driver_info_affiliate',   -- A Driver Info for affiliate 3 hour off network
-        'trip_reminder',
-        'reservation_confirmed',
-        'reservation_updated',
-        'reservation_cancelled',
-        'payment_received',
-        'invoice_sent',
-        'custom'
-    )),
-    
-    -- Email content
+    trigger_event VARCHAR(50) NOT NULL,
     subject VARCHAR(500) NOT NULL,
     body_html TEXT NOT NULL,
     body_text TEXT,
-    
-    -- Send options
     send_via_email BOOLEAN DEFAULT TRUE,
     send_via_sms BOOLEAN DEFAULT FALSE,
-    sms_body VARCHAR(160),  -- SMS character limit
-    
-    -- Recipients
+    sms_body VARCHAR(160),
     send_to_billing BOOLEAN DEFAULT TRUE,
     send_to_passenger BOOLEAN DEFAULT TRUE,
     send_to_booking_contact BOOLEAN DEFAULT FALSE,
     send_to_driver BOOLEAN DEFAULT FALSE,
-    
-    -- Timing (for reminders)
-    timing_offset_minutes INTEGER DEFAULT 0,  -- e.g., 60 = 1 hour before
-    
-    -- Status
+    timing_offset_minutes INTEGER DEFAULT 0,
     is_active BOOLEAN DEFAULT TRUE,
-    is_default BOOLEAN DEFAULT FALSE,  -- System default template
-    
-    -- Audit
+    is_default BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     created_by UUID,
     updated_by UUID
 );
+
+-- Add missing columns to existing email_templates table
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'organization_id') THEN
+        ALTER TABLE email_templates ADD COLUMN organization_id UUID;
+    END IF;
+END $$;
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_email_templates_org ON email_templates(organization_id);
@@ -75,39 +53,32 @@ CREATE INDEX IF NOT EXISTS idx_email_templates_active ON email_templates(is_acti
 CREATE TABLE IF NOT EXISTS account_email_rules (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
-    
-    -- Driver Status Rules (toggleable per account)
     rule_driver_on_the_way BOOLEAN DEFAULT TRUE,
     rule_driver_arrived BOOLEAN DEFAULT TRUE,
     rule_passenger_on_board BOOLEAN DEFAULT TRUE,
     rule_passenger_dropped_off BOOLEAN DEFAULT TRUE,
-    rule_driver_info_affiliate BOOLEAN DEFAULT FALSE,  -- 3 hour off network
-    
-    -- Reservation Status Rules
+    rule_driver_info_affiliate BOOLEAN DEFAULT FALSE,
     rule_reservation_confirmed BOOLEAN DEFAULT TRUE,
     rule_reservation_updated BOOLEAN DEFAULT TRUE,
     rule_reservation_cancelled BOOLEAN DEFAULT TRUE,
-    
-    -- Financial Rules
     rule_payment_received BOOLEAN DEFAULT TRUE,
     rule_invoice_sent BOOLEAN DEFAULT TRUE,
-    
-    -- Trip Reminders
     rule_trip_reminder BOOLEAN DEFAULT TRUE,
-    trip_reminder_hours_before INTEGER DEFAULT 24,  -- hours before trip
-    
-    -- Channel Preferences (override account defaults if set)
+    trip_reminder_hours_before INTEGER DEFAULT 24,
     prefer_email BOOLEAN DEFAULT TRUE,
     prefer_sms BOOLEAN DEFAULT FALSE,
-    
-    -- Master toggle
     all_rules_enabled BOOLEAN DEFAULT TRUE,
-    
-    -- Audit
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add missing columns to existing account_email_rules table
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_email_rules' AND column_name = 'organization_id') THEN
+        ALTER TABLE account_email_rules ADD COLUMN organization_id UUID;
+    END IF;
+END $$;
 
 -- Unique constraint: one rule set per account
 CREATE UNIQUE INDEX IF NOT EXISTS idx_account_email_rules_account 
@@ -315,16 +286,19 @@ CREATE TABLE IF NOT EXISTS account_booking_contacts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     booking_contact_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
-    
-    -- Permissions
     can_book BOOLEAN DEFAULT TRUE,
     can_view_billing BOOLEAN DEFAULT FALSE,
     can_modify BOOLEAN DEFAULT FALSE,
-    
-    -- Audit
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add missing columns to existing account_booking_contacts table
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_booking_contacts' AND column_name = 'organization_id') THEN
+        ALTER TABLE account_booking_contacts ADD COLUMN organization_id UUID;
+    END IF;
+END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_account_booking_contacts_unique 
 ON account_booking_contacts(account_id, booking_contact_id);
