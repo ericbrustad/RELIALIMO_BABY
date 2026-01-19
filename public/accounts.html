@@ -6,6 +6,8 @@
     <title>Accounts - RELIA🐂LIMO™</title>
     <link rel="icon" href="https://github.com/user-attachments/assets/d7d111cc-186d-4a88-bac3-7b39c313b25c" />
     <link rel="stylesheet" href="accounts.css" />
+    <link rel="stylesheet" href="phone-input.css" />
+    <script src="phone-input.js"></script>
     <script>
       // Hide main navigation if in iframe
       if (window.self !== window.top) {
@@ -410,90 +412,126 @@
                       
                       <div class="contact-row">
                         <label>Office Phone</label>
-                        <select class="contact-select">
-                          <option>?</option>
-                          <option>📱</option>
-                        </select>
-                        <input type="text" id="acctOfficePhone" class="form-control" placeholder="Enter number" />
+                        <div class="phone-input-wrapper" data-input-id="acctOfficePhone">
+                          <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                            <span class="phone-country-flag">🇺🇸</span>
+                            <span class="phone-country-code">+1</span>
+                            <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                              <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                          </button>
+                          <input type="tel" id="acctOfficePhone" class="phone-number-input form-control" placeholder="(555) 123-4567" inputmode="tel" />
+                          <div class="phone-validation-message"></div>
+                        </div>
                         <label class="ext-label">Ext</label>
                         <input type="text" id="acctOfficePhoneExt" class="ext-input" />
                       </div>
 
                       <div class="contact-row">
                         <label>Home Phone</label>
-                        <select class="contact-select">
-                          <option>?</option>
-                          <option>📱</option>
-                        </select>
-                        <input type="text" id="acctHomePhone" class="form-control" placeholder="Enter number" />
+                        <div class="phone-input-wrapper" data-input-id="acctHomePhone">
+                          <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                            <span class="phone-country-flag">🇺🇸</span>
+                            <span class="phone-country-code">+1</span>
+                            <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                              <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                          </button>
+                          <input type="tel" id="acctHomePhone" class="phone-number-input form-control" placeholder="(555) 123-4567" inputmode="tel" />
+                          <div class="phone-validation-message"></div>
+                        </div>
                         <label class="ext-label">Ext</label>
                         <input type="text" id="acctHomePhoneExt" class="ext-input" />
                       </div>
 
                       <div class="contact-row">
-                        <label>Cellular Phone 1</label>
-                        <select class="contact-select">
-                          <option>?</option>
-                          <option>📱</option>
-                        </select>
-                        <input type="text" id="acctCellularPhone1" class="form-control" placeholder="Enter number" />
-                        <label class="ext-label">Ext</label>
-                        <input type="text" class="ext-input" />
+                        <label>Cell Phone 1</label>
+                        <div class="phone-input-wrapper" data-input-id="acctCellularPhone1">
+                          <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                            <span class="phone-country-flag">🇺🇸</span>
+                            <span class="phone-country-code">+1</span>
+                            <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                              <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                          </button>
+                          <input type="tel" id="acctCellularPhone1" class="phone-number-input form-control" placeholder="(555) 123-4567" inputmode="tel" />
+                          <div class="phone-validation-message"></div>
+                        </div>
                       </div>
 
                       <div class="contact-row">
-                        <label>Cellular Phone 2</label>
-                        <select class="contact-select">
-                          <option>?</option>
-                          <option>📱</option>
-                        </select>
-                        <input type="text" id="acctCellularPhone2" class="form-control" placeholder="Enter number" />
-                        <label class="ext-label">Ext</label>
-                        <input type="text" class="ext-input" />
+                        <label>Cell Phone 2</label>
+                        <div class="phone-input-wrapper" data-input-id="acctCellularPhone2">
+                          <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                            <span class="phone-country-flag">🇺🇸</span>
+                            <span class="phone-country-code">+1</span>
+                            <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                              <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                          </button>
+                          <input type="tel" id="acctCellularPhone2" class="phone-number-input form-control" placeholder="(555) 123-4567" inputmode="tel" />
+                          <div class="phone-validation-message"></div>
+                        </div>
                       </div>
 
                       <div class="contact-row">
-                        <label>Cellular Phone 3</label>
-                        <select class="contact-select">
-                          <option>?</option>
-                          <option>📱</option>
-                        </select>
-                        <input type="text" id="acctCellularPhone3" class="form-control" placeholder="Enter number" />
-                        <label class="ext-label">Ext</label>
-                        <input type="text" class="ext-input" />
+                        <label>Cell Phone 3</label>
+                        <div class="phone-input-wrapper" data-input-id="acctCellularPhone3">
+                          <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                            <span class="phone-country-flag">🇺🇸</span>
+                            <span class="phone-country-code">+1</span>
+                            <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                              <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                          </button>
+                          <input type="tel" id="acctCellularPhone3" class="phone-number-input form-control" placeholder="(555) 123-4567" inputmode="tel" />
+                          <div class="phone-validation-message"></div>
+                        </div>
                       </div>
 
                       <div class="contact-row">
                         <label>Fax line 1</label>
-                        <select class="contact-select">
-                          <option>?</option>
-                          <option>📱</option>
-                        </select>
-                        <input type="text" id="acctFax1" class="form-control" placeholder="Enter number" />
-                        <label class="ext-label">Ext</label>
-                        <input type="text" class="ext-input" />
+                        <div class="phone-input-wrapper" data-input-id="acctFax1">
+                          <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                            <span class="phone-country-flag">🇺🇸</span>
+                            <span class="phone-country-code">+1</span>
+                            <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                              <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                          </button>
+                          <input type="tel" id="acctFax1" class="phone-number-input form-control" placeholder="(555) 123-4567" inputmode="tel" />
+                          <div class="phone-validation-message"></div>
+                        </div>
                       </div>
 
                       <div class="contact-row">
                         <label>Fax line 2</label>
-                        <select class="contact-select">
-                          <option>?</option>
-                          <option>📱</option>
-                        </select>
-                        <input type="text" id="acctFax2" class="form-control" placeholder="Enter number" />
-                        <label class="ext-label">Ext</label>
-                        <input type="text" class="ext-input" />
+                        <div class="phone-input-wrapper" data-input-id="acctFax2">
+                          <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                            <span class="phone-country-flag">🇺🇸</span>
+                            <span class="phone-country-code">+1</span>
+                            <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                              <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                          </button>
+                          <input type="tel" id="acctFax2" class="phone-number-input form-control" placeholder="(555) 123-4567" inputmode="tel" />
+                          <div class="phone-validation-message"></div>
+                        </div>
                       </div>
 
                       <div class="contact-row">
                         <label>Fax line 3</label>
-                        <select class="contact-select">
-                          <option>?</option>
-                          <option>📱</option>
-                        </select>
-                        <input type="text" id="acctFax3" class="form-control" placeholder="Enter number" />
-                        <label class="ext-label">Ext</label>
-                        <input type="text" class="ext-input" />
+                        <div class="phone-input-wrapper" data-input-id="acctFax3">
+                          <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                            <span class="phone-country-flag">🇺🇸</span>
+                            <span class="phone-country-code">+1</span>
+                            <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                              <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                          </button>
+                          <input type="tel" id="acctFax3" class="phone-number-input form-control" placeholder="(555) 123-4567" inputmode="tel" />
+                          <div class="phone-validation-message"></div>
+                        </div>
                       </div>
                     </div>
 
@@ -1441,5 +1479,72 @@
     <script src="entrypoint-guard.js"></script>
     <script src="CustomerNotificationService.js"></script>
     <script type="module" src="accounts.js"></script>
+    
+    <!-- Phone Input Country Dropdowns -->
+    <div class="phone-country-dropdown" data-for="acctOfficePhone" hidden>
+      <input type="text" class="phone-country-search" placeholder="Search countries..." />
+      <div class="phone-country-list"></div>
+    </div>
+    <div class="phone-country-dropdown" data-for="acctHomePhone" hidden>
+      <input type="text" class="phone-country-search" placeholder="Search countries..." />
+      <div class="phone-country-list"></div>
+    </div>
+    <div class="phone-country-dropdown" data-for="acctCellularPhone1" hidden>
+      <input type="text" class="phone-country-search" placeholder="Search countries..." />
+      <div class="phone-country-list"></div>
+    </div>
+    <div class="phone-country-dropdown" data-for="acctCellularPhone2" hidden>
+      <input type="text" class="phone-country-search" placeholder="Search countries..." />
+      <div class="phone-country-list"></div>
+    </div>
+    <div class="phone-country-dropdown" data-for="acctCellularPhone3" hidden>
+      <input type="text" class="phone-country-search" placeholder="Search countries..." />
+      <div class="phone-country-list"></div>
+    </div>
+    <div class="phone-country-dropdown" data-for="acctFax1" hidden>
+      <input type="text" class="phone-country-search" placeholder="Search countries..." />
+      <div class="phone-country-list"></div>
+    </div>
+    <div class="phone-country-dropdown" data-for="acctFax2" hidden>
+      <input type="text" class="phone-country-search" placeholder="Search countries..." />
+      <div class="phone-country-list"></div>
+    </div>
+    <div class="phone-country-dropdown" data-for="acctFax3" hidden>
+      <input type="text" class="phone-country-search" placeholder="Search countries..." />
+      <div class="phone-country-list"></div>
+    </div>
+    
+    <script>
+      // Initialize phone inputs when DOM is ready
+      document.addEventListener('DOMContentLoaded', function() {
+        if (window.PhoneInput) {
+          // Populate all country dropdowns
+          const dropdowns = document.querySelectorAll('.phone-country-dropdown');
+          dropdowns.forEach(dropdown => {
+            const list = dropdown.querySelector('.phone-country-list');
+            if (list && PhoneInput.COUNTRIES) {
+              list.innerHTML = PhoneInput.COUNTRIES.map(c => `
+                <button type="button" class="phone-country-option" data-code="${c.code}" data-dial="${c.dial}">
+                  <span class="country-flag">${c.flag}</span>
+                  <span class="country-name">${c.name}</span>
+                  <span class="country-dial">${c.dial}</span>
+                </button>
+              `).join('');
+            }
+          });
+          
+          // Initialize all phone inputs
+          const phoneInputIds = [
+            'acctOfficePhone', 'acctHomePhone', 
+            'acctCellularPhone1', 'acctCellularPhone2', 'acctCellularPhone3',
+            'acctFax1', 'acctFax2', 'acctFax3'
+          ];
+          
+          phoneInputIds.forEach(id => {
+            PhoneInput.init(id);
+          });
+        }
+      });
+    </script>
   </body>
 </html>
