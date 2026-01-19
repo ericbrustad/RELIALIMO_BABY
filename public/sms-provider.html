@@ -143,6 +143,7 @@
               <span class="status-icon">⏳</span>
               <span class="status-text">Checking...</span>
             </div>
+            <button class="btn-add-new" id="loadFromEnvBtn" style="background: linear-gradient(135deg, #00897b, #004d40); font-weight: bold;" title="Load SMS settings from Vercel environment variables">📥 Load from ENV</button>
             <button class="btn-add-new" id="quickSetupBothBtn" style="background: linear-gradient(135deg, #9c27b0, #673ab7); font-weight: bold;" title="Quick setup both SMS and Email with demo values">🔧 Quick Setup SMS + Email</button>
             <button class="btn-add-new" id="saveTwilioBtn">💾 Save Settings</button>
             <button class="btn-add-new" id="saveSecureBtn" style="background:#2e7d32;" title="Save to Supabase & create backup">🔒 Save Secure</button>
@@ -894,6 +895,60 @@ if (!json) {
       
       // Make it globally accessible
       window.QuickSetupManager = QuickSetupManager;
+      
+      // ============================================
+      // Load from ENV button handler
+      // ============================================
+      document.getElementById('loadFromEnvBtn')?.addEventListener('click', async function() {
+        const btn = this;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '⏳ Loading...';
+        btn.disabled = true;
+        
+        try {
+          const response = await fetch('/api/get-env-settings');
+          const data = await response.json();
+          
+          if (!response.ok) {
+            throw new Error(data.error || 'Failed to load settings');
+          }
+          
+          if (!data.success) {
+            throw new Error('Invalid response from server');
+          }
+          
+          const twilio = data.twilio;
+          
+          // Check if any Twilio settings are configured
+          if (!twilio.accountSid && !twilio.fromNumber) {
+            showToast('⚠️ No Twilio settings found in environment variables', 'warning');
+            return;
+          }
+          
+          // Populate form fields
+          if (twilio.accountSid) document.getElementById('twilioAccountSid').value = twilio.accountSid;
+          if (twilio.authToken) document.getElementById('twilioAuthToken').value = twilio.authToken;
+          if (twilio.apiKeySid) document.getElementById('twilioApiKeySid').value = twilio.apiKeySid;
+          if (twilio.apiKeySecret) document.getElementById('twilioApiKeySecret').value = twilio.apiKeySecret;
+          if (twilio.messagingServiceSid) document.getElementById('twilioMessagingServiceSid').value = twilio.messagingServiceSid;
+          if (twilio.fromNumber) document.getElementById('twilioFromNumber').value = twilio.fromNumber;
+          if (twilio.statusCallback) document.getElementById('twilioStatusCallback').value = twilio.statusCallback;
+          
+          showToast('✅ Loaded Twilio settings from environment!', 'success');
+          
+          // Update config status
+          if (typeof SMSConfigChecker !== 'undefined') {
+            setTimeout(() => SMSConfigChecker.checkConfiguration(), 100);
+          }
+          
+        } catch (err) {
+          console.error('Load from ENV error:', err);
+          showToast('❌ ' + (err.message || 'Failed to load from ENV'), 'error');
+        } finally {
+          btn.innerHTML = originalText;
+          btn.disabled = false;
+        }
+      });
     </script>
   </body>
 </html>

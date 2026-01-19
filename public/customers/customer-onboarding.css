@@ -1,0 +1,1127 @@
+/* ============================================
+   Customer Onboarding Styles
+   Complete account setup flow
+   ============================================ */
+
+/* ============================================
+   Base & Container Styles
+   ============================================ */
+.onboarding-container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px;
+  min-height: 100vh;
+}
+
+.onboarding-header {
+  text-align: center;
+  padding: 20px 0 30px;
+}
+
+.onboarding-header .header-logo {
+  max-height: 80px;
+  width: auto;
+  filter: drop-shadow(0 0 30px rgba(99, 102, 241, 0.6));
+}
+
+/* ============================================
+   Verification Screen
+   ============================================ */
+.verification-card {
+  text-align: center;
+  padding: 60px 40px;
+  background: linear-gradient(135deg, #1e1e3f 0%, #252549 100%);
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.verification-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+
+.verification-card h1 {
+  color: #fff;
+  font-size: 24px;
+  margin-bottom: 10px;
+}
+
+.verification-card p {
+  color: #a0aec0;
+  font-size: 16px;
+}
+
+.verify-error,
+.verify-success {
+  margin-top: 30px;
+}
+
+.verify-error.hidden,
+.verify-success.hidden {
+  display: none;
+}
+
+.error-icon,
+.success-icon {
+  font-size: 48px;
+  margin-bottom: 15px;
+}
+
+.verify-error h2,
+.verify-success h2 {
+  color: #fff;
+  font-size: 20px;
+  margin-bottom: 10px;
+}
+
+/* ============================================
+   Account Owner Card
+   ============================================ */
+.account-owner-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.1) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 16px;
+  margin-bottom: 30px;
+}
+
+.owner-avatar {
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.owner-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.owner-info h2 {
+  color: #fff;
+  font-size: 18px;
+  margin: 0 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.owner-email,
+.owner-phone {
+  color: #a0aec0;
+  font-size: 14px;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.owner-badge {
+  flex-shrink: 0;
+}
+
+.badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #fff;
+}
+
+/* ============================================
+   Progress Indicator
+   ============================================ */
+.onboarding-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 30px;
+  padding: 0 20px;
+}
+
+.progress-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-number {
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #718096;
+  transition: all 0.3s ease;
+}
+
+.progress-step.active .step-number {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-color: #8b5cf6;
+  color: #fff;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+}
+
+.progress-step.completed .step-number {
+  background: #22c55e;
+  border-color: #22c55e;
+  color: #fff;
+}
+
+.progress-step.completed .step-number::after {
+  content: '✓';
+}
+
+.step-label {
+  font-size: 12px;
+  color: #718096;
+  white-space: nowrap;
+}
+
+.progress-step.active .step-label {
+  color: #fff;
+}
+
+.progress-step.completed .step-label {
+  color: #22c55e;
+}
+
+.progress-connector {
+  flex: 1;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 10px;
+  margin-bottom: 24px;
+  max-width: 60px;
+}
+
+/* ============================================
+   Step Cards
+   ============================================ */
+.onboarding-step {
+  display: none;
+}
+
+.onboarding-step.active {
+  display: block;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.step-card {
+  background: linear-gradient(135deg, #1e1e3f 0%, #252549 100%);
+  border-radius: 20px;
+  padding: 30px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.step-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.step-icon {
+  font-size: 48px;
+  margin-bottom: 15px;
+}
+
+.step-header h2 {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 10px;
+  line-height: 1.4;
+}
+
+.step-description {
+  color: #a0aec0;
+  font-size: 14px;
+  margin: 0;
+}
+
+/* ============================================
+   Form Styles
+   ============================================ */
+.form-section {
+  margin-bottom: 24px;
+}
+
+.form-label {
+  display: block;
+  color: #e2e8f0;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.form-label-sm {
+  display: block;
+  color: #a0aec0;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.form-input::placeholder {
+  color: #718096;
+}
+
+.form-input.valid {
+  border-color: #22c55e;
+}
+
+.form-input.invalid {
+  border-color: #ef4444;
+}
+
+.form-input-sm {
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #a0aec0;
+  font-size: 14px;
+}
+
+.form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+.input-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: #718096;
+  font-size: 13px;
+}
+
+.hint-icon {
+  font-size: 12px;
+}
+
+/* ============================================
+   Address Input & Suggestions
+   ============================================ */
+.address-input-wrapper {
+  position: relative;
+}
+
+.address-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #1e1e3f;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 12px;
+  margin-top: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 100;
+  display: none;
+}
+
+.address-suggestions.show {
+  display: block;
+}
+
+.address-suggestion {
+  padding: 12px 16px;
+  color: #e2e8f0;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background 0.2s ease;
+}
+
+.address-suggestion:hover {
+  background: rgba(99, 102, 241, 0.2);
+}
+
+.address-suggestion:last-child {
+  border-bottom: none;
+}
+
+.parsed-address {
+  margin-top: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+}
+
+.parsed-address.hidden {
+  display: none;
+}
+
+/* Google Places Autocomplete Styling */
+.pac-container {
+  background: #1e1e3f !important;
+  border: 1px solid rgba(99, 102, 241, 0.3) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+  margin-top: 4px !important;
+  font-family: 'Inter', sans-serif !important;
+  z-index: 10000 !important;
+}
+
+.pac-item {
+  padding: 12px 16px !important;
+  color: #e2e8f0 !important;
+  background: transparent !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  cursor: pointer !important;
+  line-height: 1.5 !important;
+}
+
+.pac-item:hover {
+  background: rgba(99, 102, 241, 0.2) !important;
+}
+
+.pac-item-query {
+  color: #fff !important;
+  font-size: 14px !important;
+}
+
+.pac-matched {
+  color: #6366f1 !important;
+  font-weight: 600 !important;
+}
+
+.pac-icon {
+  display: none !important;
+}
+
+/* ============================================
+   Airport Suggestions
+   ============================================ */
+.airport-suggestion-section {
+  margin-top: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 16px;
+}
+
+.airport-suggestion-section.hidden {
+  display: none;
+}
+
+.suggestion-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.suggestion-icon {
+  font-size: 24px;
+}
+
+.suggestion-header h3 {
+  color: #22c55e;
+  font-size: 16px;
+  margin: 0;
+}
+
+.suggestion-text {
+  color: #a0aec0;
+  font-size: 14px;
+  margin: 0 0 16px;
+}
+
+.nearby-airports-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nearby-airports-list.hidden {
+  display: none;
+}
+
+.airport-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.airport-option:hover {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: #6366f1;
+}
+
+.airport-code {
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.airport-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.airport-name {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.airport-distance {
+  color: #718096;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.airport-select-icon {
+  color: #6366f1;
+  font-size: 20px;
+}
+
+.selected-airport-display {
+  padding: 16px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.selected-airport-display.hidden {
+  display: none;
+}
+
+.selected-label {
+  color: #22c55e;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.selected-airport {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+/* ============================================
+   Phone Input (intl-tel-input overrides)
+   ============================================ */
+.phone-input-wrapper {
+  width: 100%;
+}
+
+.iti {
+  width: 100%;
+}
+
+.iti__flag-container {
+  padding: 0 !important;
+}
+
+.iti__selected-flag {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-radius: 12px 0 0 12px !important;
+  padding: 0 12px !important;
+}
+
+.iti__country-list {
+  background: #1e1e3f !important;
+  border: 1px solid rgba(99, 102, 241, 0.3) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+}
+
+.iti__country {
+  color: #e2e8f0 !important;
+  padding: 10px 16px !important;
+}
+
+.iti__country:hover {
+  background: rgba(99, 102, 241, 0.2) !important;
+}
+
+.iti__country.iti__highlight {
+  background: rgba(99, 102, 241, 0.3) !important;
+}
+
+.iti__dial-code {
+  color: #a0aec0 !important;
+}
+
+.iti__divider {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.phone-verification-status {
+  margin-top: 12px;
+}
+
+.phone-verification-status.hidden {
+  display: none;
+}
+
+.verification-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+}
+
+.verification-badge.verified {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.badge-icon {
+  font-size: 14px;
+}
+
+/* ============================================
+   Payment Form
+   ============================================ */
+.payment-question {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.question-text {
+  color: #e2e8f0;
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
+.payment-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.payment-option-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 18px 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.payment-option-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.payment-option-btn.selected {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: #6366f1;
+}
+
+.payment-option-btn.secondary {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.option-icon {
+  font-size: 24px;
+}
+
+.option-text {
+  flex: 1;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.option-badge {
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 12px;
+  font-size: 11px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.credit-card-form {
+  margin-top: 24px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+}
+
+.credit-card-form.hidden {
+  display: none;
+}
+
+.card-input-wrapper {
+  position: relative;
+}
+
+.card-icons {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.secure-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 10px;
+  color: #22c55e;
+  font-size: 13px;
+}
+
+/* ============================================
+   Step Actions
+   ============================================ */
+.step-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #fff;
+  flex: 1;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.btn-lg {
+  padding: 16px 32px;
+  font-size: 18px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #6366f1;
+  cursor: pointer;
+  font-size: 14px;
+  text-decoration: underline;
+}
+
+.btn-link:hover {
+  color: #8b5cf6;
+}
+
+/* ============================================
+   Completion Section
+   ============================================ */
+.completion-section.hidden {
+  display: none;
+}
+
+.completion-card {
+  text-align: center;
+  padding: 40px 30px;
+  background: linear-gradient(135deg, #1e1e3f 0%, #252549 100%);
+  border-radius: 20px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.completion-icon {
+  font-size: 72px;
+  margin-bottom: 20px;
+  animation: bounce 1s ease infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.completion-card h1 {
+  color: #fff;
+  font-size: 28px;
+  margin: 0 0 10px;
+}
+
+.completion-card > p {
+  color: #a0aec0;
+  font-size: 16px;
+  margin-bottom: 30px;
+}
+
+.account-summary {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 30px;
+  text-align: left;
+}
+
+.summary-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 16px;
+}
+
+.summary-avatar {
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.summary-info {
+  flex: 1;
+}
+
+.summary-info h3 {
+  color: #fff;
+  font-size: 16px;
+  margin: 0 0 4px;
+}
+
+.summary-info p {
+  color: #a0aec0;
+  font-size: 13px;
+  margin: 0;
+}
+
+.summary-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.detail-icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+}
+
+.detail-text {
+  color: #e2e8f0;
+  font-size: 14px;
+  flex: 1;
+}
+
+/* ============================================
+   Drivers Map Section
+   ============================================ */
+.location-map-section {
+  margin: 30px 0;
+  text-align: left;
+}
+
+.location-map-section h3 {
+  color: #fff;
+  font-size: 16px;
+  margin: 0 0 16px;
+}
+
+.drivers-map {
+  height: 200px;
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  background: #1a1a2e;
+}
+
+.drivers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.driver-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+
+.driver-photo {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+.driver-info {
+  flex: 1;
+}
+
+.driver-name {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.driver-vehicle {
+  color: #a0aec0;
+  font-size: 12px;
+}
+
+.driver-stats {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.driver-stats span {
+  color: #718096;
+  font-size: 11px;
+}
+
+.driver-stats .rating {
+  color: #fbbf24;
+}
+
+.driver-distance {
+  color: #6366f1;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Map Markers */
+.home-marker {
+  font-size: 28px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.driver-marker {
+  font-size: 24px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.driver-marker:hover {
+  transform: scale(1.2);
+}
+
+/* ============================================
+   Toast Notifications
+   ============================================ */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.toast {
+  padding: 14px 24px;
+  background: #1e1e3f;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.3s ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast-success {
+  background: rgba(34, 197, 94, 0.95);
+  border-color: #22c55e;
+}
+
+.toast-error {
+  background: rgba(239, 68, 68, 0.95);
+  border-color: #ef4444;
+}
+
+.toast-info {
+  background: rgba(99, 102, 241, 0.95);
+  border-color: #6366f1;
+}
+
+/* ============================================
+   Loading Spinner
+   ============================================ */
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 20px auto;
+}
+
+.loading-spinner.hidden {
+  display: none;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================
+   Responsive Adjustments
+   ============================================ */
+@media (max-width: 480px) {
+  .onboarding-container {
+    padding: 15px;
+  }
+  
+  .step-card {
+    padding: 20px;
+  }
+  
+  .step-header h2 {
+    font-size: 18px;
+  }
+  
+  .account-owner-card {
+    flex-wrap: wrap;
+  }
+  
+  .owner-badge {
+    width: 100%;
+    text-align: center;
+    margin-top: 10px;
+  }
+  
+  .progress-step .step-label {
+    font-size: 10px;
+  }
+  
+  .form-row {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .airport-name {
+    font-size: 12px;
+  }
+}

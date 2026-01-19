@@ -3,6 +3,8 @@
 // ============================================
 
 import { getSupabaseCredentials } from '/shared/supabase-config.js';
+import CustomerAuth from './customer-auth-service.js';
+import { initUserMenu, injectUserMenuStyles } from './customer-user-menu.js';
 
 // ============================================
 // State Management
@@ -72,22 +74,96 @@ const bookingDefaults = {
 // ============================================
 // Initialization
 // ============================================
+
+// Auto-load ENV settings for SMS/Email (needed for OTP)
+async function loadEnvSettingsToLocalStorage() {
+  try {
+    // Check if already loaded in this session
+    const lastLoad = localStorage.getItem('envSettingsLastLoad');
+    const now = Date.now();
+    // Only reload if not loaded in last 5 minutes
+    if (lastLoad && (now - parseInt(lastLoad)) < 5 * 60 * 1000) {
+      console.log('[CustomerPortal] ENV settings recently loaded, skipping');
+      return;
+    }
+    
+    console.log('[CustomerPortal] Loading ENV settings...');
+    const response = await fetch('/api/get-env-settings');
+    const data = await response.json();
+    
+    if (data.success) {
+      // Save SMS/Twilio settings
+      if (data.twilio && (data.twilio.accountSid || data.twilio.authToken || data.twilio.phoneNumber)) {
+        const smsProviders = JSON.parse(localStorage.getItem('smsProviders') || '[]');
+        const existingTwilioIndex = smsProviders.findIndex(p => p.type === 'twilio');
+        const twilioProvider = {
+          type: 'twilio',
+          accountSid: data.twilio.accountSid || '',
+          authToken: data.twilio.authToken || '',
+          phoneNumber: data.twilio.phoneNumber || '',
+          fromNumber: data.twilio.phoneNumber || '',
+          isDefault: true,
+          enabled: true
+        };
+        
+        if (existingTwilioIndex >= 0) {
+          smsProviders[existingTwilioIndex] = { ...smsProviders[existingTwilioIndex], ...twilioProvider };
+        } else {
+          smsProviders.push(twilioProvider);
+        }
+        localStorage.setItem('smsProviders', JSON.stringify(smsProviders));
+        console.log('[CustomerPortal] SMS settings loaded from ENV');
+      }
+      
+      // Save Email settings
+      if (data.email && (data.email.resendApiKey || data.email.fromEmail || data.email.smtpHost)) {
+        const emailSettings = JSON.parse(localStorage.getItem('emailSettings') || '{}');
+        emailSettings.fromEmail = data.email.fromEmail || emailSettings.fromEmail || '';
+        emailSettings.replyTo = data.email.replyTo || emailSettings.replyTo || '';
+        emailSettings.resendApiKey = data.email.resendApiKey || emailSettings.resendApiKey || '';
+        emailSettings.smtpHost = data.email.smtpHost || emailSettings.smtpHost || '';
+        emailSettings.smtpPort = data.email.smtpPort || emailSettings.smtpPort || '';
+        emailSettings.smtpUser = data.email.smtpUser || emailSettings.smtpUser || '';
+        emailSettings.smtpPass = data.email.smtpPass || emailSettings.smtpPass || '';
+        localStorage.setItem('emailSettings', JSON.stringify(emailSettings));
+        console.log('[CustomerPortal] Email settings loaded from ENV');
+      }
+      
+      localStorage.setItem('envSettingsLastLoad', now.toString());
+      console.log('[CustomerPortal] ENV settings loaded successfully');
+    }
+  } catch (error) {
+    console.warn('[CustomerPortal] Could not load ENV settings:', error.message);
+  }
+}
+
 async function init() {
   console.log('[CustomerPortal] Initializing...');
   
   try {
+    // Load ENV settings for SMS/Email
+    await loadEnvSettingsToLocalStorage();
+    
     // Get portal slug from URL
     extractPortalSlug();
     
-    // Check authentication
-    const isAuth = await checkAuth();
+    // Initialize auth service and check authentication
+    const isAuth = await CustomerAuth.initAuth();
     
     if (!isAuth) {
       // Redirect to auth page
       console.log('[CustomerPortal] Not authenticated, redirecting to auth...');
-      window.location.href = 'auth.html';
+      window.location.href = '/auth';
       return;
     }
+    
+    // Sync state from auth service
+    state.session = CustomerAuth.getSession();
+    state.customer = CustomerAuth.getCustomer();
+    
+    // Inject user menu styles and initialize user menu
+    injectUserMenuStyles();
+    initUserMenu('userMenuContainer');
     
     // Load portal settings
     await loadPortalSettings();
@@ -212,9 +288,8 @@ async function fetchCustomerInfo() {
 }
 
 function logout() {
-  localStorage.removeItem('customer_session');
-  localStorage.removeItem('current_customer');
-  window.location.href = 'auth.html';
+  // Use the centralized auth service for logout
+  CustomerAuth.logout(true);
 }
 
 // ============================================
@@ -2434,7 +2509,7 @@ function setupEventListeners() {
     document.getElementById('preferencesModal').classList.remove('hidden');
   });
   
-  document.getElementById('logoutBtn')?.addEventListener('click', logout);
+  // Note: Logout is now handled by the user menu component (customer-user-menu.js)
   
   // Passenger selection
   document.getElementById('passengerSelect')?.addEventListener('change', (e) => {

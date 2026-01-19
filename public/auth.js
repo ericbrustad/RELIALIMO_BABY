@@ -96,8 +96,61 @@ async function redirectIfSignedIn() {
   }
 }
 
+// Auto-load ENV settings on admin login
+async function loadEnvSettingsToLocalStorage() {
+  try {
+    console.log('[Auth] Loading ENV settings...');
+    const response = await fetch('/api/get-env-settings');
+    const data = await response.json();
+    
+    if (data.success) {
+      // Save SMS/Twilio settings
+      if (data.twilio && (data.twilio.accountSid || data.twilio.authToken || data.twilio.phoneNumber)) {
+        const smsProviders = JSON.parse(localStorage.getItem('smsProviders') || '[]');
+        const existingTwilioIndex = smsProviders.findIndex(p => p.type === 'twilio');
+        const twilioProvider = {
+          type: 'twilio',
+          accountSid: data.twilio.accountSid || '',
+          authToken: data.twilio.authToken || '',
+          phoneNumber: data.twilio.phoneNumber || '',
+          enabled: true
+        };
+        
+        if (existingTwilioIndex >= 0) {
+          smsProviders[existingTwilioIndex] = { ...smsProviders[existingTwilioIndex], ...twilioProvider };
+        } else {
+          smsProviders.push(twilioProvider);
+        }
+        localStorage.setItem('smsProviders', JSON.stringify(smsProviders));
+        console.log('[Auth] SMS settings loaded from ENV');
+      }
+      
+      // Save Email settings
+      if (data.email && (data.email.resendApiKey || data.email.fromEmail || data.email.smtpHost)) {
+        const emailSettings = JSON.parse(localStorage.getItem('emailSettings') || '{}');
+        emailSettings.fromEmail = data.email.fromEmail || emailSettings.fromEmail || '';
+        emailSettings.replyTo = data.email.replyTo || emailSettings.replyTo || '';
+        emailSettings.resendApiKey = data.email.resendApiKey || emailSettings.resendApiKey || '';
+        emailSettings.smtpHost = data.email.smtpHost || emailSettings.smtpHost || '';
+        emailSettings.smtpPort = data.email.smtpPort || emailSettings.smtpPort || '';
+        emailSettings.smtpUser = data.email.smtpUser || emailSettings.smtpUser || '';
+        emailSettings.smtpPass = data.email.smtpPass || emailSettings.smtpPass || '';
+        localStorage.setItem('emailSettings', JSON.stringify(emailSettings));
+        console.log('[Auth] Email settings loaded from ENV');
+      }
+      
+      console.log('[Auth] ENV settings loaded successfully');
+    }
+  } catch (error) {
+    console.warn('[Auth] Could not load ENV settings:', error.message);
+  }
+}
+
 async function redirectToUserPortal(session) {
   try {
+    // Load ENV settings to localStorage on login
+    await loadEnvSettingsToLocalStorage();
+    
     const email = session.user?.email;
     if (!email) {
       window.location.replace('/index.html');

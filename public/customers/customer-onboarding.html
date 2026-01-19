@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>Complete Your Account | RELIALIMO</title>
+  <link rel="icon" href="favicon.ico">
+  <link rel="manifest" href="customer-portal-manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="customer-portal.css">
+  <link rel="stylesheet" href="customer-onboarding.css">
+  
+  <!-- Google Maps for address autocomplete -->
+  <script src="/shared/env.js"></script>
+  <script>
+    // Load Google Maps API dynamically
+    window.initGoogleMaps = function() {
+      console.log('Google Maps API loaded');
+      window.googleMapsReady = true;
+      if (window.onGoogleMapsReady) window.onGoogleMapsReady();
+    };
+  </script>
+  <script async defer 
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAZhGX8NWGZd4p9OADvlqOgM6eZDwhQQh8&libraries=places&callback=initGoogleMaps">
+  </script>
+  
+  <!-- Mapbox for map display -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  
+  <!-- International phone input -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.19/css/intlTelInput.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.19/js/intlTelInput.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="screen active" style="background: radial-gradient(ellipse at center, rgba(99, 102, 241, 0.3) 0%, rgba(26, 26, 46, 0.9) 50%, #1a1a2e 100%);">
+      <div class="loading-content">
+        <div class="logo-pulse" style="filter: drop-shadow(0 0 60px rgba(99, 102, 241, 0.8)) drop-shadow(0 0 120px rgba(139, 92, 246, 0.5));">
+          <img src="https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/reliabull%20limo%20logowhitecropped.png" 
+               alt="RELIALIMO" class="auth-logo" style="max-height: 150px; width: auto; max-width: 85vw;">
+        </div>
+        <p style="font-size: 1.8rem; margin-top: 1rem; text-shadow: 0 0 20px rgba(99, 102, 241, 0.8); color: white;">
+          Setting up your account...
+        </p>
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+
+    <!-- Email Verification Screen -->
+    <div id="verifyScreen" class="screen">
+      <div class="onboarding-container">
+        <div class="onboarding-card verification-card">
+          <div class="verification-icon">📧</div>
+          <h1>Verifying Your Email...</h1>
+          <p id="verifyMessage">Please wait while we verify your email address.</p>
+          <div class="loading-spinner" id="verifySpinner"></div>
+          
+          <div id="verifyError" class="verify-error hidden">
+            <div class="error-icon">❌</div>
+            <h2>Verification Failed</h2>
+            <p id="verifyErrorMessage"></p>
+            <button type="button" class="btn btn-primary" onclick="window.location.href='auth.html'">
+              Return to Login
+            </button>
+          </div>
+          
+          <div id="verifySuccess" class="verify-success hidden">
+            <div class="success-icon">✅</div>
+            <h2>Email Verified!</h2>
+            <p>Redirecting you to complete your account setup...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Onboarding Screen -->
+    <div id="onboardingScreen" class="screen">
+      <div class="onboarding-container">
+        <!-- Header -->
+        <header class="onboarding-header">
+          <img src="https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/reliabull%20limo%20logowhitecropped.png" 
+               alt="RELIALIMO" class="header-logo">
+        </header>
+
+        <!-- Account Owner Info -->
+        <div class="account-owner-card">
+          <div class="owner-avatar" id="ownerAvatar">
+            <span id="ownerInitials">?</span>
+          </div>
+          <div class="owner-info">
+            <h2 id="ownerName">Welcome!</h2>
+            <p class="owner-email" id="ownerEmail">Loading...</p>
+            <p class="owner-phone" id="ownerPhone"></p>
+          </div>
+          <div class="owner-badge">
+            <span class="badge badge-primary">Account Owner</span>
+          </div>
+        </div>
+
+        <!-- Progress Indicator -->
+        <div class="onboarding-progress">
+          <div class="progress-step active" data-step="1">
+            <div class="step-number">1</div>
+            <span class="step-label">Home Address</span>
+          </div>
+          <div class="progress-connector"></div>
+          <div class="progress-step" data-step="2">
+            <div class="step-number">2</div>
+            <span class="step-label">Phone Number</span>
+          </div>
+          <div class="progress-connector"></div>
+          <div class="progress-step" data-step="3">
+            <div class="step-number">3</div>
+            <span class="step-label">Payment</span>
+          </div>
+        </div>
+
+        <!-- Step 1: Home Address -->
+        <div id="step1" class="onboarding-step active">
+          <div class="step-card">
+            <div class="step-header">
+              <div class="step-icon">🏠</div>
+              <h2>Please enter your Home address</h2>
+              <p class="step-description">We'll use this to find nearby airports and personalize your transportation experience.</p>
+            </div>
+            
+            <div class="form-section">
+              <label class="form-label">Home Address</label>
+              <div class="address-input-wrapper">
+                <input type="text" 
+                       id="homeAddressInput" 
+                       class="form-input address-autocomplete" 
+                       placeholder="Start typing your address..."
+                       autocomplete="off">
+                <div id="addressSuggestions" class="address-suggestions"></div>
+              </div>
+              
+              <!-- Parsed address fields (hidden but stored) -->
+              <div id="parsedAddressFields" class="parsed-address hidden">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label-sm">Street Address</label>
+                    <input type="text" id="homeStreet" class="form-input-sm" readonly>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label-sm">City</label>
+                    <input type="text" id="homeCity" class="form-input-sm" readonly>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label-sm">State</label>
+                    <input type="text" id="homeState" class="form-input-sm" readonly>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label-sm">ZIP</label>
+                    <input type="text" id="homeZip" class="form-input-sm" readonly>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Airport Suggestions -->
+            <div id="airportSuggestionSection" class="airport-suggestion-section hidden">
+              <div class="suggestion-header">
+                <span class="suggestion-icon">✈️</span>
+                <h3>Nearby Airports Found!</h3>
+              </div>
+              <p class="suggestion-text">Would you like to use one of these airports for your home airport transportation needs?</p>
+              
+              <div id="nearbyAirportsList" class="nearby-airports-list">
+                <!-- Airports will be populated here -->
+              </div>
+              
+              <div class="selected-airport-display hidden" id="selectedAirportDisplay">
+                <div class="selected-label">✅ Selected Home Airport:</div>
+                <div class="selected-airport" id="selectedAirportName"></div>
+                <button type="button" class="btn-link" id="changeAirportBtn">Change</button>
+              </div>
+            </div>
+
+            <div class="step-actions">
+              <button type="button" class="btn btn-primary btn-lg" id="step1NextBtn" disabled>
+                Continue →
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Phone Number -->
+        <div id="step2" class="onboarding-step">
+          <div class="step-card">
+            <div class="step-header">
+              <div class="step-icon">📱</div>
+              <h2>What is the Cell Phone Number you would like to be associated with this account?</h2>
+              <p class="step-description">We'll send you trip updates, driver notifications, and important alerts via SMS.</p>
+            </div>
+            
+            <div class="form-section">
+              <label class="form-label">Cell Phone Number</label>
+              <div class="phone-input-wrapper">
+                <input type="tel" 
+                       id="cellPhoneInput" 
+                       class="form-input phone-input"
+                       placeholder="(555) 123-4567">
+              </div>
+              <p class="input-hint">
+                <span class="hint-icon">ℹ️</span>
+                Enter your phone number with country code for international format
+              </p>
+            </div>
+
+            <div class="phone-verification-status hidden" id="phoneVerificationStatus">
+              <div class="verification-badge verified">
+                <span class="badge-icon">✓</span>
+                <span class="badge-text">Phone number validated</span>
+              </div>
+            </div>
+
+            <div class="step-actions">
+              <button type="button" class="btn btn-secondary" id="step2BackBtn">
+                ← Back
+              </button>
+              <button type="button" class="btn btn-primary btn-lg" id="step2NextBtn" disabled>
+                Continue →
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Credit Card -->
+        <div id="step3" class="onboarding-step">
+          <div class="step-card">
+            <div class="step-header">
+              <div class="step-icon">💳</div>
+              <h2>We will need credit card information before we can book a trip</h2>
+              <p class="step-description">Your payment information is securely encrypted and only charged when you book rides.</p>
+            </div>
+            
+            <div class="payment-question">
+              <p class="question-text">Would you like to add your payment method now?</p>
+              
+              <div class="payment-options">
+                <button type="button" class="payment-option-btn" id="addCardYesBtn">
+                  <span class="option-icon">✅</span>
+                  <span class="option-text">Yes, add my card now</span>
+                  <span class="option-badge">Recommended</span>
+                </button>
+                
+                <button type="button" class="payment-option-btn secondary" id="addCardNoBtn">
+                  <span class="option-icon">⏭️</span>
+                  <span class="option-text">No, I'll add it later</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Credit Card Form (shown when Yes is clicked) -->
+            <div id="creditCardForm" class="credit-card-form hidden">
+              <div class="form-section">
+                <label class="form-label">Cardholder Name</label>
+                <input type="text" id="cardName" class="form-input" placeholder="Name on card" autocomplete="cc-name">
+              </div>
+              
+              <div class="form-section">
+                <label class="form-label">Card Number</label>
+                <div class="card-input-wrapper">
+                  <input type="text" id="cardNumber" class="form-input" 
+                         placeholder="1234 5678 9012 3456" 
+                         autocomplete="cc-number"
+                         maxlength="19"
+                         inputmode="numeric">
+                  <div class="card-icons" id="cardIcons">
+                    <span class="card-icon visa">💳</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Expiry Date</label>
+                  <input type="text" id="cardExpiry" class="form-input" 
+                         placeholder="MM/YY" 
+                         autocomplete="cc-exp"
+                         maxlength="5"
+                         inputmode="numeric">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">CVV</label>
+                  <input type="text" id="cardCvv" class="form-input" 
+                         placeholder="123" 
+                         autocomplete="cc-csc"
+                         maxlength="4"
+                         inputmode="numeric">
+                </div>
+              </div>
+              
+              <div class="secure-badge">
+                <span class="secure-icon">🔒</span>
+                <span>Your payment info is encrypted and secure</span>
+              </div>
+            </div>
+
+            <div class="step-actions">
+              <button type="button" class="btn btn-secondary" id="step3BackBtn">
+                ← Back
+              </button>
+              <button type="button" class="btn btn-primary btn-lg" id="completeSetupBtn">
+                Complete Setup →
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Completion Screen -->
+        <div id="completionSection" class="completion-section hidden">
+          <div class="completion-card">
+            <div class="completion-icon">🎉</div>
+            <h1>Welcome to RELIALIMO!</h1>
+            <p>Your account is all set up and ready to go.</p>
+            
+            <!-- Account Summary -->
+            <div class="account-summary">
+              <div class="summary-header">
+                <div class="summary-avatar" id="summaryAvatar">
+                  <span id="summaryInitials"></span>
+                </div>
+                <div class="summary-info">
+                  <h3 id="summaryName"></h3>
+                  <p id="summaryEmail"></p>
+                  <p id="summaryPhone"></p>
+                </div>
+              </div>
+              
+              <div class="summary-details">
+                <div class="detail-item">
+                  <span class="detail-icon">🏠</span>
+                  <span class="detail-text" id="summaryAddress">-</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-icon">✈️</span>
+                  <span class="detail-text" id="summaryAirport">No home airport selected</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-icon">💳</span>
+                  <span class="detail-text" id="summaryPayment">No payment method</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Map with location and mock drivers -->
+            <div class="location-map-section">
+              <h3>🚗 Drivers Near You</h3>
+              <div id="driversMap" class="drivers-map"></div>
+              <div class="drivers-list" id="nearbyDriversList">
+                <!-- Mock drivers will be populated here -->
+              </div>
+            </div>
+
+            <button type="button" class="btn btn-primary btn-lg" id="goToPortalBtn">
+              Start Booking Rides →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script type="module" src="customer-onboarding.js"></script>
+</body>
+</html>

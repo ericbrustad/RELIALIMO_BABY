@@ -22,8 +22,8 @@
     <!-- Loading Screen -->
     <div id="loadingScreen" class="screen active" style="background: radial-gradient(ellipse at center, rgba(99, 102, 241, 0.3) 0%, rgba(26, 26, 46, 0.9) 50%, #1a1a2e 100%);">
       <div class="loading-content">
-        <div class="logo-pulse" style="filter: drop-shadow(0 0 60px rgba(99, 102, 241, 0.8)) drop-shadow(0 0 120px rgba(139, 92, 246, 0.5));"><img src="https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/reliabull%20limo%20logowhitecropped.png" alt="RELIALIMO" class="auth-logo" style="max-height: 150px; width: auto; max-width: 85vw;"></div>
-        <p style="font-size: 1.8rem; margin-top: 1rem; text-shadow: 0 0 20px rgba(99, 102, 241, 0.8); color: white;">Customer Portal</p>
+        <div class="logo-pulse" style="filter: drop-shadow(0 0 40px rgba(99, 102, 241, 0.6));"><img src="https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/reliabull%20limo%20logowhitecropped.png" alt="RELIALIMO" class="auth-logo" style="max-height: 70px; width: auto;"></div>
+        <p style="font-size: 1.2rem; margin-top: 0.75rem; text-shadow: 0 0 15px rgba(99, 102, 241, 0.6); color: white;">Customer Portal</p>
         <div class="loading-spinner"></div>
       </div>
     </div>
@@ -32,12 +32,12 @@
     <div id="authScreen" class="screen">
       <div class="auth-container">
         <div class="auth-card">
-          <div class="auth-header" style="filter: drop-shadow(0 0 40px rgba(99, 102, 241, 0.6));">
+          <div class="auth-header" style="filter: drop-shadow(0 0 25px rgba(99, 102, 241, 0.4)); margin-bottom: 16px;">
             <img src="https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/reliabull%20limo%20logowhitecropped.png" 
                  alt="RELIALIMO" 
                  class="auth-logo"
-                 style="max-height: 120px; width: auto; max-width: 80vw;">
-            <p class="auth-subtitle" style="font-size: 1.5rem; margin-top: 1rem; text-shadow: 0 0 20px rgba(99, 102, 241, 0.8);">Customer Portal</p>
+                 style="max-height: 55px; width: auto;">
+            <p class="auth-subtitle" style="font-size: 1rem; margin-top: 0.5rem; color: rgba(255,255,255,0.7);">Customer Portal</p>
           </div>
 
           <!-- Login Form -->
@@ -62,7 +62,13 @@
                   </svg>
                 </button>
               </div>
-              <a href="#" id="forgotPasswordLink" class="forgot-password-link">Forgot Password?</a>
+              <div class="form-options">
+                <label class="remember-me-label">
+                  <input type="checkbox" id="rememberMe" checked>
+                  <span>Remember me for 30 days</span>
+                </label>
+                <a href="#" id="forgotPasswordLink" class="forgot-password-link">Forgot Password?</a>
+              </div>
             </div>
             <button type="button" id="loginBtn" class="auth-btn auth-btn-primary">
               Sign In
@@ -164,59 +170,15 @@
 
   <script type="module">
     import { getSupabaseCredentials } from '/shared/supabase-config.js';
+    import CustomerAuth from './customer-auth-service.js';
     
     // Check if already authenticated and redirect
     async function checkAuth() {
-      try {
-        const session = localStorage.getItem('customer_session');
-        if (session) {
-          const parsed = JSON.parse(session);
-          if (parsed?.access_token) {
-            const customerInfo = localStorage.getItem('current_customer');
-            if (customerInfo) {
-              const customer = JSON.parse(customerInfo);
-              const slug = customer.portal_slug || 
-                `${(customer.first_name || '').toLowerCase()}_${(customer.last_name || '').toLowerCase()}`.replace(/[^a-z0-9_]/g, '');
-              window.location.href = `/${slug}`;
-              return true;
-            }
-            
-            // Fetch customer info
-            try {
-              const creds = getSupabaseCredentials();
-              const userEmail = parsed.user?.email;
-              if (userEmail) {
-                const response = await fetch(
-                  `${creds.url}/rest/v1/accounts?email=eq.${encodeURIComponent(userEmail.toLowerCase())}&select=id,first_name,last_name,email,phone,portal_slug`,
-                  {
-                    headers: {
-                      'apikey': creds.anonKey,
-                      'Authorization': `Bearer ${parsed.access_token}`
-                    }
-                  }
-                );
-                if (response.ok) {
-                  const customers = await response.json();
-                  if (customers && customers.length > 0) {
-                    const customer = customers[0];
-                    localStorage.setItem('current_customer', JSON.stringify(customer));
-                    const slug = customer.portal_slug || 
-                      `${(customer.first_name || '').toLowerCase()}_${(customer.last_name || '').toLowerCase()}`.replace(/[^a-z0-9_]/g, '');
-                    window.location.href = `/${slug}`;
-                    return true;
-                  }
-                }
-              }
-            } catch (fetchErr) {
-              console.warn('Could not fetch customer:', fetchErr);
-            }
-            
-            window.location.href = 'customer-portal.html';
-            return true;
-          }
-        }
-      } catch (e) {
-        console.warn('Auth check failed:', e);
+      const isAuth = await CustomerAuth.initAuth();
+      if (isAuth) {
+        const slug = CustomerAuth.getPortalSlug();
+        window.location.href = slug ? `/${slug}` : '/';
+        return true;
       }
       return false;
     }
@@ -271,10 +233,11 @@
       });
     });
 
-    // Login handler
+    // Login handler - using the centralized auth service
     document.getElementById('loginBtn')?.addEventListener('click', async () => {
       const email = document.getElementById('loginEmail').value.trim();
       const password = document.getElementById('loginPassword').value;
+      const rememberMe = document.getElementById('rememberMe')?.checked || false;
 
       if (!email || !password) {
         showToast('Please enter email and password', 'error');
@@ -286,52 +249,15 @@
       btn.textContent = 'Signing In...';
 
       try {
-        const creds = getSupabaseCredentials();
-        const response = await fetch(`${creds.url}/auth/v1/token?grant_type=password`, {
-          method: 'POST',
-          headers: {
-            'apikey': creds.anonKey,
-            'Authorization': `Bearer ${creds.anonKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ email, password })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error_description || data.msg || 'Login failed');
-        }
-
-        // Store session
-        localStorage.setItem('customer_session', JSON.stringify(data));
-
-        // Fetch customer info
-        const customerResp = await fetch(
-          `${creds.url}/rest/v1/accounts?email=eq.${encodeURIComponent(email.toLowerCase())}&select=id,first_name,last_name,email,phone,portal_slug`,
-          {
-            headers: {
-              'apikey': creds.anonKey,
-              'Authorization': `Bearer ${data.access_token}`
-            }
-          }
-        );
-
-        if (customerResp.ok) {
-          const customers = await customerResp.json();
-          if (customers && customers.length > 0) {
-            localStorage.setItem('current_customer', JSON.stringify(customers[0]));
-            const slug = customers[0].portal_slug || 
-              `${(customers[0].first_name || '').toLowerCase()}_${(customers[0].last_name || '').toLowerCase()}`.replace(/[^a-z0-9_]/g, '');
-            showToast('Welcome back!', 'success');
-            setTimeout(() => {
-              window.location.href = `/${slug}`;
-            }, 500);
-            return;
-          }
-        }
-
-        window.location.href = 'customer-portal.html';
+        const { session, customer } = await CustomerAuth.login(email, password, rememberMe);
+        
+        showToast('Welcome back!', 'success');
+        
+        // Redirect to portal
+        const slug = CustomerAuth.getPortalSlug();
+        setTimeout(() => {
+          window.location.href = slug ? `/${slug}` : '/';
+        }, 500);
 
       } catch (err) {
         console.error('Login error:', err);
@@ -393,7 +319,7 @@
         }
 
         // Create customer record in accounts table
-        const portalSlug = `${firstName.toLowerCase()}_${lastName.toLowerCase()}`.replace(/[^a-z0-9_]/g, '');
+        const portalSlug = `${firstName}_${lastName}`.replace(/[^a-zA-Z0-9_]/g, '_');
         const customerData = {
           first_name: firstName,
           last_name: lastName,
@@ -402,6 +328,8 @@
           portal_slug: portalSlug,
           customer_type: 'individual',
           is_active: true,
+          email_verified: false,
+          onboarding_complete: false,
           created_at: new Date().toISOString()
         };
 
@@ -424,20 +352,20 @@
           }
         }
 
-        // Store session if available
+        // Send verification email
+        btn.textContent = 'Sending verification email...';
+        await sendVerificationEmail(email, firstName, lastName, phone, creds);
+
+        // Store session if available (but don't redirect yet - need to verify email)
         if (authData.access_token) {
           localStorage.setItem('customer_session', JSON.stringify(authData));
-          showToast('Account created! Redirecting...', 'success');
-          setTimeout(() => {
-            window.location.href = `/${portalSlug}`;
-          }, 1000);
-        } else {
-          showToast('Account created! Please check your email to verify.', 'success');
-          setTimeout(() => {
-            document.getElementById('registerForm').classList.remove('active');
-            document.getElementById('loginForm').classList.add('active');
-          }, 2000);
         }
+        
+        // Show success message for email verification
+        showToast('Account created! Please check your email to verify and complete setup.', 'success');
+        
+        // Show a verification pending message
+        showVerificationPendingUI(email, firstName);
 
       } catch (err) {
         console.error('Registration error:', err);
@@ -446,8 +374,178 @@
         btn.textContent = 'Create Account';
       }
     });
+    
+    // Send verification email function
+    async function sendVerificationEmail(email, firstName, lastName, phone, creds) {
+      // Generate verification token
+      const token = generateToken();
+      const portalSlug = `${firstName}_${lastName}`.replace(/[^a-zA-Z0-9_]/g, '_');
+      const verificationUrl = `https://account.relialimo.com/verify?token=${token}&email=${encodeURIComponent(email)}&redirect=${encodeURIComponent(portalSlug)}`;
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      
+      // Store verification token in Supabase
+      try {
+        await fetch(`${creds.url}/rest/v1/customer_email_verifications`, {
+          method: 'POST',
+          headers: {
+            'apikey': creds.anonKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: email.toLowerCase(),
+            token,
+            expires_at: expiresAt,
+            user_data: { firstName, lastName, portalSlug, phone },
+            verified: false,
+            created_at: new Date().toISOString()
+          })
+        });
+      } catch (e) {
+        console.warn('Failed to store verification token:', e);
+      }
+      
+      // Send verification email via API
+      const subject = 'Welcome to RELIALIMO - Verify Your Email';
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+        <body style="margin: 0; padding: 0; font-family: 'Inter', Arial, sans-serif; background: #1a1a2e;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+            <tr>
+              <td align="center" style="padding: 40px 20px;">
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background: linear-gradient(135deg, #1e1e3f 0%, #252549 100%); border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                  <tr>
+                    <td align="center" style="padding: 40px 40px 20px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%);">
+                      <img src="https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/reliabull%20limo%20logowhitecropped.png" alt="RELIALIMO" style="max-width: 200px; height: auto;">
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 30px 40px;">
+                      <h1 style="color: #fff; font-size: 28px; margin: 0 0 10px; text-align: center;">Welcome, ${firstName}! 🎉</h1>
+                      <p style="color: #a0aec0; font-size: 16px; line-height: 1.6; margin: 0 0 30px; text-align: center;">Thank you for creating your RELIALIMO account. Please verify your email address to complete your account setup.</p>
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                        <tr>
+                          <td align="center">
+                            <a href="${verificationUrl}" style="display: inline-block; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: #fff; text-decoration: none; padding: 16px 40px; border-radius: 12px; font-size: 18px; font-weight: 600; box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);">✅ Verify My Email</a>
+                          </td>
+                        </tr>
+                      </table>
+                      <p style="color: #718096; font-size: 14px; line-height: 1.6; margin: 30px 0 0; text-align: center;">This link will expire in 24 hours. If you didn't create this account, you can safely ignore this email.</p>
+                      <div style="margin-top: 30px; padding: 20px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                        <p style="color: #a0aec0; font-size: 12px; margin: 0 0 10px;">Having trouble with the button? Copy and paste this link:</p>
+                        <p style="color: #6366f1; font-size: 12px; word-break: break-all; margin: 0;">${verificationUrl}</p>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 20px 40px 30px; border-top: 1px solid rgba(255,255,255,0.1);">
+                      <p style="color: #718096; font-size: 12px; margin: 0; text-align: center;">Your portal URL after verification:<br><strong style="color: #a0aec0;">https://account.relialimo.com/${portalSlug}</strong></p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
+      `;
+      
+      try {
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: email, subject, html })
+        });
+        console.log('✅ Verification email sent');
+      } catch (e) {
+        console.error('Failed to send verification email:', e);
+        // Show the verification URL in console for development
+        console.log('📧 Verification URL (for testing):', verificationUrl);
+      }
+    }
+    
+    // Generate secure token
+    function generateToken() {
+      const array = new Uint8Array(32);
+      crypto.getRandomValues(array);
+      return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+    
+    // Show verification pending UI
+    function showVerificationPendingUI(email, firstName) {
+      const registerForm = document.getElementById('registerForm');
+      registerForm.innerHTML = `
+        <div class="verification-pending" style="text-align: center; padding: 20px;">
+          <div style="font-size: 64px; margin-bottom: 20px;">📧</div>
+          <h2 class="auth-title" style="color: #22c55e;">Check Your Email!</h2>
+          <p style="color: #a0aec0; margin-bottom: 20px;">
+            We've sent a verification link to:<br>
+            <strong style="color: #fff;">${email}</strong>
+          </p>
+          <p style="color: #718096; font-size: 14px; margin-bottom: 30px;">
+            Click the link in the email to verify your account and complete your setup with:
+          </p>
+          <div style="background: rgba(99, 102, 241, 0.1); border-radius: 12px; padding: 16px; margin-bottom: 20px; text-align: left;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: #e2e8f0;">
+              <span>🏠</span> <span>Home address setup</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: #e2e8f0;">
+              <span>✈️</span> <span>Nearby airport selection</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: #e2e8f0;">
+              <span>📱</span> <span>Phone number verification</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; color: #e2e8f0;">
+              <span>💳</span> <span>Payment method (optional)</span>
+            </div>
+          </div>
+          <button type="button" class="btn-link" onclick="resendVerificationEmail('${email}', '${firstName}')" style="color: #6366f1; text-decoration: underline;">
+            Didn't receive the email? Resend
+          </button>
+          <br><br>
+          <button type="button" class="btn-link" id="backToLoginFromVerify" style="color: #a0aec0;">
+            Already verified? Sign in
+          </button>
+        </div>
+      `;
+      
+      document.getElementById('backToLoginFromVerify')?.addEventListener('click', () => {
+        window.location.reload();
+      });
+    }
+    
+    // Resend verification email
+    window.resendVerificationEmail = async function(email, firstName) {
+      const creds = getSupabaseCredentials();
+      showToast('Resending verification email...', 'info');
+      
+      try {
+        // Get existing user data from stored verification
+        const resp = await fetch(
+          `${creds.url}/rest/v1/customer_email_verifications?email=eq.${encodeURIComponent(email.toLowerCase())}&order=created_at.desc&limit=1`,
+          { headers: { 'apikey': creds.anonKey } }
+        );
+        
+        let lastName = '';
+        let phone = '';
+        
+        if (resp.ok) {
+          const records = await resp.json();
+          if (records.length > 0 && records[0].user_data) {
+            lastName = records[0].user_data.lastName || '';
+            phone = records[0].user_data.phone || '';
+          }
+        }
+        
+        await sendVerificationEmail(email, firstName, lastName, phone, creds);
+        showToast('Verification email sent!', 'success');
+      } catch (e) {
+        showToast('Failed to resend. Please try again.', 'error');
+      }
+    };
 
-    // Password reset handler
+    // Password reset handler - using auth service
     document.getElementById('resetPasswordBtn')?.addEventListener('click', async () => {
       const email = document.getElementById('resetEmail').value.trim();
       
@@ -461,23 +559,7 @@
       btn.textContent = 'Sending...';
 
       try {
-        const creds = getSupabaseCredentials();
-        const response = await fetch(`${creds.url}/auth/v1/recover`, {
-          method: 'POST',
-          headers: {
-            'apikey': creds.anonKey,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ 
-            email,
-            redirectTo: `${window.location.origin}/reset-password`
-          })
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error_description || 'Failed to send reset link');
-        }
+        await CustomerAuth.sendPasswordReset(email);
 
         showToast('Reset link sent! Check your email.', 'success');
         setTimeout(() => {
@@ -488,6 +570,7 @@
       } catch (err) {
         console.error('Reset error:', err);
         showToast(err.message || 'Failed to send reset link', 'error');
+      } finally {
         btn.disabled = false;
         btn.textContent = 'Send Reset Link';
       }

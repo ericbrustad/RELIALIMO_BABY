@@ -114,6 +114,7 @@
             <span class="status-icon">⏳</span>
             <span class="status-text">Checking...</span>
           </div>
+          <button id="loadFromEnvBtn" class="btn primary" style="background: linear-gradient(135deg, #00897b, #004d40); font-weight: bold;" title="Load email settings from Vercel environment variables">📥 Load from ENV</button>
           <button id="quickSetupBothBtn" class="btn primary" style="background: linear-gradient(135deg, #9c27b0, #673ab7); font-weight: bold;" title="Quick setup both SMS and Email with demo values">🔧 Quick Setup SMS + Email</button>
           <button id="saveSettingsBtn" class="btn primary">💾 Save Settings</button>
           <button id="saveSecureBtn" class="btn primary" style="background:#2e7d32;" title="Save to Supabase & create backup">🔒 Save Secure</button>
@@ -1067,6 +1068,81 @@
     
     // Make it globally accessible
     window.QuickSetupManager = QuickSetupManager;
+    
+    // ============================================
+    // Load from ENV button handler
+    // ============================================
+    document.getElementById('loadFromEnvBtn')?.addEventListener('click', async function() {
+      const btn = this;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '⏳ Loading...';
+      btn.disabled = true;
+      
+      try {
+        const response = await fetch('/api/get-env-settings');
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to load settings');
+        }
+        
+        if (!data.success) {
+          throw new Error('Invalid response from server');
+        }
+        
+        const email = data.email;
+        
+        // Check if any email settings are configured
+        if (!email.resendApiKey && !email.smtpHost) {
+          showToast('⚠️ No email settings found in environment variables', 'warning');
+          return;
+        }
+        
+        // Populate form fields
+        if (email.fromEmail) {
+          // Parse fromEmail if it contains name and email like "Name <email@example.com>"
+          const match = email.fromEmail.match(/^(.+?)\s*<(.+)>$/);
+          if (match) {
+            document.getElementById('fromNameInput').value = match[1].trim();
+            document.getElementById('fromEmailInput').value = match[2].trim();
+          } else {
+            document.getElementById('fromEmailInput').value = email.fromEmail;
+          }
+        }
+        if (email.fromName && !document.getElementById('fromNameInput').value) {
+          document.getElementById('fromNameInput').value = email.fromName;
+        }
+        if (email.replyTo) document.getElementById('replyToInput').value = email.replyTo;
+        
+        // If using Resend, set it as the SMTP provider
+        if (email.resendApiKey) {
+          document.getElementById('smtpHostInput').value = 'resend';
+          document.getElementById('smtpPortInput').value = '443';
+          document.getElementById('smtpUserInput').value = 'resend';
+          document.getElementById('smtpPassInput').value = email.resendApiKey;
+          document.getElementById('tlsInput').checked = true;
+        } else if (email.smtpHost) {
+          document.getElementById('smtpHostInput').value = email.smtpHost;
+          document.getElementById('smtpPortInput').value = email.smtpPort || '587';
+          document.getElementById('smtpUserInput').value = email.smtpUser || '';
+          document.getElementById('smtpPassInput').value = email.smtpPass || '';
+        }
+        
+        showToast('✅ Loaded email settings from environment!', 'success');
+        
+        // Update config status
+        if (typeof EmailConfigChecker !== 'undefined') {
+          setTimeout(() => EmailConfigChecker.checkConfiguration(), 100);
+        }
+        
+      } catch (err) {
+        console.error('Load from ENV error:', err);
+        showToast('❌ ' + (err.message || 'Failed to load from ENV'), 'error');
+      } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+    });
   </script>
 </body>
 </html>

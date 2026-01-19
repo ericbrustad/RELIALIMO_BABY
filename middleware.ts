@@ -17,14 +17,13 @@ export function middleware(request: NextRequest) {
   }
 
   // Driver subdomain: driver.relialimo.com
+  // Serve main driver-portal files from root public folder
   if (host.startsWith('driver.')) {
     if (pathname === '/' || pathname === '') {
-      return NextResponse.rewrite(new URL('/drivers/driver-portal.html', request.url))
+      return NextResponse.rewrite(new URL('/driver-portal.html', request.url))
     }
-    // Rewrite all paths to /drivers folder (except /drivers paths)
-    if (!pathname.startsWith('/drivers')) {
-      return NextResponse.rewrite(new URL(`/drivers${pathname}`, request.url))
-    }
+    // Let other paths resolve from root (driver-portal.js, driver-portal.css, etc.)
+    return NextResponse.next()
   }
 
   // Customer/Account subdomain: account.relialimo.com
@@ -33,9 +32,34 @@ export function middleware(request: NextRequest) {
       return NextResponse.rewrite(new URL('/customers/customer-portal.html', request.url))
     }
     
-    // Handle customer portal slug routes like /john-smith or /john_smith
-    // Check if pathname looks like a customer slug (lowercase letters, numbers, dashes/underscores)
-    const customerSlugPattern = /^\/[a-z0-9][a-z0-9_-]*$/
+    // Handle email verification route: /verify?token=xxx&email=xxx
+    if (pathname === '/verify') {
+      return NextResponse.rewrite(new URL(`/customers/customer-onboarding.html${request.nextUrl.search}`, request.url))
+    }
+    
+    // Handle onboarding route: /onboarding
+    if (pathname === '/onboarding') {
+      return NextResponse.rewrite(new URL(`/customers/customer-onboarding.html${request.nextUrl.search}`, request.url))
+    }
+    
+    // Handle auth route: /auth or /auth.html
+    if (pathname === '/auth' || pathname === '/auth.html') {
+      return NextResponse.rewrite(new URL('/customers/auth.html', request.url))
+    }
+    
+    // Handle password reset route: /reset-password
+    if (pathname === '/reset-password') {
+      return NextResponse.rewrite(new URL(`/customers/reset-password.html${request.nextUrl.search}`, request.url))
+    }
+    
+    // Handle onboarding route: /onboarding
+    if (pathname === '/onboarding' || pathname === '/onboarding.html') {
+      return NextResponse.rewrite(new URL(`/customers/customer-onboarding.html${request.nextUrl.search}`, request.url))
+    }
+    
+    // Handle customer portal slug routes like /First_Name_Last_Name or /john_smith
+    // Pattern allows uppercase and lowercase letters, numbers, dashes/underscores
+    const customerSlugPattern = /^\/[a-zA-Z0-9][a-zA-Z0-9_-]*$/
     if (customerSlugPattern.test(pathname) && !pathname.includes('.')) {
       // Rewrite slug routes to customer portal with slug as query param
       const slug = pathname.slice(1) // Remove leading slash
