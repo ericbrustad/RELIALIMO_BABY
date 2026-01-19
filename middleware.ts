@@ -32,6 +32,16 @@ export function middleware(request: NextRequest) {
     if (pathname === '/' || pathname === '') {
       return NextResponse.rewrite(new URL('/customers/customer-portal.html', request.url))
     }
+    
+    // Handle customer portal slug routes like /john-smith or /john_smith
+    // Check if pathname looks like a customer slug (lowercase letters, numbers, dashes/underscores)
+    const customerSlugPattern = /^\/[a-z0-9][a-z0-9_-]*$/
+    if (customerSlugPattern.test(pathname) && !pathname.includes('.')) {
+      // Rewrite slug routes to customer portal with slug as query param
+      const slug = pathname.slice(1) // Remove leading slash
+      return NextResponse.rewrite(new URL(`/customers/customer-portal.html?slug=${slug}`, request.url))
+    }
+    
     // Rewrite all paths to /customers folder (except /customers paths)
     if (!pathname.startsWith('/customers')) {
       return NextResponse.rewrite(new URL(`/customers${pathname}`, request.url))

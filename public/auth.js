@@ -92,6 +92,46 @@ try {
 async function redirectIfSignedIn() {
   const { data } = await supabase.auth.getSession();
   if (data?.session) {
+    await redirectToUserPortal(data.session);
+  }
+}
+
+async function redirectToUserPortal(session) {
+  try {
+    const email = session.user?.email;
+    if (!email) {
+      window.location.replace('/index.html');
+      return;
+    }
+
+    // Fetch user profile from accounts table
+    const { data: accounts, error } = await supabase
+      .from('accounts')
+      .select('id, first_name, last_name, portal_slug')
+      .eq('email', email.toLowerCase())
+      .limit(1);
+
+    if (!error && accounts && accounts.length > 0) {
+      const account = accounts[0];
+      const slug = account.portal_slug || 
+        `${(account.first_name || '').toLowerCase()}-${(account.last_name || '').toLowerCase()}`.replace(/[^a-z0-9-]/g, '');
+      
+      // Update portal_slug if it wasn't set
+      if (!account.portal_slug && slug) {
+        await supabase
+          .from('accounts')
+          .update({ portal_slug: slug })
+          .eq('id', account.id);
+      }
+      
+      window.location.replace(`/${slug}`);
+      return;
+    }
+
+    // Fallback to index if no account found
+    window.location.replace('/index.html');
+  } catch (err) {
+    console.error('Error redirecting to portal:', err);
     window.location.replace('/index.html');
   }
 }
@@ -109,7 +149,7 @@ async function handlePasswordSignIn(event) {
     return;
   }
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
     setMessage(error.message, 'error');
@@ -117,7 +157,13 @@ async function handlePasswordSignIn(event) {
   }
 
   setMessage('Signed in — redirecting…', 'success');
-  window.location.href = '/index.html';
+  
+  // Redirect to personalized portal URL
+  if (data?.session) {
+    await redirectToUserPortal(data.session);
+  } else {
+    window.location.href = '/index.html';
+  }
 }
 
 async function handleMagicLink(event) {

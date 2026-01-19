@@ -123,6 +123,15 @@ async function init() {
 }
 
 function extractPortalSlug() {
+  // First check for slug in query params (from middleware rewrite)
+  const urlParams = new URLSearchParams(window.location.search);
+  const slugParam = urlParams.get('slug');
+  if (slugParam) {
+    state.portalSlug = slugParam;
+    return;
+  }
+  
+  // Fallback: extract from pathname
   const pathname = window.location.pathname;
   const parts = pathname.split('/').filter(p => p && !p.includes('.'));
   if (parts.length > 0) {
