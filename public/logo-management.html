@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logo Management | RELIALIMO</title>
+  <link rel="stylesheet" href="my-office.css">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #f8f9fb;
+      margin: 0;
+      padding: 20px;
+    }
+    
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      color: #333;
+      margin: 0 0 20px 0;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #c9a227;
+    }
+    
+    .logo-management-section {
+      margin: 0;
+      padding: 25px;
+      background: linear-gradient(135deg, #f8f9fb 0%, #fff 100%);
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+    }
+    
+    .logo-upload-card,
+    .logo-browser-card {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    
+    .logo-upload-card h4,
+    .logo-browser-card h4 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #333;
+      margin: 0 0 8px 0;
+    }
+    
+    .form-hint {
+      color: #666;
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+    
+    .file-upload-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    
+    .file-name {
+      color: #666;
+      font-size: 13px;
+    }
+    
+    .btn {
+      padding: 8px 16px;
+      font-size: 13px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid #ddd;
+      transition: all 0.2s;
+    }
+    
+    .btn-secondary {
+      background: #f5f5f5;
+      color: #333;
+    }
+    
+    .btn-secondary:hover {
+      background: #e8e8e8;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #c9a227, #a68821);
+      color: #000;
+      border: none;
+      font-weight: 500;
+    }
+    
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #d4b84a, #c9a227);
+    }
+    
+    .btn-large {
+      padding: 12px 24px;
+      font-size: 14px;
+    }
+    
+    .upload-preview {
+      margin-top: 15px;
+      text-align: center;
+    }
+    
+    .upload-preview img {
+      max-width: 200px;
+      max-height: 100px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 8px;
+      background: #fff;
+    }
+    
+    /* Image Gallery */
+    .image-gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 12px;
+      margin-top: 15px;
+      max-height: 300px;
+      overflow-y: auto;
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 8px;
+    }
+    
+    .image-gallery .loading-text {
+      grid-column: 1 / -1;
+      text-align: center;
+      color: #888;
+      padding: 20px;
+    }
+    
+    .gallery-item {
+      position: relative;
+      cursor: pointer;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+      transition: all 0.2s ease;
+    }
+    
+    .gallery-item:hover {
+      border-color: #c9a227;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .gallery-item.selected {
+      border-color: #c9a227;
+      box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.3);
+    }
+    
+    .gallery-item img {
+      width: 100%;
+      height: 80px;
+      object-fit: contain;
+      padding: 8px;
+      background: #fff;
+    }
+    
+    .gallery-item-name {
+      font-size: 10px;
+      color: #666;
+      text-align: center;
+      padding: 4px;
+      background: #f9f9f9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    /* Logo Selection Grid */
+    .logo-selection-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+    
+    .logo-selector-card {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 16px;
+      transition: all 0.2s ease;
+    }
+    
+    .logo-selector-card:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    
+    .logo-selector-card.logo-selector-master {
+      background: linear-gradient(135deg, #fffdf5 0%, #fff 100%);
+      border-color: #c9a227;
+      grid-column: 1 / -1;
+    }
+    
+    .logo-selector-card h4 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin: 0 0 6px 0;
+    }
+    
+    .logo-selector-preview {
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f5f5f5;
+      border-radius: 6px;
+      margin: 10px 0;
+      overflow: hidden;
+    }
+    
+    .logo-selector-preview img {
+      max-width: 100%;
+      max-height: 70px;
+      object-fit: contain;
+    }
+    
+    .logo-selector-preview .no-logo-text {
+      color: #999;
+      font-size: 12px;
+      font-style: italic;
+    }
+    
+    .logo-select {
+      width: 100%;
+      margin-top: 8px;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    
+    .logo-select:disabled {
+      background: #f5f5f5;
+      color: #888;
+    }
+    
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      font-size: 13px;
+      color: #555;
+      cursor: pointer;
+    }
+    
+    .checkbox-label input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: #c9a227;
+    }
+    
+    /* Logo Size & Preview Section */
+    .logo-preview-section {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+    
+    .logo-preview-section h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin: 0 0 8px 0;
+    }
+    
+    .size-controls {
+      margin: 20px 0;
+    }
+    
+    .size-control-group {
+      margin-bottom: 15px;
+    }
+    
+    .size-control-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 8px;
+    }
+    
+    .size-slider-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .size-slider {
+      flex: 1;
+      height: 8px;
+      border-radius: 4px;
+      background: #e0e0e0;
+      -webkit-appearance: none;
+      appearance: none;
+      cursor: pointer;
+    }
+    
+    .size-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #c9a227;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    
+    .size-input {
+      width: 70px;
+      padding: 6px 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      text-align: center;
+      font-size: 14px;
+    }
+    
+    .size-unit {
+      color: #888;
+      font-size: 13px;
+    }
+    
+    .size-presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    
+    .size-preset {
+      font-size: 11px !important;
+      padding: 5px 10px !important;
+    }
+    
+    .size-preset:hover {
+      background: #c9a227 !important;
+      color: #000 !important;
+      border-color: #c9a227 !important;
+    }
+    
+    /* Live Preview Container */
+    .live-preview-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 20px 0;
+    }
+    
+    .preview-panel {
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+      min-height: 150px;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .preview-panel.preview-dark {
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+      border: 1px solid #333;
+    }
+    
+    .preview-panel.preview-light {
+      background: linear-gradient(135deg, #f8f9fb 0%, #fff 100%);
+      border: 1px solid #e0e0e0;
+    }
+    
+    .preview-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 15px;
+    }
+    
+    .preview-dark .preview-label {
+      color: #888;
+    }
+    
+    .preview-light .preview-label {
+      color: #666;
+    }
+    
+    .preview-content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .preview-content img {
+      max-width: 100%;
+      height: auto;
+      object-fit: contain;
+      transition: all 0.2s ease;
+    }
+    
+    .preview-context-selector {
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid #eee;
+    }
+    
+    .preview-context-selector label {
+      font-size: 13px;
+      color: #555;
+      margin-right: 10px;
+    }
+    
+    .form-actions {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: center;
+    }
+    
+    @media (max-width: 768px) {
+      .live-preview-container {
+        grid-template-columns: 1fr;
+      }
+      
+      .size-presets {
+        justify-content: center;
+      }
+    }
+  </style>
+  <script src="shared/env.js"></script>
+</head>
+<body>
+  <h1>🖼️ Logo Management</h1>
+  
+  <div class="logo-management-section">
+    <p class="form-hint">Manage logos for different portals. Logos are stored in Supabase storage.</p>
+    
+    <!-- Upload New Logo -->
+    <div class="logo-upload-card">
+      <h4>Upload New Logo</h4>
+      <p class="form-hint">Supported: .JPG, .PNG (max 5MB, recommended 1280px width)</p>
+      <input type="file" id="logoFileInput" accept="image/jpeg,image/png" style="display: none;" />
+      <div class="file-upload-group">
+        <button class="btn btn-secondary" id="logoChooseBtn">Choose File</button>
+        <span class="file-name" id="logoFileName">No file chosen</span>
+        <button class="btn btn-primary" id="logoUploadBtn">Upload to Supabase</button>
+      </div>
+      <div class="upload-preview" id="uploadPreviewContainer" style="display: none;">
+        <img id="uploadPreviewImg" alt="Upload preview" />
+      </div>
+    </div>
+
+    <!-- Browse Supabase Images -->
+    <div class="logo-browser-card">
+      <h4>Browse Supabase Images</h4>
+      <p class="form-hint">Select from existing images in your Supabase storage bucket.</p>
+      <button class="btn btn-secondary" id="refreshImagesBtn">🔄 Refresh Images</button>
+      <div class="image-gallery" id="supabaseImageGallery">
+        <p class="loading-text">Click "Refresh Images" to load available logos...</p>
+      </div>
+    </div>
+
+    <!-- Logo Selection Grid -->
+    <div class="logo-selection-grid">
+      <!-- All Online Portals -->
+      <div class="logo-selector-card logo-selector-master">
+        <h4>🌐 All Online Portals</h4>
+        <p class="form-hint">Sets default logo for all portals (drivers, customers, admin)</p>
+        <div class="logo-selector-preview">
+          <img id="allPortalsLogoPreview" src="" alt="All Portals Logo" onerror="this.style.display='none'" />
+          <span class="no-logo-text" id="allPortalsNoLogo">No logo selected</span>
+        </div>
+        <select class="form-control logo-select" id="allPortalsLogoSelect">
+          <option value="">-- Select Logo --</option>
+        </select>
+        <label class="checkbox-label">
+          <input type="checkbox" id="applyToAllPortals" checked />
+          Apply to all portals below
+        </label>
+      </div>
+
+      <!-- Driver Portal -->
+      <div class="logo-selector-card">
+        <h4>🚗 Driver Portal</h4>
+        <p class="form-hint">Logo for driver.relialimo.com</p>
+        <div class="logo-selector-preview">
+          <img id="driverLogoPreview" src="" alt="Driver Logo" onerror="this.style.display='none'" />
+          <span class="no-logo-text" id="driverNoLogo">Using All Portals default</span>
+        </div>
+        <select class="form-control logo-select" id="driverLogoSelect" disabled>
+          <option value="">-- Use All Portals Default --</option>
+        </select>
+      </div>
+
+      <!-- Customer Portal -->
+      <div class="logo-selector-card">
+        <h4>👤 Customer Portal</h4>
+        <p class="form-hint">Logo for account.relialimo.com</p>
+        <div class="logo-selector-preview">
+          <img id="customerLogoPreview" src="" alt="Customer Logo" onerror="this.style.display='none'" />
+          <span class="no-logo-text" id="customerNoLogo">Using All Portals default</span>
+        </div>
+        <select class="form-control logo-select" id="customerLogoSelect" disabled>
+          <option value="">-- Use All Portals Default --</option>
+        </select>
+      </div>
+
+      <!-- Admin Portal -->
+      <div class="logo-selector-card">
+        <h4>🔧 Admin Portal</h4>
+        <p class="form-hint">Logo for admin.relialimo.com</p>
+        <div class="logo-selector-preview">
+          <img id="adminLogoPreview" src="" alt="Admin Logo" onerror="this.style.display='none'" />
+          <span class="no-logo-text" id="adminNoLogo">Using All Portals default</span>
+        </div>
+        <select class="form-control logo-select" id="adminLogoSelect" disabled>
+          <option value="">-- Use All Portals Default --</option>
+        </select>
+      </div>
+
+      <!-- Email Logo -->
+      <div class="logo-selector-card">
+        <h4>📧 Email Logo</h4>
+        <p class="form-hint">Logo for email headers and templates</p>
+        <div class="logo-selector-preview">
+          <img id="emailLogoPreview" src="" alt="Email Logo" onerror="this.style.display='none'" />
+          <span class="no-logo-text" id="emailNoLogo">No logo selected</span>
+        </div>
+        <select class="form-control logo-select" id="emailLogoSelect">
+          <option value="">-- Select Logo --</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Logo Size & Preview Section -->
+    <div class="logo-preview-section">
+      <h4>📐 Logo Size & Preview</h4>
+      <p class="form-hint">Adjust logo size and see how it will appear on different screens.</p>
+      
+      <div class="size-controls">
+        <div class="size-control-group">
+          <label>Logo Size (pixels)</label>
+          <div class="size-slider-row">
+            <input type="range" id="logoSizeSlider" min="50" max="300" value="160" class="size-slider" />
+            <input type="number" id="logoSizeInput" min="50" max="300" value="160" class="size-input" />
+            <span class="size-unit">px</span>
+          </div>
+        </div>
+        <div class="size-presets">
+          <button class="btn btn-secondary size-preset" data-size="80">Small (80px)</button>
+          <button class="btn btn-secondary size-preset" data-size="120">Medium (120px)</button>
+          <button class="btn btn-secondary size-preset" data-size="160">Default (160px)</button>
+          <button class="btn btn-secondary size-preset" data-size="200">Large (200px)</button>
+          <button class="btn btn-secondary size-preset" data-size="250">XL (250px)</button>
+        </div>
+      </div>
+
+      <div class="live-preview-container">
+        <div class="preview-panel preview-dark">
+          <div class="preview-label">Dark Background</div>
+          <div class="preview-content">
+            <img id="previewLogoDark" src="" alt="Logo preview" />
+          </div>
+        </div>
+        <div class="preview-panel preview-light">
+          <div class="preview-label">Light Background</div>
+          <div class="preview-content">
+            <img id="previewLogoLight" src="" alt="Logo preview" />
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-context-selector">
+        <label>Preview Context:</label>
+        <select id="previewContextSelect" class="form-control" style="max-width: 200px; display: inline-block;">
+          <option value="allPortals">All Portals</option>
+          <option value="driver">Driver Portal</option>
+          <option value="customer">Customer Portal</option>
+          <option value="admin">Admin Portal</option>
+          <option value="email">Email</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-actions" style="margin-top: 20px;">
+      <button class="btn btn-primary btn-large" id="saveLogoSettingsBtn">💾 Save Logo Settings</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { supabase } from './supabase-client.js';
+    
+    const SUPABASE_URL = 'https://siumiadylwcrkaqsfwkj.supabase.co';
+    
+    // State
+    let selectedGalleryImage = null;
+    
+    // DOM Elements
+    const refreshBtn = document.getElementById('refreshImagesBtn');
+    const gallery = document.getElementById('supabaseImageGallery');
+    const logoChooseBtn = document.getElementById('logoChooseBtn');
+    const logoFileInput = document.getElementById('logoFileInput');
+    const logoFileName = document.getElementById('logoFileName');
+    const logoUploadBtn = document.getElementById('logoUploadBtn');
+    const uploadPreviewContainer = document.getElementById('uploadPreviewContainer');
+    const uploadPreviewImg = document.getElementById('uploadPreviewImg');
+    const saveLogoSettingsBtn = document.getElementById('saveLogoSettingsBtn');
+    const applyToAllCheckbox = document.getElementById('applyToAllPortals');
+    const allPortalsSelect = document.getElementById('allPortalsLogoSelect');
+    const driverSelect = document.getElementById('driverLogoSelect');
+    const customerSelect = document.getElementById('customerLogoSelect');
+    const adminSelect = document.getElementById('adminLogoSelect');
+    const emailSelect = document.getElementById('emailLogoSelect');
+    const sizeSlider = document.getElementById('logoSizeSlider');
+    const sizeInput = document.getElementById('logoSizeInput');
+    const previewLogoDark = document.getElementById('previewLogoDark');
+    const previewLogoLight = document.getElementById('previewLogoLight');
+    const previewContextSelect = document.getElementById('previewContextSelect');
+    const sizePresetBtns = document.querySelectorAll('.size-preset');
+    
+    // Initialize
+    init();
+    
+    function init() {
+      // Refresh images button
+      refreshBtn?.addEventListener('click', loadSupabaseImages);
+      
+      // Choose file button
+      logoChooseBtn?.addEventListener('click', () => logoFileInput?.click());
+      
+      // File input change
+      logoFileInput?.addEventListener('change', handleFileSelect);
+      
+      // Upload button
+      logoUploadBtn?.addEventListener('click', uploadLogoToSupabase);
+      
+      // Save settings button
+      saveLogoSettingsBtn?.addEventListener('click', saveLogoSettings);
+      
+      // Apply to all checkbox
+      applyToAllCheckbox?.addEventListener('change', handleApplyToAllChange);
+      
+      // Portal selects
+      allPortalsSelect?.addEventListener('change', handleAllPortalsChange);
+      [driverSelect, customerSelect, adminSelect, emailSelect].forEach(sel => {
+        sel?.addEventListener('change', (e) => {
+          const key = e.target.id.replace('LogoSelect', '');
+          updateLogoPreview(key, e.target.value);
+        });
+      });
+      
+      // Size controls
+      sizeSlider?.addEventListener('input', (e) => {
+        sizeInput.value = e.target.value;
+        updatePreviewSize(e.target.value);
+      });
+      
+      sizeInput?.addEventListener('change', (e) => {
+        let size = parseInt(e.target.value) || 160;
+        size = Math.max(50, Math.min(300, size));
+        e.target.value = size;
+        sizeSlider.value = size;
+        updatePreviewSize(size);
+      });
+      
+      sizePresetBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const size = btn.dataset.size;
+          sizeSlider.value = size;
+          sizeInput.value = size;
+          updatePreviewSize(size);
+        });
+      });
+      
+      previewContextSelect?.addEventListener('change', (e) => updatePreviewLogo(e.target.value));
+      
+      // Load saved settings
+      loadLogoSettings();
+    }
+    
+    function handleFileSelect(e) {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      
+      if (!file.type.match(/^image\/(jpeg|png)$/)) {
+        alert('Please select a JPG or PNG image file.');
+        e.target.value = '';
+        return;
+      }
+      
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image file size must be less than 5MB.');
+        e.target.value = '';
+        return;
+      }
+      
+      logoFileName.textContent = file.name;
+      
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        uploadPreviewImg.src = evt.target.result;
+        uploadPreviewContainer.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+    
+    async function loadSupabaseImages() {
+      gallery.innerHTML = '<p class="loading-text">Loading images...</p>';
+      
+      try {
+        const { data: files, error } = await supabase.storage
+          .from('images')
+          .list('', { limit: 50, sortBy: { column: 'name', order: 'asc' } });
+        
+        if (error) {
+          gallery.innerHTML = `<p class="loading-text" style="color: #c00;">Error: ${error.message}</p>`;
+          return;
+        }
+        
+        if (!files || files.length === 0) {
+          gallery.innerHTML = '<p class="loading-text">No images found. Upload some logos first!</p>';
+          return;
+        }
+        
+        const imageFiles = files.filter(f => f.name.match(/\.(png|jpg|jpeg|gif|svg|webp)$/i));
+        
+        if (imageFiles.length === 0) {
+          gallery.innerHTML = '<p class="loading-text">No image files found in bucket.</p>';
+          return;
+        }
+        
+        gallery.innerHTML = imageFiles.map(file => {
+          const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/images/${file.name}`;
+          return `
+            <div class="gallery-item" data-url="${publicUrl}" data-name="${file.name}">
+              <img src="${publicUrl}" alt="${file.name}" loading="lazy" />
+              <div class="gallery-item-name">${file.name}</div>
+            </div>
+          `;
+        }).join('');
+        
+        gallery.querySelectorAll('.gallery-item').forEach(item => {
+          item.addEventListener('click', () => {
+            gallery.querySelectorAll('.gallery-item').forEach(i => i.classList.remove('selected'));
+            item.classList.add('selected');
+            selectedGalleryImage = { url: item.dataset.url, name: item.dataset.name };
+          });
+        });
+        
+        populateLogoSelects(imageFiles);
+        
+      } catch (err) {
+        gallery.innerHTML = `<p class="loading-text" style="color: #c00;">Error: ${err.message}</p>`;
+      }
+    }
+    
+    function populateLogoSelects(imageFiles) {
+      const selects = [allPortalsSelect, driverSelect, customerSelect, adminSelect, emailSelect];
+      
+      selects.forEach(select => {
+        if (!select) return;
+        const currentValue = select.value;
+        const firstOption = select.options[0];
+        select.innerHTML = '';
+        select.appendChild(firstOption);
+        
+        imageFiles.forEach(file => {
+          const option = document.createElement('option');
+          option.value = `${SUPABASE_URL}/storage/v1/object/public/images/${file.name}`;
+          option.textContent = file.name;
+          select.appendChild(option);
+        });
+        
+        if (currentValue) select.value = currentValue;
+      });
+    }
+    
+    async function uploadLogoToSupabase() {
+      const file = logoFileInput?.files?.[0];
+      if (!file) {
+        alert('Please choose a file first.');
+        return;
+      }
+      
+      try {
+        const ext = file.name.split('.').pop();
+        const timestamp = Date.now();
+        const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_').replace(/\.[^.]+$/, '');
+        const fileName = `${safeName}_${timestamp}.${ext}`;
+        
+        const { data, error } = await supabase.storage
+          .from('images')
+          .upload(fileName, file, { cacheControl: '3600', upsert: false });
+        
+        if (error) {
+          alert(`Upload failed: ${error.message}`);
+          return;
+        }
+        
+        alert(`✅ Logo uploaded successfully as: ${fileName}`);
+        logoFileInput.value = '';
+        logoFileName.textContent = 'No file chosen';
+        uploadPreviewContainer.style.display = 'none';
+        
+        await loadSupabaseImages();
+        
+      } catch (err) {
+        alert(`Upload error: ${err.message}`);
+      }
+    }
+    
+    function handleApplyToAllChange(e) {
+      const disabled = e.target.checked;
+      driverSelect.disabled = disabled;
+      customerSelect.disabled = disabled;
+      adminSelect.disabled = disabled;
+      
+      if (disabled && allPortalsSelect) {
+        const masterValue = allPortalsSelect.value;
+        updateLogoPreview('driver', masterValue);
+        updateLogoPreview('customer', masterValue);
+        updateLogoPreview('admin', masterValue);
+      }
+    }
+    
+    function handleAllPortalsChange(e) {
+      const url = e.target.value;
+      updateLogoPreview('allPortals', url);
+      
+      if (applyToAllCheckbox?.checked) {
+        updateLogoPreview('driver', url);
+        updateLogoPreview('customer', url);
+        updateLogoPreview('admin', url);
+      }
+    }
+    
+    function updateLogoPreview(key, url) {
+      const previewImg = document.getElementById(`${key}LogoPreview`);
+      const noLogoText = document.getElementById(`${key}NoLogo`);
+      
+      if (previewImg && url) {
+        previewImg.src = url;
+        previewImg.style.display = 'block';
+        if (noLogoText) noLogoText.style.display = 'none';
+      } else if (previewImg) {
+        previewImg.style.display = 'none';
+        if (noLogoText) noLogoText.style.display = 'block';
+      }
+      
+      // Also update live preview
+      updatePreviewLogo(previewContextSelect?.value || 'allPortals');
+    }
+    
+    function updatePreviewSize(size) {
+      if (previewLogoDark) {
+        previewLogoDark.style.height = `${size}px`;
+        previewLogoDark.style.width = 'auto';
+      }
+      if (previewLogoLight) {
+        previewLogoLight.style.height = `${size}px`;
+        previewLogoLight.style.width = 'auto';
+      }
+    }
+    
+    function updatePreviewLogo(context) {
+      const applyToAll = applyToAllCheckbox?.checked;
+      let logoUrl = '';
+      
+      if (context === 'allPortals' || (applyToAll && context !== 'email')) {
+        logoUrl = allPortalsSelect?.value || '';
+      } else {
+        const selectId = `${context}LogoSelect`;
+        logoUrl = document.getElementById(selectId)?.value || allPortalsSelect?.value || '';
+      }
+      
+      if (logoUrl) {
+        if (previewLogoDark) {
+          previewLogoDark.src = logoUrl;
+          previewLogoDark.style.display = 'block';
+        }
+        if (previewLogoLight) {
+          previewLogoLight.src = logoUrl;
+          previewLogoLight.style.display = 'block';
+        }
+        
+        const size = sizeSlider?.value || 160;
+        updatePreviewSize(size);
+      } else {
+        if (previewLogoDark) previewLogoDark.style.display = 'none';
+        if (previewLogoLight) previewLogoLight.style.display = 'none';
+      }
+    }
+    
+    async function saveLogoSettings() {
+      const logoSettings = {
+        applyToAll: applyToAllCheckbox?.checked ?? true,
+        allPortals: allPortalsSelect?.value || '',
+        driver: applyToAllCheckbox?.checked ? '' : (driverSelect?.value || ''),
+        customer: applyToAllCheckbox?.checked ? '' : (customerSelect?.value || ''),
+        admin: applyToAllCheckbox?.checked ? '' : (adminSelect?.value || ''),
+        email: emailSelect?.value || '',
+        logoSize: parseInt(sizeSlider?.value) || 160,
+        updatedAt: new Date().toISOString()
+      };
+      
+      localStorage.setItem('logoSettings', JSON.stringify(logoSettings));
+      
+      try {
+        const orgId = localStorage.getItem('currentOrganizationId');
+        if (orgId) {
+          await supabase
+            .from('organizations')
+            .update({
+              logo_url: logoSettings.applyToAll ? logoSettings.allPortals : (logoSettings.driver || logoSettings.allPortals),
+              logo_settings: logoSettings
+            })
+            .eq('id', orgId);
+        }
+      } catch (err) {
+        console.warn('Supabase save error:', err);
+      }
+      
+      alert('✅ Logo settings saved successfully!');
+    }
+    
+    function loadLogoSettings() {
+      const saved = localStorage.getItem('logoSettings');
+      if (!saved) return;
+      
+      try {
+        const settings = JSON.parse(saved);
+        
+        if (applyToAllCheckbox) {
+          applyToAllCheckbox.checked = settings.applyToAll ?? true;
+        }
+        
+        const logoSize = settings.logoSize || 160;
+        if (sizeSlider) sizeSlider.value = logoSize;
+        if (sizeInput) sizeInput.value = logoSize;
+        
+        setTimeout(() => {
+          const selects = {
+            allPortalsLogoSelect: settings.allPortals,
+            driverLogoSelect: settings.driver,
+            customerLogoSelect: settings.customer,
+            adminLogoSelect: settings.admin,
+            emailLogoSelect: settings.email
+          };
+          
+          Object.entries(selects).forEach(([id, value]) => {
+            const el = document.getElementById(id);
+            if (el && value) {
+              el.value = value;
+              const key = id.replace('LogoSelect', '');
+              updateLogoPreview(key, value);
+            }
+          });
+          
+          const disabled = settings.applyToAll;
+          if (driverSelect) driverSelect.disabled = disabled;
+          if (customerSelect) customerSelect.disabled = disabled;
+          if (adminSelect) adminSelect.disabled = disabled;
+          
+          if (disabled && settings.allPortals) {
+            ['driver', 'customer', 'admin'].forEach(key => {
+              updateLogoPreview(key, settings.allPortals);
+            });
+          }
+          
+          updatePreviewLogo('allPortals');
+          updatePreviewSize(logoSize);
+        }, 500);
+        
+      } catch (err) {
+        console.error('Error loading logo settings:', err);
+      }
+    }
+  </script>
+</body>
+</html>

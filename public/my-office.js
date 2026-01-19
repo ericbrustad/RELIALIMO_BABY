@@ -64,7 +64,8 @@ class MyOffice {
     this.activeFleetId = null;
     this.fleetSelectionBound = false;
     this.fleetStorageKey = 'cr_fleet';
-    this.users = [
+    this.usersStorageKey = 'cr_system_users';
+    this.defaultUsers = [
       {
         id: '1',
         displayName: 'Amanda Brustad (amanda)',
@@ -94,6 +95,8 @@ class MyOffice {
         sms: '',
       }
     ];
+    // Load users from localStorage or use defaults
+    this.users = this.loadSystemUsers();
     this.selectedUserId = this.users[0]?.id || null;
     this.userInputs = {};
     this.mapboxService = new MapboxService();
@@ -1052,481 +1055,49 @@ class MyOffice {
   }
 
   // ===================================
-  // LOGO MANAGEMENT (Supabase Integration)
+  // LOGO MANAGEMENT (Moved to logo-management.html)
   // ===================================
   
   async setupLogoManagement() {
-    const refreshBtn = document.getElementById('refreshImagesBtn');
-    const applyToAllCheckbox = document.getElementById('applyToAllPortals');
-    const allPortalsSelect = document.getElementById('allPortalsLogoSelect');
-    const driverSelect = document.getElementById('driverLogoSelect');
-    const customerSelect = document.getElementById('customerLogoSelect');
-    const adminSelect = document.getElementById('adminLogoSelect');
-    const emailSelect = document.getElementById('emailLogoSelect');
-    const saveLogoSettingsBtn = document.getElementById('saveLogoSettingsBtn');
-    const logoUploadBtn = document.getElementById('logoUploadBtn');
-
-    // Refresh images button
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', () => this.loadSupabaseImages());
-    }
-
-    // Apply to all checkbox toggle
-    if (applyToAllCheckbox) {
-      applyToAllCheckbox.addEventListener('change', (e) => {
-        const disabled = e.target.checked;
-        if (driverSelect) driverSelect.disabled = disabled;
-        if (customerSelect) customerSelect.disabled = disabled;
-        if (adminSelect) adminSelect.disabled = disabled;
-        
-        if (disabled && allPortalsSelect) {
-          // Apply master selection to all
-          const masterValue = allPortalsSelect.value;
-          if (driverSelect) driverSelect.value = '';
-          if (customerSelect) customerSelect.value = '';
-          if (adminSelect) adminSelect.value = '';
-          this.updateLogoPreview('driver', masterValue);
-          this.updateLogoPreview('customer', masterValue);
-          this.updateLogoPreview('admin', masterValue);
-        }
-      });
-    }
-
-    // All portals select change
-    if (allPortalsSelect) {
-      allPortalsSelect.addEventListener('change', (e) => {
-        const url = e.target.value;
-        this.updateLogoPreview('allPortals', url);
-        
-        if (applyToAllCheckbox?.checked) {
-          this.updateLogoPreview('driver', url);
-          this.updateLogoPreview('customer', url);
-          this.updateLogoPreview('admin', url);
-        }
-      });
-    }
-
-    // Individual portal selects
-    [
-      { el: driverSelect, key: 'driver' },
-      { el: customerSelect, key: 'customer' },
-      { el: adminSelect, key: 'admin' },
-      { el: emailSelect, key: 'email' }
-    ].forEach(({ el, key }) => {
-      if (el) {
-        el.addEventListener('change', (e) => {
-          this.updateLogoPreview(key, e.target.value);
-        });
-      }
-    });
-
-    // Upload to Supabase
-    if (logoUploadBtn) {
-      logoUploadBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        await this.uploadLogoToSupabase();
-      });
-    }
-
-    // Save logo settings
-    if (saveLogoSettingsBtn) {
-      saveLogoSettingsBtn.addEventListener('click', async () => {
-        await this.saveLogoSettings();
-      });
-    }
-
-    // Setup size slider and preview
-    this.setupLogoSizePreview();
-
-    // Load saved settings and images on init
-    this.loadLogoSettings();
+    // Logo management is now handled by the iframe page at logo-management.html
+    // This function is kept for legacy compatibility
+    console.log('Logo management moved to logo-management.html iframe');
   }
 
   setupLogoSizePreview() {
-    const sizeSlider = document.getElementById('logoSizeSlider');
-    const sizeInput = document.getElementById('logoSizeInput');
-    const previewLogoDark = document.getElementById('previewLogoDark');
-    const previewLogoLight = document.getElementById('previewLogoLight');
-    const previewContextSelect = document.getElementById('previewContextSelect');
-    const sizePresetBtns = document.querySelectorAll('.size-preset');
-
-    // Sync slider and input
-    if (sizeSlider && sizeInput) {
-      sizeSlider.addEventListener('input', (e) => {
-        const size = e.target.value;
-        sizeInput.value = size;
-        this.updatePreviewSize(size);
-      });
-
-      sizeInput.addEventListener('change', (e) => {
-        let size = parseInt(e.target.value) || 160;
-        size = Math.max(50, Math.min(300, size));
-        e.target.value = size;
-        sizeSlider.value = size;
-        this.updatePreviewSize(size);
-      });
-    }
-
-    // Size preset buttons
-    sizePresetBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const size = btn.dataset.size;
-        if (sizeSlider) sizeSlider.value = size;
-        if (sizeInput) sizeInput.value = size;
-        this.updatePreviewSize(size);
-      });
-    });
-
-    // Preview context selector
-    if (previewContextSelect) {
-      previewContextSelect.addEventListener('change', (e) => {
-        this.updatePreviewLogo(e.target.value);
-      });
-    }
-
-    // Initial preview update
-    setTimeout(() => this.updatePreviewLogo('allPortals'), 600);
+    // Moved to logo-management.html
   }
 
   updatePreviewSize(size) {
-    const previewLogoDark = document.getElementById('previewLogoDark');
-    const previewLogoLight = document.getElementById('previewLogoLight');
-    
-    if (previewLogoDark) {
-      previewLogoDark.style.height = `${size}px`;
-      previewLogoDark.style.width = 'auto';
-    }
-    if (previewLogoLight) {
-      previewLogoLight.style.height = `${size}px`;
-      previewLogoLight.style.width = 'auto';
-    }
+    // Moved to logo-management.html
   }
 
   updatePreviewLogo(context) {
-    const previewLogoDark = document.getElementById('previewLogoDark');
-    const previewLogoLight = document.getElementById('previewLogoLight');
-    const applyToAll = document.getElementById('applyToAllPortals')?.checked;
-    
-    let logoUrl = '';
-    
-    if (context === 'allPortals' || (applyToAll && context !== 'email')) {
-      logoUrl = document.getElementById('allPortalsLogoSelect')?.value || '';
-    } else {
-      const selectId = `${context}LogoSelect`;
-      logoUrl = document.getElementById(selectId)?.value || 
-                document.getElementById('allPortalsLogoSelect')?.value || '';
-    }
-
-    if (logoUrl) {
-      if (previewLogoDark) {
-        previewLogoDark.src = logoUrl;
-        previewLogoDark.style.display = 'block';
-      }
-      if (previewLogoLight) {
-        previewLogoLight.src = logoUrl;
-        previewLogoLight.style.display = 'block';
-      }
-      
-      // Apply current size
-      const size = document.getElementById('logoSizeSlider')?.value || 160;
-      this.updatePreviewSize(size);
-    } else {
-      if (previewLogoDark) previewLogoDark.style.display = 'none';
-      if (previewLogoLight) previewLogoLight.style.display = 'none';
-    }
+    // Moved to logo-management.html
   }
 
   async loadSupabaseImages() {
-    const gallery = document.getElementById('supabaseImageGallery');
-    if (!gallery) return;
-
-    gallery.innerHTML = '<p class="loading-text">Loading images...</p>';
-
-    try {
-      const { supabase } = await import('./supabase-client.js');
-      const SUPABASE_URL = 'https://siumiadylwcrkaqsfwkj.supabase.co';
-      
-      // List files in images bucket
-      const { data: files, error } = await supabase.storage
-        .from('images')
-        .list('', { limit: 50, sortBy: { column: 'name', order: 'asc' } });
-
-      if (error) {
-        console.error('Error loading images:', error);
-        gallery.innerHTML = `<p class="loading-text" style="color: #c00;">Error: ${error.message}</p>`;
-        return;
-      }
-
-      if (!files || files.length === 0) {
-        gallery.innerHTML = '<p class="loading-text">No images found. Upload some logos first!</p>';
-        return;
-      }
-
-      // Filter only image files
-      const imageFiles = files.filter(f => 
-        f.name.match(/\.(png|jpg|jpeg|gif|svg|webp)$/i)
-      );
-
-      if (imageFiles.length === 0) {
-        gallery.innerHTML = '<p class="loading-text">No image files found in bucket.</p>';
-        return;
-      }
-
-      // Build gallery HTML
-      gallery.innerHTML = imageFiles.map(file => {
-        const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/images/${file.name}`;
-        return `
-          <div class="gallery-item" data-url="${publicUrl}" data-name="${file.name}">
-            <img src="${publicUrl}" alt="${file.name}" loading="lazy" />
-            <div class="gallery-item-name">${file.name}</div>
-          </div>
-        `;
-      }).join('');
-
-      // Add click handlers
-      gallery.querySelectorAll('.gallery-item').forEach(item => {
-        item.addEventListener('click', () => {
-          const url = item.dataset.url;
-          const name = item.dataset.name;
-          
-          // Toggle selection
-          gallery.querySelectorAll('.gallery-item').forEach(i => i.classList.remove('selected'));
-          item.classList.add('selected');
-          
-          // Show in upload preview
-          const previewContainer = document.getElementById('uploadPreviewContainer');
-          const previewImg = document.getElementById('uploadPreviewImg');
-          if (previewContainer && previewImg) {
-            previewImg.src = url;
-            previewContainer.style.display = 'block';
-          }
-
-          // Prompt to use this image
-          this.selectedGalleryImage = { url, name };
-        });
-      });
-
-      // Populate select dropdowns
-      this.populateLogoSelects(imageFiles);
-
-    } catch (err) {
-      console.error('Error loading Supabase images:', err);
-      gallery.innerHTML = `<p class="loading-text" style="color: #c00;">Error: ${err.message}</p>`;
-    }
+    // Moved to logo-management.html
   }
 
   populateLogoSelects(imageFiles) {
-    const SUPABASE_URL = 'https://siumiadylwcrkaqsfwkj.supabase.co';
-    const selects = [
-      'allPortalsLogoSelect',
-      'driverLogoSelect',
-      'customerLogoSelect', 
-      'adminLogoSelect',
-      'emailLogoSelect'
-    ];
-
-    selects.forEach(selectId => {
-      const select = document.getElementById(selectId);
-      if (!select) return;
-
-      const currentValue = select.value;
-      
-      // Keep first option
-      const firstOption = select.options[0];
-      select.innerHTML = '';
-      select.appendChild(firstOption);
-
-      // Add image options
-      imageFiles.forEach(file => {
-        const option = document.createElement('option');
-        option.value = `${SUPABASE_URL}/storage/v1/object/public/images/${file.name}`;
-        option.textContent = file.name;
-        select.appendChild(option);
-      });
-
-      // Restore value if it exists
-      if (currentValue) {
-        select.value = currentValue;
-      }
-    });
+    // Moved to logo-management.html
   }
 
   updateLogoPreview(key, url) {
-    const previewImg = document.getElementById(`${key}LogoPreview`);
-    const noLogoText = document.getElementById(`${key}NoLogo`);
-
-    if (previewImg && url) {
-      previewImg.src = url;
-      previewImg.style.display = 'block';
-      if (noLogoText) noLogoText.style.display = 'none';
-    } else if (previewImg) {
-      previewImg.style.display = 'none';
-      if (noLogoText) noLogoText.style.display = 'block';
-    }
+    // Moved to logo-management.html
   }
 
   async uploadLogoToSupabase() {
-    const fileInput = document.getElementById('logoFileInput');
-    const file = fileInput?.files?.[0];
-    
-    if (!file) {
-      alert('Please choose a file first.');
-      return;
-    }
-
-    // Validate
-    if (!file.type.match(/^image\/(jpeg|png|gif|svg|webp)$/i)) {
-      alert('Please select a valid image file (JPG, PNG, GIF, SVG, or WebP).');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Image must be less than 5MB.');
-      return;
-    }
-
-    try {
-      const { supabase } = await import('./supabase-client.js');
-      
-      // Generate unique filename
-      const ext = file.name.split('.').pop();
-      const timestamp = Date.now();
-      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_').replace(/\.[^.]+$/, '');
-      const fileName = `${safeName}_${timestamp}.${ext}`;
-
-      const { data, error } = await supabase.storage
-        .from('images')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (error) {
-        alert(`Upload failed: ${error.message}`);
-        return;
-      }
-
-      alert(`✅ Logo uploaded successfully as: ${fileName}`);
-      
-      // Clear input and refresh gallery
-      fileInput.value = '';
-      document.getElementById('logoFileName').textContent = 'No file chosen';
-      
-      await this.loadSupabaseImages();
-
-    } catch (err) {
-      console.error('Upload error:', err);
-      alert(`Upload error: ${err.message}`);
-    }
+    // Moved to logo-management.html
   }
 
   async saveLogoSettings() {
-    const applyToAll = document.getElementById('applyToAllPortals')?.checked ?? true;
-    const allPortals = document.getElementById('allPortalsLogoSelect')?.value || '';
-    const driver = document.getElementById('driverLogoSelect')?.value || '';
-    const customer = document.getElementById('customerLogoSelect')?.value || '';
-    const admin = document.getElementById('adminLogoSelect')?.value || '';
-    const email = document.getElementById('emailLogoSelect')?.value || '';
-    const logoSize = parseInt(document.getElementById('logoSizeSlider')?.value) || 160;
-
-    const logoSettings = {
-      applyToAll,
-      allPortals,
-      driver: applyToAll ? '' : driver,
-      customer: applyToAll ? '' : customer,
-      admin: applyToAll ? '' : admin,
-      email,
-      logoSize,
-      updatedAt: new Date().toISOString()
-    };
-
-    // Save to localStorage
-    localStorage.setItem('logoSettings', JSON.stringify(logoSettings));
-
-    // Try to save to Supabase organization record
-    try {
-      const { supabase } = await import('./supabase-client.js');
-      const orgId = localStorage.getItem('currentOrganizationId');
-      
-      if (orgId) {
-        const { error } = await supabase
-          .from('organizations')
-          .update({
-            logo_url: applyToAll ? allPortals : (driver || allPortals),
-            logo_settings: logoSettings
-          })
-          .eq('id', orgId);
-
-        if (error) {
-          console.warn('Could not save to Supabase:', error);
-        }
-      }
-    } catch (err) {
-      console.warn('Supabase save error:', err);
-    }
-
-    alert('✅ Logo settings saved successfully!');
+    // Moved to logo-management.html
   }
 
   loadLogoSettings() {
-    const saved = localStorage.getItem('logoSettings');
-    if (!saved) return;
-
-    try {
-      const settings = JSON.parse(saved);
-      
-      const applyToAllCheckbox = document.getElementById('applyToAllPortals');
-      if (applyToAllCheckbox) {
-        applyToAllCheckbox.checked = settings.applyToAll ?? true;
-      }
-
-      // Restore logo size
-      const logoSize = settings.logoSize || 160;
-      const sizeSlider = document.getElementById('logoSizeSlider');
-      const sizeInput = document.getElementById('logoSizeInput');
-      if (sizeSlider) sizeSlider.value = logoSize;
-      if (sizeInput) sizeInput.value = logoSize;
-
-      // Set select values after images load
-      setTimeout(() => {
-        const selects = {
-          allPortalsLogoSelect: settings.allPortals,
-          driverLogoSelect: settings.driver,
-          customerLogoSelect: settings.customer,
-          adminLogoSelect: settings.admin,
-          emailLogoSelect: settings.email
-        };
-
-        Object.entries(selects).forEach(([id, value]) => {
-          const el = document.getElementById(id);
-          if (el && value) {
-            el.value = value;
-            const key = id.replace('LogoSelect', '');
-            this.updateLogoPreview(key, value);
-          }
-        });
-
-        // Update disabled state
-        const disabled = settings.applyToAll;
-        ['driverLogoSelect', 'customerLogoSelect', 'adminLogoSelect'].forEach(id => {
-          const el = document.getElementById(id);
-          if (el) el.disabled = disabled;
-        });
-
-        // If apply to all, show master logo in sub-portals
-        if (disabled && settings.allPortals) {
-          ['driver', 'customer', 'admin'].forEach(key => {
-            this.updateLogoPreview(key, settings.allPortals);
-          });
-        }
-
-        // Update preview with saved size
-        this.updatePreviewLogo('allPortals');
-        this.updatePreviewSize(logoSize);
-      }, 500);
-      
-    } catch (err) {
-      console.error('Error loading logo settings:', err);
-    }
+    // Moved to logo-management.html
   }
   loadSavedLogo() {
     // Legacy support - load from old format
@@ -2407,6 +1978,7 @@ class MyOffice {
       'limoanywhere-pay': null,
       'digital-marketing': null,
       'appearance': 'appearance.html',
+      'logo-management': 'logo-management.html',
       'utilities': 'utilities.html?v=' + Date.now(),
       'test-checklist': 'full-site-test-checklist.html',
       'supabase-integration-test': 'test-supabase-integration.html',
@@ -2709,14 +2281,27 @@ class MyOffice {
     user.displayName += user.username ? ` (${user.username})` : '';
     user.roleLabel = user.login === 'admin' ? 'admin' : user.login;
 
+    // Persist to localStorage
+    this.saveSystemUsers();
+
     this.renderUserList();
     this.selectUser(user.id);
+    alert('✅ User saved successfully!');
   }
 
   deleteSelectedUser() {
     if (!this.selectedUserId) return;
 
+    const userToDelete = this.users.find(u => u.id === this.selectedUserId);
+    if (!confirm(`Are you sure you want to delete user "${userToDelete?.displayName || userToDelete?.username || 'this user'}"?`)) {
+      return;
+    }
+
     this.users = this.users.filter(u => u.id !== this.selectedUserId);
+    
+    // Persist to localStorage
+    this.saveSystemUsers();
+    
     if (this.users.length === 0) {
       this.selectedUserId = null;
       this.showUserEmptyState();
@@ -2727,6 +2312,34 @@ class MyOffice {
     this.selectedUserId = this.users[0].id;
     this.renderUserList();
     this.selectUser(this.selectedUserId);
+  }
+
+  // Load system users from localStorage or return defaults
+  loadSystemUsers() {
+    try {
+      const saved = localStorage.getItem(this.usersStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          console.log('✅ Loaded', parsed.length, 'system users from localStorage');
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Failed to load system users from localStorage:', e);
+    }
+    // Return default users if nothing saved
+    return [...this.defaultUsers];
+  }
+
+  // Save system users to localStorage
+  saveSystemUsers() {
+    try {
+      localStorage.setItem(this.usersStorageKey, JSON.stringify(this.users));
+      console.log('✅ Saved', this.users.length, 'system users to localStorage');
+    } catch (e) {
+      console.error('❌ Failed to save system users:', e);
+    }
   }
 
   showUserEmptyState() {

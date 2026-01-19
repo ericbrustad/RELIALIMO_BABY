@@ -40,7 +40,6 @@
             <!-- Company Settings Tab Items -->
             <div class="sidebar-group" id="companySettingsGroup">
               <button class="sidebar-btn active" data-section="contact-info">Contact Information</button>
-              <button class="sidebar-btn" data-section="logo-management">Logo Management</button>
               <button class="sidebar-btn" data-section="company-prefs">Company Preferences</button>
               <button class="sidebar-btn" data-section="system-users">System Users</button>
               <button class="sidebar-btn" data-section="policies">Policies</button>
@@ -56,6 +55,7 @@
                 <button class="sidebar-subbtn" data-system-setting="farmout-automation">Farmout Automation</button>
                 <button class="sidebar-subbtn" data-system-setting="portal-links">Portal Links</button>
                 <button class="sidebar-subbtn" data-system-setting="digital-marketing">Digital Marketing</button>
+                <button class="sidebar-subbtn" data-system-setting="logo-management">Logo Management</button>
                 <button class="sidebar-subbtn" data-system-setting="utilities">Utilities</button>
               </div>
             </div>
@@ -307,169 +307,6 @@
                     </div>
                     <button type="button" class="btn btn-primary" id="companyRouteRun">Get Distance & Duration</button>
                     <p class="route-helper-text">Results use Google Directions. Map renders via Mapbox for a quick visual.</p>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <!-- Logo Management Section -->
-            <section id="logo-management-section" class="office-section">
-              <div class="section-header">
-                <h2>🖼️ Logo Management</h2>
-              </div>
-              <div class="form-container">
-                <div class="logo-management-section">
-                  <p class="form-hint">Manage logos for different portals. Logos are stored in Supabase storage.</p>
-                  
-                  <!-- Upload New Logo -->
-                  <div class="logo-upload-card">
-                    <h4>Upload New Logo</h4>
-                    <p class="form-hint">Supported: .JPG, .PNG (max 5MB, recommended 1280px width)</p>
-                    <input type="file" id="logoFileInput" accept="image/jpeg,image/png" style="display: none;" />
-                    <div class="file-upload-group">
-                      <button class="btn btn-secondary" id="logoChooseBtn">Choose File</button>
-                      <span class="file-name" id="logoFileName">No file chosen</span>
-                      <button class="btn btn-primary" id="logoUploadBtn">Upload to Supabase</button>
-                    </div>
-                    <div class="upload-preview" id="uploadPreviewContainer" style="display: none;">
-                      <img id="uploadPreviewImg" alt="Upload preview" />
-                    </div>
-                  </div>
-
-                  <!-- Browse Supabase Images -->
-                  <div class="logo-browser-card">
-                    <h4>Browse Supabase Images</h4>
-                    <p class="form-hint">Select from existing images in your Supabase storage bucket.</p>
-                    <button class="btn btn-secondary" id="refreshImagesBtn">🔄 Refresh Images</button>
-                    <div class="image-gallery" id="supabaseImageGallery">
-                      <p class="loading-text">Click "Refresh Images" to load available logos...</p>
-                    </div>
-                  </div>
-
-                  <!-- Logo Selection Grid -->
-                  <div class="logo-selection-grid">
-                    <!-- All Online Portals -->
-                    <div class="logo-selector-card logo-selector-master">
-                      <h4>🌐 All Online Portals</h4>
-                      <p class="form-hint">Sets default logo for all portals (drivers, customers, admin)</p>
-                      <div class="logo-selector-preview">
-                        <img id="allPortalsLogoPreview" src="" alt="All Portals Logo" onerror="this.style.display='none'" />
-                        <span class="no-logo-text" id="allPortalsNoLogo">No logo selected</span>
-                      </div>
-                      <select class="form-control logo-select" id="allPortalsLogoSelect">
-                        <option value="">-- Select Logo --</option>
-                      </select>
-                      <label class="checkbox-label">
-                        <input type="checkbox" id="applyToAllPortals" checked />
-                        Apply to all portals below
-                      </label>
-                    </div>
-
-                    <!-- Driver Portal -->
-                    <div class="logo-selector-card">
-                      <h4>🚗 Driver Portal</h4>
-                      <p class="form-hint">Logo for driver.relialimo.com</p>
-                      <div class="logo-selector-preview">
-                        <img id="driverLogoPreview" src="" alt="Driver Logo" onerror="this.style.display='none'" />
-                        <span class="no-logo-text" id="driverNoLogo">Using All Portals default</span>
-                      </div>
-                      <select class="form-control logo-select" id="driverLogoSelect" disabled>
-                        <option value="">-- Use All Portals Default --</option>
-                      </select>
-                    </div>
-
-                    <!-- Customer Portal -->
-                    <div class="logo-selector-card">
-                      <h4>👤 Customer Portal</h4>
-                      <p class="form-hint">Logo for account.relialimo.com</p>
-                      <div class="logo-selector-preview">
-                        <img id="customerLogoPreview" src="" alt="Customer Logo" onerror="this.style.display='none'" />
-                        <span class="no-logo-text" id="customerNoLogo">Using All Portals default</span>
-                      </div>
-                      <select class="form-control logo-select" id="customerLogoSelect" disabled>
-                        <option value="">-- Use All Portals Default --</option>
-                      </select>
-                    </div>
-
-                    <!-- Admin Portal -->
-                    <div class="logo-selector-card">
-                      <h4>🔧 Admin Portal</h4>
-                      <p class="form-hint">Logo for admin.relialimo.com</p>
-                      <div class="logo-selector-preview">
-                        <img id="adminLogoPreview" src="" alt="Admin Logo" onerror="this.style.display='none'" />
-                        <span class="no-logo-text" id="adminNoLogo">Using All Portals default</span>
-                      </div>
-                      <select class="form-control logo-select" id="adminLogoSelect" disabled>
-                        <option value="">-- Use All Portals Default --</option>
-                      </select>
-                    </div>
-
-                    <!-- Email Logo -->
-                    <div class="logo-selector-card">
-                      <h4>📧 Email Logo</h4>
-                      <p class="form-hint">Logo for email headers and templates</p>
-                      <div class="logo-selector-preview">
-                        <img id="emailLogoPreview" src="" alt="Email Logo" onerror="this.style.display='none'" />
-                        <span class="no-logo-text" id="emailNoLogo">No logo selected</span>
-                      </div>
-                      <select class="form-control logo-select" id="emailLogoSelect">
-                        <option value="">-- Select Logo --</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <!-- Logo Size & Preview Section -->
-                  <div class="logo-preview-section">
-                    <h4>📐 Logo Size & Preview</h4>
-                    <p class="form-hint">Adjust logo size and see how it will appear on different screens.</p>
-                    
-                    <div class="size-controls">
-                      <div class="size-control-group">
-                        <label>Logo Size (pixels)</label>
-                        <div class="size-slider-row">
-                          <input type="range" id="logoSizeSlider" min="50" max="300" value="160" class="size-slider" />
-                          <input type="number" id="logoSizeInput" min="50" max="300" value="160" class="size-input" />
-                          <span class="size-unit">px</span>
-                        </div>
-                      </div>
-                      <div class="size-presets">
-                        <button class="btn btn-sm btn-secondary size-preset" data-size="80">Small (80px)</button>
-                        <button class="btn btn-sm btn-secondary size-preset" data-size="120">Medium (120px)</button>
-                        <button class="btn btn-sm btn-secondary size-preset" data-size="160">Default (160px)</button>
-                        <button class="btn btn-sm btn-secondary size-preset" data-size="200">Large (200px)</button>
-                        <button class="btn btn-sm btn-secondary size-preset" data-size="250">XL (250px)</button>
-                      </div>
-                    </div>
-
-                    <div class="live-preview-container">
-                      <div class="preview-panel preview-dark">
-                        <div class="preview-label">Dark Background</div>
-                        <div class="preview-content">
-                          <img id="previewLogoDark" src="" alt="Logo preview" />
-                        </div>
-                      </div>
-                      <div class="preview-panel preview-light">
-                        <div class="preview-label">Light Background</div>
-                        <div class="preview-content">
-                          <img id="previewLogoLight" src="" alt="Logo preview" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="preview-context-selector">
-                      <label>Preview Context:</label>
-                      <select id="previewContextSelect" class="form-control" style="max-width: 200px; display: inline-block;">
-                        <option value="allPortals">All Portals</option>
-                        <option value="driver">Driver Portal</option>
-                        <option value="customer">Customer Portal</option>
-                        <option value="admin">Admin Portal</option>
-                        <option value="email">Email</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div class="form-actions" style="margin-top: 20px;">
-                    <button class="btn btn-primary btn-large" id="saveLogoSettingsBtn">💾 Save Logo Settings</button>
                   </div>
                 </div>
               </div>
