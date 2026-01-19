@@ -444,8 +444,137 @@ export const supabase = {
       };
     }
   },
+  storage: {
+    from: (bucket) => new StorageQuery(bucket)
+  },
   from: (table) => new PostgrestQuery(table)
 };
+
+// Storage API for file operations
+class StorageQuery {
+  constructor(bucket) {
+    this.bucket = bucket;
+  }
+
+  async list(path = '', options = {}) {
+    try {
+      const { url, anonKey } = ensureCredentials();
+      const session = loadStoredSession();
+      const token = session?.access_token || anonKey;
+      
+      let endpoint = `${url}/storage/v1/object/list/${this.bucket}`;
+      
+      const body = {
+        prefix: path,
+        limit: options.limit || 100,
+        offset: options.offset || 0,
+        sortBy: options.sortBy || { column: 'name', order: 'asc' }
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'apikey': anonKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        return { data: null, error: { message: errText || response.statusText } };
+      }
+
+      const data = await response.json();
+      return { data, error: null };
+    } catch (err) {
+      console.error('Storage list error:', err);
+      return { data: null, error: { message: err.message } };
+    }
+  }
+
+  async upload(path, file, options = {}) {
+    try {
+      const { url, anonKey } = ensureCredentials();
+      const session = loadStoredSession();
+      const token = session?.access_token || anonKey;
+      
+      const endpoint = `${url}/storage/v1/object/${this.bucket}/${path}`;
+      
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'apikey': anonKey
+      };
+
+      if (options.cacheControl) {
+        headers['Cache-Control'] = `max-age=${options.cacheControl}`;
+      }
+      
+      if (options.upsert) {
+        headers['x-upsert'] = 'true';
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: file
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        return { data: null, error: { message: errText || response.statusText } };
+      }
+
+      const data = await response.json();
+      return { data, error: null };
+    } catch (err) {
+      console.error('Storage upload error:', err);
+      return { data: null, error: { message: err.message } };
+    }
+  }
+
+  async remove(paths) {
+    try {
+      const { url, anonKey } = ensureCredentials();
+      const session = loadStoredSession();
+      const token = session?.access_token || anonKey;
+      
+      const pathArray = Array.isArray(paths) ? paths : [paths];
+      const endpoint = `${url}/storage/v1/object/${this.bucket}`;
+
+      const response = await fetch(endpoint, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'apikey': anonKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ prefixes: pathArray })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        return { data: null, error: { message: errText || response.statusText } };
+      }
+
+      const data = await response.json();
+      return { data, error: null };
+    } catch (err) {
+      console.error('Storage remove error:', err);
+      return { data: null, error: { message: err.message } };
+    }
+  }
+
+  getPublicUrl(path) {
+    const { url } = ensureCredentials();
+    return {
+      data: {
+        publicUrl: `${url}/storage/v1/object/public/${this.bucket}/${path}`
+      }
+    };
+  }
+}
 
 class PostgrestQuery {
   constructor(table) {
