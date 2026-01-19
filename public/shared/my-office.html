@@ -53,9 +53,9 @@
                 <button class="sidebar-subbtn" data-system-setting="sms-provider">Sms Provider</button>
                 <button class="sidebar-subbtn" data-system-setting="email-settings">Email Settings</button>
                 <button class="sidebar-subbtn" data-system-setting="farmout-automation">Farmout Automation</button>
+                <button class="sidebar-subbtn" data-system-setting="widget-settings">Widget Settings</button>
                 <button class="sidebar-subbtn" data-system-setting="portal-links">Portal Links</button>
                 <button class="sidebar-subbtn" data-system-setting="digital-marketing">Digital Marketing</button>
-                <button class="sidebar-subbtn" data-system-setting="logo-management">Logo Management</button>
                 <button class="sidebar-subbtn" data-system-setting="utilities">Utilities</button>
               </div>
             </div>
@@ -268,6 +268,24 @@
                   <div class="form-group">
                     <label>Company Website URL</label>
                     <input type="url" id="companyWebsite" class="form-control" value="" />
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Company Logo</label>
+                    <p class="form-hint">This will be used in outbox web by 1280px logo, or smaller.</p>
+                    <p class="form-hint">Supported: .JPG, .PNG</p>
+                    <input type="file" id="logoFileInput" accept="image/jpeg,image/png" style="display: none;" />
+                    <div class="file-upload-group">
+                      <button class="btn btn-secondary" id="logoChooseBtn">Choose File</button>
+                      <span class="file-name" id="logoFileName">No file chosen</span>
+                      <button class="btn btn-primary" id="logoUploadBtn">Upload >></button>
+                    </div>
+                    <div class="logo-preview">
+                      <img id="logoPreviewImg" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100' viewBox='0 0 200 100'%3E%3Crect fill='%23000' width='200' height='100'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23fff' font-family='Arial' font-size='24' font-weight='bold'%3EERIX%3C/text%3E%3C/svg%3E" alt="Company Logo" />
+                      <a href="#" class="logo-link" id="logoDeleteBtn">>> Delete Logo <<</a>
+                    </div>
                   </div>
                 </div>
 
