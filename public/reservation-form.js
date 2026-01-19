@@ -7207,25 +7207,27 @@ class ReservationForm {
         }
       }
 
-      // Save route stops if available (optional feature; db may not implement this)
-      if (reservationData.routing.stops && reservationData.routing.stops.length > 0) {
-        if (typeof db.saveRouteStops === 'function') {
-          db.saveRouteStops(saved.id, reservationData.routing.stops);
-          console.log('✅ Route stops saved to db');
-        }
+      // Save addresses to account if account number exists
+      // This captures all addresses from the reservation for easy reuse
+      const accountNumber = reservationData.billingAccount.account;
+      if (accountNumber && accountNumber.trim()) {
+        // Find account by number
+        const accountList2 = await db.getAllAccounts();
+        const account = accountList2.find(a => a.id === accountNumber || a.account_number === accountNumber);
         
-        // Save addresses to account if account number exists
-        const accountNumber = reservationData.billingAccount.account;
-        if (accountNumber && accountNumber.trim()) {
-          // Find account by number
-          const accountList2 = await db.getAllAccounts();
-          const account = accountList2.find(a => a.id === accountNumber || a.account_number === accountNumber);
+        if (account) {
+          console.log('📍 Saving addresses to account:', account.id);
+          const addressPromises = [];
           
-          if (account) {
-            console.log('📍 Saving addresses to account:', account.id);
+          // Save route stops if available
+          if (reservationData.routing.stops && reservationData.routing.stops.length > 0) {
+            if (typeof db.saveRouteStops === 'function') {
+              db.saveRouteStops(saved.id, reservationData.routing.stops);
+              console.log('✅ Route stops saved to db');
+            }
             
             // Save each stop address to the account
-            reservationData.routing.stops.forEach(stop => {
+            for (const stop of reservationData.routing.stops) {
               if (stop.address1 && stop.city) {
                 const addressData = {
                   address_type: stop.stopType || 'waypoint',
@@ -7238,11 +7240,53 @@ class ReservationForm {
                   country: 'United States'
                 };
                 
-                db.saveAccountAddress(account.id, addressData);
+                addressPromises.push(db.saveAccountAddress(account.id, addressData));
               }
-            });
-            
-            console.log('✅ Addresses saved to account');
+            }
+          }
+          
+          // Also save primary pickup address from form fields
+          const puAddress = document.getElementById('puAddress')?.value?.trim();
+          const puCity = document.getElementById('puCity')?.value?.trim();
+          const puLocationName = document.getElementById('puLocationName')?.value?.trim() || 
+                                 document.getElementById('puPlace')?.value?.trim() || '';
+          if (puAddress && puCity) {
+            addressPromises.push(db.saveAccountAddress(account.id, {
+              address_type: 'pickup',
+              address_name: puLocationName,
+              address_line1: puAddress,
+              address_line2: '',
+              city: puCity,
+              state: document.getElementById('puState')?.value?.trim() || '',
+              zip_code: document.getElementById('puZip')?.value?.trim() || '',
+              country: 'United States'
+            }));
+          }
+          
+          // Also save primary dropoff address from form fields
+          const doAddress = document.getElementById('doAddress')?.value?.trim();
+          const doCity = document.getElementById('doCity')?.value?.trim();
+          const doLocationName = document.getElementById('doLocationName')?.value?.trim() || 
+                                 document.getElementById('doPlace')?.value?.trim() || '';
+          if (doAddress && doCity) {
+            addressPromises.push(db.saveAccountAddress(account.id, {
+              address_type: 'dropoff',
+              address_name: doLocationName,
+              address_line1: doAddress,
+              address_line2: '',
+              city: doCity,
+              state: document.getElementById('doState')?.value?.trim() || '',
+              zip_code: document.getElementById('doZip')?.value?.trim() || '',
+              country: 'United States'
+            }));
+          }
+          
+          // Wait for all address saves to complete
+          try {
+            await Promise.all(addressPromises);
+            console.log('✅ All addresses saved to account');
+          } catch (addrError) {
+            console.warn('⚠️ Some addresses failed to save:', addrError);
           }
         }
       }

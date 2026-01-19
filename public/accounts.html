@@ -976,10 +976,63 @@
                     
                     <div class="form-section">
                       <h4 class="form-section-header">Scheduled Email Rules For Account</h4>
-                      <select id="scheduledEmailRules" class="form-control">
-                        <option value="">- - - NOT SELECTED - - -</option>
-                      </select>
-                      <button type="button" class="btn btn-primary" style="margin-top: 10px;">SAVE</button>
+                      
+                      <!-- Master Toggle -->
+                      <div style="background: linear-gradient(135deg, #e3f2fd, #bbdefb); padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 2px solid #1976d2;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; color: #1565c0;">
+                          <input type="checkbox" id="emailRulesEnabled" style="width: 18px; height: 18px;" checked />
+                          <span>📧 Enable Email Notifications</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; color: #1565c0; margin-top: 8px;">
+                          <input type="checkbox" id="smsRulesEnabled" style="width: 18px; height: 18px;" />
+                          <span>📱 Enable SMS Notifications</span>
+                        </label>
+                      </div>
+                      
+                      <!-- Driver Status Rules -->
+                      <div style="background: #f5f5f5; padding: 10px; border-radius: 6px; margin-bottom: 10px;">
+                        <h5 style="margin: 0 0 10px 0; color: #333; font-size: 13px;">🚗 Driver Status Updates</h5>
+                        <div id="driverStatusRules" style="display: grid; gap: 8px;">
+                          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="ruleOnTheWay" class="email-rule-toggle" data-rule="driver_on_the_way" checked />
+                            <span style="font-size: 13px;">On the way</span>
+                          </label>
+                          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="ruleArrived" class="email-rule-toggle" data-rule="driver_arrived" checked />
+                            <span style="font-size: 13px;">Arrived</span>
+                          </label>
+                          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="rulePassengerOnBoard" class="email-rule-toggle" data-rule="passenger_on_board" checked />
+                            <span style="font-size: 13px;">Passenger on board</span>
+                          </label>
+                          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="rulePassengerDroppedOff" class="email-rule-toggle" data-rule="passenger_dropped_off" checked />
+                            <span style="font-size: 13px;">Passenger Dropped off</span>
+                          </label>
+                          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="ruleDriverInfoAffiliate" class="email-rule-toggle" data-rule="driver_info_affiliate" />
+                            <span style="font-size: 13px;">A Driver Info for affiliate 3 hour off network</span>
+                          </label>
+                        </div>
+                      </div>
+                      
+                      <!-- Select All Option -->
+                      <div style="margin-bottom: 10px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                          <input type="checkbox" id="selectAllEmailRules" />
+                          <span style="font-size: 13px; font-weight: 600;">Select All</span>
+                        </label>
+                      </div>
+                      
+                      <!-- Template Selection -->
+                      <div class="form-group" style="margin-top: 15px;">
+                        <label>Email Template</label>
+                        <select id="scheduledEmailRules" class="form-control">
+                          <option value="">- - - NOT SELECTED - - -</option>
+                        </select>
+                      </div>
+                      
+                      <button type="button" id="saveEmailRulesBtn" class="btn btn-primary" style="margin-top: 10px;">SAVE</button>
                     </div>
                     
                     <div class="form-section">
@@ -992,7 +1045,7 @@
                         <label>GNet ID</label>
                         <input type="text" id="gnetId" class="form-control" />
                       </div>
-                      <button type="button" class="btn btn-primary">SAVE</button>
+                      <button type="button" id="savePartnerPrefsBtn" class="btn btn-primary">SAVE</button>
                     </div>
                   </div>
                 </div>

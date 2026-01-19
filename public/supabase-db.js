@@ -26,6 +26,14 @@ import {
   saveBookingAgentToSupabase
 } from './api-service.js';
 
+// Get organization_id from ENV config
+function getOrganizationId() {
+  if (typeof window !== 'undefined' && window.ENV) {
+    return window.ENV.ORGANIZATION_ID || window.ENV.SUPABASE_ORGANIZATION_ID || window.ENV.ORG_ID || null;
+  }
+  return null;
+}
+
 // Success notification helper
 function showDatabaseSuccess(operation, data) {
   console.log(`✅ ${operation} successful:`, data);
@@ -774,17 +782,114 @@ export async function getAllBookingAgents() {
 // ACCOUNT ADDRESSES
 // ========================================
 
+/**
+ * Normalize address string for duplicate comparison
+ * Removes extra spaces, converts to lowercase, strips common variations
+ */
+function normalizeAddress(addr) {
+  if (!addr) return '';
+  return addr
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[.,#]/g, '')
+    .replace(/\bstreet\b/g, 'st')
+    .replace(/\bavenue\b/g, 'ave')
+    .replace(/\bboulevard\b/g, 'blvd')
+    .replace(/\bdrive\b/g, 'dr')
+    .replace(/\broad\b/g, 'rd')
+    .replace(/\blane\b/g, 'ln')
+    .replace(/\bcourt\b/g, 'ct')
+    .replace(/\bplace\b/g, 'pl')
+    .replace(/\bapartment\b/g, 'apt')
+    .replace(/\bsuite\b/g, 'ste')
+    .trim();
+}
+
+/**
+ * Save account address with duplicate prevention
+ * Checks if an address with the same address_line1, city, and state already exists
+ * If duplicate found, returns existing record instead of inserting new one
+ */
 export async function saveAccountAddress(accountId, addressData) {
   try {
     await setupAPI();
     const client = getSupabaseClient();
     if (!client) throw new Error('No Supabase client');
     
+    // Skip if no meaningful address data
+    if (!addressData.address_line1 || !addressData.city) {
+      console.log('⏭️ Skipping address save - missing address_line1 or city');
+      return null;
+    }
+    
+    // Check for existing duplicate addresses for this account
+    const { data: existingAddresses, error: fetchError } = await client
+      .from('account_addresses')
+      .select('*')
+      .eq('account_id', accountId);
+    
+    if (fetchError) {
+      console.warn('⚠️ Could not check for duplicate addresses:', fetchError);
+      // Continue with insert attempt
+    } else if (existingAddresses && existingAddresses.length > 0) {
+      // Normalize incoming address for comparison
+      const normalizedIncoming = {
+        address1: normalizeAddress(addressData.address_line1),
+        city: normalizeAddress(addressData.city),
+        state: normalizeAddress(addressData.state)
+      };
+      
+      // Check each existing address for duplicates
+      for (const existing of existingAddresses) {
+        const normalizedExisting = {
+          address1: normalizeAddress(existing.address_line1),
+          city: normalizeAddress(existing.city),
+          state: normalizeAddress(existing.state)
+        };
+        
+        // If address1 and city match (state is optional match)
+        if (normalizedIncoming.address1 === normalizedExisting.address1 &&
+            normalizedIncoming.city === normalizedExisting.city) {
+          // Check state if both have it
+          if (!normalizedIncoming.state || !normalizedExisting.state ||
+              normalizedIncoming.state === normalizedExisting.state) {
+            console.log('📍 Duplicate address found, skipping insert:', existing.address_line1);
+            
+            // Optionally update the location name if provided and different
+            if (addressData.address_name && addressData.address_name !== existing.address_name) {
+              const { data: updated, error: updateError } = await client
+                .from('account_addresses')
+                .update({ address_name: addressData.address_name })
+                .eq('id', existing.id)
+                .select();
+              
+              if (!updateError && updated) {
+                console.log('📝 Updated address name to:', addressData.address_name);
+                return updated[0];
+              }
+            }
+            
+            return existing; // Return existing record
+          }
+        }
+      }
+    }
+    
+    // No duplicate found, insert new address
+    const orgId = getOrganizationId();
     const { data, error } = await client
       .from('account_addresses')
       .insert([{
         account_id: accountId,
-        ...addressData
+        organization_id: orgId,
+        address_type: addressData.address_type || 'other',
+        address_name: addressData.address_name || addressData.location_name || '',
+        address_line1: addressData.address_line1,
+        address_line2: addressData.address_line2 || '',
+        city: addressData.city,
+        state: addressData.state || '',
+        zip_code: addressData.zip_code || '',
+        country: addressData.country || 'United States'
       }])
       .select();
     

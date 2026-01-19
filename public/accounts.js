@@ -491,6 +491,86 @@ class Accounts {
       this.setMultiSelectValues('acctRestrictedDrivers', account.restricted_drivers || []);
       this.setMultiSelectValues('acctRestrictedCars', account.restricted_cars || []);
       
+      // ==========================================
+      // Financial Data Tab fields
+      // ==========================================
+      const postMethodEl = document.getElementById('postMethod');
+      const postTermsEl = document.getElementById('postTerms');
+      const primaryAgentEl = document.getElementById('primaryAgent');
+      const secondaryAgentEl = document.getElementById('secondaryAgent');
+      if (postMethodEl) postMethodEl.value = account.post_method || '';
+      if (postTermsEl) postTermsEl.value = account.post_terms || '';
+      if (primaryAgentEl) primaryAgentEl.value = account.primary_agent_id || '';
+      if (secondaryAgentEl) secondaryAgentEl.value = account.secondary_agent_id || '';
+      
+      // Credit Card fields (display last 4 only if stored)
+      const ccNumberEl = document.getElementById('creditCardNumber');
+      const expMonthEl = document.getElementById('expMonth');
+      const expYearEl = document.getElementById('expYear');
+      const nameOnCardEl = document.getElementById('nameOnCard');
+      const ccTypeEl = document.getElementById('ccType');
+      const ccBillingAddressEl = document.getElementById('billingAddressCC');
+      const ccBillingCityEl = document.getElementById('billingCityCC');
+      const ccBillingStateEl = document.getElementById('billingStateCC');
+      const ccBillingZipEl = document.getElementById('billingZipCC');
+      const ccBillingCountryEl = document.getElementById('billingCountryCC');
+      const ccNotesEl = document.getElementById('creditCardNotes');
+      
+      if (ccNumberEl) ccNumberEl.value = account.cc_last_four ? `****-****-****-${account.cc_last_four}` : '';
+      if (expMonthEl) expMonthEl.value = account.cc_exp_month || '';
+      if (expYearEl) expYearEl.value = account.cc_exp_year || '';
+      if (nameOnCardEl) nameOnCardEl.value = account.cc_name_on_card || '';
+      if (ccTypeEl) ccTypeEl.value = account.cc_type || '';
+      if (ccBillingAddressEl) ccBillingAddressEl.value = account.cc_billing_address || '';
+      if (ccBillingCityEl) ccBillingCityEl.value = account.cc_billing_city || '';
+      if (ccBillingStateEl) ccBillingStateEl.value = account.cc_billing_state || '';
+      if (ccBillingZipEl) ccBillingZipEl.value = account.cc_billing_zip || '';
+      if (ccBillingCountryEl) ccBillingCountryEl.value = account.cc_billing_country || 'United States';
+      if (ccNotesEl) ccNotesEl.value = account.cc_notes || '';
+      
+      // ==========================================
+      // Addresses Tab - Billing Contact fields
+      // ==========================================
+      const employeeIdEl = document.getElementById('employeeId');
+      const vipNumberEl = document.getElementById('vipNumber');
+      const myBillingContactEl = document.getElementById('myBillingContact');
+      if (employeeIdEl) employeeIdEl.value = account.employee_id || '';
+      if (vipNumberEl) vipNumberEl.value = account.vip_number || '';
+      if (myBillingContactEl) myBillingContactEl.value = account.my_billing_contact_id || '';
+      
+      // ==========================================
+      // Misc Tab fields
+      // ==========================================
+      const miscPrefixEl = document.getElementById('miscPrefix');
+      const miscFirstNameEl = document.getElementById('miscFirstName');
+      const miscLastNameEl = document.getElementById('miscLastName');
+      const miscAccountNumberEl = document.getElementById('miscAccountNumber');
+      const groundXchangeIdEl = document.getElementById('groundXchangeId');
+      const gnetIdEl = document.getElementById('gnetId');
+      
+      if (miscPrefixEl) miscPrefixEl.value = account.prefix || '';
+      if (miscFirstNameEl) miscFirstNameEl.value = account.first_name || '';
+      if (miscLastNameEl) miscLastNameEl.value = account.last_name || '';
+      if (miscAccountNumberEl) miscAccountNumberEl.value = account.account_number || '';
+      if (groundXchangeIdEl) groundXchangeIdEl.value = account.groundxchange_id || '';
+      if (gnetIdEl) gnetIdEl.value = account.gnet_id || '';
+      
+      // Email rules toggles
+      const emailRulesEnabledEl = document.getElementById('emailRulesEnabled');
+      const smsRulesEnabledEl = document.getElementById('smsRulesEnabled');
+      if (emailRulesEnabledEl) emailRulesEnabledEl.checked = account.email_rules_enabled !== false;
+      if (smsRulesEnabledEl) smsRulesEnabledEl.checked = account.sms_rules_enabled === true;
+      
+      // Customer Profile Info (read-only audit info)
+      const createdByEl = document.getElementById('createdBy');
+      const dateCreatedEl = document.getElementById('dateCreated');
+      const updatedByEl = document.getElementById('updatedBy');
+      const lastUpdatedEl = document.getElementById('lastUpdated');
+      if (createdByEl) createdByEl.textContent = account.created_by || 'System';
+      if (dateCreatedEl) dateCreatedEl.textContent = account.created_at ? new Date(account.created_at).toLocaleString() : '--';
+      if (updatedByEl) updatedByEl.textContent = account.updated_by || 'System';
+      if (lastUpdatedEl) lastUpdatedEl.textContent = account.updated_at ? new Date(account.updated_at).toLocaleString() : '--';
+      
       // Switch to accounts tab
       this.switchAccountTab('info');
       
@@ -1205,8 +1285,245 @@ class Accounts {
   }
   
   loadMiscInfo() {
-    // TODO: Load misc info
     console.log('Loading misc info...');
+    const accountId = this.getCurrentAccountId();
+    
+    // Sync name fields from Account Info tab
+    const firstName = document.getElementById('acctFirstName')?.value || '';
+    const lastName = document.getElementById('acctLastName')?.value || '';
+    const accountNumber = document.getElementById('accountNumber')?.value || '';
+    
+    const miscFirstNameEl = document.getElementById('miscFirstName');
+    const miscLastNameEl = document.getElementById('miscLastName');
+    const miscAccountNumberEl = document.getElementById('miscAccountNumber');
+    
+    if (miscFirstNameEl) miscFirstNameEl.value = firstName;
+    if (miscLastNameEl) miscLastNameEl.value = lastName;
+    if (miscAccountNumberEl) miscAccountNumberEl.value = accountNumber;
+    
+    // Load email rules from account data or defaults
+    this.loadEmailRules(accountId);
+    this.loadEmailTemplates();
+    
+    // Wire up email rules UI
+    this.wireEmailRulesUI();
+  }
+  
+  async loadEmailRules(accountId) {
+    console.log('📧 Loading email rules for account:', accountId);
+    
+    // Default values (all enabled)
+    const defaultRules = {
+      email_rules_enabled: true,
+      sms_rules_enabled: false,
+      rule_driver_on_the_way: true,
+      rule_driver_arrived: true,
+      rule_passenger_on_board: true,
+      rule_passenger_dropped_off: true,
+      rule_driver_info_affiliate: false
+    };
+    
+    // Try to load from Supabase if account exists
+    let rules = { ...defaultRules };
+    if (accountId && this.db && window.supabase) {
+      try {
+        const { data, error } = await window.supabase
+          .from('account_email_rules')
+          .select('*')
+          .eq('account_id', accountId)
+          .single();
+        
+        if (data && !error) {
+          rules = { ...defaultRules, ...data };
+        }
+      } catch (e) {
+        console.warn('Could not load email rules:', e);
+      }
+    }
+    
+    // Populate UI
+    const emailRulesEnabledEl = document.getElementById('emailRulesEnabled');
+    const smsRulesEnabledEl = document.getElementById('smsRulesEnabled');
+    
+    if (emailRulesEnabledEl) emailRulesEnabledEl.checked = rules.email_rules_enabled !== false;
+    if (smsRulesEnabledEl) smsRulesEnabledEl.checked = rules.sms_rules_enabled === true;
+    
+    // Driver status rules
+    const ruleMapping = {
+      'ruleOnTheWay': 'rule_driver_on_the_way',
+      'ruleArrived': 'rule_driver_arrived',
+      'rulePassengerOnBoard': 'rule_passenger_on_board',
+      'rulePassengerDroppedOff': 'rule_passenger_dropped_off',
+      'ruleDriverInfoAffiliate': 'rule_driver_info_affiliate'
+    };
+    
+    Object.entries(ruleMapping).forEach(([elId, ruleKey]) => {
+      const el = document.getElementById(elId);
+      if (el) el.checked = rules[ruleKey] !== false;
+    });
+    
+    this.updateSelectAllState();
+  }
+  
+  async loadEmailTemplates() {
+    const selectEl = document.getElementById('scheduledEmailRules');
+    if (!selectEl) return;
+    
+    // Clear and add default option
+    selectEl.innerHTML = '<option value="">- - - NOT SELECTED - - -</option>';
+    
+    if (!window.supabase) {
+      console.warn('Supabase not available for loading templates');
+      return;
+    }
+    
+    try {
+      const { data: templates, error } = await window.supabase
+        .from('email_templates')
+        .select('id, name, trigger_event')
+        .eq('is_active', true)
+        .order('name');
+      
+      if (templates && !error) {
+        templates.forEach(t => {
+          const option = document.createElement('option');
+          option.value = t.id;
+          option.textContent = `${t.name} (${t.trigger_event.replace(/_/g, ' ')})`;
+          selectEl.appendChild(option);
+        });
+      }
+    } catch (e) {
+      console.warn('Could not load email templates:', e);
+    }
+  }
+  
+  wireEmailRulesUI() {
+    // Select All toggle
+    const selectAllEl = document.getElementById('selectAllEmailRules');
+    if (selectAllEl) {
+      selectAllEl.addEventListener('change', (e) => {
+        const checked = e.target.checked;
+        document.querySelectorAll('.email-rule-toggle').forEach(cb => {
+          cb.checked = checked;
+        });
+      });
+    }
+    
+    // Individual rule toggles update Select All state
+    document.querySelectorAll('.email-rule-toggle').forEach(cb => {
+      cb.addEventListener('change', () => this.updateSelectAllState());
+    });
+    
+    // Save Email Rules button
+    const saveEmailRulesBtn = document.getElementById('saveEmailRulesBtn');
+    if (saveEmailRulesBtn) {
+      saveEmailRulesBtn.addEventListener('click', () => this.saveEmailRules());
+    }
+    
+    // Save Partner Prefs button
+    const savePartnerPrefsBtn = document.getElementById('savePartnerPrefsBtn');
+    if (savePartnerPrefsBtn) {
+      savePartnerPrefsBtn.addEventListener('click', () => this.savePartnerPreferences());
+    }
+  }
+  
+  updateSelectAllState() {
+    const allToggles = document.querySelectorAll('.email-rule-toggle');
+    const checkedCount = Array.from(allToggles).filter(cb => cb.checked).length;
+    const selectAllEl = document.getElementById('selectAllEmailRules');
+    
+    if (selectAllEl) {
+      selectAllEl.checked = checkedCount === allToggles.length;
+      selectAllEl.indeterminate = checkedCount > 0 && checkedCount < allToggles.length;
+    }
+  }
+  
+  async saveEmailRules() {
+    const accountId = this.getCurrentAccountId();
+    const accountUUID = document.getElementById('accountUUID')?.value?.trim();
+    
+    if (!accountUUID) {
+      alert('Please save the account first before setting email rules.');
+      return;
+    }
+    
+    const rules = {
+      account_id: accountUUID,
+      organization_id: window.ENV?.ORGANIZATION_ID || localStorage.getItem('relia_organization_id') || null,
+      rule_driver_on_the_way: document.getElementById('ruleOnTheWay')?.checked ?? true,
+      rule_driver_arrived: document.getElementById('ruleArrived')?.checked ?? true,
+      rule_passenger_on_board: document.getElementById('rulePassengerOnBoard')?.checked ?? true,
+      rule_passenger_dropped_off: document.getElementById('rulePassengerDroppedOff')?.checked ?? true,
+      rule_driver_info_affiliate: document.getElementById('ruleDriverInfoAffiliate')?.checked ?? false,
+      all_rules_enabled: document.getElementById('emailRulesEnabled')?.checked ?? true,
+      prefer_email: document.getElementById('emailRulesEnabled')?.checked ?? true,
+      prefer_sms: document.getElementById('smsRulesEnabled')?.checked ?? false,
+      updated_at: new Date().toISOString()
+    };
+    
+    console.log('💾 Saving email rules:', rules);
+    
+    if (!window.supabase) {
+      alert('Database not available. Settings saved locally.');
+      localStorage.setItem(`email_rules_${accountId}`, JSON.stringify(rules));
+      return;
+    }
+    
+    try {
+      const { data, error } = await window.supabase
+        .from('account_email_rules')
+        .upsert(rules, { onConflict: 'account_id' });
+      
+      if (error) throw error;
+      
+      // Also update the main accounts table flags
+      await window.supabase
+        .from('accounts')
+        .update({
+          email_rules_enabled: rules.all_rules_enabled,
+          sms_rules_enabled: rules.prefer_sms
+        })
+        .eq('id', accountUUID);
+      
+      alert('✅ Email rules saved successfully!');
+    } catch (e) {
+      console.error('Error saving email rules:', e);
+      alert('Error saving email rules: ' + e.message);
+    }
+  }
+  
+  async savePartnerPreferences() {
+    const accountUUID = document.getElementById('accountUUID')?.value?.trim();
+    
+    if (!accountUUID) {
+      alert('Please save the account first.');
+      return;
+    }
+    
+    const prefs = {
+      groundxchange_id: document.getElementById('groundXchangeId')?.value?.trim() || null,
+      gnet_id: document.getElementById('gnetId')?.value?.trim() || null
+    };
+    
+    console.log('💾 Saving partner preferences:', prefs);
+    
+    if (!window.supabase) {
+      alert('Database not available.');
+      return;
+    }
+    
+    try {
+      const { error } = await window.supabase
+        .from('accounts')
+        .update(prefs)
+        .eq('id', accountUUID);
+      
+      if (error) throw error;
+      alert('✅ Partner preferences saved!');
+    } catch (e) {
+      console.error('Error saving partner prefs:', e);
+      alert('Error: ' + e.message);
+    }
   }
 
   addNewAccount() {
@@ -1603,6 +1920,39 @@ class Accounts {
         is_billing_client: document.getElementById('acctTypeBilling')?.checked || false,
         is_passenger: document.getElementById('acctTypePassenger')?.checked || false,
         is_booking_contact: document.getElementById('acctTypeBooking')?.checked || false,
+        
+        // Financial Data tab fields
+        post_method: document.getElementById('postMethod')?.value || '',
+        post_terms: document.getElementById('postTerms')?.value?.trim() || '',
+        primary_agent_id: document.getElementById('primaryAgent')?.value || null,
+        secondary_agent_id: document.getElementById('secondaryAgent')?.value || null,
+        
+        // Credit Card (note: only store last 4 digits in production)
+        cc_last_four: (document.getElementById('creditCardNumber')?.value || '').slice(-4) || '',
+        cc_exp_month: document.getElementById('expMonth')?.value?.trim() || '',
+        cc_exp_year: document.getElementById('expYear')?.value?.trim() || '',
+        cc_name_on_card: document.getElementById('nameOnCard')?.value?.trim() || '',
+        cc_type: document.getElementById('ccType')?.value || '',
+        cc_billing_address: document.getElementById('billingAddressCC')?.value?.trim() || '',
+        cc_billing_city: document.getElementById('billingCityCC')?.value?.trim() || '',
+        cc_billing_state: document.getElementById('billingStateCC')?.value || '',
+        cc_billing_zip: document.getElementById('billingZipCC')?.value?.trim() || '',
+        cc_billing_country: document.getElementById('billingCountryCC')?.value || 'United States',
+        cc_notes: document.getElementById('creditCardNotes')?.value?.trim() || '',
+        
+        // Addresses tab - Billing Contact fields
+        employee_id: document.getElementById('employeeId')?.value?.trim() || '',
+        vip_number: document.getElementById('vipNumber')?.value?.trim() || '',
+        my_billing_contact_id: document.getElementById('myBillingContact')?.value || null,
+        
+        // Misc tab fields
+        prefix: document.getElementById('miscPrefix')?.value || '',
+        groundxchange_id: document.getElementById('groundXchangeId')?.value?.trim() || '',
+        gnet_id: document.getElementById('gnetId')?.value?.trim() || '',
+        
+        // Email rules toggles
+        email_rules_enabled: document.getElementById('emailRulesEnabled')?.checked ?? true,
+        sms_rules_enabled: document.getElementById('smsRulesEnabled')?.checked ?? false,
         
         type: 'individual',
         updated_at: new Date().toISOString()
