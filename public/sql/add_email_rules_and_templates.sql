@@ -390,7 +390,7 @@ ON CONFLICT DO NOTHING;
 
 
 -- =====================================================
--- 7. RLS POLICIES
+-- 7. RLS POLICIES (Permissive for authenticated users)
 -- =====================================================
 
 -- Enable RLS
@@ -399,51 +399,86 @@ ALTER TABLE account_email_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE account_addresses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE account_booking_contacts ENABLE ROW LEVEL SECURITY;
 
--- Email Templates: Org members can CRUD their templates, read defaults
-CREATE POLICY "email_templates_select" ON email_templates
+-- Drop existing policies if any (for re-running)
+DROP POLICY IF EXISTS "email_templates_select" ON email_templates;
+DROP POLICY IF EXISTS "email_templates_insert" ON email_templates;
+DROP POLICY IF EXISTS "email_templates_update" ON email_templates;
+DROP POLICY IF EXISTS "email_templates_delete" ON email_templates;
+DROP POLICY IF EXISTS "account_email_rules_all" ON account_email_rules;
+DROP POLICY IF EXISTS "account_addresses_all" ON account_addresses;
+DROP POLICY IF EXISTS "account_booking_contacts_all" ON account_booking_contacts;
+
+-- Email Templates: Any authenticated user can CRUD
+CREATE POLICY "authenticated_select_email_templates" ON email_templates
     FOR SELECT TO authenticated
-    USING (organization_id IS NULL OR organization_id IN (
-        SELECT organization_id FROM profiles WHERE id = auth.uid()
-    ));
+    USING (true);
 
-CREATE POLICY "email_templates_insert" ON email_templates
+CREATE POLICY "authenticated_insert_email_templates" ON email_templates
     FOR INSERT TO authenticated
-    WITH CHECK (organization_id IN (
-        SELECT organization_id FROM profiles WHERE id = auth.uid()
-    ));
+    WITH CHECK (true);
 
-CREATE POLICY "email_templates_update" ON email_templates
+CREATE POLICY "authenticated_update_email_templates" ON email_templates
     FOR UPDATE TO authenticated
-    USING (organization_id IN (
-        SELECT organization_id FROM profiles WHERE id = auth.uid()
-    ));
+    USING (true)
+    WITH CHECK (true);
 
-CREATE POLICY "email_templates_delete" ON email_templates
+CREATE POLICY "authenticated_delete_email_templates" ON email_templates
     FOR DELETE TO authenticated
-    USING (organization_id IN (
-        SELECT organization_id FROM profiles WHERE id = auth.uid()
-    ) AND is_default = FALSE);
+    USING (true);
 
--- Account Email Rules: Org members can manage
-CREATE POLICY "account_email_rules_all" ON account_email_rules
-    FOR ALL TO authenticated
-    USING (organization_id IN (
-        SELECT organization_id FROM profiles WHERE id = auth.uid()
-    ));
+-- Account Email Rules: Any authenticated user can CRUD
+CREATE POLICY "authenticated_select_account_email_rules" ON account_email_rules
+    FOR SELECT TO authenticated
+    USING (true);
 
--- Account Addresses: Org members can manage
-CREATE POLICY "account_addresses_all" ON account_addresses
-    FOR ALL TO authenticated
-    USING (organization_id IN (
-        SELECT organization_id FROM profiles WHERE id = auth.uid()
-    ));
+CREATE POLICY "authenticated_insert_account_email_rules" ON account_email_rules
+    FOR INSERT TO authenticated
+    WITH CHECK (true);
 
--- Account Booking Contacts: Org members can manage
-CREATE POLICY "account_booking_contacts_all" ON account_booking_contacts
-    FOR ALL TO authenticated
-    USING (organization_id IN (
-        SELECT organization_id FROM profiles WHERE id = auth.uid()
-    ));
+CREATE POLICY "authenticated_update_account_email_rules" ON account_email_rules
+    FOR UPDATE TO authenticated
+    USING (true)
+    WITH CHECK (true);
+
+CREATE POLICY "authenticated_delete_account_email_rules" ON account_email_rules
+    FOR DELETE TO authenticated
+    USING (true);
+
+-- Account Addresses: Any authenticated user can CRUD
+CREATE POLICY "authenticated_select_account_addresses" ON account_addresses
+    FOR SELECT TO authenticated
+    USING (true);
+
+CREATE POLICY "authenticated_insert_account_addresses" ON account_addresses
+    FOR INSERT TO authenticated
+    WITH CHECK (true);
+
+CREATE POLICY "authenticated_update_account_addresses" ON account_addresses
+    FOR UPDATE TO authenticated
+    USING (true)
+    WITH CHECK (true);
+
+CREATE POLICY "authenticated_delete_account_addresses" ON account_addresses
+    FOR DELETE TO authenticated
+    USING (true);
+
+-- Account Booking Contacts: Any authenticated user can CRUD
+CREATE POLICY "authenticated_select_account_booking_contacts" ON account_booking_contacts
+    FOR SELECT TO authenticated
+    USING (true);
+
+CREATE POLICY "authenticated_insert_account_booking_contacts" ON account_booking_contacts
+    FOR INSERT TO authenticated
+    WITH CHECK (true);
+
+CREATE POLICY "authenticated_update_account_booking_contacts" ON account_booking_contacts
+    FOR UPDATE TO authenticated
+    USING (true)
+    WITH CHECK (true);
+
+CREATE POLICY "authenticated_delete_account_booking_contacts" ON account_booking_contacts
+    FOR DELETE TO authenticated
+    USING (true);
 
 
 -- =====================================================
