@@ -75,51 +75,59 @@ const bookingDefaults = {
 async function init() {
   console.log('[CustomerPortal] Initializing...');
   
-  // Get portal slug from URL
-  extractPortalSlug();
-  
-  // Check authentication
-  const isAuth = await checkAuth();
-  
-  if (!isAuth) {
-    // Redirect to auth page
-    window.location.href = 'auth.html';
-    return;
+  try {
+    // Get portal slug from URL
+    extractPortalSlug();
+    
+    // Check authentication
+    const isAuth = await checkAuth();
+    
+    if (!isAuth) {
+      // Redirect to auth page
+      console.log('[CustomerPortal] Not authenticated, redirecting to auth...');
+      window.location.href = 'auth.html';
+      return;
+    }
+    
+    // Load portal settings
+    await loadPortalSettings();
+    
+    // Apply settings to UI
+    applyPortalSettings();
+    
+    // Load customer data
+    await loadCustomerData();
+    
+    // Setup event listeners
+    setupEventListeners();
+    
+    // Initialize maps
+    await initializeMaps();
+    
+    // Show portal screen
+    document.getElementById('loadingScreen').classList.remove('active');
+    document.getElementById('portalScreen').classList.add('active');
+    
+    // Load initial data
+    await Promise.all([
+      loadVehicleTypes(),
+      loadAirports(),
+      loadTrips()
+    ]);
+    
+    // Setup real-time tracking if active trip
+    checkForActiveTrip();
+    
+    // Set default date/time
+    setDefaultDateTime();
+    
+    console.log('[CustomerPortal] Initialized successfully');
+  } catch (err) {
+    console.error('[CustomerPortal] Initialization error:', err);
+    // Still hide loading screen to show something
+    document.getElementById('loadingScreen').classList.remove('active');
+    document.getElementById('portalScreen').classList.add('active');
   }
-  
-  // Load portal settings
-  await loadPortalSettings();
-  
-  // Apply settings to UI
-  applyPortalSettings();
-  
-  // Load customer data
-  await loadCustomerData();
-  
-  // Setup event listeners
-  setupEventListeners();
-  
-  // Initialize maps
-  await initializeMaps();
-  
-  // Show portal screen
-  document.getElementById('loadingScreen').classList.remove('active');
-  document.getElementById('portalScreen').classList.add('active');
-  
-  // Load initial data
-  await Promise.all([
-    loadVehicleTypes(),
-    loadAirports(),
-    loadTrips()
-  ]);
-  
-  // Setup real-time tracking if active trip
-  checkForActiveTrip();
-  
-  // Set default date/time
-  setDefaultDateTime();
-  
-  console.log('[CustomerPortal] Initialized successfully');
 }
 
 function extractPortalSlug() {
