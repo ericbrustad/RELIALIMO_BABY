@@ -62,23 +62,22 @@ function loadSettings() {
   return currentSettings;
 }
 
-// Mark settings as changed
+// Mark settings as changed (but they're already saved instantly)
 function markUnsaved() {
-  hasUnsavedChanges = JSON.stringify(currentSettings) !== savedSettings;
+  // Settings are now applied instantly, so just update the button state
+  // to show that changes have been made
+  hasUnsavedChanges = false; // Actually saved instantly now
+  savedSettings = JSON.stringify(currentSettings);
   updateSaveButtonState();
 }
 
-// Update save button to show unsaved state
+// Update save button to show saved state
 function updateSaveButtonState() {
   const saveBtn = document.getElementById('saveSettings');
   if (saveBtn) {
-    if (hasUnsavedChanges) {
-      saveBtn.textContent = '💾 Save Settings *';
-      saveBtn.style.background = '#dc2626';
-    } else {
-      saveBtn.textContent = '💾 Save Settings';
-      saveBtn.style.background = '';
-    }
+    // Always show as saved since we apply instantly now
+    saveBtn.textContent = '✓ Auto-Saved';
+    saveBtn.style.background = '#059669';
   }
 }
 
@@ -439,6 +438,7 @@ function initEventListeners() {
     currentSettings.timerSize = parseInt(e.target.value, 10);
     updatePreview();
     markUnsaved();
+    applyWidgetInstantly('timerSize');
   });
   
   // Clock size slider
@@ -457,6 +457,7 @@ function initEventListeners() {
       currentSettings.timerTheme = btn.dataset.theme;
       updatePreview();
       markUnsaved();
+      applyWidgetInstantly('timerTheme');
     });
   });
   
@@ -478,6 +479,7 @@ function initEventListeners() {
     currentSettings.clockTextColor = e.target.value;
     updatePreview();
     markUnsaved();
+    applyWidgetInstantly('clockTextColor');
   });
   
   // Reset clock color
@@ -486,6 +488,7 @@ function initEventListeners() {
     setColorPicker('clockTextColor', currentSettings.clockTextColor);
     updatePreview();
     markUnsaved();
+    applyWidgetInstantly('clockTextColor');
   });
   
   // Toggle changes - apply INSTANTLY to widgets and mark unsaved
@@ -525,20 +528,22 @@ function initEventListeners() {
   document.getElementById('resetTimerPosition')?.addEventListener('click', () => {
     currentSettings.timerPosition = null;
     updatePositionDisplays();
+    markUnsaved();
+    applyWidgetInstantly('timerPosition');
   });
   
   document.getElementById('resetClockPosition')?.addEventListener('click', () => {
     currentSettings.clockPosition = null;
     updatePositionDisplays();
+    markUnsaved();
+    applyWidgetInstantly('clockPosition');
   });
   
   document.getElementById('resetSysMonitorPosition')?.addEventListener('click', () => {
     currentSettings.sysMonitorPosition = null;
-    localStorage.setItem('sysMonitorSettings', JSON.stringify({
-      ...JSON.parse(localStorage.getItem('sysMonitorSettings') || '{}'),
-      position: null
-    }));
     updatePositionDisplays();
+    markUnsaved();
+    applyWidgetInstantly('sysMonitorPosition');
   });
   
   // Test buttons
@@ -552,6 +557,24 @@ function initEventListeners() {
 // Apply widget settings instantly to the main page
 function applyWidgetInstantly(settingId) {
   try {
+    // ALWAYS save to localStorage immediately for instant effect
+    localStorage.setItem('widgetSettings', JSON.stringify(currentSettings));
+    localStorage.setItem('clockStyle', currentSettings.clockStyle);
+    
+    // Save sysMonitor settings in their own key
+    const sysSettings = {
+      visible: currentSettings.sysMonitorVisible,
+      draggable: currentSettings.sysMonitorDraggable,
+      showCpu: currentSettings.sysMonitorShowCpu,
+      showRam: currentSettings.sysMonitorShowRam,
+      size: currentSettings.sysMonitorSize,
+      style: currentSettings.sysMonitorStyle,
+      position: currentSettings.sysMonitorPosition
+    };
+    localStorage.setItem('sysMonitorSettings', JSON.stringify(sysSettings));
+    
+    console.log('[WidgetSettings] Applied instantly:', settingId, '=', currentSettings[settingId]);
+    
     // Try to communicate with parent window or opener
     const targetWindow = window.opener || (window.self !== window.top ? window.top : null);
     
@@ -565,40 +588,15 @@ function applyWidgetInstantly(settingId) {
       }, '*');
     }
     
-    // Also update localStorage immediately for sysMonitor settings
-    if (settingId.startsWith('sysMonitor')) {
-      const sysSettings = {
-        visible: currentSettings.sysMonitorVisible,
-        draggable: currentSettings.sysMonitorDraggable,
-        showCpu: currentSettings.sysMonitorShowCpu,
-        showRam: currentSettings.sysMonitorShowRam,
-        size: currentSettings.sysMonitorSize,
-        style: currentSettings.sysMonitorStyle
-      };
-      localStorage.setItem('sysMonitorSettings', JSON.stringify(sysSettings));
-      console.log('[WidgetSettings] Applied sysMonitor settings instantly:', sysSettings);
-    }
-    
-    // Clock settings
-    if (settingId.startsWith('clock')) {
-      localStorage.setItem('widgetSettings', JSON.stringify(currentSettings));
-      localStorage.setItem('clockStyle', currentSettings.clockStyle);
-    }
-    
   } catch (e) {
     console.log('[WidgetSettings] Could not apply instantly:', e.message);
   }
 }
 
-// Warn user about unsaved changes on exit
+// No longer needed - settings are saved instantly
 function setupUnsavedWarning() {
-  window.addEventListener('beforeunload', (e) => {
-    if (hasUnsavedChanges) {
-      e.preventDefault();
-      e.returnValue = 'You have unsaved widget settings. Are you sure you want to leave?';
-      return e.returnValue;
-    }
-  });
+  // All settings are now applied instantly, no warning needed
+  console.log('[WidgetSettings] Instant save mode - no unsaved warning needed');
 }
 
 // Add pulse animation style
