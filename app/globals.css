@@ -59,6 +59,27 @@ h1, h2, h3, h4 {
   animation: fadeInDown 1s ease-out;
 }
 
+.hero-logo {
+  max-width: 400px;
+  width: 90vw;
+  height: auto;
+  filter: drop-shadow(0 0 40px rgba(201, 162, 39, 0.4));
+  animation: logoGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes logoGlow {
+  from {
+    filter: drop-shadow(0 0 40px rgba(201, 162, 39, 0.3));
+  }
+  to {
+    filter: drop-shadow(0 0 60px rgba(201, 162, 39, 0.6));
+  }
+}
+
+.logo-fallback {
+  text-align: center;
+}
+
 .logo-bull {
   font-size: 8rem;
   filter: drop-shadow(0 0 30px rgba(201, 162, 39, 0.5));

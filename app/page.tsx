@@ -1,13 +1,30 @@
 export default function LandingPage() {
+  // Supabase storage URL for logos
+  const supabaseUrl = 'https://siumiadylwcrkaqsfwkj.supabase.co';
+  const mainLogoUrl = `${supabaseUrl}/storage/v1/object/public/images/relialimo-logo-main.png`;
+  
   return (
     <>
       {/* Hero Section */}
       <section className="hero">
         <div className="logo-container">
-          <div className="logo-bull">🐂</div>
+          <img 
+            src={mainLogoUrl} 
+            alt="RELIALIMO" 
+            className="hero-logo"
+            onError={(e) => {
+              // Fallback to text if image fails to load
+              e.currentTarget.style.display = 'none';
+              const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+              if (fallback) fallback.style.display = 'block';
+            }}
+          />
+          <div className="logo-fallback" style={{ display: 'none' }}>
+            <div className="logo-bull">🐂</div>
+            <h1 className="hero-title">RELIALIMO</h1>
+          </div>
         </div>
         
-        <h1 className="hero-title">RELIALIMO</h1>
         <p className="hero-subtitle">Professional Transportation</p>
         <p className="hero-tagline">
           Experience luxury, reliability, and unparalleled service for all your 
