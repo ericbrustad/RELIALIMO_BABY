@@ -53,6 +53,7 @@
             padding: 12px;
             border-radius: 8px;
             display: none;
+            white-space: pre-wrap;
         }
         .status.success { display: block; background: #1a4d1a; color: #4ade80; }
         .status.error { display: block; background: #4d1a1a; color: #f87171; }
@@ -83,11 +84,21 @@
         .instructions h3 { color: #60a5fa; margin-top: 0; }
         .instructions ol { color: #ccc; line-height: 1.8; }
         .instructions code { background: #333; padding: 2px 6px; border-radius: 4px; }
+        .init-status { 
+            padding: 10px 16px; 
+            border-radius: 8px; 
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .init-status.ok { background: #1a4d1a; color: #4ade80; }
+        .init-status.error { background: #4d1a1a; color: #f87171; }
     </style>
 </head>
 <body>
     <h1>🐂 Upload RELIALIMO Logos</h1>
     <p class="subtitle">Upload logos to Supabase Storage bucket "images/"</p>
+
+    <div id="initStatus" class="init-status">⏳ Initializing Supabase...</div>
 
     <div class="instructions">
         <h3>📋 Before You Start</h3>
@@ -107,7 +118,7 @@
         <p>Save as: <strong>relialimo-logo-main.png</strong></p>
         <input type="file" id="mainLogoFile" accept="image/*">
         <img id="mainPreview" class="preview" style="display:none; background:#fff; padding:20px;">
-        <button onclick="uploadLogo('main')">Upload Main Logo</button>
+        <button id="mainUploadBtn">Upload Main Logo</button>
         <div id="mainStatus" class="status"></div>
         <div id="mainUrl" class="url-box" style="display:none;"></div>
     </div>
@@ -119,34 +130,69 @@
         <p>Save as: <strong>relialimo-logo-dark.png</strong></p>
         <input type="file" id="darkLogoFile" accept="image/*">
         <img id="darkPreview" class="preview" style="display:none; background:#000; padding:20px;">
-        <button onclick="uploadLogo('dark')">Upload Dark Logo</button>
+        <button id="darkUploadBtn">Upload Dark Logo</button>
         <div id="darkStatus" class="status"></div>
         <div id="darkUrl" class="url-box" style="display:none;"></div>
     </div>
 
-    <script src="/shared/env.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Load env.js first -->
+    <script src="env.js"></script>
+    
+    <!-- Load Supabase JS SDK (UMD version for browser) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    
     <script>
-        let supabase;
+        let supabaseClient = null;
 
-        // Initialize Supabase
-        async function initSupabase() {
-            const creds = getSupabaseCredentials();
-            if (!creds.url || !creds.anonKey) {
-                alert('Missing Supabase credentials. Check env.js');
-                return;
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initSupabase();
+            
+            // Preview handlers
+            document.getElementById('mainLogoFile').addEventListener('change', function(e) {
+                previewImage(e.target.files[0], 'mainPreview');
+            });
+            document.getElementById('darkLogoFile').addEventListener('change', function(e) {
+                previewImage(e.target.files[0], 'darkPreview');
+            });
+            
+            // Upload button handlers
+            document.getElementById('mainUploadBtn').addEventListener('click', function() {
+                uploadLogo('main');
+            });
+            document.getElementById('darkUploadBtn').addEventListener('click', function() {
+                uploadLogo('dark');
+            });
+        });
+
+        function initSupabase() {
+            const statusEl = document.getElementById('initStatus');
+            
+            try {
+                // Get credentials from env.js (window.ENV)
+                const url = window.ENV?.SUPABASE_URL;
+                const key = window.ENV?.SUPABASE_ANON_KEY;
+                
+                if (!url || !key) {
+                    statusEl.className = 'init-status error';
+                    statusEl.textContent = '❌ Missing Supabase credentials in env.js. URL: ' + (url ? 'OK' : 'MISSING') + ', Key: ' + (key ? 'OK' : 'MISSING');
+                    console.error('ENV:', window.ENV);
+                    return;
+                }
+                
+                // Create Supabase client using the UMD bundle
+                supabaseClient = window.supabase.createClient(url, key);
+                
+                statusEl.className = 'init-status ok';
+                statusEl.textContent = '✅ Supabase connected: ' + url;
+                console.log('Supabase initialized successfully');
+                
+            } catch (err) {
+                statusEl.className = 'init-status error';
+                statusEl.textContent = '❌ Error: ' + err.message;
+                console.error('Init error:', err);
             }
-            supabase = window.supabase.createClient(creds.url, creds.anonKey);
-            console.log('Supabase initialized');
         }
-
-        // Preview image on select
-        document.getElementById('mainLogoFile').addEventListener('change', function(e) {
-            previewImage(e.target.files[0], 'mainPreview');
-        });
-        document.getElementById('darkLogoFile').addEventListener('change', function(e) {
-            previewImage(e.target.files[0], 'darkPreview');
-        });
 
         function previewImage(file, previewId) {
             if (!file) return;
@@ -164,6 +210,12 @@
             const statusEl = document.getElementById(type + 'Status');
             const urlEl = document.getElementById(type + 'Url');
             
+            if (!supabaseClient) {
+                statusEl.className = 'status error';
+                statusEl.textContent = 'Supabase not initialized. Check the status message above.';
+                return;
+            }
+            
             const file = fileInput.files[0];
             if (!file) {
                 statusEl.className = 'status error';
@@ -177,11 +229,15 @@
             const fileName = type === 'main' ? 'relialimo-logo-main.png' : 'relialimo-logo-dark.png';
 
             try {
-                // Delete existing file first (in case of update)
-                await supabase.storage.from('images').remove([fileName]);
+                // Try to delete existing file first (ignore errors)
+                try {
+                    await supabaseClient.storage.from('images').remove([fileName]);
+                } catch (e) {
+                    console.log('Delete existing failed (OK if file doesnt exist):', e);
+                }
 
                 // Upload new file
-                const { data, error } = await supabase.storage
+                const { data, error } = await supabaseClient.storage
                     .from('images')
                     .upload(fileName, file, {
                         cacheControl: '3600',
@@ -192,7 +248,7 @@
                 if (error) throw error;
 
                 // Get public URL
-                const { data: urlData } = supabase.storage
+                const { data: urlData } = supabaseClient.storage
                     .from('images')
                     .getPublicUrl(fileName);
 
@@ -211,21 +267,28 @@
             } catch (err) {
                 console.error('Upload error:', err);
                 statusEl.className = 'status error';
-                statusEl.textContent = 'Error: ' + err.message;
                 
-                if (err.message.includes('bucket') || err.message.includes('not found')) {
-                    statusEl.textContent += '\n\n⚠️ Make sure you created the "images" bucket in Supabase Storage!';
+                let errorMsg = 'Error: ' + (err.message || JSON.stringify(err));
+                
+                if (err.message?.includes('Bucket not found') || err.statusCode === 400) {
+                    errorMsg += '\n\n⚠️ The "images" bucket does not exist. Create it in Supabase Dashboard → Storage → New bucket';
                 }
+                
+                if (err.message?.includes('security') || err.message?.includes('policy') || err.message?.includes('row-level')) {
+                    errorMsg += '\n\n⚠️ Storage needs upload permissions. Go to Supabase → Storage → images → Policies → Add policy for INSERT';
+                }
+                
+                statusEl.textContent = errorMsg;
             }
         }
 
         function copyUrl(url) {
-            navigator.clipboard.writeText(url);
-            alert('URL copied to clipboard!');
+            navigator.clipboard.writeText(url).then(() => {
+                alert('URL copied to clipboard!');
+            }).catch(() => {
+                prompt('Copy this URL:', url);
+            });
         }
-
-        // Initialize on load
-        initSupabase();
     </script>
 </body>
 </html>
