@@ -1,0 +1,167 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/driver-portal.html"
+    },
+    {
+      "source": "/auth.html",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/auth.html"
+    },
+    {
+      "source": "/index.html",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/index.html"
+    },
+    {
+      "source": "/driver-portal.html",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/driver-portal.html"
+    },
+    {
+      "source": "/driver-portal.css",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/driver-portal.css"
+    },
+    {
+      "source": "/driver-portal.js",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/driver-portal.js"
+    },
+    {
+      "source": "/favicon.ico",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/favicon.ico"
+    },
+    {
+      "source": "/driver-portal-manifest.json",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/driver-portal-manifest.json"
+    },
+    {
+      "source": "/shared/:path*",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/shared/:path*"
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/drivers/:path*"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "account.relialimo.com" }],
+      "destination": "/customers/customer-portal.html"
+    },
+    {
+      "source": "/auth.html",
+      "has": [{ "type": "host", "value": "account.relialimo.com" }],
+      "destination": "/customers/auth.html"
+    },
+    {
+      "source": "/index.html",
+      "has": [{ "type": "host", "value": "account.relialimo.com" }],
+      "destination": "/customers/index.html"
+    },
+    {
+      "source": "/customer-portal.html",
+      "has": [{ "type": "host", "value": "account.relialimo.com" }],
+      "destination": "/customers/customer-portal.html"
+    },
+    {
+      "source": "/customer-portal.css",
+      "has": [{ "type": "host", "value": "account.relialimo.com" }],
+      "destination": "/customers/customer-portal.css"
+    },
+    {
+      "source": "/customer-portal.js",
+      "has": [{ "type": "host", "value": "account.relialimo.com" }],
+      "destination": "/customers/customer-portal.js"
+    },
+    {
+      "source": "/favicon.ico",
+      "has": [{ "type": "host", "value": "account.relialimo.com" }],
+      "destination": "/customers/favicon.ico"
+    },
+    {
+      "source": "/customer-portal-manifest.json",
+      "has": [{ "type": "host", "value": "account.relialimo.com" }],
+      "destination": "/customers/customer-portal-manifest.json"
+    },
+    {
+      "source": "/shared/:path*",
+      "has": [{ "type": "host", "value": "account.relialimo.com" }],
+      "destination": "/shared/:path*"
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "account.relialimo.com" }],
+      "destination": "/customers/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    },
+    {
+      "source": "/driver/:driver_id",
+      "destination": "/driver-portal.html?driver_id=:driver_id"
+    },
+    {
+      "source": "/portal/:driver_id",
+      "destination": "/driver-portal.html?driver_id=:driver_id"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "relialimo.com" }],
+      "destination": "https://admin.relialimo.com",
+      "permanent": true
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "www.relialimo.com" }],
+      "destination": "https://admin.relialimo.com",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "relialimo.com" }],
+      "destination": "https://admin.relialimo.com/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.relialimo.com" }],
+      "destination": "https://admin.relialimo.com/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/drivers/:path*",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/customers/:path*",
+      "has": [{ "type": "host", "value": "driver.relialimo.com" }],
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/drivers/:path*",
+      "has": [{ "type": "host", "value": "account.relialimo.com" }],
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/customers/:path*",
+      "has": [{ "type": "host", "value": "account.relialimo.com" }],
+      "destination": "/",
+      "permanent": false
+    }
+  ]
+}

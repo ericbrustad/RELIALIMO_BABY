@@ -15,3 +15,8 @@ ENV_SAVE_AND_RESTORE.html
 
 .vercel
 .env*.local
+
+# Next.js
+.next/
+out/
+node_modules/
