@@ -1337,12 +1337,10 @@ class MyOffice {
 
   async loadCompanyInfo() {
     try {
-      // First try to load from Supabase
-      const apiModule = await import('./api-service.js');
-      await apiModule.setupAPI();
-      const supabase = apiModule.getSupabaseClient();
+      // First try to load from Supabase - import client directly
+      const { supabase } = await import('./supabase-client.js');
       
-      if (supabase) {
+      if (supabase && typeof supabase.from === 'function') {
         const { data: org, error } = await supabase
           .from('organizations')
           .select('*')
@@ -1695,17 +1693,10 @@ class MyOffice {
 
     // Try to save to Supabase
     try {
-      const apiModule = await import('./api-service.js');
-      await apiModule.setupAPI();
-      const supabase = apiModule.getSupabaseClient();
-      if (!supabase) throw new Error('Supabase client unavailable');
-
-      if (typeof apiModule.ensureValidToken === 'function') {
-        const tokenOk = await apiModule.ensureValidToken(supabase);
-        if (!tokenOk) {
-          alert('⚠️ Session expired. Saved locally. Please sign in again, then retry to sync.');
-          return;
-        }
+      // Import supabase client directly
+      const { supabase } = await import('./supabase-client.js');
+      if (!supabase || typeof supabase.from !== 'function') {
+        throw new Error('Supabase client unavailable or invalid');
       }
 
       const { data: existingRows, error: fetchError } = await supabase
