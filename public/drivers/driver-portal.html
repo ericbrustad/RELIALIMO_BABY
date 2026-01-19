@@ -15,6 +15,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="driver-portal.css">
+  <link rel="stylesheet" href="/phone-input.css">
+  <script src="/phone-input.js"></script>
   <!-- Mapbox GL JS -->
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet">
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
@@ -168,7 +170,17 @@
             </div>
             <div class="form-group">
               <label for="regPhone">Cell Phone *</label>
-              <input type="tel" id="regPhone" placeholder="(555) 123-4567" required>
+              <div class="phone-input-wrapper" data-input-id="regPhone">
+                <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                  <span class="phone-country-flag">🇺🇸</span>
+                  <span class="phone-country-code">+1</span>
+                  <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                    <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                  </svg>
+                </button>
+                <input type="tel" id="regPhone" class="phone-number-input" placeholder="(555) 123-4567" inputmode="tel" required>
+                <div class="phone-validation-message"></div>
+              </div>
               <small class="field-hint">We'll send a verification code to this number</small>
             </div>
             <div class="form-group">
@@ -281,7 +293,17 @@
               </div>
               <div class="form-group">
                 <label for="regCompanyPhone">Company Phone</label>
-                <input type="tel" id="regCompanyPhone" placeholder="(555) 987-6543">
+                <div class="phone-input-wrapper" data-input-id="regCompanyPhone">
+                  <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                    <span class="phone-country-flag">🇺🇸</span>
+                    <span class="phone-country-code">+1</span>
+                    <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                      <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                    </svg>
+                  </button>
+                  <input type="tel" id="regCompanyPhone" class="phone-number-input" placeholder="(555) 987-6543" inputmode="tel">
+                  <div class="phone-validation-message"></div>
+                </div>
               </div>
             </div>
             
@@ -858,7 +880,17 @@
           </div>
           <div class="form-group">
             <label for="profileCompanyPhone">Company Phone</label>
-            <input type="tel" id="profileCompanyPhone" maxlength="20" placeholder="(555) 123-4567">
+            <div class="phone-input-wrapper" data-input-id="profileCompanyPhone">
+              <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                <span class="phone-country-flag">🇺🇸</span>
+                <span class="phone-country-code">+1</span>
+                <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                  <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                </svg>
+              </button>
+              <input type="tel" id="profileCompanyPhone" class="phone-number-input" maxlength="20" placeholder="(555) 123-4567" inputmode="tel">
+              <div class="phone-validation-message"></div>
+            </div>
           </div>
           <button type="button" id="saveCompanyInfoBtn" class="btn btn-secondary" style="margin-top: 10px;">
             💾 Save Company Info
@@ -1454,6 +1486,48 @@
     <!-- Toast Notifications -->
     <div id="toast" class="toast"></div>
   </div>
+
+  <!-- Phone Input Country Dropdowns -->
+  <div class="phone-country-dropdown" data-for="regPhone" hidden>
+    <input type="text" class="phone-country-search" placeholder="Search countries..." />
+    <div class="phone-country-list"></div>
+  </div>
+  <div class="phone-country-dropdown" data-for="regCompanyPhone" hidden>
+    <input type="text" class="phone-country-search" placeholder="Search countries..." />
+    <div class="phone-country-list"></div>
+  </div>
+  <div class="phone-country-dropdown" data-for="profileCompanyPhone" hidden>
+    <input type="text" class="phone-country-search" placeholder="Search countries..." />
+    <div class="phone-country-list"></div>
+  </div>
+  
+  <script>
+    // Initialize phone inputs when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+      if (window.PhoneInput) {
+        // Populate all country dropdowns
+        const dropdowns = document.querySelectorAll('.phone-country-dropdown');
+        dropdowns.forEach(dropdown => {
+          const list = dropdown.querySelector('.phone-country-list');
+          if (list && PhoneInput.COUNTRIES) {
+            list.innerHTML = PhoneInput.COUNTRIES.map(c => `
+              <button type="button" class="phone-country-option" data-code="${c.code}" data-dial="${c.dial}">
+                <span class="country-flag">${c.flag}</span>
+                <span class="country-name">${c.name}</span>
+                <span class="country-dial">${c.dial}</span>
+              </button>
+            `).join('');
+          }
+        });
+        
+        // Initialize all phone inputs
+        const phoneInputIds = ['regPhone', 'regCompanyPhone', 'profileCompanyPhone'];
+        phoneInputIds.forEach(id => {
+          PhoneInput.init(id);
+        });
+      }
+    });
+  </script>
 
   <script src="/shared/sms-service.js"></script>
   <script type="module" src="driver-portal.js"></script>

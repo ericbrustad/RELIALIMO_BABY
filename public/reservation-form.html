@@ -6,6 +6,8 @@
     <title>New Reservation - RELIA🐂LIMO™</title>
     <link rel="icon" href="https://github.com/user-attachments/assets/d7d111cc-186d-4a88-bac3-7b39c313b25c" />
     <link rel="stylesheet" href="reservation-form.css" />
+    <link rel="stylesheet" href="phone-input.css" />
+    <script src="phone-input.js"></script>
     <style>
       /* Prevent header flash when embedded; activated once html.embedded is set */
       html.embedded body { padding-top: 0 !important; }
@@ -107,7 +109,17 @@
 
                 <div class="form-group">
                   <label>Cell Phone</label>
-                  <input type="tel" id="billingPhone" class="form-control" placeholder="Enter number" inputmode="tel" pattern="\+?1?\d{10}" title="Enter a valid US phone number" required />
+                  <div class="phone-input-wrapper" data-input-id="billingPhone">
+                    <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                      <span class="phone-country-flag">🇺🇸</span>
+                      <span class="phone-country-code">+1</span>
+                      <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                        <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                      </svg>
+                    </button>
+                    <input type="tel" id="billingPhone" class="phone-number-input form-control" placeholder="(555) 123-4567" inputmode="tel" required />
+                    <div class="phone-validation-message"></div>
+                  </div>
                 </div>
 
                 <div class="form-group">
@@ -273,7 +285,17 @@
 
                   <div class="form-group">
                   <label>Passenger Phone</label>
-                  <input type="tel" id="passengerPhone" class="form-control" placeholder="Enter number" inputmode="tel" pattern="\+?1?\d{10}" title="Enter a valid US phone number" />
+                  <div class="phone-input-wrapper" data-input-id="passengerPhone">
+                    <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                      <span class="phone-country-flag">🇺🇸</span>
+                      <span class="phone-country-code">+1</span>
+                      <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                        <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                      </svg>
+                    </button>
+                    <input type="tel" id="passengerPhone" class="phone-number-input form-control" placeholder="(555) 123-4567" inputmode="tel" />
+                    <div class="phone-validation-message"></div>
+                  </div>
                 </div>
 
                   <div class="form-group">
@@ -290,7 +312,17 @@
 
                 <div class="form-group">
                   <label>Alt. Contact Phone</label>
-                  <input type="tel" id="altContactPhone" class="form-control" placeholder="Enter number" inputmode="tel" pattern="\+?1?\d{10}" title="Enter a valid US phone number" />
+                  <div class="phone-input-wrapper" data-input-id="altContactPhone">
+                    <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                      <span class="phone-country-flag">🇺🇸</span>
+                      <span class="phone-country-code">+1</span>
+                      <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                        <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                      </svg>
+                    </button>
+                    <input type="tel" id="altContactPhone" class="phone-number-input form-control" placeholder="(555) 123-4567" inputmode="tel" />
+                    <div class="phone-validation-message"></div>
+                  </div>
                 </div>
               </div>
             </section>
@@ -320,7 +352,17 @@
 
                   <div class="form-group">
                   <label>Phone</label>
-                  <input type="tel" id="bookedByPhone" class="form-control" placeholder="Enter number" inputmode="tel" pattern="\+?1?\d{10}" title="Enter a valid US phone number" />
+                  <div class="phone-input-wrapper" data-input-id="bookedByPhone">
+                    <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                      <span class="phone-country-flag">🇺🇸</span>
+                      <span class="phone-country-code">+1</span>
+                      <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                        <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                      </svg>
+                    </button>
+                    <input type="tel" id="bookedByPhone" class="phone-number-input form-control" placeholder="(555) 123-4567" inputmode="tel" />
+                    <div class="phone-validation-message"></div>
+                  </div>
                 </div>
 
                   <div class="form-group">
@@ -2485,5 +2527,51 @@
     <script src="https://storage.googleapis.com/rosebud_staticfiles/ImageGenerator.js"></script>
     <script src="https://storage.googleapis.com/rosebud_staticfiles/ProgressLogger.js"></script>
     <script src="https://storage.googleapis.com/rosebud_staticfiles/OGP.js"></script>
+    
+    <!-- Phone Input Country Dropdowns -->
+    <div class="phone-country-dropdown" data-for="billingPhone" hidden>
+      <input type="text" class="phone-country-search" placeholder="Search countries..." />
+      <div class="phone-country-list"></div>
+    </div>
+    <div class="phone-country-dropdown" data-for="passengerPhone" hidden>
+      <input type="text" class="phone-country-search" placeholder="Search countries..." />
+      <div class="phone-country-list"></div>
+    </div>
+    <div class="phone-country-dropdown" data-for="altContactPhone" hidden>
+      <input type="text" class="phone-country-search" placeholder="Search countries..." />
+      <div class="phone-country-list"></div>
+    </div>
+    <div class="phone-country-dropdown" data-for="bookedByPhone" hidden>
+      <input type="text" class="phone-country-search" placeholder="Search countries..." />
+      <div class="phone-country-list"></div>
+    </div>
+    
+    <script>
+      // Initialize phone inputs when DOM is ready
+      document.addEventListener('DOMContentLoaded', function() {
+        if (window.PhoneInput) {
+          // Populate all country dropdowns
+          const dropdowns = document.querySelectorAll('.phone-country-dropdown');
+          dropdowns.forEach(dropdown => {
+            const list = dropdown.querySelector('.phone-country-list');
+            if (list && PhoneInput.COUNTRIES) {
+              list.innerHTML = PhoneInput.COUNTRIES.map(c => `
+                <button type="button" class="phone-country-option" data-code="${c.code}" data-dial="${c.dial}">
+                  <span class="country-flag">${c.flag}</span>
+                  <span class="country-name">${c.name}</span>
+                  <span class="country-dial">${c.dial}</span>
+                </button>
+              `).join('');
+            }
+          });
+          
+          // Initialize all phone inputs
+          const phoneInputIds = ['billingPhone', 'passengerPhone', 'altContactPhone', 'bookedByPhone'];
+          phoneInputIds.forEach(id => {
+            PhoneInput.init(id);
+          });
+        }
+      });
+    </script>
   </body>
 </html>

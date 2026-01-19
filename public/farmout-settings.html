@@ -6,6 +6,8 @@
     <title>Farmout Automation Settings - RELIALIMO</title>
     <link rel="stylesheet" href="global.css">
     <link rel="stylesheet" href="farmout-settings.css">
+    <link rel="stylesheet" href="phone-input.css">
+    <script src="phone-input.js"></script>
 </head>
 <body>
     <div class="settings-container">
@@ -240,7 +242,17 @@
                         </div>
                         <div class="input-group full-width">
                             <label for="adminNotificationSms">Admin Phone (SMS)</label>
-                            <input type="tel" id="adminNotificationSms" placeholder="+1 (555) 123-4567">
+                            <div class="phone-input-wrapper" data-input-id="adminNotificationSms">
+                              <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                                <span class="phone-country-flag">🇺🇸</span>
+                                <span class="phone-country-code">+1</span>
+                                <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                                  <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                </svg>
+                              </button>
+                              <input type="tel" id="adminNotificationSms" class="phone-number-input" placeholder="(555) 123-4567" inputmode="tel">
+                              <div class="phone-validation-message"></div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -376,6 +388,37 @@
             <span id="toastMessage"></span>
         </div>
     </div>
+
+    <!-- Phone Input Country Dropdown -->
+    <div class="phone-country-dropdown" data-for="adminNotificationSms" hidden>
+      <input type="text" class="phone-country-search" placeholder="Search countries..." />
+      <div class="phone-country-list"></div>
+    </div>
+    
+    <script>
+      // Initialize phone inputs when DOM is ready
+      document.addEventListener('DOMContentLoaded', function() {
+        if (window.PhoneInput) {
+          // Populate all country dropdowns
+          const dropdowns = document.querySelectorAll('.phone-country-dropdown');
+          dropdowns.forEach(dropdown => {
+            const list = dropdown.querySelector('.phone-country-list');
+            if (list && PhoneInput.COUNTRIES) {
+              list.innerHTML = PhoneInput.COUNTRIES.map(c => `
+                <button type="button" class="phone-country-option" data-code="${c.code}" data-dial="${c.dial}">
+                  <span class="country-flag">${c.flag}</span>
+                  <span class="country-name">${c.name}</span>
+                  <span class="country-dial">${c.dial}</span>
+                </button>
+              `).join('');
+            }
+          });
+          
+          // Initialize phone input
+          PhoneInput.init('adminNotificationSms');
+        }
+      });
+    </script>
 
     <script src="env.js"></script>
     <script src="api-service.js"></script>
