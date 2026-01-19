@@ -889,7 +889,9 @@ export async function saveAccountAddress(accountId, addressData) {
         city: addressData.city,
         state: addressData.state || '',
         zip_code: addressData.zip_code || '',
-        country: addressData.country || 'United States'
+        country: addressData.country || 'United States',
+        latitude: addressData.latitude || null,
+        longitude: addressData.longitude || null
       }])
       .select();
     

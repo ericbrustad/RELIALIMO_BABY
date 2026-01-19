@@ -5238,7 +5238,7 @@ class ReservationForm {
       locationNameInput.value = addressData.name || addressData.address;
     }
 
-    // If we have a placeId from Google, fetch details to populate context
+    // If we have a placeId from Google, fetch details to populate context and lat/lng
     if (!addressData.context && addressData.placeId && this.googleMapsService?.getPlaceDetails) {
       try {
         const details = await this.googleMapsService.getPlaceDetails(addressData.placeId);
@@ -5253,6 +5253,12 @@ class ReservationForm {
             countryCode: details.addressComponents.countryCode
           };
         }
+        // Capture latitude/longitude from Google Places
+        if (details?.latitude && details?.longitude) {
+          addressData.latitude = details.latitude;
+          addressData.longitude = details.longitude;
+          console.log('📍 Captured coordinates:', details.latitude, details.longitude);
+        }
         if (details?.name && !addressData.name) {
           addressData.name = details.name;
         }
@@ -5263,6 +5269,12 @@ class ReservationForm {
         console.warn('⚠️ Failed to fetch Google place details:', e);
       }
     }
+
+    // Store lat/lng in hidden fields for stop creation
+    const latField = document.getElementById('locationLat');
+    const lngField = document.getElementById('locationLng');
+    if (latField && addressData.latitude) latField.value = addressData.latitude;
+    if (lngField && addressData.longitude) lngField.value = addressData.longitude;
 
     // Fill in city, state, zip if available
     if (addressData.context) {
@@ -7239,7 +7251,9 @@ class ReservationForm {
                   city: stop.city,
                   state: stop.state || '',
                   zip_code: stop.zipCode || '',
-                  country: 'United States'
+                  country: 'United States',
+                  latitude: stop.latitude || null,
+                  longitude: stop.longitude || null
                 };
                 
                 addressPromises.push(db.saveAccountAddress(account.id, addressData));
@@ -9050,7 +9064,11 @@ window.handleCreateStop = function() {
   const notes = document.getElementById('locationNotes')?.value?.trim() || '';
   const timeIn = document.getElementById('timeIn')?.value?.trim() || '';
   
-  console.log('📋 All form values:', { locationName, address1, address2, city, state, zipCode, country, phone, notes, timeIn });
+  // Get latitude/longitude from hidden fields (populated by Google Places)
+  const latitude = parseFloat(document.getElementById('locationLat')?.value) || null;
+  const longitude = parseFloat(document.getElementById('locationLng')?.value) || null;
+  
+  console.log('📋 All form values:', { locationName, address1, address2, city, state, zipCode, country, phone, notes, timeIn, latitude, longitude });
   
   // Build full address
   let fullAddress = address1;
@@ -9081,6 +9099,9 @@ window.handleCreateStop = function() {
     notes: notes || (fboInfo?.services ? `Services: ${fboInfo.services}` : ''),
     timeIn: timeIn,
     fullAddress: fullAddress || (fboInfo ? `${fboInfo.address}, ${fboInfo.city}, ${fboInfo.state} ${fboInfo.zip}` : ''),
+    // Geo coordinates from Google Places
+    latitude: latitude,
+    longitude: longitude,
     // Airport info
     airportCode: airportCode,
     airline: airlineCode,
