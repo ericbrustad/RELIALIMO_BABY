@@ -521,6 +521,18 @@ function renderSkeleton(container) {
 
           <div class="menu-divider"></div>
 
+          <button type="button" class="menu-item" id="userMenuWidgetSettings" onclick="window.location.href='widget-settings.html'">
+            <span class="menu-icon">🎛️</span>
+            <span>Widget Settings</span>
+          </button>
+
+          <button type="button" class="menu-item" id="userMenuSystemSettings" onclick="window.location.href='system-settings.html'">
+            <span class="menu-icon">⚙️</span>
+            <span>System Settings</span>
+          </button>
+
+          <div class="menu-divider"></div>
+
           <button type="button" class="menu-item" id="userMenuSignIn" style="display:none;">
             <span class="menu-icon">🔑</span>
             <span>Sign in</span>
