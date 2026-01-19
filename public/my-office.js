@@ -1339,7 +1339,8 @@ class MyOffice {
     try {
       // First try to load from Supabase
       const apiModule = await import('./api-service.js');
-      const { supabase } = await apiModule.setupAPI();
+      await apiModule.setupAPI();
+      const supabase = apiModule.getSupabaseClient();
       
       if (supabase) {
         const { data: org, error } = await supabase
@@ -1695,7 +1696,8 @@ class MyOffice {
     // Try to save to Supabase
     try {
       const apiModule = await import('./api-service.js');
-      const supabase = await apiModule.setupAPI();
+      await apiModule.setupAPI();
+      const supabase = apiModule.getSupabaseClient();
       if (!supabase) throw new Error('Supabase client unavailable');
 
       if (typeof apiModule.ensureValidToken === 'function') {
