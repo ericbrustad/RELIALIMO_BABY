@@ -34,6 +34,8 @@ const DEFAULT_SETTINGS = {
 
 // Current settings state
 let currentSettings = { ...DEFAULT_SETTINGS };
+let hasUnsavedChanges = false;
+let savedSettings = null;
 
 // Load settings from localStorage
 function loadSettings() {
@@ -53,13 +55,39 @@ function loadSettings() {
     currentSettings = { ...DEFAULT_SETTINGS };
   }
   
+  // Store copy for unsaved changes detection
+  savedSettings = JSON.stringify(currentSettings);
+  hasUnsavedChanges = false;
+  
   return currentSettings;
+}
+
+// Mark settings as changed
+function markUnsaved() {
+  hasUnsavedChanges = JSON.stringify(currentSettings) !== savedSettings;
+  updateSaveButtonState();
+}
+
+// Update save button to show unsaved state
+function updateSaveButtonState() {
+  const saveBtn = document.getElementById('saveSettings');
+  if (saveBtn) {
+    if (hasUnsavedChanges) {
+      saveBtn.textContent = '💾 Save Settings *';
+      saveBtn.style.background = '#dc2626';
+    } else {
+      saveBtn.textContent = '💾 Save Settings';
+      saveBtn.style.background = '';
+    }
+  }
 }
 
 // Save settings to localStorage
 function saveSettings() {
   try {
     localStorage.setItem('widgetSettings', JSON.stringify(currentSettings));
+    savedSettings = JSON.stringify(currentSettings);
+    hasUnsavedChanges = false;
     // Also save clock style in legacy format for compatibility
     localStorage.setItem('clockStyle', currentSettings.clockStyle);
     console.log('[WidgetSettings] Settings saved:', currentSettings);
@@ -410,6 +438,7 @@ function initEventListeners() {
     updateSizeLabel('timerSize', 'timerSizeValue');
     currentSettings.timerSize = parseInt(e.target.value, 10);
     updatePreview();
+    markUnsaved();
   });
   
   // Clock size slider
@@ -417,14 +446,17 @@ function initEventListeners() {
     updateSizeLabel('clockSize', 'clockSizeValue');
     currentSettings.clockSize = parseInt(e.target.value, 10);
     updatePreview();
+    markUnsaved();
+    applyWidgetInstantly('clockSize');
   });
   
   // Color theme buttons
-  document.querySelectorAll('.color-theme-btn').forEach(btn => {
+  document.querySelectorAll('.color-theme-btn:not(.sys-monitor-style)').forEach(btn => {
     btn.addEventListener('click', () => {
       setActiveTheme(btn.dataset.theme);
       currentSettings.timerTheme = btn.dataset.theme;
       updatePreview();
+      markUnsaved();
     });
   });
   
@@ -434,6 +466,8 @@ function initEventListeners() {
       setActiveClockStyle(card.dataset.style);
       currentSettings.clockStyle = card.dataset.style;
       updatePreview();
+      markUnsaved();
+      applyWidgetInstantly('clockStyle');
     });
   });
   
@@ -443,6 +477,7 @@ function initEventListeners() {
     if (label) label.textContent = e.target.value;
     currentSettings.clockTextColor = e.target.value;
     updatePreview();
+    markUnsaved();
   });
   
   // Reset clock color
@@ -450,27 +485,19 @@ function initEventListeners() {
     currentSettings.clockTextColor = DEFAULT_SETTINGS.clockTextColor;
     setColorPicker('clockTextColor', currentSettings.clockTextColor);
     updatePreview();
+    markUnsaved();
   });
   
-  // Toggle changes
+  // Toggle changes - apply INSTANTLY to widgets and mark unsaved
   ['timerAlwaysVisible', 'timerDraggable', 'timerPlayChime', 'clockVisible', 'clockDraggable', 'clockShowDate',
    'sysMonitorVisible', 'sysMonitorDraggable', 'sysMonitorShowCpu', 'sysMonitorShowRam'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', () => {
       readSettingsFromForm();
       updatePreview();
+      markUnsaved();
       
-      // Also update localStorage for sysMonitor settings immediately
-      if (id.startsWith('sysMonitor')) {
-        const sysSettings = {
-          visible: currentSettings.sysMonitorVisible,
-          draggable: currentSettings.sysMonitorDraggable,
-          showCpu: currentSettings.sysMonitorShowCpu,
-          showRam: currentSettings.sysMonitorShowRam,
-          size: currentSettings.sysMonitorSize,
-          style: currentSettings.sysMonitorStyle
-        };
-        localStorage.setItem('sysMonitorSettings', JSON.stringify(sysSettings));
-      }
+      // Apply widget visibility INSTANTLY
+      applyWidgetInstantly(id);
     });
   });
   
@@ -479,6 +506,8 @@ function initEventListeners() {
     updateSizeLabel('sysMonitorSize', 'sysMonitorSizeValue');
     currentSettings.sysMonitorSize = parseInt(e.target.value, 10);
     updatePreview();
+    markUnsaved();
+    applyWidgetInstantly('sysMonitorSize');
   });
   
   // System Monitor style buttons
@@ -487,6 +516,8 @@ function initEventListeners() {
       setActiveMonitorStyle(btn.dataset.style);
       currentSettings.sysMonitorStyle = btn.dataset.style;
       updatePreview();
+      markUnsaved();
+      applyWidgetInstantly('sysMonitorStyle');
     });
   });
   
@@ -518,6 +549,58 @@ function initEventListeners() {
   document.getElementById('refreshNextDriver')?.addEventListener('click', fetchNextDriver);
 }
 
+// Apply widget settings instantly to the main page
+function applyWidgetInstantly(settingId) {
+  try {
+    // Try to communicate with parent window or opener
+    const targetWindow = window.opener || (window.self !== window.top ? window.top : null);
+    
+    if (targetWindow) {
+      // Send instant update message
+      targetWindow.postMessage({
+        type: 'widgetSettingChanged',
+        setting: settingId,
+        value: currentSettings[settingId],
+        allSettings: currentSettings
+      }, '*');
+    }
+    
+    // Also update localStorage immediately for sysMonitor settings
+    if (settingId.startsWith('sysMonitor')) {
+      const sysSettings = {
+        visible: currentSettings.sysMonitorVisible,
+        draggable: currentSettings.sysMonitorDraggable,
+        showCpu: currentSettings.sysMonitorShowCpu,
+        showRam: currentSettings.sysMonitorShowRam,
+        size: currentSettings.sysMonitorSize,
+        style: currentSettings.sysMonitorStyle
+      };
+      localStorage.setItem('sysMonitorSettings', JSON.stringify(sysSettings));
+      console.log('[WidgetSettings] Applied sysMonitor settings instantly:', sysSettings);
+    }
+    
+    // Clock settings
+    if (settingId.startsWith('clock')) {
+      localStorage.setItem('widgetSettings', JSON.stringify(currentSettings));
+      localStorage.setItem('clockStyle', currentSettings.clockStyle);
+    }
+    
+  } catch (e) {
+    console.log('[WidgetSettings] Could not apply instantly:', e.message);
+  }
+}
+
+// Warn user about unsaved changes on exit
+function setupUnsavedWarning() {
+  window.addEventListener('beforeunload', (e) => {
+    if (hasUnsavedChanges) {
+      e.preventDefault();
+      e.returnValue = 'You have unsaved widget settings. Are you sure you want to leave?';
+      return e.returnValue;
+    }
+  });
+}
+
 // Add pulse animation style
 function addAnimationStyles() {
   const style = document.createElement('style');
@@ -539,6 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSettings();
   applySettingsToForm();
   initEventListeners();
+  setupUnsavedWarning();
   fetchNextDriver();
   
   // Update clock preview with current time

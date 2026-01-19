@@ -403,6 +403,54 @@ const SystemMonitor = {
 // Expose globally
 window.SystemMonitor = SystemMonitor;
 
+// Handle instant widget setting changes from settings page
+function handleInstantWidgetChange(settingId, value, allSettings) {
+  const widget = document.getElementById('systemMonitorWidget');
+  const clockContainer = document.getElementById('headerClock');
+  
+  // System Monitor visibility toggle - INSTANT
+  if (settingId === 'sysMonitorVisible' && widget) {
+    widget.style.display = value ? 'flex' : 'none';
+    console.log('[user-menu] System monitor visibility set to:', value);
+  }
+  
+  // System Monitor CPU/RAM toggles
+  if (settingId === 'sysMonitorShowCpu' && widget) {
+    const cpuRow = widget.querySelector('.sys-monitor-row:first-child');
+    if (cpuRow) cpuRow.style.display = value ? 'flex' : 'none';
+  }
+  
+  if (settingId === 'sysMonitorShowRam' && widget) {
+    const ramRow = widget.querySelector('.sys-monitor-row:last-child');
+    if (ramRow) ramRow.style.display = value ? 'flex' : 'none';
+  }
+  
+  // System Monitor size
+  if (settingId === 'sysMonitorSize' && widget) {
+    widget.style.transform = `scale(${value / 100})`;
+  }
+  
+  // Clock visibility
+  if (settingId === 'clockVisible' && clockContainer) {
+    clockContainer.style.display = value ? 'block' : 'none';
+  }
+  
+  // Clock size
+  if (settingId === 'clockSize' && clockContainer) {
+    clockContainer.style.transform = `scale(${value / 100})`;
+  }
+  
+  // Re-apply full settings if available
+  if (allSettings) {
+    // Save to localStorage for persistence
+    try {
+      localStorage.setItem('widgetSettings', JSON.stringify(allSettings));
+    } catch (e) {
+      console.warn('[user-menu] Could not save settings:', e);
+    }
+  }
+}
+
 function renderSkeleton(container) {
   container.innerHTML = `
     <div class="user-menu-wrapper">
@@ -1206,6 +1254,21 @@ async function init() {
     if (event.data?.type === 'widgetSettingsChanged') {
       console.log('[user-menu] Received widget settings change from iframe, reloading...');
       applyWidgetSettings();
+    }
+    // Handle instant widget toggle changes
+    if (event.data?.type === 'widgetSettingChanged') {
+      console.log('[user-menu] Received instant widget change:', event.data.setting, event.data.value);
+      handleInstantWidgetChange(event.data.setting, event.data.value, event.data.allSettings);
+    }
+  });
+  
+  // Also listen on storage events for cross-tab sync
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'sysMonitorSettings' || event.key === 'widgetSettings') {
+      console.log('[user-menu] Storage changed, reapplying widget settings...');
+      applyWidgetSettings();
+      // Re-init system monitor with new settings
+      SystemMonitor.init();
     }
   });
 
