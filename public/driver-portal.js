@@ -1779,7 +1779,14 @@ function setupEventListeners() {
         const isPassword = input.type === 'password';
         input.type = isPassword ? 'text' : 'password';
         btn.classList.toggle('active', isPassword);
-        btn.querySelector('.eye-icon').textContent = isPassword ? '🙈' : '👁️';
+        
+        // Toggle SVG icons
+        const eyeOpen = btn.querySelector('.eye-open');
+        const eyeClosed = btn.querySelector('.eye-closed');
+        if (eyeOpen && eyeClosed) {
+          eyeOpen.style.display = isPassword ? 'none' : 'block';
+          eyeClosed.style.display = isPassword ? 'block' : 'none';
+        }
       }
     });
   });
