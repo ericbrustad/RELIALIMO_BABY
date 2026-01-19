@@ -23,6 +23,15 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'organization_id') THEN
         ALTER TABLE email_templates ADD COLUMN organization_id UUID;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'name') THEN
+        ALTER TABLE email_templates ADD COLUMN name VARCHAR(255);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'subject') THEN
+        ALTER TABLE email_templates ADD COLUMN subject VARCHAR(500);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'body_html') THEN
+        ALTER TABLE email_templates ADD COLUMN body_html TEXT;
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'email_templates' AND column_name = 'description') THEN
         ALTER TABLE email_templates ADD COLUMN description TEXT;
     END IF;
