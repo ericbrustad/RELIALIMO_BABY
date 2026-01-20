@@ -34,9 +34,6 @@
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
   
-  <!-- International phone input -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.19/css/intlTelInput.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.19/js/intlTelInput.min.js"></script>
 </head>
 <body>
   <div id="app">
@@ -206,15 +203,17 @@
             
             <div class="form-section">
               <label class="form-label">Cell Phone Number</label>
-              <div class="phone-input-wrapper">
+              <div class="phone-input-wrapper" style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:18px; font-weight:600; color:#d4af37; background:#2a2a4e; padding:14px 16px; border-radius:8px; border:1px solid #3a3a5e;">+1</span>
                 <input type="tel" 
                        id="cellPhoneInput" 
                        class="form-input phone-input"
-                       placeholder="(555) 123-4567">
+                       placeholder="(555) 123-4567"
+                       style="flex:1;">
               </div>
               <p class="input-hint">
                 <span class="hint-icon">ℹ️</span>
-                Enter your phone number with country code for international format
+                Enter your 10-digit US phone number
               </p>
             </div>
 

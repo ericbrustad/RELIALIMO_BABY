@@ -584,21 +584,26 @@ function selectAirport(code) {
 }
 
 // ============================================
-// Phone Input (International)
+// Phone Input (US Only)
 // ============================================
 function setupPhoneInput() {
   const input = document.getElementById('cellPhoneInput');
   
-  // Initialize intl-tel-input
-  state.iti = window.intlTelInput(input, {
-    initialCountry: 'us',
-    preferredCountries: ['us', 'ca', 'gb', 'mx'],
-    separateDialCode: true,
-    utilsScript: 'https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.19/js/utils.js'
-  });
-  
-  // Validation on input
-  input.addEventListener('input', () => {
+  // Format phone as user types
+  input.addEventListener('input', (e) => {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 10) value = value.substring(0, 10);
+    
+    // Format as (XXX) XXX-XXXX
+    if (value.length >= 6) {
+      value = '(' + value.substring(0, 3) + ') ' + value.substring(3, 6) + '-' + value.substring(6);
+    } else if (value.length >= 3) {
+      value = '(' + value.substring(0, 3) + ') ' + value.substring(3);
+    } else if (value.length > 0) {
+      value = '(' + value;
+    }
+    
+    e.target.value = value;
     validatePhoneInput();
   });
   
@@ -609,7 +614,16 @@ function setupPhoneInput() {
   // Pre-fill if phone exists
   if (state.customer?.phone || state.customer?.cell_phone) {
     const existingPhone = state.customer.phone || state.customer.cell_phone;
-    input.value = existingPhone.replace(/^\+\d+\s*/, ''); // Remove country code if present
+    // Remove +1 or country code if present and format
+    let digits = existingPhone.replace(/\D/g, '');
+    if (digits.startsWith('1') && digits.length === 11) {
+      digits = digits.substring(1);
+    }
+    if (digits.length === 10) {
+      input.value = '(' + digits.substring(0, 3) + ') ' + digits.substring(3, 6) + '-' + digits.substring(6);
+    } else {
+      input.value = existingPhone;
+    }
     validatePhoneInput();
   }
 }
@@ -619,13 +633,13 @@ function validatePhoneInput() {
   const statusDiv = document.getElementById('phoneVerificationStatus');
   const nextBtn = document.getElementById('step2NextBtn');
   
-  if (!state.iti) return;
-  
-  const isValid = state.iti.isValidNumber();
+  // Get just the digits
+  const digits = input.value.replace(/\D/g, '');
+  const isValid = digits.length === 10;
   
   if (isValid) {
-    state.cellPhone = state.iti.getNumber(); // E.164 format
-    state.cellPhoneFormatted = state.iti.getNumber(intlTelInputUtils.numberFormat.INTERNATIONAL);
+    state.cellPhone = '+1' + digits; // E.164 format
+    state.cellPhoneFormatted = '+1 (' + digits.substring(0, 3) + ') ' + digits.substring(3, 6) + '-' + digits.substring(6);
     
     statusDiv.classList.remove('hidden');
     nextBtn.disabled = false;
