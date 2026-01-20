@@ -154,9 +154,11 @@
             <div class="step" data-step="3">3</div>
           </div>
 
-          <!-- Step 1: Personal Info + Email Verification -->
+          <!-- Step 1: Progressive Registration with Inline OTP -->
           <div id="registerStep1" class="register-step active">
-            <h2>About You</h2>
+            <h2>Create Your Account</h2>
+            
+            <!-- Name Fields -->
             <div class="form-row">
               <div class="form-group">
                 <label for="regFirstName">First Name *</label>
@@ -167,30 +169,84 @@
                 <input type="text" id="regLastName" placeholder="Doe" required>
               </div>
             </div>
-            <div class="form-group">
+            
+            <!-- Email with inline OTP -->
+            <div class="form-group" id="emailSection">
               <label for="regEmail">Email *</label>
-              <input type="email" id="regEmail" placeholder="john@example.com" required>
-              <small class="field-hint">We'll send a verification code to this email</small>
-            </div>
-            <div class="form-group">
-              <label for="regPhone">Cell Phone *</label>
-              <div class="phone-input-wrapper" data-input-id="regPhone">
-                <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
-                  <span class="phone-country-flag">🇺🇸</span>
-                  <span class="phone-country-code">+1</span>
-                  <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-                    <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                  </svg>
-                </button>
-                <input type="tel" id="regPhone" class="phone-number-input" placeholder="(555) 123-4567" inputmode="tel" required>
-                <div class="phone-validation-message"></div>
+              <div class="inline-verify-wrapper">
+                <input type="email" id="regEmail" placeholder="john@example.com" required>
+                <button type="button" id="sendEmailOtpBtn" class="btn btn-sm btn-primary">Send Code</button>
               </div>
-              <small class="field-hint">We'll send a verification code to this number</small>
+              <div id="emailVerifiedBadge" class="verified-badge" style="display: none;">
+                ✓ Email Verified
+              </div>
             </div>
-            <div class="form-group">
+            
+            <!-- Email OTP Entry (hidden until code sent) -->
+            <div id="emailOtpSection" class="inline-otp-section" style="display: none;">
+              <p class="otp-instruction">Enter the 6-digit code sent to <strong id="emailOtpDisplay"></strong></p>
+              <div class="otp-input-group otp-inline">
+                <input type="text" class="email-otp-digit" id="emailOtpDigit1" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="one-time-code">
+                <input type="text" class="email-otp-digit" id="emailOtpDigit2" maxlength="1" inputmode="numeric" pattern="[0-9]">
+                <input type="text" class="email-otp-digit" id="emailOtpDigit3" maxlength="1" inputmode="numeric" pattern="[0-9]">
+                <input type="text" class="email-otp-digit" id="emailOtpDigit4" maxlength="1" inputmode="numeric" pattern="[0-9]">
+                <input type="text" class="email-otp-digit" id="emailOtpDigit5" maxlength="1" inputmode="numeric" pattern="[0-9]">
+                <input type="text" class="email-otp-digit" id="emailOtpDigit6" maxlength="1" inputmode="numeric" pattern="[0-9]">
+              </div>
+              <div id="emailOtpStatus" class="otp-status"></div>
+              <div class="otp-actions-inline">
+                <button type="button" id="verifyEmailOtpBtn" class="btn btn-sm btn-primary">Verify</button>
+                <button type="button" id="resendEmailOtpBtn" class="btn btn-sm btn-link" disabled>Resend</button>
+                <span id="emailOtpTimer" class="otp-timer"></span>
+              </div>
+            </div>
+            
+            <!-- Phone with inline OTP (disabled until email verified) -->
+            <div class="form-group" id="phoneSection">
+              <label for="regPhone">Cell Phone *</label>
+              <div class="inline-verify-wrapper">
+                <div class="phone-input-wrapper" data-input-id="regPhone">
+                  <button type="button" class="phone-country-btn" aria-label="Select country" data-country="US">
+                    <span class="phone-country-flag">🇺🇸</span>
+                    <span class="phone-country-code">+1</span>
+                    <svg class="phone-dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                      <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                    </svg>
+                  </button>
+                  <input type="tel" id="regPhone" class="phone-number-input" placeholder="(555) 123-4567" inputmode="tel" required disabled>
+                  <div class="phone-validation-message"></div>
+                </div>
+                <button type="button" id="sendPhoneOtpBtn" class="btn btn-sm btn-primary" disabled>Send Code</button>
+              </div>
+              <div id="phoneVerifiedBadge" class="verified-badge" style="display: none;">
+                ✓ Phone Verified
+              </div>
+            </div>
+            
+            <!-- Phone OTP Entry (hidden until code sent) -->
+            <div id="phoneOtpSection" class="inline-otp-section" style="display: none;">
+              <p class="otp-instruction">Enter the 6-digit code sent to <strong id="otpPhoneDisplay"></strong></p>
+              <div class="otp-input-group otp-inline">
+                <input type="text" class="otp-digit" id="otpDigit1" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="one-time-code">
+                <input type="text" class="otp-digit" id="otpDigit2" maxlength="1" inputmode="numeric" pattern="[0-9]">
+                <input type="text" class="otp-digit" id="otpDigit3" maxlength="1" inputmode="numeric" pattern="[0-9]">
+                <input type="text" class="otp-digit" id="otpDigit4" maxlength="1" inputmode="numeric" pattern="[0-9]">
+                <input type="text" class="otp-digit" id="otpDigit5" maxlength="1" inputmode="numeric" pattern="[0-9]">
+                <input type="text" class="otp-digit" id="otpDigit6" maxlength="1" inputmode="numeric" pattern="[0-9]">
+              </div>
+              <div id="otpStatus" class="otp-status"></div>
+              <div class="otp-actions-inline">
+                <button type="button" id="verifyOtpBtn" class="btn btn-sm btn-primary">Verify</button>
+                <button type="button" id="resendOtpBtn" class="btn btn-sm btn-link" disabled>Resend</button>
+                <span id="otpTimer" class="otp-timer"></span>
+              </div>
+            </div>
+            
+            <!-- Password (disabled until phone verified) -->
+            <div class="form-group" id="passwordSection">
               <label for="regPassword">Create Password *</label>
               <div class="password-wrapper">
-                <input type="password" id="regPassword" placeholder="Min 8 characters" required>
+                <input type="password" id="regPassword" placeholder="Min 8 characters" required disabled>
                 <button type="button" class="btn-show-password" data-target="regPassword" aria-label="Show password">
                   <svg class="eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -202,37 +258,17 @@
                   </svg>
                 </button>
               </div>
+              <small class="field-hint">Minimum 8 characters</small>
             </div>
-            <button type="button" id="regNextStep1" class="btn btn-primary btn-large">
+            
+            <button type="button" id="regNextStep1" class="btn btn-primary btn-large" disabled>
               Continue →
             </button>
           </div>
 
-          <!-- Step 1b: Email Verification -->
-          <div id="registerStep1b" class="register-step">
-            <h2>📧 Verify Your Email</h2>
-            <p class="step-subtitle">Enter the 6-digit code sent to <strong id="emailOtpDisplay"></strong></p>
-            
-            <div class="otp-input-group">
-              <input type="text" class="email-otp-digit" id="emailOtpDigit1" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="one-time-code">
-              <input type="text" class="email-otp-digit" id="emailOtpDigit2" maxlength="1" inputmode="numeric" pattern="[0-9]">
-              <input type="text" class="email-otp-digit" id="emailOtpDigit3" maxlength="1" inputmode="numeric" pattern="[0-9]">
-              <input type="text" class="email-otp-digit" id="emailOtpDigit4" maxlength="1" inputmode="numeric" pattern="[0-9]">
-              <input type="text" class="email-otp-digit" id="emailOtpDigit5" maxlength="1" inputmode="numeric" pattern="[0-9]">
-              <input type="text" class="email-otp-digit" id="emailOtpDigit6" maxlength="1" inputmode="numeric" pattern="[0-9]">
-            </div>
-            
-            <div id="emailOtpStatus" class="otp-status"></div>
-            
-            <div class="otp-actions">
-              <button type="button" id="resendEmailOtpBtn" class="btn btn-link">Resend Code</button>
-              <span id="emailOtpTimer" class="otp-timer"></span>
-            </div>
-            
-            <div class="btn-row">
-              <button type="button" id="regBackStep1b" class="btn btn-secondary">← Back</button>
-              <button type="button" id="verifyEmailOtpBtn" class="btn btn-primary">Verify & Continue →</button>
-            </div>
+          <!-- Step 1b: DEPRECATED - Email verification now inline in Step 1 -->
+          <div id="registerStep1b" class="register-step" style="display: none !important;">
+            <!-- This step is no longer used - email OTP is now inline in Step 1 -->
           </div>
 
           <!-- Step 2: Company Info with Matching -->
@@ -320,35 +356,13 @@
             
             <div class="btn-row">
               <button type="button" id="regBackStep2" class="btn btn-secondary">← Back</button>
-              <button type="button" id="regNextStep2" class="btn btn-primary">Verify Phone →</button>
+              <button type="button" id="regNextStep2" class="btn btn-primary">Continue →</button>
             </div>
           </div>
           
-          <!-- Step 2b: Phone OTP Verification -->
-          <div id="registerStep2b" class="register-step">
-            <h2>📱 Verify Your Phone</h2>
-            <p class="step-subtitle">Enter the 6-digit code sent to <strong id="otpPhoneDisplay"></strong></p>
-            
-            <div class="otp-input-group">
-              <input type="text" class="otp-digit" id="otpDigit1" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="one-time-code">
-              <input type="text" class="otp-digit" id="otpDigit2" maxlength="1" inputmode="numeric" pattern="[0-9]">
-              <input type="text" class="otp-digit" id="otpDigit3" maxlength="1" inputmode="numeric" pattern="[0-9]">
-              <input type="text" class="otp-digit" id="otpDigit4" maxlength="1" inputmode="numeric" pattern="[0-9]">
-              <input type="text" class="otp-digit" id="otpDigit5" maxlength="1" inputmode="numeric" pattern="[0-9]">
-              <input type="text" class="otp-digit" id="otpDigit6" maxlength="1" inputmode="numeric" pattern="[0-9]">
-            </div>
-            
-            <div id="otpStatus" class="otp-status"></div>
-            
-            <div class="otp-actions">
-              <button type="button" id="resendOtpBtn" class="btn btn-link">Resend Code</button>
-              <span id="otpTimer" class="otp-timer"></span>
-            </div>
-            
-            <div class="btn-row">
-              <button type="button" id="regBackStep2b" class="btn btn-secondary">← Back</button>
-              <button type="button" id="verifyOtpBtn" class="btn btn-primary">Verify & Continue →</button>
-            </div>
+          <!-- Step 2b: DEPRECATED - Phone OTP now inline in Step 1 -->
+          <div id="registerStep2b" class="register-step" style="display: none !important;">
+            <!-- This step is no longer used. Phone OTP verification is now handled inline in Step 1 -->
           </div>
 
           <!-- Step 3: Vehicle Info -->

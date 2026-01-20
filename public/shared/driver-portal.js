@@ -1710,23 +1710,28 @@ function setupEventListeners() {
   // Login
   elements.loginBtn?.addEventListener('click', handleLogin);
   
-  // Registration navigation - updated for new flow with email + phone OTP steps
+  // Registration navigation - updated for new inline OTP flow
   elements.regNextStep1?.addEventListener('click', handleStep1Continue);
   elements.regNextStep2?.addEventListener('click', handleStep2Continue);
   elements.regBackStep1b?.addEventListener('click', () => goToRegStep(1));
-  elements.regBackStep2?.addEventListener('click', () => goToRegStep('1b'));
+  elements.regBackStep2?.addEventListener('click', () => goToRegStep(1)); // Now goes back to Step 1 since no more 1b
   elements.regBackStep2b?.addEventListener('click', () => goToRegStep(2));
-  elements.regBackStep3?.addEventListener('click', () => goToRegStep('2b'));
+  elements.regBackStep3?.addEventListener('click', () => goToRegStep(2)); // Skip 2b since phone OTP is now inline
   elements.regSubmit?.addEventListener('click', handleRegistration);
   
-  // Phone OTP verification
-  elements.verifyOtpBtn?.addEventListener('click', handleVerifyOtp);
-  elements.resendOtpBtn?.addEventListener('click', handleResendOtp);
+  // Inline OTP - Send Code buttons
+  document.getElementById('sendEmailOtpBtn')?.addEventListener('click', handleSendEmailOtp);
+  document.getElementById('sendPhoneOtpBtn')?.addEventListener('click', handleSendPhoneOtp);
+  
+  // Phone OTP verification (inline)
+  elements.verifyOtpBtn?.addEventListener('click', handleVerifyPhoneOtpInline);
+  elements.resendOtpBtn?.addEventListener('click', handleResendPhoneOtpInline);
   setupOtpInputs();
   
-  // Email OTP verification
-  elements.verifyEmailOtpBtn?.addEventListener('click', handleVerifyEmailOtp);
-  elements.resendEmailOtpBtn?.addEventListener('click', handleResendEmailOtp);
+  // Email OTP verification (inline)
+  elements.verifyEmailOtpBtn?.addEventListener('click', handleVerifyEmailOtpInline);
+  elements.resendEmailOtpBtn?.addEventListener('click', handleResendEmailOtpInline);
+  initEmailOtpInputs(); // Initialize email OTP inputs
   
   // Company matching
   const companyNameInput = document.getElementById('regCompanyName');
@@ -3228,7 +3233,7 @@ function goToRegStep(step) {
   }
 }
 
-// Step 1: Personal Info - Create Supabase Auth Account
+// Step 1: Personal Info - with inline OTP verification
 async function handleStep1Continue() {
   const firstName = document.getElementById('regFirstName').value.trim();
   const lastName = document.getElementById('regLastName').value.trim();
@@ -3236,7 +3241,7 @@ async function handleStep1Continue() {
   const phone = document.getElementById('regPhone').value.trim();
   const password = document.getElementById('regPassword').value;
   
-  // Validate
+  // Validate all fields
   if (!firstName || !lastName) {
     showToast('Please enter your name', 'error');
     return;
@@ -3249,82 +3254,60 @@ async function handleStep1Continue() {
     showToast('Please enter your phone number', 'error');
     return;
   }
-  if (!password || password.length < 6) {
-    showToast('Password must be at least 6 characters', 'error');
+  if (!password || password.length < 8) {
+    showToast('Password must be at least 8 characters', 'error');
+    return;
+  }
+  
+  // Check that both verifications are complete
+  if (!state.emailVerified) {
+    showToast('Please verify your email first', 'error');
+    return;
+  }
+  if (!state.phoneVerified) {
+    showToast('Please verify your phone first', 'error');
     return;
   }
   
   const btn = elements.regNextStep1;
   btn.disabled = true;
-  btn.textContent = 'Checking...';
+  btn.textContent = 'Continuing...';
   
   try {
-    // Check if email already exists in drivers table (direct query for efficiency)
-    const emailExists = await checkEmailExists(email);
-    if (emailExists) {
-      showToast('A driver account with this email already exists. Please sign in instead.', 'error');
-      return;
-    }
-    
-    // Store password hash for later verification (simple hash for demo - use proper auth in production)
+    // Store password for later use during registration
     state.pendingPassword = password;
     
-    console.log('[DriverPortal] Step 1 validated, proceeding to email verification');
+    console.log('[DriverPortal] Step 1 complete, both email and phone verified');
     
-    // Send email OTP and go to step 1b
-    btn.textContent = 'Sending verification code...';
-    await sendOtpToEmail(email);
-    startEmailOtpResendTimer();
-    goToRegStep('1b');
+    // Go directly to Step 2 (Company Info)
+    goToRegStep(2);
     
   } catch (err) {
-    console.error('[DriverPortal] Validation error:', err);
-    showToast(err.message || 'Failed to validate information', 'error');
+    console.error('[DriverPortal] Step 1 error:', err);
+    showToast(err.message || 'Failed to continue', 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Continue →';
   }
 }
 
-// Step 2: Company Info - Search for matching companies & proceed to OTP
+// Step 2: Company Info - proceed to vehicle info (no more phone OTP step)
 async function handleStep2Continue() {
-  const phone = document.getElementById('regPhone').value.trim();
-  
-  if (!phone) {
-    showToast('Phone number is required for verification', 'error');
-    goToRegStep(1);
-    return;
-  }
-  
+  // Company info is optional, just proceed to step 3
   const btn = elements.regNextStep2;
   btn.disabled = true;
-  btn.textContent = 'Sending code...';
+  btn.textContent = 'Continuing...';
   
   try {
-    // Send OTP to phone
-    await sendOtpToPhone(phone);
-    
-    // Display phone in OTP step
-    const formattedPhone = formatPhone(phone);
-    if (elements.otpPhoneDisplay) {
-      elements.otpPhoneDisplay.textContent = formattedPhone;
-    }
-    
-    // Move to OTP verification step
-    goToRegStep('2b');
-    
-    // Start resend timer
-    startOtpResendTimer();
-    
-    // Focus first OTP input
-    document.getElementById('otpDigit1')?.focus();
+    // Go directly to Step 3 (Vehicle Info) - no more Step 2b
+    goToRegStep(3);
     
   } catch (err) {
-    console.error('[DriverPortal] Send OTP error:', err);
-    showToast(err.message || 'Failed to send verification code', 'error');
+    console.error('[DriverPortal] Step 2 error:', err);
+    showToast(err.message || 'Failed to continue', 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Verify Phone →';
+    btn.textContent = 'Continue →';
   }
 }
 
@@ -4178,6 +4161,350 @@ function setEmailOtpStatus(message, type) {
 }
 
 // ============================================
+// INLINE OTP VERIFICATION HANDLERS (New Flow)
+// ============================================
+
+/**
+ * Handle sending email OTP from the inline button
+ */
+async function handleSendEmailOtp() {
+  const email = document.getElementById('regEmail').value.trim();
+  const firstName = document.getElementById('regFirstName').value.trim();
+  const lastName = document.getElementById('regLastName').value.trim();
+  
+  // Validate name fields first
+  if (!firstName || !lastName) {
+    showToast('Please enter your name first', 'error');
+    document.getElementById('regFirstName').focus();
+    return;
+  }
+  
+  // Validate email
+  if (!email || !email.includes('@')) {
+    showToast('Please enter a valid email address', 'error');
+    document.getElementById('regEmail').focus();
+    return;
+  }
+  
+  const btn = document.getElementById('sendEmailOtpBtn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  
+  try {
+    // Check if email already exists
+    const emailExists = await checkEmailExists(email);
+    if (emailExists) {
+      showToast('A driver account with this email already exists. Please sign in instead.', 'error');
+      return;
+    }
+    
+    // Send OTP
+    await sendOtpToEmail(email);
+    
+    // Show the OTP input section
+    const otpSection = document.getElementById('emailOtpSection');
+    otpSection.style.display = 'block';
+    
+    // Update display
+    document.getElementById('emailOtpDisplay').textContent = email;
+    
+    // Start timer
+    startEmailOtpResendTimerInline();
+    
+    // Focus first input
+    document.getElementById('emailOtpDigit1')?.focus();
+    
+    // Disable the email input
+    document.getElementById('regEmail').disabled = true;
+    btn.style.display = 'none';
+    
+  } catch (err) {
+    console.error('[DriverPortal] Send email OTP error:', err);
+    showToast(err.message || 'Failed to send verification code', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Send Code';
+  }
+}
+
+/**
+ * Handle verifying email OTP inline
+ */
+async function handleVerifyEmailOtpInline() {
+  const enteredCode = getEnteredEmailOtp();
+  
+  if (enteredCode.length !== 6) {
+    showToast('Please enter all 6 digits', 'error');
+    return;
+  }
+  
+  // Check expiry
+  if (Date.now() > state.emailOtpExpiry) {
+    setEmailOtpStatus('Code expired. Please request a new one.', 'error');
+    return;
+  }
+  
+  // Check attempts
+  state.emailOtpAttempts++;
+  if (state.emailOtpAttempts > 5) {
+    setEmailOtpStatus('Too many attempts. Please request a new code.', 'error');
+    return;
+  }
+  
+  // Verify code
+  if (enteredCode !== state.emailOtpCode) {
+    setEmailOtpStatus(`Incorrect code. ${5 - state.emailOtpAttempts} attempts remaining.`, 'error');
+    document.querySelectorAll('.email-otp-digit').forEach(i => i.classList.add('error'));
+    setTimeout(() => {
+      document.querySelectorAll('.email-otp-digit').forEach(i => i.classList.remove('error'));
+    }, 500);
+    return;
+  }
+  
+  // Success!
+  state.emailVerified = true;
+  
+  // Hide OTP section, show verified badge
+  document.getElementById('emailOtpSection').style.display = 'none';
+  document.getElementById('emailVerifiedBadge').style.display = 'inline-flex';
+  
+  // Clear timer
+  if (state.emailOtpResendTimer) {
+    clearInterval(state.emailOtpResendTimer);
+  }
+  
+  // Enable phone section
+  document.getElementById('regPhone').disabled = false;
+  document.getElementById('sendPhoneOtpBtn').disabled = false;
+  
+  showToast('Email verified! Now verify your phone.', 'success');
+}
+
+/**
+ * Handle resending email OTP inline
+ */
+async function handleResendEmailOtpInline() {
+  const email = document.getElementById('regEmail').value.trim();
+  
+  if (!email) {
+    showToast('Email address not found', 'error');
+    return;
+  }
+  
+  const resendBtn = document.getElementById('resendEmailOtpBtn');
+  resendBtn.disabled = true;
+  resendBtn.textContent = 'Sending...';
+  
+  try {
+    await sendOtpToEmail(email);
+    clearEmailOtpInputs();
+    startEmailOtpResendTimerInline();
+    showToast('New code sent to your email!', 'success');
+    document.getElementById('emailOtpDigit1')?.focus();
+  } catch (err) {
+    showToast('Failed to resend code', 'error');
+  } finally {
+    resendBtn.textContent = 'Resend';
+  }
+}
+
+/**
+ * Start email OTP resend timer for inline flow
+ */
+function startEmailOtpResendTimerInline() {
+  let seconds = 60;
+  const resendBtn = document.getElementById('resendEmailOtpBtn');
+  const timerEl = document.getElementById('emailOtpTimer');
+  
+  if (state.emailOtpResendTimer) {
+    clearInterval(state.emailOtpResendTimer);
+  }
+  
+  if (resendBtn) resendBtn.disabled = true;
+  
+  state.emailOtpResendTimer = setInterval(() => {
+    seconds--;
+    
+    if (timerEl) {
+      timerEl.textContent = seconds > 0 ? `${seconds}s` : '';
+    }
+    
+    if (seconds <= 0) {
+      clearInterval(state.emailOtpResendTimer);
+      if (resendBtn) resendBtn.disabled = false;
+    }
+  }, 1000);
+}
+
+/**
+ * Handle sending phone OTP from the inline button
+ */
+async function handleSendPhoneOtp() {
+  const phone = document.getElementById('regPhone').value.trim();
+  
+  // Validate phone
+  if (!phone) {
+    showToast('Please enter your phone number', 'error');
+    document.getElementById('regPhone').focus();
+    return;
+  }
+  
+  // Check if email is verified
+  if (!state.emailVerified) {
+    showToast('Please verify your email first', 'error');
+    return;
+  }
+  
+  const btn = document.getElementById('sendPhoneOtpBtn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  
+  try {
+    // Send OTP
+    await sendOtpToPhone(phone);
+    
+    // Show the OTP input section
+    const otpSection = document.getElementById('phoneOtpSection');
+    otpSection.style.display = 'block';
+    
+    // Update display
+    const formattedPhone = formatPhone(phone);
+    document.getElementById('otpPhoneDisplay').textContent = formattedPhone;
+    
+    // Start timer
+    startPhoneOtpResendTimerInline();
+    
+    // Focus first input
+    document.getElementById('otpDigit1')?.focus();
+    
+    // Disable the phone input
+    document.getElementById('regPhone').disabled = true;
+    btn.style.display = 'none';
+    
+    showToast('Verification code sent to your phone!', 'success');
+    
+  } catch (err) {
+    console.error('[DriverPortal] Send phone OTP error:', err);
+    showToast(err.message || 'Failed to send verification code', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Send Code';
+  }
+}
+
+/**
+ * Handle verifying phone OTP inline
+ */
+async function handleVerifyPhoneOtpInline() {
+  const enteredCode = getEnteredOtp();
+  
+  if (enteredCode.length !== 6) {
+    showToast('Please enter all 6 digits', 'error');
+    return;
+  }
+  
+  // Check expiry
+  if (Date.now() > state.otpExpiry) {
+    setOtpStatus('Code expired. Please request a new one.', 'error');
+    return;
+  }
+  
+  // Check attempts
+  state.otpAttempts++;
+  if (state.otpAttempts > 5) {
+    setOtpStatus('Too many attempts. Please request a new code.', 'error');
+    return;
+  }
+  
+  // Verify code
+  if (enteredCode !== state.otpCode) {
+    setOtpStatus(`Incorrect code. ${5 - state.otpAttempts} attempts remaining.`, 'error');
+    document.querySelectorAll('.otp-digit').forEach(i => i.classList.add('error'));
+    setTimeout(() => {
+      document.querySelectorAll('.otp-digit').forEach(i => i.classList.remove('error'));
+    }, 500);
+    return;
+  }
+  
+  // Success!
+  state.phoneVerified = true;
+  
+  // Hide OTP section, show verified badge
+  document.getElementById('phoneOtpSection').style.display = 'none';
+  document.getElementById('phoneVerifiedBadge').style.display = 'inline-flex';
+  
+  // Clear timer
+  if (state.otpResendTimer) {
+    clearInterval(state.otpResendTimer);
+  }
+  
+  // Enable password section
+  document.getElementById('regPassword').disabled = false;
+  
+  // Enable continue button
+  document.getElementById('regNextStep1').disabled = false;
+  
+  showToast('Phone verified! Create your password to continue.', 'success');
+  
+  // Focus password field
+  document.getElementById('regPassword')?.focus();
+}
+
+/**
+ * Handle resending phone OTP inline
+ */
+async function handleResendPhoneOtpInline() {
+  const phone = document.getElementById('regPhone').value.trim();
+  
+  if (!phone) {
+    showToast('Phone number not found', 'error');
+    return;
+  }
+  
+  const resendBtn = document.getElementById('resendOtpBtn');
+  resendBtn.disabled = true;
+  resendBtn.textContent = 'Sending...';
+  
+  try {
+    await sendOtpToPhone(phone);
+    clearOtpInputs();
+    startPhoneOtpResendTimerInline();
+    showToast('New code sent to your phone!', 'success');
+    document.getElementById('otpDigit1')?.focus();
+  } catch (err) {
+    showToast('Failed to resend code', 'error');
+  } finally {
+    resendBtn.textContent = 'Resend';
+  }
+}
+
+/**
+ * Start phone OTP resend timer for inline flow
+ */
+function startPhoneOtpResendTimerInline() {
+  let seconds = 60;
+  const resendBtn = document.getElementById('resendOtpBtn');
+  const timerEl = document.getElementById('otpTimer');
+  
+  if (state.otpResendTimer) {
+    clearInterval(state.otpResendTimer);
+  }
+  
+  if (resendBtn) resendBtn.disabled = true;
+  
+  state.otpResendTimer = setInterval(() => {
+    seconds--;
+    
+    if (timerEl) {
+      timerEl.textContent = seconds > 0 ? `${seconds}s` : '';
+    }
+    
+    if (seconds <= 0) {
+      clearInterval(state.otpResendTimer);
+      if (resendBtn) resendBtn.disabled = false;
+    }
+  }, 1000);
+}
+
+// ============================================
 // Registration - Legacy goToRegStep and validation
 // ============================================
 function validateRegStep(step) {
@@ -4257,18 +4584,19 @@ async function handleRegistration() {
       }
     }
     
-    // Generate driver ID upfront (needed for organization_id if no affiliate)
+    // Generate driver ID upfront
     const driverUUID = crypto.randomUUID();
     
     // IMPORTANT: Organization_id hierarchy:
     // 1. If driver has affiliate -> use affiliate's organization_id
-    // 2. If no affiliate -> use driver's own UUID (independent driver)
-    // Never use the main/owner company ID for drivers
-    const organizationId = affiliate?.organization_id || driverUUID;
+    // 2. If no affiliate -> use main organization ID (drivers must belong to a valid org)
+    // The main org ID must exist in the organizations table to satisfy FK constraint
+    const mainOrgId = window.ENV?.ORGANIZATION_ID || '54eb6ce7-ba97-4198-8566-6ac075828160';
+    const organizationId = affiliate?.organization_id || mainOrgId;
     
     console.log('[DriverPortal] Using organization_id:', organizationId, 
-                affiliate?.organization_id ? '(from affiliate)' : '(driver as own org)');
-    
+                affiliate?.organization_id ? '(from affiliate)' : '(main organization)');
+
     // Get company info for driver record (use selected affiliate or form data)
     const companyInfo = affiliate ? {
       address: affiliate.primary_address,

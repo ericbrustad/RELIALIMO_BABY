@@ -2056,6 +2056,135 @@ body {
 }
 
 /* ============================================
+   Inline OTP Verification Styles (New Flow)
+   ============================================ */
+.inline-verify-wrapper {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.inline-verify-wrapper input {
+  flex: 1;
+}
+
+.inline-verify-wrapper .btn-send-code {
+  white-space: nowrap;
+  padding: 0.65rem 1rem;
+  font-size: 0.85rem;
+}
+
+.inline-otp-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-top: var(--space-sm);
+}
+
+.inline-otp-section .otp-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-sm);
+}
+
+.inline-otp-section .otp-input-group {
+  margin: var(--space-sm) 0;
+  justify-content: flex-start;
+}
+
+.inline-otp-section .otp-digit,
+.inline-otp-section .email-otp-digit {
+  width: 40px;
+  height: 48px;
+  font-size: 1.25rem;
+}
+
+.otp-actions-inline {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  margin-top: var(--space-sm);
+}
+
+.otp-actions-inline .btn-verify-otp {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+}
+
+.otp-actions-inline .btn-resend {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+}
+
+.otp-actions-inline .btn-resend:hover {
+  color: var(--primary);
+}
+
+.otp-actions-inline .otp-timer-inline {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.verified-badge .verified-icon {
+  font-size: 1rem;
+}
+
+.verification-section {
+  margin-bottom: var(--space-lg);
+  padding-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--border);
+}
+
+.verification-section:last-child {
+  border-bottom: none;
+}
+
+.verification-section.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.verification-section.verified {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.verification-section.verified .form-group label::after {
+  content: ' ✓';
+  color: var(--success);
+}
+
+.otp-status-inline {
+  font-size: 0.85rem;
+  margin-top: var(--space-xs);
+}
+
+.otp-status-inline.success {
+  color: var(--success);
+}
+
+.otp-status-inline.error {
+  color: var(--danger);
+}
+
+/* ============================================
    Company Matching Styles
    ============================================ */
 .match-results {
