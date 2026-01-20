@@ -3527,10 +3527,30 @@ function setupOtpInputs() {
   inputs.forEach((input, index) => {
     // Auto-focus next on input
     input.addEventListener('input', (e) => {
-      const value = e.target.value;
+      const value = e.target.value.replace(/\D/g, '');
       
-      // Only allow digits
-      e.target.value = value.replace(/\D/g, '').slice(0, 1);
+      // Handle iOS/Android autofill - when multiple digits are entered at once
+      if (value.length > 1) {
+        const digits = value.substring(0, 6 - index);
+        digits.split('').forEach((char, i) => {
+          if (inputs[index + i]) {
+            inputs[index + i].value = char;
+            inputs[index + i].classList.add('filled');
+          }
+        });
+        // Focus the next empty input or last input
+        const nextEmpty = Array.from(inputs).findIndex(d => !d.value);
+        if (nextEmpty !== -1) {
+          inputs[nextEmpty].focus();
+        } else {
+          inputs[inputs.length - 1].focus();
+        }
+        checkOtpComplete();
+        return;
+      }
+      
+      // Single digit entry
+      e.target.value = value.slice(0, 1);
       
       if (e.target.value) {
         e.target.classList.add('filled');
@@ -3785,6 +3805,28 @@ function initEmailOtpInputs() {
   inputs.forEach((input, index) => {
     input.addEventListener('input', (e) => {
       const value = e.target.value.replace(/\D/g, '');
+      
+      // Handle iOS/Android autofill - when multiple digits are entered at once
+      if (value.length > 1) {
+        const digits = value.substring(0, 6 - index);
+        digits.split('').forEach((char, i) => {
+          if (inputs[index + i]) {
+            inputs[index + i].value = char;
+            inputs[index + i].classList.add('filled');
+          }
+        });
+        // Focus the next empty input or last input
+        const nextEmpty = Array.from(inputs).findIndex(d => !d.value);
+        if (nextEmpty !== -1) {
+          inputs[nextEmpty].focus();
+        } else {
+          inputs[inputs.length - 1].focus();
+        }
+        checkEmailOtpComplete();
+        return;
+      }
+      
+      // Single digit entry
       e.target.value = value;
       
       if (value) {

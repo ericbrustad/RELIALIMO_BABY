@@ -771,6 +771,28 @@ function setupOtpInputs() {
   otpDigits.forEach((input, index) => {
     input.addEventListener('input', (e) => {
       const value = e.target.value.replace(/\D/g, '');
+      
+      // Handle iOS/Android autofill - when multiple digits are entered at once
+      if (value.length > 1) {
+        // Distribute digits across all inputs starting from current position
+        const digits = value.substring(0, 6 - index);
+        digits.split('').forEach((char, i) => {
+          if (otpDigits[index + i]) {
+            otpDigits[index + i].value = char;
+          }
+        });
+        // Focus the next empty input or last input
+        const nextEmpty = Array.from(otpDigits).findIndex(d => !d.value);
+        if (nextEmpty !== -1) {
+          otpDigits[nextEmpty].focus();
+        } else {
+          otpDigits[otpDigits.length - 1].focus();
+        }
+        checkOtpComplete();
+        return;
+      }
+      
+      // Single digit entry
       e.target.value = value.substring(0, 1);
       
       if (value && index < otpDigits.length - 1) {

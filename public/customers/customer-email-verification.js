@@ -43,12 +43,13 @@ class CustomerEmailVerificationService {
    * Generate portal slug from name
    * @param {string} firstName 
    * @param {string} lastName 
-   * @returns {string} Portal slug like First_name_Last_name
+   * @returns {string} Portal slug like first_name_last_name_abc12345 (with unique suffix)
    */
   generatePortalSlug(firstName, lastName) {
-    const first = (firstName || '').trim().replace(/[^a-zA-Z0-9]/g, '_');
-    const last = (lastName || '').trim().replace(/[^a-zA-Z0-9]/g, '_');
-    return `${first}_${last}`;
+    const first = (firstName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const last = (lastName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const uniqueId = crypto.randomUUID().split('-')[0]; // First 8 chars of UUID
+    return `${first}_${last}_${uniqueId}`;
   }
 
   /**

@@ -319,7 +319,9 @@
         }
 
         // Create customer record in accounts table
-        const portalSlug = `${firstName}_${lastName}`.replace(/[^a-zA-Z0-9_]/g, '_');
+        // Generate a unique portal slug using name + short UUID
+        const uniqueId = crypto.randomUUID().split('-')[0]; // First 8 chars of UUID
+        const portalSlug = `${firstName}_${lastName}_${uniqueId}`.toLowerCase().replace(/[^a-z0-9_]/g, '_');
         const customerData = {
           first_name: firstName,
           last_name: lastName,
@@ -354,7 +356,7 @@
 
         // Send verification email
         btn.textContent = 'Sending verification email...';
-        await sendVerificationEmail(email, firstName, lastName, phone, creds);
+        await sendVerificationEmail(email, firstName, lastName, phone, portalSlug, creds);
 
         // Store session if available (but don't redirect yet - need to verify email)
         if (authData.access_token) {
@@ -376,10 +378,9 @@
     });
     
     // Send verification email function
-    async function sendVerificationEmail(email, firstName, lastName, phone, creds) {
+    async function sendVerificationEmail(email, firstName, lastName, phone, portalSlug, creds) {
       // Generate verification token
       const token = generateToken();
-      const portalSlug = `${firstName}_${lastName}`.replace(/[^a-zA-Z0-9_]/g, '_');
       const verificationUrl = `https://account.relialimo.com/verify?token=${token}&email=${encodeURIComponent(email)}&redirect=${encodeURIComponent(portalSlug)}`;
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       
