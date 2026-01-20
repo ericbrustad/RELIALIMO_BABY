@@ -105,14 +105,17 @@ async function loadEnvSettingsToLocalStorage() {
     
     if (data.success) {
       // Save SMS/Twilio settings
-      if (data.twilio && (data.twilio.accountSid || data.twilio.authToken || data.twilio.phoneNumber)) {
+      if (data.twilio && (data.twilio.accountSid || data.twilio.authToken || data.twilio.fromNumber || data.twilio.messagingServiceSid)) {
         const smsProviders = JSON.parse(localStorage.getItem('smsProviders') || '[]');
         const existingTwilioIndex = smsProviders.findIndex(p => p.type === 'twilio');
         const twilioProvider = {
           type: 'twilio',
           accountSid: data.twilio.accountSid || '',
           authToken: data.twilio.authToken || '',
-          phoneNumber: data.twilio.phoneNumber || '',
+          phoneNumber: data.twilio.fromNumber || data.twilio.messagingServiceSid || '',
+          fromNumber: data.twilio.fromNumber || data.twilio.messagingServiceSid || '',
+          messagingServiceSid: data.twilio.messagingServiceSid || '',
+          isDefault: true,
           enabled: true
         };
         

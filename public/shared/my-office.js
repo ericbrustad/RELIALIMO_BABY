@@ -69,29 +69,15 @@ class MyOffice {
     this.defaultUsers = [
       {
         id: '1',
-        displayName: 'Amanda Brustad (amanda)',
+        displayName: 'Admin User (admin)',
         roleLabel: 'admin (site-admin)',
-        username: 'amanda.brustad',
+        username: 'admin',
         status: 'active',
-        firstName: 'Amanda',
-        lastName: 'Brustad',
-        email: 'amanda@erixmm.com',
-        phone: '(763) 226-8230',
+        firstName: 'Admin',
+        lastName: 'User',
+        email: 'admin@relialimo.com',
+        phone: '',
         login: 'admin',
-        password: '••••••••••',
-        sms: '',
-      },
-      {
-        id: '2',
-        displayName: 'Tom Smith (tsmith)',
-        roleLabel: 'support (mod/analyst/support)',
-        username: 'tsmith',
-        status: 'active',
-        firstName: 'Tom',
-        lastName: 'Smith',
-        email: 'tom@relialimo.demo',
-        phone: '(555) 100-2000',
-        login: 'user',
         password: '••••••••••',
         sms: '',
       }
@@ -560,6 +546,34 @@ class MyOffice {
           const section = btn.dataset.listSection;
           console.log('Navigating to list section:', section);
           this.navigateToListSection(section);
+        }
+      });
+    }
+
+    // Driver App Settings sidebar navigation
+    const driverAppSettingsGroup = document.getElementById('driverAppSettingsGroup');
+    if (driverAppSettingsGroup) {
+      driverAppSettingsGroup.addEventListener('click', (e) => {
+        const target = e.target;
+        const btn = target instanceof Element ? target.closest('.sidebar-btn') : null;
+        if (btn && btn.dataset.driverSetting) {
+          const setting = btn.dataset.driverSetting;
+          console.log('Navigating to driver setting:', setting);
+          this.navigateToDriverSetting(setting);
+        }
+      });
+    }
+
+    // Customer Account Settings sidebar navigation
+    const customerAccountSettingsGroup = document.getElementById('customerAccountSettingsGroup');
+    if (customerAccountSettingsGroup) {
+      customerAccountSettingsGroup.addEventListener('click', (e) => {
+        const target = e.target;
+        const btn = target instanceof Element ? target.closest('.sidebar-btn') : null;
+        if (btn && btn.dataset.customerSetting) {
+          const setting = btn.dataset.customerSetting;
+          console.log('Navigating to customer setting:', setting);
+          this.navigateToCustomerSetting(setting);
         }
       });
     }
@@ -2090,16 +2104,22 @@ class MyOffice {
     const normalLayout = document.getElementById('normalLayout');
     const resourcesContainer = document.getElementById('companyResourcesContainer');
     const customFormsSection = document.getElementById('custom-forms-section');
+    const driverAppSettingsSection = document.getElementById('driver-app-settings-section');
+    const customerAccountSettingsSection = document.getElementById('customer-account-settings-section');
     const sidebarGroups = {
       'company-settings': document.getElementById('companySettingsGroup'),
       'rate-management': document.getElementById('rateManagementGroup'),
       'list-management': document.getElementById('listManagementGroup'),
       'custom-forms': document.getElementById('customFormsGroup'),
+      'driver-app-settings': document.getElementById('driverAppSettingsGroup'),
+      'customer-account-settings': document.getElementById('customerAccountSettingsGroup'),
     };
 
     if (normalLayout) normalLayout.style.display = 'none';
     if (resourcesContainer) resourcesContainer.style.display = 'none';
     if (customFormsSection) customFormsSection.style.display = 'none';
+    if (driverAppSettingsSection) driverAppSettingsSection.style.display = 'none';
+    if (customerAccountSettingsSection) customerAccountSettingsSection.style.display = 'none';
 
     Object.values(sidebarGroups).forEach(group => {
       if (group) group.style.display = 'none';
@@ -2128,6 +2148,16 @@ class MyOffice {
       case 'custom-forms':
         if (customFormsSection) customFormsSection.style.display = 'block';
         if (sidebarGroups['custom-forms']) sidebarGroups['custom-forms'].style.display = 'block';
+        break;
+      case 'driver-app-settings':
+        if (driverAppSettingsSection) driverAppSettingsSection.style.display = 'block';
+        if (sidebarGroups['driver-app-settings']) sidebarGroups['driver-app-settings'].style.display = 'block';
+        this.navigateToDriverSetting('portal-branding');
+        break;
+      case 'customer-account-settings':
+        if (customerAccountSettingsSection) customerAccountSettingsSection.style.display = 'block';
+        if (sidebarGroups['customer-account-settings']) sidebarGroups['customer-account-settings'].style.display = 'block';
+        this.navigateToCustomerSetting('portal-branding');
         break;
       default:
         if (normalLayout) normalLayout.style.display = 'block';
@@ -6505,6 +6535,56 @@ class MyOffice {
       // Show placeholder for not-yet-implemented sections
       console.log(`${section} section is not yet implemented`);
     }
+  }
+
+  navigateToDriverSetting(setting) {
+    // Update sidebar button active state
+    const driverButtons = document.querySelectorAll('#driverAppSettingsGroup .sidebar-btn');
+    driverButtons.forEach(btn => {
+      btn.classList.remove('active');
+      if (btn.dataset.driverSetting === setting) {
+        btn.classList.add('active');
+      }
+    });
+
+    // Hide all driver setting panels
+    document.querySelectorAll('.driver-setting-panel').forEach(panel => {
+      panel.style.display = 'none';
+    });
+
+    // Show the appropriate panel
+    const panelId = 'driver-' + setting;
+    const panel = document.getElementById(panelId);
+    if (panel) {
+      panel.style.display = 'block';
+    }
+    
+    this.currentDriverSetting = setting;
+  }
+
+  navigateToCustomerSetting(setting) {
+    // Update sidebar button active state
+    const customerButtons = document.querySelectorAll('#customerAccountSettingsGroup .sidebar-btn');
+    customerButtons.forEach(btn => {
+      btn.classList.remove('active');
+      if (btn.dataset.customerSetting === setting) {
+        btn.classList.add('active');
+      }
+    });
+
+    // Hide all customer setting panels
+    document.querySelectorAll('.customer-setting-panel').forEach(panel => {
+      panel.style.display = 'none';
+    });
+
+    // Show the appropriate panel
+    const panelId = 'customer-' + setting;
+    const panel = document.getElementById(panelId);
+    if (panel) {
+      panel.style.display = 'block';
+    }
+    
+    this.currentCustomerSetting = setting;
   }
 
   navigateToRateSection(section) {

@@ -22,7 +22,19 @@ export function middleware(request: NextRequest) {
     if (pathname === '/' || pathname === '') {
       return NextResponse.rewrite(new URL('/driver-portal.html', request.url))
     }
-    // Let other paths resolve from root (driver-portal.js, driver-portal.css, etc.)
+    
+    // Static assets - let them resolve normally
+    if (pathname.match(/\.(js|css|html|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot)$/)) {
+      return NextResponse.next()
+    }
+    
+    // Driver profile slugs (e.g., /eric_brustad) - serve driver portal
+    // The driver portal JS will read the slug from the URL
+    if (pathname.match(/^\/[a-zA-Z0-9_-]+$/)) {
+      return NextResponse.rewrite(new URL('/driver-portal.html', request.url))
+    }
+    
+    // Let other paths resolve from root
     return NextResponse.next()
   }
 

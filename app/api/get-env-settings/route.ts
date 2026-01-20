@@ -8,14 +8,15 @@ export async function GET(request: Request) {
     const origin = request.headers.get('origin') || '';
     const host = request.headers.get('host') || '';
     
-    // Allow localhost and relialimo.com
+    // Allow localhost and relialimo.com subdomains
     const allowedOrigins = [
       'http://localhost:3000',
       'http://localhost:3001',
       'https://relialimo.com',
       'https://www.relialimo.com',
       'https://admin.relialimo.com',
-      'https://account.relialimo.com'
+      'https://account.relialimo.com',
+      'https://driver.relialimo.com'
     ];
     
     // Get Twilio settings

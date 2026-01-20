@@ -897,6 +897,74 @@ if (!json) {
       window.QuickSetupManager = QuickSetupManager;
       
       // ============================================
+      // Load from ENV function (reusable)
+      // ============================================
+      async function loadEnvSettings() {
+        try {
+          const response = await fetch('/api/get-env-settings');
+          const data = await response.json();
+          
+          if (!response.ok || !data.success) {
+            console.warn('[SMS] Could not load ENV settings');
+            return false;
+          }
+          
+          const twilio = data.twilio;
+          
+          // Check if any Twilio settings are configured
+          if (!twilio.accountSid && !twilio.fromNumber && !twilio.messagingServiceSid) {
+            console.log('[SMS] No Twilio settings in ENV');
+            return false;
+          }
+          
+          // Populate form fields
+          if (twilio.accountSid) document.getElementById('twilioAccountSid').value = twilio.accountSid;
+          if (twilio.authToken) document.getElementById('twilioAuthToken').value = twilio.authToken;
+          if (twilio.apiKeySid) document.getElementById('twilioApiKeySid').value = twilio.apiKeySid;
+          if (twilio.apiKeySecret) document.getElementById('twilioApiKeySecret').value = twilio.apiKeySecret;
+          if (twilio.messagingServiceSid) document.getElementById('twilioMessagingServiceSid').value = twilio.messagingServiceSid;
+          if (twilio.fromNumber) document.getElementById('twilioFromNumber').value = twilio.fromNumber;
+          if (twilio.statusCallback) document.getElementById('twilioStatusCallback').value = twilio.statusCallback;
+          
+          // Also save to localStorage for other pages
+          const smsProviders = JSON.parse(localStorage.getItem('smsProviders') || '[]');
+          const existingTwilioIndex = smsProviders.findIndex(p => p.type === 'twilio');
+          const twilioProvider = {
+            type: 'twilio',
+            accountSid: twilio.accountSid || '',
+            authToken: twilio.authToken || '',
+            phoneNumber: twilio.fromNumber || twilio.messagingServiceSid || '',
+            fromNumber: twilio.fromNumber || twilio.messagingServiceSid || '',
+            messagingServiceSid: twilio.messagingServiceSid || '',
+            isDefault: true,
+            enabled: true
+          };
+          
+          if (existingTwilioIndex >= 0) {
+            smsProviders[existingTwilioIndex] = { ...smsProviders[existingTwilioIndex], ...twilioProvider };
+          } else {
+            smsProviders.push(twilioProvider);
+          }
+          localStorage.setItem('smsProviders', JSON.stringify(smsProviders));
+          
+          console.log('[SMS] ENV settings loaded');
+          return true;
+        } catch (err) {
+          console.warn('[SMS] Could not load ENV settings:', err.message);
+          return false;
+        }
+      }
+      
+      // Auto-load ENV settings on page load
+      loadEnvSettings().then(loaded => {
+        if (loaded) {
+          showToast('✅ Loaded settings from ENV', 'success');
+          if (typeof SMSConfigChecker !== 'undefined') {
+            setTimeout(() => SMSConfigChecker.checkConfiguration(), 100);
+          }
+        }
+      });
+      
       // Load from ENV button handler
       // ============================================
       document.getElementById('loadFromEnvBtn')?.addEventListener('click', async function() {
