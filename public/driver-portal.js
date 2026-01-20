@@ -4936,9 +4936,197 @@ async function loadVehicleTypes() {
       console.warn('[DriverPortal] regVehicleType select not found');
     }
     console.log('[DriverPortal] Loaded', state.vehicleTypes.length, 'vehicle types');
+    
+    // Also populate Make/Model/Year/Color dropdowns for vehicle registration
+    populateVehicleMakeOptions();
+    populateVehicleYearOptions();
+    populateVehicleColorOptions();
   } catch (err) {
     console.error('[DriverPortal] Failed to load vehicle types:', err);
   }
+}
+
+/**
+ * Populate Year dropdown with years starting from 2019
+ */
+function populateVehicleYearOptions() {
+  const yearSelect = document.getElementById('regVehicleYear');
+  if (!yearSelect) return;
+  
+  const currentYear = new Date().getFullYear();
+  const startYear = currentYear + 1; // allow ordering units ahead of delivery
+  const minYear = 2019;
+  
+  yearSelect.innerHTML = '<option value="">Select Year</option>';
+  for (let year = startYear; year >= minYear; year--) {
+    const option = document.createElement('option');
+    option.value = String(year);
+    option.textContent = String(year);
+    yearSelect.appendChild(option);
+  }
+}
+
+/**
+ * Populate Make dropdown with common limousine/luxury vehicle makes
+ */
+function populateVehicleMakeOptions() {
+  const makeSelect = document.getElementById('regVehicleMake');
+  if (!makeSelect) return;
+  
+  const makes = [
+    'Cadillac',
+    'Chevrolet',
+    'Chrysler',
+    'Dodge',
+    'Ford',
+    'GMC',
+    'Infiniti',
+    'Jaguar',
+    'Lexus',
+    'Lincoln',
+    'Mercedes-Benz',
+    'BMW',
+    'Audi',
+    'Tesla',
+    'Toyota',
+    'Rolls-Royce',
+    'Bentley',
+    'Land Rover',
+    'Range Rover',
+    'Porsche',
+    'Sprinter',
+    'Freightliner',
+    'International',
+    'Prevost',
+    'MCI',
+    'Van Hool',
+    'Grech',
+    'Executive Coach Builders',
+    'Battisti',
+    'Tiffany'
+  ].sort();
+  
+  const currentValue = makeSelect.value;
+  makeSelect.innerHTML = '<option value="">Select Make</option>';
+  makes.forEach(make => {
+    const option = document.createElement('option');
+    option.value = make;
+    option.textContent = make;
+    makeSelect.appendChild(option);
+  });
+  if (currentValue) makeSelect.value = currentValue;
+  
+  // Setup model population when make changes
+  makeSelect.addEventListener('change', () => populateVehicleModelOptions());
+}
+
+/**
+ * Populate Model dropdown based on selected Make
+ */
+function populateVehicleModelOptions() {
+  const makeSelect = document.getElementById('regVehicleMake');
+  const modelSelect = document.getElementById('regVehicleModel');
+  if (!modelSelect) return;
+  
+  const selectedMake = makeSelect?.value || '';
+  
+  // Model options by make
+  const modelsByMake = {
+    'Cadillac': ['Escalade', 'Escalade ESV', 'CT6', 'XTS', 'XT5', 'XT6', 'Lyriq', 'DTS', 'CTS'],
+    'Chevrolet': ['Suburban', 'Tahoe', 'Express', 'Express 2500', 'Express 3500', 'Traverse', 'Silverado'],
+    'Chrysler': ['300', '300C', 'Pacifica', 'Town & Country', 'Voyager'],
+    'Dodge': ['Durango', 'Grand Caravan', 'Charger', 'Ram ProMaster'],
+    'Ford': ['Expedition', 'Expedition MAX', 'Explorer', 'Transit', 'Transit 350', 'E-350', 'E-450', 'F-550', 'Excursion'],
+    'GMC': ['Yukon', 'Yukon XL', 'Savana', 'Savana 2500', 'Savana 3500', 'Sierra', 'Acadia'],
+    'Infiniti': ['QX80', 'QX60', 'QX56', 'Q70L'],
+    'Jaguar': ['XJ', 'XJL', 'F-Pace', 'I-Pace'],
+    'Lexus': ['LS 460', 'LS 500', 'LX 570', 'LX 600', 'GX 460', 'ES 350'],
+    'Lincoln': ['Navigator', 'Navigator L', 'MKT', 'MKS', 'Continental', 'Town Car', 'Aviator'],
+    'Mercedes-Benz': ['S-Class', 'S550', 'S560', 'S580', 'Maybach', 'E-Class', 'GLS', 'GLE', 'V-Class', 'Sprinter', 'Metris'],
+    'BMW': ['7 Series', '740i', '750i', 'X7', 'X5', 'i7'],
+    'Audi': ['A8', 'A8L', 'Q7', 'Q8', 'e-tron'],
+    'Tesla': ['Model S', 'Model X', 'Model Y', 'Model 3'],
+    'Toyota': ['Sequoia', 'Land Cruiser', 'Sienna', 'Highlander'],
+    'Rolls-Royce': ['Phantom', 'Ghost', 'Cullinan', 'Dawn', 'Wraith'],
+    'Bentley': ['Flying Spur', 'Bentayga', 'Continental GT', 'Mulsanne'],
+    'Land Rover': ['Range Rover', 'Range Rover Sport', 'Defender', 'Discovery'],
+    'Range Rover': ['Autobiography', 'Sport', 'Velar', 'Evoque', 'LWB'],
+    'Porsche': ['Panamera', 'Cayenne', 'Taycan'],
+    'Sprinter': ['2500', '3500', '4500', 'Executive', 'Limo', 'Party Bus'],
+    'Freightliner': ['M2', 'S2C', 'Party Bus Chassis'],
+    'International': ['3200', '3400', 'Party Bus Chassis'],
+    'Prevost': ['H3-45', 'X3-45', 'Entertainer Coach'],
+    'MCI': ['J4500', 'D4500', 'D45 CRT LE'],
+    'Van Hool': ['CX35', 'CX45', 'TX'],
+    'Grech': ['GM33', 'GM40', 'Limo Bus'],
+    'Executive Coach Builders': ['Sprinter Executive', 'Mobile Office', 'Luxury Van'],
+    'Battisti': ['Custom Sedan', 'Custom SUV', 'Custom Sprinter'],
+    'Tiffany': ['Town Car', 'Sprinter Conversion', 'Executive Van']
+  };
+  
+  const models = modelsByMake[selectedMake] || [];
+  const currentValue = modelSelect.value;
+  
+  modelSelect.innerHTML = '<option value="">Select Model</option>';
+  models.forEach(model => {
+    const option = document.createElement('option');
+    option.value = model;
+    option.textContent = model;
+    modelSelect.appendChild(option);
+  });
+  
+  // Try to restore previous value if it exists in new list
+  if (currentValue && models.includes(currentValue)) {
+    modelSelect.value = currentValue;
+  }
+}
+
+/**
+ * Populate Color dropdown with common vehicle colors
+ */
+function populateVehicleColorOptions() {
+  const colorSelect = document.getElementById('regVehicleColor');
+  if (!colorSelect) return;
+  
+  const colors = [
+    'Black',
+    'White',
+    'Silver',
+    'Gray',
+    'Charcoal',
+    'Navy Blue',
+    'Dark Blue',
+    'Midnight Blue',
+    'Burgundy',
+    'Maroon',
+    'Red',
+    'Champagne',
+    'Gold',
+    'Bronze',
+    'Pearl White',
+    'Diamond White',
+    'Obsidian Black',
+    'Onyx Black',
+    'Platinum',
+    'Graphite',
+    'Metallic Gray',
+    'Cashmere',
+    'Tan',
+    'Beige',
+    'Brown',
+    'Green',
+    'Dark Green'
+  ];
+  
+  const currentValue = colorSelect.value;
+  colorSelect.innerHTML = '<option value="">Select Color</option>';
+  colors.forEach(color => {
+    const option = document.createElement('option');
+    option.value = color;
+    option.textContent = color;
+    colorSelect.appendChild(option);
+  });
+  if (currentValue) colorSelect.value = currentValue;
 }
 
 /**
