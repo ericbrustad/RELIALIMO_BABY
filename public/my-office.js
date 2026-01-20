@@ -548,6 +548,7 @@ class MyOffice {
           this.navigateToListSection(section);
         }
       });
+    }
 
     // Driver App Settings sidebar navigation
     const driverAppSettingsGroup = document.getElementById('driverAppSettingsGroup');
