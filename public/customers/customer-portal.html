@@ -18,6 +18,29 @@
   <!-- Mapbox for location selection -->
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <!-- Google Maps for address autocomplete -->
+  <script>
+    window.googleMapsReady = false;
+    function onGoogleMapsLoad() {
+      window.googleMapsReady = true;
+      if (window.onGoogleMapsReady) window.onGoogleMapsReady();
+    }
+  </script>
+  <script src="/shared/env.js" id="env-loader"></script>
+  <script>
+    // Load Google Maps with API key from env
+    (function() {
+      const config = window.ENV || {};
+      const apiKey = config.GOOGLE_MAPS_API_KEY;
+      if (apiKey) {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=onGoogleMapsLoad`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+      }
+    })();
+  </script>
 </head>
 <body>
   <div id="app">
@@ -151,11 +174,16 @@
               
               <!-- New Pickup Address Input -->
               <div id="pickupAddressNew" class="address-input-group hidden">
-                <input type="text" id="pickupAddressInput" class="form-input address-autocomplete" 
-                       placeholder="Start typing an address..." data-type="pickup">
-                <button type="button" class="btn-icon btn-map" id="pickupMapBtn" title="Select on map">
-                  🗺️
-                </button>
+                <div class="address-search-wrapper">
+                  <span class="search-icon">🔍</span>
+                  <input type="text" id="pickupAddressInput" class="form-input address-autocomplete" 
+                         placeholder="Search for business, address, or location..." data-type="pickup"
+                         autocomplete="off">
+                  <button type="button" class="btn-icon btn-map" id="pickupMapBtn" title="Select on map">
+                    🗺️
+                  </button>
+                </div>
+                <div id="pickupAddressSuggestions" class="address-suggestions"></div>
               </div>
 
               <!-- Airport Pickup Details -->
@@ -173,13 +201,39 @@
                   </div>
                 </div>
                 <div class="form-row">
-                  <div class="form-group">
-                    <label class="form-label">Flight Number*</label>
-                    <input type="text" id="flightNumber" class="form-input" placeholder="e.g., DL1234">
+                  <div class="form-group" style="flex: 1;">
+                    <label class="form-label">Airline*</label>
+                    <select id="airlineCode" class="form-select">
+                      <option value="">Select Airline</option>
+                      <option value="AA">American Airlines (AA)</option>
+                      <option value="DL">Delta Air Lines (DL)</option>
+                      <option value="UA">United Airlines (UA)</option>
+                      <option value="WN">Southwest Airlines (WN)</option>
+                      <option value="AS">Alaska Airlines (AS)</option>
+                      <option value="B6">JetBlue Airways (B6)</option>
+                      <option value="F9">Frontier Airlines (F9)</option>
+                      <option value="NK">Spirit Airlines (NK)</option>
+                      <option value="SY">Sun Country Airlines (SY)</option>
+                      <option value="G4">Allegiant Air (G4)</option>
+                      <option value="AC">Air Canada (AC)</option>
+                      <option value="AF">Air France (AF)</option>
+                      <option value="BA">British Airways (BA)</option>
+                      <option value="LH">Lufthansa (LH)</option>
+                      <option value="KL">KLM Royal Dutch (KL)</option>
+                      <option value="OTHER">Other (enter manually)</option>
+                    </select>
                   </div>
+                  <div class="form-group" style="flex: 1;">
+                    <label class="form-label">Flight Number*</label>
+                    <input type="text" id="flightNumber" class="form-input" placeholder="e.g., 1234">
+                    <p class="form-hint" id="flightNumberHint">Enter flight number without airline code</p>
+                  </div>
+                </div>
+                <div class="form-row">
                   <div class="form-group">
-                    <label class="form-label">Arrival Time*</label>
+                    <label class="form-label">Scheduled Arrival Time*</label>
                     <input type="time" id="flightArrivalTime" class="form-input">
+                    <p class="form-hint">We'll verify and update with real-time data</p>
                   </div>
                 </div>
                 <div id="flightVerification" class="flight-verification hidden">
@@ -223,11 +277,16 @@
               
               <!-- New Dropoff Address Input -->
               <div id="dropoffAddressNew" class="address-input-group hidden">
-                <input type="text" id="dropoffAddressInput" class="form-input address-autocomplete" 
-                       placeholder="Start typing an address..." data-type="dropoff">
-                <button type="button" class="btn-icon btn-map" id="dropoffMapBtn" title="Select on map">
-                  🗺️
-                </button>
+                <div class="address-search-wrapper">
+                  <span class="search-icon">🔍</span>
+                  <input type="text" id="dropoffAddressInput" class="form-input address-autocomplete" 
+                         placeholder="Search for business, address, or location..." data-type="dropoff"
+                         autocomplete="off">
+                  <button type="button" class="btn-icon btn-map" id="dropoffMapBtn" title="Select on map">
+                    🗺️
+                  </button>
+                </div>
+                <div id="dropoffAddressSuggestions" class="address-suggestions"></div>
               </div>
 
               <!-- Airport Dropoff Details -->
@@ -261,8 +320,51 @@
             <div class="form-section">
               <label class="form-label">🚗 Vehicle Type</label>
               <div class="vehicle-type-selector" id="vehicleTypeSelector">
-                <!-- Populated dynamically -->
+                <!-- Populated dynamically from vehicle_types -->
               </div>
+            </div>
+
+            <!-- Trip Type Selection -->
+            <div class="form-section">
+              <label class="form-label">⏱️ Trip Type</label>
+              <div class="trip-type-selector">
+                <label class="trip-type-option" id="tripTypeStandard">
+                  <input type="radio" name="tripType" value="standard" checked>
+                  <span class="trip-type-content">
+                    <span class="trip-type-icon">📍</span>
+                    <span class="trip-type-label">Point-to-Point</span>
+                    <span class="trip-type-desc">Standard pickup and dropoff</span>
+                  </span>
+                </label>
+                <label class="trip-type-option" id="tripTypeHourly">
+                  <input type="radio" name="tripType" value="hourly">
+                  <span class="trip-type-content">
+                    <span class="trip-type-icon">⏰</span>
+                    <span class="trip-type-label">Hourly Reservation</span>
+                    <span class="trip-type-desc">Book driver by the hour</span>
+                  </span>
+                </label>
+              </div>
+              
+              <!-- Hourly Options (shown when hourly is selected) -->
+              <div id="hourlyOptions" class="hourly-options hidden">
+                <div class="form-group">
+                  <label class="form-label">Number of Hours*</label>
+                  <div class="hours-selector">
+                    <button type="button" class="count-btn" id="hoursMinusBtn">−</button>
+                    <input type="number" id="hourlyDuration" class="count-input" value="2" min="2" max="12">
+                    <button type="button" class="count-btn" id="hoursPlusBtn">+</button>
+                  </div>
+                  <p class="form-hint">Minimum 2 hours. Additional time can be added.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Estimated Price Display -->
+            <div class="price-display" id="priceDisplaySection">
+              <div class="price-label">Estimated Total:</div>
+              <div class="price-amount" id="estimatedPrice">--</div>
+              <div class="price-hint" id="routeInfo"></div>
             </div>
 
             <!-- Booking Buttons -->

@@ -795,7 +795,79 @@ body {
 
 .address-input-group {
   display: flex;
+  flex-direction: column;
   gap: var(--space-sm);
+}
+
+.address-search-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  position: relative;
+}
+
+.address-search-wrapper .search-icon {
+  position: absolute;
+  left: 12px;
+  font-size: 1rem;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.address-search-wrapper .form-input {
+  flex: 1;
+  padding-left: 40px;
+}
+
+.address-suggestions {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  max-height: 250px;
+  overflow-y: auto;
+  display: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+}
+
+.address-suggestions.active {
+  display: block;
+}
+
+.address-suggestion-item {
+  padding: var(--space-md);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s ease;
+}
+
+.address-suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.address-suggestion-item:hover {
+  background: var(--bg-card-hover);
+}
+
+.address-suggestion-item .suggestion-main {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.address-suggestion-item .suggestion-secondary {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.address-suggestion-item .suggestion-type {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  background: var(--primary);
+  color: white;
+  border-radius: 3px;
+  margin-right: 6px;
 }
 
 .address-input-group .form-input {
@@ -1013,6 +1085,124 @@ body {
 .vehicle-capacity {
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+/* ============================================
+   Trip Type Selector (Hourly vs Point-to-Point)
+   ============================================ */
+.trip-type-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+.trip-type-option {
+  display: block;
+  cursor: pointer;
+}
+
+.trip-type-option input[type="radio"] {
+  display: none;
+}
+
+.trip-type-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: all 0.2s ease;
+  opacity: 0.6;
+}
+
+.trip-type-option input[type="radio"]:checked + .trip-type-content {
+  border-color: var(--primary);
+  background: var(--bg-card-hover);
+  opacity: 1;
+}
+
+.trip-type-option:hover .trip-type-content {
+  border-color: var(--primary-light);
+  opacity: 0.9;
+}
+
+.trip-type-icon {
+  font-size: 1.75rem;
+}
+
+.trip-type-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.trip-type-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Hourly Options */
+.hourly-options {
+  margin-top: var(--space-lg);
+  padding: var(--space-lg);
+  background: var(--bg-input);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+}
+
+.hourly-options.hidden {
+  display: none;
+}
+
+.hours-selector {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  justify-content: center;
+}
+
+.hours-selector .count-input {
+  width: 80px;
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+/* ============================================
+   Price Display
+   ============================================ */
+.price-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-lg);
+  text-align: center;
+}
+
+.price-label {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.price-amount {
+  font-size: 2rem;
+  font-weight: 700;
+  color: white;
+}
+
+.price-hint {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 /* ============================================

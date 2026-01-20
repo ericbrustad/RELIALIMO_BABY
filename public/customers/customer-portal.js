@@ -29,7 +29,15 @@ const state = {
   selectedVehicleType: null,
   selectedPickupAddress: null,
   selectedDropoffAddress: null,
+  pickupAddressData: null, // Full address data with coordinates
+  dropoffAddressData: null, // Full address data with coordinates
+  pickupAutocomplete: null, // Google Places autocomplete instance
+  dropoffAutocomplete: null, // Google Places autocomplete instance
+  routeInfo: null, // Distance, duration from Google Directions
+  estimatedPrice: null, // Calculated price based on vehicle type and route
   stops: [],
+  tripType: 'standard', // 'standard' or 'hourly'
+  hourlyDuration: 2, // minimum 2 hours
   mapboxToken: null,
   maps: {
     tracking: null,
@@ -559,6 +567,8 @@ function renderVehicleTypes() {
       container.querySelectorAll('.vehicle-type-option').forEach(o => o.classList.remove('selected'));
       option.classList.add('selected');
       state.selectedVehicleType = option.dataset.type;
+      // Recalculate price when vehicle type changes
+      calculatePrice();
     });
   });
   
@@ -613,12 +623,21 @@ async function loadAirports() {
 // Flight Verification
 // ============================================
 async function verifyFlight() {
-  const flightNumber = document.getElementById('flightNumber').value.trim().toUpperCase();
+  const airlineCode = document.getElementById('airlineCode')?.value || '';
+  let flightNumberInput = document.getElementById('flightNumber').value.trim().toUpperCase();
   const arrivalTime = document.getElementById('flightArrivalTime').value;
   const pickupDate = document.getElementById('pickupDate').value;
   
-  if (!flightNumber) {
-    showToast('Please enter a flight number', 'warning');
+  // Combine airline code with flight number if airline is selected
+  let flightNumber = flightNumberInput;
+  if (airlineCode && airlineCode !== 'OTHER') {
+    // Remove any leading airline code from user input
+    flightNumber = flightNumberInput.replace(/^[A-Z]{2}/i, '');
+    flightNumber = `${airlineCode}${flightNumber}`;
+  }
+  
+  if (!flightNumber || flightNumber.length < 3) {
+    showToast('Please select an airline and enter a flight number', 'warning');
     return;
   }
   
@@ -730,7 +749,8 @@ function fillPassengerDetails(passengerId) {
   if (passenger) {
     document.getElementById('passengerFirstName').value = passenger.first_name || '';
     document.getElementById('passengerLastName').value = passenger.last_name || '';
-    document.getElementById('passengerPhone').value = passenger.phone || '';
+    // Check both cell_phone and phone fields (customer may have cell_phone from onboarding)
+    document.getElementById('passengerPhone').value = passenger.cell_phone || passenger.phone || '';
     document.getElementById('passengerEmail').value = passenger.email || '';
   }
 }
@@ -996,10 +1016,9 @@ function prefillBookingDefaults() {
   // 1. Prefill passenger details (default to "Myself")
   fillPassengerDetails('self');
   
-  // 2. Prefill home address as pickup if available
-  const homeAddress = findHomeAddress();
-  if (homeAddress) {
-    // Show the saved addresses section
+  // 2. Show saved addresses section automatically if customer has saved addresses
+  if (state.savedAddresses && state.savedAddresses.length > 0) {
+    // Show the saved addresses section for pickup
     const pickupSelect = document.getElementById('pickupAddressSelect');
     if (pickupSelect) {
       pickupSelect.value = 'saved';
@@ -1008,24 +1027,30 @@ function prefillBookingDefaults() {
       pickupSelect.dispatchEvent(event);
     }
     
-    // Select the home address
-    setTimeout(() => {
-      selectSavedAddress(homeAddress.id, homeAddress.full_address || homeAddress.address, 'pickup');
-    }, 100);
-  }
-  
-  // 3. Set preferred airport if available
-  if (state.customer.preferred_pickup_airport) {
-    const pickupAirport = document.getElementById('pickupAirport');
-    if (pickupAirport) {
-      pickupAirport.value = state.customer.preferred_pickup_airport;
+    // Pre-select the home address if available
+    const homeAddress = findHomeAddress();
+    if (homeAddress) {
+      setTimeout(() => {
+        selectSavedAddress(homeAddress.id, homeAddress.full_address || homeAddress.address, 'pickup');
+      }, 100);
     }
   }
   
-  if (state.customer.preferred_dropoff_airport) {
+  // 3. Set preferred airport if available (check both home_airport and preferred_pickup_airport)
+  const preferredPickupAirport = state.customer.preferred_pickup_airport || state.customer.home_airport;
+  if (preferredPickupAirport) {
+    const pickupAirport = document.getElementById('pickupAirport');
+    if (pickupAirport) {
+      pickupAirport.value = preferredPickupAirport;
+    }
+  }
+  
+  // Also set dropoff airport (use home_airport if no preferred_dropoff)
+  const preferredDropoffAirport = state.customer.preferred_dropoff_airport || state.customer.home_airport;
+  if (preferredDropoffAirport) {
     const dropoffAirport = document.getElementById('dropoffAirport');
     if (dropoffAirport) {
-      dropoffAirport.value = state.customer.preferred_dropoff_airport;
+      dropoffAirport.value = preferredDropoffAirport;
     }
   }
   
@@ -1296,16 +1321,57 @@ function buildReservationData() {
   // Build stops array
   const stops = state.stops.filter(s => s.address).map(s => s.address);
   
-  // Apply booking defaults from admin settings
-  const assignmentType = bookingDefaults.defaultAssignmentType || 'unassigned';
-  const affiliate = bookingDefaults.defaultAffiliate || 'in-house';
-  const vehicleType = state.selectedVehicleType || bookingDefaults.defaultVehicleType || 'Black SUV';
-  const serviceType = bookingDefaults.defaultServiceType || 'Point to Point';
+  // Get vehicle type name (not ID)
+  const selectedVehicleTypeData = state.vehicleTypes.find(v => 
+    v.id === state.selectedVehicleType || v.name === state.selectedVehicleType
+  );
+  const vehicleTypeName = selectedVehicleTypeData?.name || state.selectedVehicleType || 'Black SUV';
+  
+  // Determine service type based on trip type selection
+  let serviceType;
+  if (state.tripType === 'hourly') {
+    serviceType = 'Hourly';
+  } else {
+    serviceType = 'Point to Point';
+  }
+  
+  // Get airline code for flight number
+  const airlineCode = document.getElementById('airlineCode')?.value || '';
+  let flightNumber = document.getElementById('flightNumber')?.value?.trim() || '';
+  if (airlineCode && airlineCode !== 'OTHER' && flightNumber) {
+    flightNumber = `${airlineCode}${flightNumber.replace(/^[A-Z]{2}/i, '')}`;
+  }
+  
+  // Get flight arrival time for airport pickups
+  const flightArrivalTime = document.getElementById('flightArrivalTime')?.value || null;
+  
+  // Calculate total price from route info and vehicle type
+  let totalPrice = state.estimatedPrice || 0;
+  if (!totalPrice && state.routeInfo && selectedVehicleTypeData) {
+    // Calculate if not already done
+    const distanceMiles = state.routeInfo.distanceMiles || 0;
+    if (state.tripType === 'hourly') {
+      const hourlyRate = parseFloat(selectedVehicleTypeData.hourly_rate) || parseFloat(selectedVehicleTypeData.base_rate) || 75;
+      totalPrice = hourlyRate * state.hourlyDuration;
+    } else {
+      const baseRate = parseFloat(selectedVehicleTypeData.base_rate) || 0;
+      const perMileRate = parseFloat(selectedVehicleTypeData.per_mile_rate) || parseFloat(selectedVehicleTypeData.rate_per_mile) || 3;
+      const minimumFare = parseFloat(selectedVehicleTypeData.minimum_fare) || parseFloat(selectedVehicleTypeData.min_fare) || 50;
+      totalPrice = baseRate + (distanceMiles * perMileRate);
+      totalPrice = Math.max(totalPrice, minimumFare);
+    }
+  }
+  
+  // Get pickup airport code if airport pickup
+  const pickupAirportCode = pickupType === 'airport' ? document.getElementById('pickupAirport')?.value : null;
+  const dropoffAirportCode = dropoffType === 'airport' ? document.getElementById('dropoffAirport')?.value : null;
   
   return {
     // Account & Passenger
     account_id: state.customer?.id,
     billing_name: `${state.customer?.first_name || ''} ${state.customer?.last_name || ''}`.trim(),
+    billing_phone: state.customer?.cell_phone || state.customer?.phone || '',
+    billing_email: state.customer?.email || '',
     passenger_first_name: document.getElementById('passengerFirstName').value.trim(),
     passenger_last_name: document.getElementById('passengerLastName').value.trim(),
     passenger_phone: document.getElementById('passengerPhone').value.trim(),
@@ -1319,59 +1385,104 @@ function buildReservationData() {
     stops: stops.length > 0 ? JSON.stringify(stops) : null,
     special_instructions: document.getElementById('specialInstructions').value.trim(),
     
-    // Vehicle & Service (from admin defaults)
-    vehicle_type: vehicleType,
+    // Vehicle & Service
+    vehicle_type: vehicleTypeName,
     service_type: serviceType,
     
-    // Assignment defaults from admin settings
+    // Assignment: Farm-out unassigned, type In-House (as per user request)
     driver_id: null,                    // Unassigned
-    assignment_type: assignmentType,    // 'unassigned', 'in-house', 'farm-out'
-    affiliate: affiliate,               // 'in-house' or affiliate name
+    res_status: 'Farmout',              // Farm-out status for unassigned
+    assignment_type: 'In-House',        // Type is In-House
+    affiliate: 'in-house',              // In-house affiliate
+    farm_status: 'unassigned',          // Unassigned status
     
     // Status
-    status: bookingDefaults.autoConfirm ? 'confirmed' : 'pending',
+    status: 'confirmed',
     
     // Source & tracking
     source: 'customer_portal',
     
-    // Flight info
-    flight_number: document.getElementById('flightNumber')?.value?.trim() || 
-                   document.getElementById('dropoffFlightNumber')?.value?.trim() || null,
+    // Flight info - transfer with all data for API updates
+    flight_number: flightNumber || document.getElementById('dropoffFlightNumber')?.value?.trim() || null,
+    flight_time: flightArrivalTime,
+    pickup_airport: pickupAirportCode,
+    dropoff_airport: dropoffAirportCode,
     is_airport_pickup: pickupType === 'airport',
     is_airport_dropoff: dropoffType === 'airport',
+    
+    // Route & Pricing
+    distance_miles: state.routeInfo?.distanceMiles || null,
+    distance_text: state.routeInfo?.distanceText || null,
+    duration_minutes: state.routeInfo ? Math.round(state.routeInfo.durationSeconds / 60) : null,
+    duration_text: state.routeInfo?.durationText || null,
+    total_price: totalPrice,
+    base_rate: selectedVehicleTypeData?.base_rate || null,
+    rate_per_mile: selectedVehicleTypeData?.per_mile_rate || selectedVehicleTypeData?.rate_per_mile || null,
+    
+    // Hourly reservation
+    is_hourly: state.tripType === 'hourly',
+    hourly_duration: state.tripType === 'hourly' ? state.hourlyDuration : null,
+    hourly_rate: state.tripType === 'hourly' ? (selectedVehicleTypeData?.hourly_rate || null) : null,
     
     // Timestamps
     created_at: new Date().toISOString()
   };
 }
 
-// Get next confirmation number from sequence
+// Get next confirmation number using company settings (like reservation-form)
 async function getNextConfirmationNumber() {
   try {
     const creds = getSupabaseCredentials();
+    
+    // Get company settings for confirmation start number
+    const settingsRaw = localStorage.getItem('relia_company_settings');
+    const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
+    const confirmationStartNumber = parseInt(settings.confirmationStartNumber, 10) || 100000;
+    
+    // Get the highest confirmation number from existing reservations
     const response = await fetch(
-      `${creds.url}/rest/v1/rpc/get_next_confirmation_number`,
+      `${creds.url}/rest/v1/reservations?select=confirmation_number`,
       {
-        method: 'POST',
         headers: {
           'apikey': creds.anonKey,
-          'Authorization': `Bearer ${state.session?.access_token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ p_sequence_name: 'reservations' })
+          'Authorization': `Bearer ${state.session?.access_token}`
+        }
       }
     );
     
     if (response.ok) {
-      const result = await response.json();
-      return result;
+      const reservations = await response.json();
+      
+      if (reservations.length === 0) {
+        // No reservations - use start number from settings
+        console.log('[CustomerPortal] No reservations, using start number:', confirmationStartNumber);
+        return confirmationStartNumber;
+      }
+      
+      // Find highest confirmation number
+      const confirmationNumbers = reservations
+        .map(r => parseInt(r.confirmation_number, 10))
+        .filter(n => !isNaN(n) && n > 0);
+      
+      if (confirmationNumbers.length > 0) {
+        const maxNumber = Math.max(...confirmationNumbers);
+        const nextNumber = maxNumber + 1;
+        console.log('[CustomerPortal] Next confirmation number:', nextNumber);
+        return nextNumber;
+      }
+      
+      // No valid numbers found - use start number
+      return confirmationStartNumber;
     }
     
-    // Fallback: generate timestamp-based number
-    return Date.now().toString().slice(-8);
+    // Fallback: use start number
+    return confirmationStartNumber;
   } catch (err) {
     console.error('[CustomerPortal] Failed to get confirmation number:', err);
-    return Date.now().toString().slice(-8);
+    // Fallback: generate timestamp-based number
+    const settingsRaw = localStorage.getItem('relia_company_settings');
+    const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
+    return parseInt(settings.confirmationStartNumber, 10) || 100000;
   }
 }
 
@@ -1540,21 +1651,27 @@ async function saveAddress(fullAddress, label = 'Recent', addressType = 'other',
 }
 
 async function saveUsedAddresses() {
-  // Save new addresses that were entered
+  // Save new addresses that were entered (with coordinates from Google Places)
   const pickupType = document.getElementById('pickupAddressSelect').value;
   const dropoffType = document.getElementById('dropoffAddressSelect').value;
   
   if (pickupType === 'new') {
     const address = document.getElementById('pickupAddressInput').value.trim();
     if (address) {
-      await saveAddress(address, 'Recent', 'pickup');
+      // Use coordinates from Google Places if available
+      const lat = state.pickupAddressData?.coordinates?.lat || null;
+      const lng = state.pickupAddressData?.coordinates?.lng || null;
+      await saveAddress(address, 'Recent', 'pickup', lat, lng);
     }
   }
   
   if (dropoffType === 'new') {
     const address = document.getElementById('dropoffAddressInput').value.trim();
     if (address) {
-      await saveAddress(address, 'Recent', 'dropoff');
+      // Use coordinates from Google Places if available
+      const lat = state.dropoffAddressData?.coordinates?.lat || null;
+      const lng = state.dropoffAddressData?.coordinates?.lng || null;
+      await saveAddress(address, 'Recent', 'dropoff', lat, lng);
     }
   }
   
@@ -2557,8 +2674,64 @@ function setupEventListeners() {
   document.getElementById('pickupMapBtn')?.addEventListener('click', () => openMapSelection('pickup'));
   document.getElementById('dropoffMapBtn')?.addEventListener('click', () => openMapSelection('dropoff'));
   
+  // Airline code selector - update hint when selected
+  document.getElementById('airlineCode')?.addEventListener('change', (e) => {
+    const hint = document.getElementById('flightNumberHint');
+    const flightInput = document.getElementById('flightNumber');
+    const airlineCode = e.target.value;
+    
+    if (airlineCode && airlineCode !== 'OTHER') {
+      hint.textContent = `Enter flight number only (e.g., ${airlineCode}1234 → just enter 1234)`;
+      flightInput.placeholder = 'e.g., 1234';
+    } else if (airlineCode === 'OTHER') {
+      hint.textContent = 'Enter full flight number with airline code (e.g., DL1234)';
+      flightInput.placeholder = 'e.g., DL1234';
+    } else {
+      hint.textContent = 'Enter flight number without airline code';
+      flightInput.placeholder = 'e.g., 1234';
+    }
+  });
+  
   // Flight verification
   document.getElementById('verifyFlightBtn')?.addEventListener('click', verifyFlight);
+  
+  // Trip type selection (Standard vs Hourly)
+  document.querySelectorAll('input[name="tripType"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      state.tripType = e.target.value;
+      const hourlyOptions = document.getElementById('hourlyOptions');
+      if (hourlyOptions) {
+        hourlyOptions.classList.toggle('hidden', e.target.value !== 'hourly');
+      }
+      console.log('[CustomerPortal] Trip type changed to:', state.tripType);
+    });
+  });
+  
+  // Hourly duration controls
+  document.getElementById('hoursMinusBtn')?.addEventListener('click', () => {
+    const input = document.getElementById('hourlyDuration');
+    const val = parseInt(input.value) || 2;
+    if (val > 2) {
+      input.value = val - 1;
+      state.hourlyDuration = val - 1;
+    }
+  });
+  
+  document.getElementById('hoursPlusBtn')?.addEventListener('click', () => {
+    const input = document.getElementById('hourlyDuration');
+    const val = parseInt(input.value) || 2;
+    if (val < 12) {
+      input.value = val + 1;
+      state.hourlyDuration = val + 1;
+    }
+  });
+  
+  document.getElementById('hourlyDuration')?.addEventListener('change', (e) => {
+    let val = parseInt(e.target.value) || 2;
+    val = Math.max(2, Math.min(12, val)); // Clamp between 2-12
+    e.target.value = val;
+    state.hourlyDuration = val;
+  });
   
   // Stops
   document.getElementById('addStopBtn')?.addEventListener('click', addStop);
@@ -2642,6 +2815,270 @@ function showToast(message, type = 'info') {
 }
 
 // ============================================
+// Google Places Autocomplete for Address Search
+// ============================================
+function setupAddressAutocomplete() {
+  function initAutocomplete() {
+    if (!window.google?.maps?.places) {
+      setTimeout(initAutocomplete, 100);
+      return;
+    }
+    
+    // Setup for pickup address
+    setupPlacesAutocomplete('pickupAddressInput', 'pickupAddressSuggestions', 'pickup');
+    
+    // Setup for dropoff address
+    setupPlacesAutocomplete('dropoffAddressInput', 'dropoffAddressSuggestions', 'dropoff');
+    
+    console.log('[CustomerPortal] Google Places autocomplete initialized');
+  }
+  
+  if (window.googleMapsReady) {
+    initAutocomplete();
+  } else {
+    window.onGoogleMapsReady = initAutocomplete;
+  }
+}
+
+function setupPlacesAutocomplete(inputId, suggestionsId, type) {
+  const input = document.getElementById(inputId);
+  const suggestionsContainer = document.getElementById(suggestionsId);
+  
+  if (!input || !suggestionsContainer) return;
+  
+  const autocomplete = new google.maps.places.Autocomplete(input, {
+    types: ['establishment', 'geocode'],
+    componentRestrictions: { country: 'us' },
+    fields: ['place_id', 'formatted_address', 'name', 'geometry', 'types', 'address_components']
+  });
+  
+  // Store autocomplete reference
+  if (type === 'pickup') {
+    state.pickupAutocomplete = autocomplete;
+  } else {
+    state.dropoffAutocomplete = autocomplete;
+  }
+  
+  autocomplete.addListener('place_changed', () => {
+    const place = autocomplete.getPlace();
+    
+    if (!place.geometry) {
+      console.warn('[CustomerPortal] No geometry for selected place');
+      return;
+    }
+    
+    // Build the full address with business name if applicable
+    let fullAddress = place.formatted_address;
+    const isEstablishment = place.types?.some(t => 
+      ['establishment', 'point_of_interest', 'restaurant', 'lodging', 'store'].includes(t)
+    );
+    
+    if (isEstablishment && place.name && !place.formatted_address.includes(place.name)) {
+      fullAddress = `${place.name}, ${place.formatted_address}`;
+    }
+    
+    // Store the address with coordinates
+    const addressData = {
+      fullAddress,
+      name: place.name,
+      formattedAddress: place.formatted_address,
+      coordinates: {
+        lat: place.geometry.location.lat(),
+        lng: place.geometry.location.lng()
+      },
+      placeId: place.place_id,
+      addressComponents: parseAddressComponents(place.address_components)
+    };
+    
+    if (type === 'pickup') {
+      state.selectedPickupAddress = fullAddress;
+      state.pickupAddressData = addressData;
+      input.value = fullAddress;
+    } else {
+      state.selectedDropoffAddress = fullAddress;
+      state.dropoffAddressData = addressData;
+      input.value = fullAddress;
+    }
+    
+    // Hide suggestions
+    suggestionsContainer.classList.remove('active');
+    
+    // Calculate route for pricing
+    calculateRouteAndPrice();
+    
+    console.log(`[CustomerPortal] ${type} address selected:`, addressData);
+  });
+  
+  // Handle input focus to show pac-container
+  input.addEventListener('focus', () => {
+    suggestionsContainer.classList.remove('active');
+  });
+  
+  input.addEventListener('blur', () => {
+    setTimeout(() => suggestionsContainer.classList.remove('active'), 200);
+  });
+}
+
+function parseAddressComponents(components) {
+  const result = {
+    street_number: '',
+    route: '',
+    city: '',
+    state: '',
+    zip: '',
+    country: ''
+  };
+  
+  if (!components) return result;
+  
+  components.forEach(c => {
+    if (c.types.includes('street_number')) result.street_number = c.long_name;
+    if (c.types.includes('route')) result.route = c.long_name;
+    if (c.types.includes('locality')) result.city = c.long_name;
+    if (c.types.includes('administrative_area_level_1')) result.state = c.short_name;
+    if (c.types.includes('postal_code')) result.zip = c.long_name;
+    if (c.types.includes('country')) result.country = c.short_name;
+  });
+  
+  result.street = [result.street_number, result.route].filter(Boolean).join(' ');
+  return result;
+}
+
+// ============================================
+// Route Calculation and Pricing
+// ============================================
+async function calculateRouteAndPrice() {
+  const pickupType = document.getElementById('pickupAddressSelect')?.value;
+  const dropoffType = document.getElementById('dropoffAddressSelect')?.value;
+  
+  // Get pickup address
+  let pickupAddress = null;
+  if (pickupType === 'airport') {
+    const airportSelect = document.getElementById('pickupAirport');
+    const selectedOption = airportSelect?.options[airportSelect.selectedIndex];
+    pickupAddress = selectedOption?.dataset?.address || airportSelect?.value;
+  } else if (pickupType === 'new' || pickupType === 'saved') {
+    pickupAddress = state.selectedPickupAddress;
+  }
+  
+  // Get dropoff address
+  let dropoffAddress = null;
+  if (dropoffType === 'airport') {
+    const airportSelect = document.getElementById('dropoffAirport');
+    const selectedOption = airportSelect?.options[airportSelect.selectedIndex];
+    dropoffAddress = selectedOption?.dataset?.address || airportSelect?.value;
+  } else if (dropoffType === 'new' || dropoffType === 'saved') {
+    dropoffAddress = state.selectedDropoffAddress;
+  }
+  
+  if (!pickupAddress || !dropoffAddress) {
+    state.routeInfo = null;
+    return;
+  }
+  
+  console.log('[CustomerPortal] Calculating route:', pickupAddress, '→', dropoffAddress);
+  
+  try {
+    // Use Google Maps Directions API
+    if (!window.google?.maps) {
+      console.warn('[CustomerPortal] Google Maps not ready for route calculation');
+      return;
+    }
+    
+    const directionsService = new google.maps.DirectionsService();
+    const result = await new Promise((resolve, reject) => {
+      directionsService.route({
+        origin: pickupAddress,
+        destination: dropoffAddress,
+        travelMode: google.maps.TravelMode.DRIVING
+      }, (response, status) => {
+        if (status === 'OK') {
+          resolve(response);
+        } else {
+          reject(new Error(`Directions failed: ${status}`));
+        }
+      });
+    });
+    
+    const leg = result.routes[0]?.legs[0];
+    if (leg) {
+      state.routeInfo = {
+        distanceMeters: leg.distance.value,
+        distanceText: leg.distance.text,
+        durationSeconds: leg.duration.value,
+        durationText: leg.duration.text,
+        distanceMiles: leg.distance.value / 1609.34
+      };
+      
+      console.log('[CustomerPortal] Route calculated:', state.routeInfo);
+      
+      // Calculate price based on vehicle type
+      calculatePrice();
+    }
+  } catch (err) {
+    console.error('[CustomerPortal] Route calculation error:', err);
+    state.routeInfo = null;
+  }
+}
+
+function calculatePrice() {
+  const priceDisplay = document.getElementById('estimatedPrice');
+  const routeInfoDisplay = document.getElementById('routeInfo');
+  
+  if (!state.routeInfo || !state.selectedVehicleType) {
+    state.estimatedPrice = null;
+    if (priceDisplay) priceDisplay.textContent = '--';
+    if (routeInfoDisplay) routeInfoDisplay.textContent = '';
+    return;
+  }
+  
+  // Find selected vehicle type data
+  const vehicleType = state.vehicleTypes.find(v => v.id === state.selectedVehicleType || v.name === state.selectedVehicleType);
+  if (!vehicleType) {
+    state.estimatedPrice = null;
+    if (priceDisplay) priceDisplay.textContent = '--';
+    return;
+  }
+  
+  let price = 0;
+  const distanceMiles = state.routeInfo.distanceMiles;
+  const durationMinutes = state.routeInfo.durationSeconds / 60;
+  
+  // Check for hourly vs point-to-point
+  if (state.tripType === 'hourly') {
+    // Hourly rate
+    const hourlyRate = parseFloat(vehicleType.hourly_rate) || parseFloat(vehicleType.base_rate) || 75;
+    price = hourlyRate * state.hourlyDuration;
+  } else {
+    // Point-to-point: base rate + per-mile rate
+    const baseRate = parseFloat(vehicleType.base_rate) || 0;
+    const perMileRate = parseFloat(vehicleType.per_mile_rate) || parseFloat(vehicleType.rate_per_mile) || 3;
+    const minimumFare = parseFloat(vehicleType.minimum_fare) || parseFloat(vehicleType.min_fare) || 50;
+    
+    price = baseRate + (distanceMiles * perMileRate);
+    price = Math.max(price, minimumFare);
+  }
+  
+  // Round to 2 decimal places
+  state.estimatedPrice = Math.round(price * 100) / 100;
+  
+  console.log('[CustomerPortal] Estimated price:', state.estimatedPrice, 'for', vehicleType.name);
+  
+  // Update price display
+  if (priceDisplay) {
+    priceDisplay.textContent = `$${state.estimatedPrice.toFixed(2)}`;
+  }
+  
+  // Update route info display
+  if (routeInfoDisplay && state.routeInfo) {
+    routeInfoDisplay.textContent = `${state.routeInfo.distanceText} • ${state.routeInfo.durationText}`;
+  }
+}
+
+// ============================================
 // Initialize
 // ============================================
+// Setup address autocomplete on load
+setTimeout(() => setupAddressAutocomplete(), 500);
+
 document.addEventListener('DOMContentLoaded', init);
