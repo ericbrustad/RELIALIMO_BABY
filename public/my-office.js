@@ -601,10 +601,22 @@ class MyOffice {
       previewCustomerBtn.addEventListener('click', () => this.showCustomerPortalPreview());
     }
 
+    // Preview button for Driver Portal
+    const previewDriverBtn = document.getElementById('previewDriverPortal');
+    if (previewDriverBtn) {
+      previewDriverBtn.addEventListener('click', () => this.showDriverPortalPreview());
+    }
+
     // Live preview updates - listen to all customer settings changes
     const customerSettingInputs = document.querySelectorAll('#customer-account-settings-section input, #customer-account-settings-section select');
     customerSettingInputs.forEach(input => {
       input.addEventListener('change', () => this.updateCustomerPortalPreview());
+    });
+
+    // Live preview updates - listen to all driver settings changes
+    const driverSettingInputs = document.querySelectorAll('#driver-app-settings-section input, #driver-app-settings-section select');
+    driverSettingInputs.forEach(input => {
+      input.addEventListener('change', () => this.updateDriverPortalPreview());
     });
 
     // Load saved settings on init
@@ -7636,6 +7648,159 @@ class MyOffice {
     }
 
     console.log('Customer Portal Preview updated');
+  }
+
+  // Show Driver Portal Preview Modal
+  showDriverPortalPreview() {
+    const modal = document.getElementById('driverPortalPreviewModal');
+    if (modal) {
+      modal.style.display = 'block';
+      this.updateDriverPortalPreview();
+    }
+  }
+
+  // Update Driver Portal Preview based on current settings
+  updateDriverPortalPreview() {
+    // Get current settings from form
+    const settings = {
+      welcomeMessage: document.getElementById('driverWelcomeMessage')?.value || 'Welcome to your driver portal',
+      primaryColor: document.getElementById('driverPrimaryColor')?.value || '#28a745',
+      requireEmailVerify: document.getElementById('driverRequireEmailVerify')?.value || 'yes',
+      requirePhoneVerify: document.getElementById('driverRequirePhoneVerify')?.value || 'yes',
+      // Requirements
+      requireLicense: document.getElementById('driverRequireLicense')?.value || 'yes',
+      requireRegistration: document.getElementById('driverRequireRegistration')?.value || 'yes',
+      requireInsurance: document.getElementById('driverRequireInsurance')?.value || 'yes',
+      requireTCP: document.getElementById('driverRequireTCP')?.value || 'no',
+      requireBackground: document.getElementById('driverRequireBackground')?.value || 'no',
+      requireDrug: document.getElementById('driverRequireDrug')?.value || 'no',
+      // Notifications
+      notifMethod: document.getElementById('driverNotifMethod')?.value || 'push-sms',
+      offerTimeout: document.getElementById('driverOfferTimeout')?.value || '15',
+      pickupReminder: document.getElementById('driverPickupReminder')?.value || '60',
+      dailySummary: document.getElementById('driverDailySummary')?.value || 'yes',
+      // Trip settings
+      gpsTracking: document.getElementById('driverGpsTracking')?.value || 'always',
+      statusUpdates: document.getElementById('driverStatusUpdates')?.value || 'full',
+      requireIncidentals: document.getElementById('driverRequireIncidentals')?.value || 'yes',
+      allowPhotoUpload: document.getElementById('driverAllowPhotoUpload')?.value || 'yes',
+      // Payment
+      payRate: document.getElementById('driverPayRate')?.value || '70',
+      paySchedule: document.getElementById('driverPaySchedule')?.value || 'weekly',
+      allowCashCollection: document.getElementById('driverAllowCashCollection')?.value || 'yes'
+    };
+
+    // Update Welcome Message
+    const previewWelcome = document.getElementById('driverPreviewWelcome');
+    if (previewWelcome) {
+      previewWelcome.textContent = settings.welcomeMessage || 'Driver Portal';
+    }
+
+    // Update Email Verification field visibility
+    const previewEmailVerify = document.getElementById('driverPreviewEmailVerifyField');
+    if (previewEmailVerify) {
+      previewEmailVerify.style.display = settings.requireEmailVerify === 'yes' ? 'block' : 'none';
+    }
+
+    // Update Phone Verification field visibility
+    const previewPhoneVerify = document.getElementById('driverPreviewPhoneVerifyField');
+    if (previewPhoneVerify) {
+      previewPhoneVerify.style.display = settings.requirePhoneVerify === 'yes' ? 'block' : 'none';
+    }
+
+    // Update Requirements
+    const reqLicense = document.getElementById('driverPreviewReqLicense');
+    if (reqLicense) reqLicense.style.display = settings.requireLicense === 'yes' ? 'block' : 'none';
+    
+    const reqRegistration = document.getElementById('driverPreviewReqRegistration');
+    if (reqRegistration) reqRegistration.style.display = settings.requireRegistration === 'yes' ? 'block' : 'none';
+    
+    const reqInsurance = document.getElementById('driverPreviewReqInsurance');
+    if (reqInsurance) reqInsurance.style.display = settings.requireInsurance === 'yes' ? 'block' : 'none';
+    
+    const reqTCP = document.getElementById('driverPreviewReqTCP');
+    if (reqTCP) reqTCP.style.display = settings.requireTCP === 'yes' ? 'block' : 'none';
+    
+    const reqBackground = document.getElementById('driverPreviewReqBackground');
+    if (reqBackground) reqBackground.style.display = settings.requireBackground === 'yes' ? 'block' : 'none';
+    
+    const reqDrug = document.getElementById('driverPreviewReqDrug');
+    if (reqDrug) reqDrug.style.display = settings.requireDrug === 'yes' ? 'block' : 'none';
+
+    // Update Notifications
+    const previewNotifTrip = document.getElementById('driverPreviewNotifTrip');
+    if (previewNotifTrip) {
+      const methodText = settings.notifMethod === 'push-sms' ? 'Push + SMS' :
+                         settings.notifMethod === 'push' ? 'Push only' :
+                         settings.notifMethod === 'sms' ? 'SMS only' : settings.notifMethod;
+      previewNotifTrip.textContent = `✓ New trip offers (${methodText})`;
+    }
+
+    const previewNotifExpiry = document.getElementById('driverPreviewNotifExpiry');
+    if (previewNotifExpiry) {
+      previewNotifExpiry.textContent = `✓ Offers expire in ${settings.offerTimeout} minutes`;
+    }
+
+    const previewNotifReminder = document.getElementById('driverPreviewNotifReminder');
+    if (previewNotifReminder) {
+      previewNotifReminder.textContent = `✓ Pickup reminder ${settings.pickupReminder} mins before`;
+    }
+
+    const previewNotifSummary = document.getElementById('driverPreviewNotifSummary');
+    if (previewNotifSummary) {
+      previewNotifSummary.style.display = settings.dailySummary === 'yes' ? 'block' : 'none';
+    }
+
+    // Update Trip Settings
+    const previewGPS = document.getElementById('driverPreviewGPS');
+    if (previewGPS) {
+      if (settings.gpsTracking === 'always') {
+        previewGPS.textContent = '✓ GPS tracking during trips';
+      } else if (settings.gpsTracking === 'trip-only') {
+        previewGPS.textContent = '✓ GPS tracking (trip duration only)';
+      } else {
+        previewGPS.textContent = '✗ GPS tracking disabled';
+      }
+    }
+
+    const previewStatus = document.getElementById('driverPreviewStatus');
+    if (previewStatus) {
+      previewStatus.textContent = settings.statusUpdates === 'full' ? 
+        '✓ Full status updates' : '✓ Simple status updates';
+    }
+
+    const previewIncidentals = document.getElementById('driverPreviewIncidentals');
+    if (previewIncidentals) {
+      previewIncidentals.textContent = settings.requireIncidentals === 'yes' ? 
+        '✓ Post-trip incidentals required' : '✗ Post-trip incidentals optional';
+    }
+
+    const previewPhoto = document.getElementById('driverPreviewPhoto');
+    if (previewPhoto) {
+      previewPhoto.style.display = settings.allowPhotoUpload === 'yes' ? 'block' : 'none';
+    }
+
+    // Update Payment
+    const previewPayRate = document.getElementById('driverPreviewPayRate');
+    if (previewPayRate) {
+      previewPayRate.textContent = `Earn ${settings.payRate}% of fare`;
+    }
+
+    const previewPaySchedule = document.getElementById('driverPreviewPaySchedule');
+    if (previewPaySchedule) {
+      const scheduleText = settings.paySchedule === 'weekly' ? 'Paid weekly' :
+                           settings.paySchedule === 'biweekly' ? 'Paid bi-weekly' :
+                           settings.paySchedule === 'monthly' ? 'Paid monthly' : 'Paid per trip';
+      previewPaySchedule.textContent = scheduleText;
+    }
+
+    const previewCashCollection = document.getElementById('driverPreviewCashCollection');
+    if (previewCashCollection) {
+      previewCashCollection.textContent = settings.allowCashCollection === 'yes' ? 
+        '✓ Cash collection allowed' : '✗ Cash collection not allowed';
+    }
+
+    console.log('Driver Portal Preview updated');
   }
 
   switchCustomFormTab(formTab) {

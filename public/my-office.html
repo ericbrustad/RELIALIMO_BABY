@@ -7976,10 +7976,113 @@ further assistance.</textarea>
 
             <div style="text-align: right; margin-top: 20px; padding-right: 20px;">
               <button class="btn btn-secondary" style="margin-right: 10px;">Reset</button>
+              <button class="btn btn-info" id="previewDriverPortal" style="margin-right: 10px; background: #17a2b8; border-color: #17a2b8;">👁️ Preview Driver Portal</button>
               <button class="btn btn-primary" id="saveDriverAppSettings">Save Driver App Settings</button>
             </div>
           </div>
         </section>
+
+        <!-- Driver Portal Preview Modal -->
+        <div class="modal-overlay" id="driverPortalPreviewModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 10000; overflow-y: auto;">
+          <div style="max-width: 500px; margin: 40px auto; background: #1a1a1a; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
+            <!-- Preview Header -->
+            <div style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;">
+              <h2 style="color: #fff; margin: 0; font-size: 18px;">🚗 Driver Portal Preview</h2>
+              <button onclick="document.getElementById('driverPortalPreviewModal').style.display='none'" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer;">&times;</button>
+            </div>
+            
+            <!-- Preview Content -->
+            <div style="padding: 20px;">
+              <!-- Phone Frame -->
+              <div style="background: #222; border-radius: 30px; padding: 10px; max-width: 320px; margin: 0 auto; border: 3px solid #333;">
+                <!-- Phone Screen -->
+                <div style="background: #121212; border-radius: 20px; min-height: 550px; overflow: hidden;">
+                  
+                  <!-- App Header -->
+                  <div id="driverPreviewHeader" style="padding: 20px; text-align: center; border-bottom: 1px solid #333;">
+                    <div id="driverPreviewLogo" style="font-size: 24px; font-weight: bold; margin-bottom: 10px; color: #28a745;">🚗 RELIA LIMO</div>
+                    <p id="driverPreviewWelcome" style="color: #888; font-size: 12px; margin: 0;">Driver Portal</p>
+                  </div>
+                  
+                  <!-- Onboarding Preview -->
+                  <div id="driverPreviewOnboarding" style="padding: 20px;">
+                    <h3 style="color: #28a745; font-size: 14px; margin-bottom: 15px;">Driver Registration</h3>
+                    
+                    <div style="margin-bottom: 12px;">
+                      <label style="color: #888; font-size: 11px; display: block; margin-bottom: 4px;">Phone Number *</label>
+                      <input type="text" disabled style="width: 100%; padding: 8px; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #fff; font-size: 12px;" placeholder="(555) 123-4567">
+                    </div>
+                    
+                    <div id="driverPreviewPhoneVerifyField" style="margin-bottom: 12px;">
+                      <label style="color: #888; font-size: 11px; display: block; margin-bottom: 4px;">📱 SMS Verification Code *</label>
+                      <input type="text" disabled style="width: 100%; padding: 8px; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #fff; font-size: 12px;" placeholder="Enter 6-digit code">
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                      <label style="color: #888; font-size: 11px; display: block; margin-bottom: 4px;">Email *</label>
+                      <input type="text" disabled style="width: 100%; padding: 8px; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #fff; font-size: 12px;" placeholder="driver@email.com">
+                    </div>
+                    
+                    <div id="driverPreviewEmailVerifyField" style="margin-bottom: 12px;">
+                      <label style="color: #888; font-size: 11px; display: block; margin-bottom: 4px;">📧 Email Verification Code *</label>
+                      <input type="text" disabled style="width: 100%; padding: 8px; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #fff; font-size: 12px;" placeholder="Enter 6-digit code">
+                    </div>
+                    
+                    <button disabled style="width: 100%; padding: 12px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border: none; border-radius: 6px; color: #fff; font-weight: bold; font-size: 13px; margin-top: 10px;">Continue Registration</button>
+                  </div>
+                  
+                  <!-- Requirements Preview -->
+                  <div id="driverPreviewRequirements" style="padding: 20px; border-top: 1px solid #333;">
+                    <h3 style="color: #28a745; font-size: 14px; margin-bottom: 15px;">📋 Required Documents</h3>
+                    <div style="font-size: 11px; color: #ccc;">
+                      <div id="driverPreviewReqLicense" style="margin-bottom: 6px;">✓ Driver's License</div>
+                      <div id="driverPreviewReqRegistration" style="margin-bottom: 6px;">✓ Vehicle Registration</div>
+                      <div id="driverPreviewReqInsurance" style="margin-bottom: 6px;">✓ Insurance Certificate</div>
+                      <div id="driverPreviewReqTCP" style="margin-bottom: 6px; display: none;">✓ TCP/Livery License</div>
+                      <div id="driverPreviewReqBackground" style="margin-bottom: 6px; display: none;">✓ Background Check</div>
+                      <div id="driverPreviewReqDrug" style="margin-bottom: 6px; display: none;">✓ Drug Test Results</div>
+                    </div>
+                  </div>
+                  
+                  <!-- Notifications Preview -->
+                  <div id="driverPreviewNotifications" style="padding: 20px; border-top: 1px solid #333;">
+                    <h3 style="color: #28a745; font-size: 14px; margin-bottom: 15px;">🔔 You'll Receive</h3>
+                    <div style="font-size: 11px; color: #ccc;">
+                      <div id="driverPreviewNotifTrip" style="margin-bottom: 6px;">✓ New trip offers (Push + SMS)</div>
+                      <div id="driverPreviewNotifExpiry" style="margin-bottom: 6px;">✓ Offers expire in 15 minutes</div>
+                      <div id="driverPreviewNotifReminder" style="margin-bottom: 6px;">✓ Pickup reminder 60 mins before</div>
+                      <div id="driverPreviewNotifSummary" style="margin-bottom: 6px;">✓ Daily trip summary email</div>
+                    </div>
+                  </div>
+                  
+                  <!-- Trip Settings Preview -->
+                  <div id="driverPreviewTripSettings" style="padding: 20px; border-top: 1px solid #333;">
+                    <h3 style="color: #28a745; font-size: 14px; margin-bottom: 15px;">🚙 Trip Features</h3>
+                    <div style="font-size: 11px; color: #ccc;">
+                      <div id="driverPreviewGPS" style="margin-bottom: 6px;">✓ GPS tracking during trips</div>
+                      <div id="driverPreviewStatus" style="margin-bottom: 6px;">✓ Full status updates</div>
+                      <div id="driverPreviewIncidentals" style="margin-bottom: 6px;">✓ Post-trip incidentals required</div>
+                      <div id="driverPreviewPhoto" style="margin-bottom: 6px;">✓ Photo upload available</div>
+                    </div>
+                  </div>
+                  
+                  <!-- Payment Preview -->
+                  <div id="driverPreviewPayment" style="padding: 20px; border-top: 1px solid #333;">
+                    <h3 style="color: #28a745; font-size: 14px; margin-bottom: 15px;">💰 Earnings</h3>
+                    <div style="font-size: 11px; color: #ccc;">
+                      <div id="driverPreviewPayRate" style="margin-bottom: 6px;">Earn 70% of fare</div>
+                      <div id="driverPreviewPaySchedule" style="margin-bottom: 6px;">Paid weekly</div>
+                      <div id="driverPreviewCashCollection" style="margin-bottom: 6px;">✓ Cash collection allowed</div>
+                    </div>
+                  </div>
+                  
+                </div>
+              </div>
+              
+              <p style="text-align: center; color: #666; font-size: 11px; margin-top: 15px;">This preview updates live as you change settings</p>
+            </div>
+          </div>
+        </div>
 
         <!-- Customer Account Settings Section -->
         <section id="customer-account-settings-section" class="office-section" style="display: none;">
