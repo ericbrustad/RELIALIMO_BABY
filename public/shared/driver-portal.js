@@ -198,6 +198,78 @@ async function fetchVehicleTypesFromAPI() {
   }
 }
 
+/**
+ * Create a custom vehicle type (entered via "Other" option)
+ */
+async function createCustomVehicleType(typeName, organizationId) {
+  const SUPABASE_URL = 'https://siumiadylwcrkaqsfwkj.supabase.co';
+  const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpdW1pYWR5bHdjcmthcXNmd2tqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTY2MzMxMywiZXhwIjoyMDgxMjM5MzEzfQ.AwUvDEQNb_U04OveQ6Ia9wFgoIatwV6wigdwSQnsOP4';
+  
+  const newType = {
+    name: typeName,
+    type_name: typeName,
+    status: 'ACTIVE',
+    organization_id: organizationId,
+    passenger_capacity: 4,
+    description: `Custom vehicle type created by driver: ${typeName}`,
+    created_at: new Date().toISOString()
+  };
+  
+  console.log('[DriverPortal] Creating custom vehicle type:', newType);
+  
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/vehicle_types`, {
+    method: 'POST',
+    headers: {
+      'apikey': SERVICE_ROLE_KEY,
+      'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    },
+    body: JSON.stringify(newType)
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[DriverPortal] Failed to create vehicle type:', response.status, errorText);
+    throw new Error(`Failed to create vehicle type: ${response.status}`);
+  }
+  
+  const data = await response.json();
+  console.log('[DriverPortal] ✅ Created custom vehicle type:', data);
+  return Array.isArray(data) ? data[0] : data;
+}
+
+/**
+ * Activate an inactive vehicle type
+ */
+async function activateVehicleType(vehicleTypeId) {
+  const SUPABASE_URL = 'https://siumiadylwcrkaqsfwkj.supabase.co';
+  const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpdW1pYWR5bHdjcmthcXNmd2tqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTY2MzMxMywiZXhwIjoyMDgxMjM5MzEzfQ.AwUvDEQNb_U04OveQ6Ia9wFgoIatwV6wigdwSQnsOP4';
+  
+  console.log('[DriverPortal] Activating vehicle type:', vehicleTypeId);
+  
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/vehicle_types?id=eq.${vehicleTypeId}`, {
+    method: 'PATCH',
+    headers: {
+      'apikey': SERVICE_ROLE_KEY,
+      'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    },
+    body: JSON.stringify({ status: 'ACTIVE' })
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[DriverPortal] Failed to activate vehicle type:', response.status, errorText);
+    throw new Error(`Failed to activate vehicle type: ${response.status}`);
+  }
+  
+  const data = await response.json();
+  console.log('[DriverPortal] ✅ Activated vehicle type:', data);
+  return Array.isArray(data) ? data[0] : data;
+}
+
 async function createVehicle(vehicleData) {
   // Create vehicle in fleet_vehicles table (the main fleet management table)
   const client = getSupabase();
@@ -4536,7 +4608,7 @@ function validateRegStep(step) {
 }
 
 async function handleRegistration() {
-  const vehicleType = document.getElementById('regVehicleType').value;
+  let vehicleType = document.getElementById('regVehicleType').value;
   const licensePlate = document.getElementById('regVehiclePlate').value.trim();
   
   if (!vehicleType) {
@@ -4546,6 +4618,17 @@ async function handleRegistration() {
   if (!licensePlate) {
     showToast('Please enter license plate', 'error');
     return;
+  }
+  
+  // Handle "Other" vehicle type - user typed in a custom type
+  const vehicleTypeOtherInput = document.getElementById('regVehicleTypeOther');
+  if (vehicleType === '__other__' && vehicleTypeOtherInput) {
+    const customTypeName = vehicleTypeOtherInput.value.trim();
+    if (!customTypeName) {
+      showToast('Please enter a vehicle type name', 'error');
+      return;
+    }
+    // Will create the custom vehicle type during registration below
   }
   
   // Verify email was verified (unless in dev mode)
@@ -4680,15 +4763,59 @@ async function handleRegistration() {
       
       console.log('[DriverPortal] ✅ Driver created:', newDriver.id, 'for affiliate:', affiliate?.company_name || 'None');
       
+      // Handle "Other" vehicle type - create a new active vehicle type
+      if (vehicleType === '__other__') {
+        const vehicleTypeOtherInput = document.getElementById('regVehicleTypeOther');
+        const customTypeName = vehicleTypeOtherInput?.value.trim();
+        if (customTypeName) {
+          console.log('[DriverPortal] Creating custom vehicle type:', customTypeName);
+          try {
+            const newType = await createCustomVehicleType(customTypeName, organizationId);
+            if (newType && newType.id) {
+              vehicleType = newType.id;
+              console.log('[DriverPortal] ✅ Created custom vehicle type:', newType.id);
+            }
+          } catch (err) {
+            console.error('[DriverPortal] Failed to create custom vehicle type:', err);
+            showToast('Failed to create custom vehicle type', 'error');
+            throw err;
+          }
+        }
+      } else if (vehicleType) {
+        // Check if selected type is inactive and needs activation
+        const selectedOption = document.querySelector(`#regVehicleType option[value="${vehicleType}"]`);
+        if (selectedOption && selectedOption.parentElement.label === 'Inactive Vehicle Types') {
+          console.log('[DriverPortal] Activating inactive vehicle type:', vehicleType);
+          try {
+            await activateVehicleType(vehicleType);
+            console.log('[DriverPortal] ✅ Activated vehicle type');
+          } catch (err) {
+            console.warn('[DriverPortal] Could not activate vehicle type:', err.message);
+          }
+        }
+      }
+      
       // Create vehicle - generate a unique unit number
       // Format: Initials + timestamp suffix (guaranteed unique)
       const driverInitials = `${(newDriver.first_name || 'X')[0]}${(newDriver.last_name || 'X')[0]}`.toUpperCase();
       const timestamp = Date.now().toString(36).toUpperCase().slice(-5); // 5 char base36 timestamp
       const unitNumber = `${driverInitials}${timestamp}`;
       
-      // Get vehicle make/model/year for title
-      const vehMake = document.getElementById('regVehicleMake').value.trim() || null;
-      const vehModel = document.getElementById('regVehicleModel').value.trim() || null;
+      // Get vehicle make/model/year for title (handle "Other" options)
+      let vehMake = document.getElementById('regVehicleMake').value;
+      if (vehMake === '__other__') {
+        vehMake = document.getElementById('regVehicleMakeOther')?.value.trim() || null;
+      } else {
+        vehMake = vehMake?.trim() || null;
+      }
+      
+      let vehModel = document.getElementById('regVehicleModel').value;
+      if (vehModel === '__other__') {
+        vehModel = document.getElementById('regVehicleModelOther')?.value.trim() || null;
+      } else {
+        vehModel = vehModel?.trim() || null;
+      }
+      
       const vehYear = parseInt(document.getElementById('regVehicleYear').value) || null;
       const vehCapacity = parseInt(document.getElementById('regVehicleCapacity').value) || 4;
       
@@ -4863,52 +4990,89 @@ async function loadVehicleTypes() {
     const types = await fetchVehicleTypesFromAPI();
     console.log('[DriverPortal] Raw vehicle types:', types);
     
-    // Filter for active types (check both uppercase and lowercase)
-    let filtered = (types || []).filter(t => {
+    // Store all types (both active and inactive) for reference
+    state.allVehicleTypes = types || [];
+    
+    // Separate active and inactive types
+    const activeTypes = (types || []).filter(t => {
       const status = (t.status || '').toString().toUpperCase();
       return status === 'ACTIVE' || status === '' || !t.status;
     });
     
-    // If no active types found, use all types (for testing/debugging)
-    if (filtered.length === 0 && types.length > 0) {
-      console.log('[DriverPortal] No ACTIVE types found, using all types for testing');
-      filtered = types;
-    }
+    const inactiveTypes = (types || []).filter(t => {
+      const status = (t.status || '').toString().toUpperCase();
+      return status === 'INACTIVE';
+    });
     
-    state.vehicleTypes = filtered;
+    state.vehicleTypes = activeTypes;
+    state.inactiveVehicleTypes = inactiveTypes;
     
-    console.log('[DriverPortal] Filtered active types:', state.vehicleTypes);
-    console.log('[DriverPortal] Vehicle types count:', state.vehicleTypes.length);
+    console.log('[DriverPortal] Active types:', activeTypes.length);
+    console.log('[DriverPortal] Inactive types:', inactiveTypes.length);
     
-    // Populate vehicle type dropdown - clear first to prevent duplicates
+    // Populate vehicle type dropdown
     const select = document.getElementById('regVehicleType');
+    const otherInput = document.getElementById('regVehicleTypeOther');
+    
     if (select) {
-      // Clear all existing options except the first one
-      while (select.options.length > 1) {
-        select.remove(1);
+      // Clear all existing options
+      select.innerHTML = '<option value="">Select type...</option>';
+      
+      // Add active types first
+      if (activeTypes.length > 0) {
+        const activeGroup = document.createElement('optgroup');
+        activeGroup.label = 'Active Vehicle Types';
+        activeTypes.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t.id;
+          opt.textContent = t.name || t.type_name || 'Unknown';
+          activeGroup.appendChild(opt);
+        });
+        select.appendChild(activeGroup);
       }
       
-      console.log('[DriverPortal] Select element found, cleared options');
+      // Add inactive types in a separate group
+      if (inactiveTypes.length > 0) {
+        const inactiveGroup = document.createElement('optgroup');
+        inactiveGroup.label = 'Inactive (will be activated)';
+        inactiveTypes.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t.id;
+          opt.textContent = `${t.name || t.type_name || 'Unknown'} (inactive)`;
+          opt.dataset.inactive = 'true';
+          inactiveGroup.appendChild(opt);
+        });
+        select.appendChild(inactiveGroup);
+      }
       
-      // Add vehicle type options
-      state.vehicleTypes.forEach((t, idx) => {
-        console.log(`[DriverPortal] Adding option ${idx}: ${t.name} (${t.id})`);
-        const opt = document.createElement('option');
-        opt.value = t.id;
-        opt.textContent = t.name || t.type_name || 'Unknown';
-        select.appendChild(opt);
+      // Add "Other" option at the end
+      const otherOpt = document.createElement('option');
+      otherOpt.value = '__other__';
+      otherOpt.textContent = '➕ Other (enter custom type)';
+      select.appendChild(otherOpt);
+      
+      console.log('[DriverPortal] Vehicle type dropdown populated with', select.options.length, 'options');
+      
+      // Handle "Other" selection - show/hide text input
+      select.addEventListener('change', () => {
+        if (select.value === '__other__') {
+          if (otherInput) {
+            otherInput.style.display = 'block';
+            otherInput.focus();
+            otherInput.required = true;
+          }
+        } else {
+          if (otherInput) {
+            otherInput.style.display = 'none';
+            otherInput.required = false;
+          }
+        }
       });
-      
-      console.log('[DriverPortal] Dropdown now has', select.options.length, 'options');
-      
-      // Log all options for debugging
-      for (let i = 0; i < select.options.length; i++) {
-        console.log(`[DriverPortal] Option ${i}: "${select.options[i].text}" = "${select.options[i].value}"`);
-      }
     } else {
       console.warn('[DriverPortal] regVehicleType select not found');
     }
-    console.log('[DriverPortal] Loaded', state.vehicleTypes.length, 'vehicle types');
+    
+    console.log('[DriverPortal] Loaded', state.vehicleTypes.length, 'active vehicle types');
     
     // Also populate Make/Model/Year/Color dropdowns for vehicle registration
     populateVehicleMakeOptions();
@@ -4944,6 +5108,7 @@ function populateVehicleYearOptions() {
  */
 function populateVehicleMakeOptions() {
   const makeSelect = document.getElementById('regVehicleMake');
+  const otherInput = document.getElementById('regVehicleMakeOther');
   if (!makeSelect) return;
   
   const makes = [
@@ -4987,10 +5152,44 @@ function populateVehicleMakeOptions() {
     option.textContent = make;
     makeSelect.appendChild(option);
   });
-  if (currentValue) makeSelect.value = currentValue;
   
-  // Setup model population when make changes
-  makeSelect.addEventListener('change', () => populateVehicleModelOptions());
+  // Add "Other" option at the end
+  const otherOpt = document.createElement('option');
+  otherOpt.value = '__other__';
+  otherOpt.textContent = '➕ Other (enter custom make)';
+  makeSelect.appendChild(otherOpt);
+  
+  if (currentValue && currentValue !== '__other__') makeSelect.value = currentValue;
+  
+  // Setup model population and "Other" handling when make changes
+  makeSelect.addEventListener('change', () => {
+    if (makeSelect.value === '__other__') {
+      if (otherInput) {
+        otherInput.style.display = 'block';
+        otherInput.focus();
+      }
+      // Clear model dropdown since we don't have models for custom makes
+      const modelSelect = document.getElementById('regVehicleModel');
+      const modelOtherInput = document.getElementById('regVehicleModelOther');
+      if (modelSelect) {
+        modelSelect.innerHTML = '<option value="">Select Model</option>';
+        const otherModelOpt = document.createElement('option');
+        otherModelOpt.value = '__other__';
+        otherModelOpt.textContent = '➕ Other (enter custom model)';
+        modelSelect.appendChild(otherModelOpt);
+        modelSelect.value = '__other__';
+      }
+      if (modelOtherInput) {
+        modelOtherInput.style.display = 'block';
+      }
+    } else {
+      if (otherInput) {
+        otherInput.style.display = 'none';
+        otherInput.value = '';
+      }
+      populateVehicleModelOptions();
+    }
+  });
 }
 
 /**
@@ -4999,9 +5198,16 @@ function populateVehicleMakeOptions() {
 function populateVehicleModelOptions() {
   const makeSelect = document.getElementById('regVehicleMake');
   const modelSelect = document.getElementById('regVehicleModel');
+  const otherInput = document.getElementById('regVehicleModelOther');
   if (!modelSelect) return;
   
   const selectedMake = makeSelect?.value || '';
+  
+  // Hide other input initially
+  if (otherInput) {
+    otherInput.style.display = 'none';
+    otherInput.value = '';
+  }
   
   // Model options by make
   const modelsByMake = {
@@ -5046,6 +5252,37 @@ function populateVehicleModelOptions() {
     option.value = model;
     option.textContent = model;
     modelSelect.appendChild(option);
+  });
+  
+  // Add "Other" option at end
+  const otherOption = document.createElement('option');
+  otherOption.value = '__other__';
+  otherOption.textContent = '-- Other (specify) --';
+  modelSelect.appendChild(otherOption);
+  
+  // Get or create the custom input field
+  let otherInput = document.getElementById('regVehicleModelOther');
+  if (!otherInput) {
+    otherInput = document.createElement('input');
+    otherInput.type = 'text';
+    otherInput.id = 'regVehicleModelOther';
+    otherInput.placeholder = 'Enter custom model';
+    otherInput.style.display = 'none';
+    otherInput.style.marginTop = '8px';
+    modelSelect.parentNode.appendChild(otherInput);
+  }
+  
+  // Handle "Other" selection
+  modelSelect.addEventListener('change', function() {
+    if (this.value === '__other__') {
+      otherInput.style.display = 'block';
+      otherInput.required = true;
+      otherInput.focus();
+    } else {
+      otherInput.style.display = 'none';
+      otherInput.required = false;
+      otherInput.value = '';
+    }
   });
   
   // Try to restore previous value if it exists in new list
