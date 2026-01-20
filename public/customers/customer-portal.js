@@ -54,7 +54,7 @@ const state = {
 const portalSettings = {
   logo: '/favicon.ico',
   headerTitle: 'RELIALIMO',
-  welcomeMessage: 'Welcome back!',
+  welcomeMessage: 'Welcome to Professional',
   thankYouMessage: 'RELIALIMO thanks you',
   googleReviewUrl: '',
   primaryColor: '#4f46e5',
@@ -406,7 +406,7 @@ function applyPortalSettings() {
   
   // Update welcome message
   if (state.customer) {
-    document.getElementById('welcomeGreeting').textContent = portalSettings.welcomeMessage || 'Welcome back!';
+    document.getElementById('welcomeGreeting').textContent = portalSettings.welcomeMessage || 'Welcome to Professional';
     document.getElementById('welcomeName').textContent = `${state.customer.first_name || ''} ${state.customer.last_name || ''}`.trim();
   }
   
