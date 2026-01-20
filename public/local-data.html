@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Local Data Manager - RELIA🐂LIMO™</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #1a1a2e;
+      color: #e8e8e8;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #333;
+    }
+    .header h1 {
+      font-size: 24px;
+      color: #d4af37;
+    }
+    .header-actions {
+      display: flex;
+      gap: 10px;
+    }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #d4af37 0%, #b8972e 100%);
+      color: #000;
+    }
+    .btn-danger {
+      background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+      color: #fff;
+    }
+    .btn-secondary {
+      background: #444;
+      color: #fff;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+    .stat-card {
+      background: #252542;
+      border-radius: 10px;
+      padding: 20px;
+      border: 1px solid #333;
+    }
+    .stat-card h3 {
+      font-size: 12px;
+      color: #888;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .stat-card .value {
+      font-size: 28px;
+      font-weight: bold;
+      color: #d4af37;
+    }
+    .stat-card .detail {
+      font-size: 12px;
+      color: #666;
+      margin-top: 5px;
+    }
+    .data-section {
+      background: #252542;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      border: 1px solid #333;
+      overflow: hidden;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 20px;
+      background: #1e1e36;
+      cursor: pointer;
+      user-select: none;
+    }
+    .section-header:hover {
+      background: #2a2a4a;
+    }
+    .section-header h2 {
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-header .badge {
+      background: #d4af37;
+      color: #000;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .section-header .size {
+      font-size: 12px;
+      color: #888;
+    }
+    .section-header .toggle {
+      font-size: 18px;
+      color: #888;
+      transition: transform 0.2s;
+    }
+    .section-header.expanded .toggle {
+      transform: rotate(180deg);
+    }
+    .section-content {
+      display: none;
+      padding: 20px;
+      border-top: 1px solid #333;
+    }
+    .section-content.show {
+      display: block;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .data-table th,
+    .data-table td {
+      padding: 10px 15px;
+      text-align: left;
+      border-bottom: 1px solid #333;
+    }
+    .data-table th {
+      background: #1a1a2e;
+      color: #888;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    .data-table tr:hover {
+      background: #2a2a4a;
+    }
+    .key-name {
+      font-family: 'Courier New', monospace;
+      color: #4fc3f7;
+    }
+    .data-type {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .type-array { background: #1565c0; color: #fff; }
+    .type-object { background: #7b1fa2; color: #fff; }
+    .type-string { background: #2e7d32; color: #fff; }
+    .type-number { background: #f57c00; color: #fff; }
+    .type-boolean { background: #c62828; color: #fff; }
+    .action-btn {
+      padding: 5px 10px;
+      border: none;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      margin-right: 5px;
+    }
+    .action-btn.view {
+      background: #1976d2;
+      color: #fff;
+    }
+    .action-btn.delete {
+      background: #dc3545;
+      color: #fff;
+    }
+    .action-btn.copy {
+      background: #28a745;
+      color: #fff;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.8);
+      z-index: 1000;
+      overflow-y: auto;
+      padding: 40px 20px;
+    }
+    .modal.show {
+      display: block;
+    }
+    .modal-content {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #252542;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 20px;
+      background: #1e1e36;
+      border-bottom: 1px solid #333;
+    }
+    .modal-header h3 {
+      font-size: 16px;
+      color: #d4af37;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 24px;
+      cursor: pointer;
+    }
+    .modal-body {
+      padding: 20px;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+    .modal-body pre {
+      background: #1a1a2e;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #e8e8e8;
+    }
+    .modal-footer {
+      padding: 15px 20px;
+      border-top: 1px solid #333;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+    .category-icon {
+      font-size: 20px;
+    }
+    .warning-banner {
+      background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+      color: #000;
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    .warning-banner .icon {
+      font-size: 24px;
+    }
+    .back-link {
+      color: #d4af37;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .back-link:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="my-office.html" class="back-link">← Back to My Office</a>
+    
+    <div class="header">
+      <h1>📦 Local Data Manager</h1>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="refreshData()">🔄 Refresh</button>
+        <button class="btn btn-primary" onclick="exportAllData()">📥 Export All</button>
+        <button class="btn btn-danger" onclick="clearAllData()">🗑️ Clear All Data</button>
+      </div>
+    </div>
+
+    <div class="warning-banner">
+      <span class="icon">⚠️</span>
+      <div>
+        <strong>Browser Local Storage</strong><br>
+        This data is stored in your browser and may be lost if you clear your browser cache. Critical data should be synced to Supabase.
+      </div>
+    </div>
+
+    <div class="stats-grid" id="statsGrid">
+      <!-- Stats will be populated here -->
+    </div>
+
+    <div id="dataContainer">
+      <!-- Data sections will be populated here -->
+    </div>
+  </div>
+
+  <!-- View Modal -->
+  <div class="modal" id="viewModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalTitle">Data Viewer</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <pre id="modalContent"></pre>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="copyModalContent()">📋 Copy</button>
+        <button class="btn btn-primary" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Known localStorage keys organized by category
+    const DATA_CATEGORIES = {
+      'Company Settings': {
+        icon: '🏢',
+        keys: [
+          'companyInfo',
+          'companyLogo',
+          'companyRates',
+          'logoSettings',
+          'logoManagementSettings',
+          'relia_company_settings',
+          'relia_company_info',
+          'relia_organization_id',
+          'selectedOrgId',
+          'organization_id',
+          'currentOrganizationId'
+        ]
+      },
+      'Driver Data': {
+        icon: '🚗',
+        keys: [
+          'relia_driver_directory',
+          'relia_driver_status_overrides',
+          'relia_driver_status_overrides_timestamp',
+          'cr_drivers'
+        ]
+      },
+      'Account Data': {
+        icon: '👤',
+        keys: [
+          'limoAccounts',
+          'relia_accounts',
+          'relia_account_draft',
+          'current_customer',
+          'customer_session'
+        ]
+      },
+      'Reservation Data': {
+        icon: '📅',
+        keys: [
+          'relia_reservations',
+          'dev_reservations',
+          'local_reservations',
+          'relia_dev_reservations',
+          'relia_farmout_assignments',
+          'relia_trip_status_update',
+          'relia_return_to_reservation_url'
+        ]
+      },
+      'Fleet & Vehicles': {
+        icon: '🚙',
+        keys: [
+          'cr_fleet',
+          'cr_vehicle_types',
+          'vehicleTypeDrafts'
+        ]
+      },
+      'Affiliates & Resources': {
+        icon: '🤝',
+        keys: [
+          'cr_affiliates',
+          'cr_airports'
+        ]
+      },
+      'Portal Settings': {
+        icon: '⚙️',
+        keys: [
+          'driverAppSettings',
+          'customerAccountSettings',
+          'magicLinkEnabled'
+        ]
+      },
+      'Authentication': {
+        icon: '🔐',
+        keys: [
+          'supabase_session',
+          'supabase_access_token',
+          'authToken',
+          'currentUser'
+        ]
+      },
+      'Messaging': {
+        icon: '📧',
+        keys: [
+          'smsProviders',
+          'emailSettings',
+          'pendingEmails',
+          'pendingSms',
+          'pending_verifications'
+        ]
+      },
+      'Testing & Debug': {
+        icon: '🧪',
+        keys: [
+          'relia_test_data',
+          'relia_auto_test',
+          'relia_test_instructions',
+          'envSettingsLastLoad'
+        ]
+      }
+    };
+
+    let allData = {};
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function getDataType(value) {
+      if (Array.isArray(value)) return 'array';
+      if (value === null) return 'null';
+      return typeof value;
+    }
+
+    function getItemCount(value) {
+      if (Array.isArray(value)) return value.length;
+      if (typeof value === 'object' && value !== null) return Object.keys(value).length;
+      return 1;
+    }
+
+    function loadAllData() {
+      allData = {};
+      let totalSize = 0;
+      let totalKeys = 0;
+
+      // Collect all known keys
+      const allKnownKeys = new Set();
+      Object.values(DATA_CATEGORIES).forEach(cat => {
+        cat.keys.forEach(key => allKnownKeys.add(key));
+      });
+
+      // Scan localStorage for all keys
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        const rawValue = localStorage.getItem(key);
+        const size = new Blob([rawValue]).size;
+        totalSize += size;
+        totalKeys++;
+
+        let parsedValue = rawValue;
+        try {
+          parsedValue = JSON.parse(rawValue);
+        } catch (e) {
+          // Keep as string
+        }
+
+        allData[key] = {
+          raw: rawValue,
+          parsed: parsedValue,
+          size: size,
+          type: getDataType(parsedValue),
+          count: getItemCount(parsedValue)
+        };
+
+        // Add to "Other" category if not known
+        if (!allKnownKeys.has(key) && !key.startsWith('email_rules_')) {
+          if (!DATA_CATEGORIES['Other']) {
+            DATA_CATEGORIES['Other'] = { icon: '📁', keys: [] };
+          }
+          if (!DATA_CATEGORIES['Other'].keys.includes(key)) {
+            DATA_CATEGORIES['Other'].keys.push(key);
+          }
+        }
+      }
+
+      // Handle dynamic email_rules keys
+      Object.keys(allData).forEach(key => {
+        if (key.startsWith('email_rules_')) {
+          if (!DATA_CATEGORIES['Messaging'].keys.includes(key)) {
+            DATA_CATEGORIES['Messaging'].keys.push(key);
+          }
+        }
+      });
+
+      return { totalSize, totalKeys };
+    }
+
+    function renderStats(totalSize, totalKeys) {
+      const grid = document.getElementById('statsGrid');
+      
+      // Count by category
+      let categoryCounts = {};
+      Object.entries(DATA_CATEGORIES).forEach(([cat, info]) => {
+        const count = info.keys.filter(k => allData[k]).length;
+        if (count > 0) categoryCounts[cat] = count;
+      });
+
+      grid.innerHTML = `
+        <div class="stat-card">
+          <h3>Total Keys</h3>
+          <div class="value">${totalKeys}</div>
+          <div class="detail">localStorage entries</div>
+        </div>
+        <div class="stat-card">
+          <h3>Total Size</h3>
+          <div class="value">${formatBytes(totalSize)}</div>
+          <div class="detail">of browser storage</div>
+        </div>
+        <div class="stat-card">
+          <h3>Categories</h3>
+          <div class="value">${Object.keys(categoryCounts).length}</div>
+          <div class="detail">data categories</div>
+        </div>
+        <div class="stat-card">
+          <h3>Largest Item</h3>
+          <div class="value">${formatBytes(Math.max(...Object.values(allData).map(d => d.size)))}</div>
+          <div class="detail">${Object.entries(allData).sort((a, b) => b[1].size - a[1].size)[0]?.[0] || 'N/A'}</div>
+        </div>
+      `;
+    }
+
+    function renderDataSections() {
+      const container = document.getElementById('dataContainer');
+      container.innerHTML = '';
+
+      Object.entries(DATA_CATEGORIES).forEach(([category, info]) => {
+        const keys = info.keys.filter(k => allData[k]);
+        if (keys.length === 0) return;
+
+        const totalSize = keys.reduce((sum, k) => sum + allData[k].size, 0);
+
+        const section = document.createElement('div');
+        section.className = 'data-section';
+        section.innerHTML = `
+          <div class="section-header" onclick="toggleSection(this)">
+            <h2>
+              <span class="category-icon">${info.icon}</span>
+              ${category}
+              <span class="badge">${keys.length}</span>
+            </h2>
+            <div style="display: flex; align-items: center; gap: 15px;">
+              <span class="size">${formatBytes(totalSize)}</span>
+              <span class="toggle">▼</span>
+            </div>
+          </div>
+          <div class="section-content">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Key</th>
+                  <th>Type</th>
+                  <th>Items</th>
+                  <th>Size</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${keys.map(key => {
+                  const data = allData[key];
+                  return `
+                    <tr>
+                      <td><span class="key-name">${key}</span></td>
+                      <td><span class="data-type type-${data.type}">${data.type}</span></td>
+                      <td>${data.count}</td>
+                      <td>${formatBytes(data.size)}</td>
+                      <td>
+                        <button class="action-btn view" onclick="viewData('${key}')">View</button>
+                        <button class="action-btn copy" onclick="copyData('${key}')">Copy</button>
+                        <button class="action-btn delete" onclick="deleteData('${key}')">Delete</button>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+        container.appendChild(section);
+      });
+
+      if (container.innerHTML === '') {
+        container.innerHTML = `
+          <div class="empty-state">
+            <h3>No local data found</h3>
+            <p>Your localStorage is empty.</p>
+          </div>
+        `;
+      }
+    }
+
+    function toggleSection(header) {
+      header.classList.toggle('expanded');
+      const content = header.nextElementSibling;
+      content.classList.toggle('show');
+    }
+
+    function viewData(key) {
+      const data = allData[key];
+      document.getElementById('modalTitle').textContent = key;
+      document.getElementById('modalContent').textContent = JSON.stringify(data.parsed, null, 2);
+      document.getElementById('viewModal').classList.add('show');
+    }
+
+    function closeModal() {
+      document.getElementById('viewModal').classList.remove('show');
+    }
+
+    function copyData(key) {
+      const data = allData[key];
+      navigator.clipboard.writeText(JSON.stringify(data.parsed, null, 2))
+        .then(() => alert('Copied to clipboard!'))
+        .catch(err => alert('Failed to copy: ' + err));
+    }
+
+    function copyModalContent() {
+      const content = document.getElementById('modalContent').textContent;
+      navigator.clipboard.writeText(content)
+        .then(() => alert('Copied to clipboard!'))
+        .catch(err => alert('Failed to copy: ' + err));
+    }
+
+    function deleteData(key) {
+      if (confirm(`Are you sure you want to delete "${key}"?\n\nThis cannot be undone.`)) {
+        localStorage.removeItem(key);
+        refreshData();
+      }
+    }
+
+    function clearAllData() {
+      if (confirm('⚠️ WARNING: This will delete ALL local data!\n\nAre you absolutely sure?')) {
+        if (confirm('This action cannot be undone. Type YES to confirm.')) {
+          localStorage.clear();
+          refreshData();
+          alert('All local data has been cleared.');
+        }
+      }
+    }
+
+    function exportAllData() {
+      const exportData = {};
+      Object.keys(allData).forEach(key => {
+        exportData[key] = allData[key].parsed;
+      });
+      
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relia-local-data-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function refreshData() {
+      const { totalSize, totalKeys } = loadAllData();
+      renderStats(totalSize, totalKeys);
+      renderDataSections();
+    }
+
+    // Initialize
+    refreshData();
+  </script>
+</body>
+</html>

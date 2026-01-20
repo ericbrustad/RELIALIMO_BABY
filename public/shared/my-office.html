@@ -4709,6 +4709,7 @@ further assistance.</textarea>
                       <div style="margin-top: 30px; display: flex; gap: 10px;">
                         <button id="saveAffiliateBtn" class="btn btn-primary btn-large">SAVE AFFILIATE</button>
                         <button id="clearAffiliateBtn" class="btn btn-secondary btn-large">NEW / CLEAR</button>
+                        <button id="deleteAffiliateBtn" class="btn btn-danger btn-large" style="background: #dc3545; border-color: #dc3545; display: none;">DELETE AFFILIATE</button>
                       </div>
                     </div>
 
@@ -5588,53 +5589,56 @@ further assistance.</textarea>
         <section id="airports-section" class="office-section resource-section" style="display: none;">
           <div class="resource-layout">
             <!-- Left: Airports List -->
-            <div class="resource-list-panel">
-              <div class="resource-header">
-                <h3>Airports</h3>
+            <div class="resource-list-panel" style="background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 15px;">
+              <div class="resource-header" style="margin-bottom: 15px;">
+                <h3 style="font-size: 16px; font-weight: 600; color: #333; margin-bottom: 12px;">Airports</h3>
                 <div class="search-bar">
-                  <input type="text" placeholder="Search airports..." class="form-control" />
+                  <input type="text" placeholder="Search airports..." class="form-control" style="border-radius: 4px;" />
                 </div>
               </div>
+              
+              <!-- Add New Airport Button - Moved above list -->
+              <div class="resource-actions" style="margin-bottom: 15px;">
+                <button class="btn btn-primary" id="addNewAirportBtn" style="width: 100%; padding: 10px; font-weight: 600; background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%); border: none; border-radius: 6px;">+ Add New Airport</button>
+              </div>
+              
               <div class="filter-options">
                 <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 10px;">
-                  <input type="checkbox" />
+                  <input type="checkbox" id="showAllAirportsCheckbox" />
                   <span>Show All</span>
                 </label>
               </div>
-              <div class="resource-list" id="airportsList">
-                <div class="resource-item active" data-code="MSP" data-name="Minneapolis-St Paul International Airport" data-address="4300 Glumack Dr" data-city="St. Paul" data-state="MN" data-zip="55111" data-country="United States" data-latitude="44.8848" data-longitude="-93.2223">
+              <div class="resource-list" id="airportsList" style="display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 380px); overflow-y: auto;">
+                <div class="resource-item airport-item active" data-code="MSP" data-name="Minneapolis-St Paul International Airport" data-address="4300 Glumack Dr" data-city="St. Paul" data-state="MN" data-zip="55111" data-country="United States" data-latitude="44.8848" data-longitude="-93.2223" style="border: 2px solid #1976d2; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; padding: 12px 15px; cursor: pointer; transition: all 0.2s ease;">
                   <div class="resource-item-main">
                     <div class="resource-item-details">
-                      <div class="resource-item-name">Minneapolis-St Paul International Airport</div>
-                      <div class="resource-item-meta">
-                        <span>Code: MSP</span>
+                      <div class="resource-item-name" style="font-weight: 600; font-size: 14px; color: #1565c0;">Minneapolis-St Paul International Airport</div>
+                      <div class="resource-item-meta" style="font-size: 12px; color: #666; margin-top: 4px;">
+                        <span style="background: #1976d2; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: 600;">MSP</span>
                       </div>
                     </div>
                   </div>
                 </div>
-                <div class="resource-item" data-code="FCM" data-name="Premier Jet Center Flying Cloud" data-address="14800 Pioneer Trl" data-city="Eden Prairie" data-state="MN" data-zip="55347" data-country="United States" data-latitude="44.8272" data-longitude="-93.4575">
+                <div class="resource-item airport-item" data-code="FCM" data-name="Premier Jet Center Flying Cloud" data-address="14800 Pioneer Trl" data-city="Eden Prairie" data-state="MN" data-zip="55347" data-country="United States" data-latitude="44.8272" data-longitude="-93.4575" style="border: 1px solid #ddd; background: #fff; border-radius: 8px; padding: 12px 15px; cursor: pointer; transition: all 0.2s ease;">
                   <div class="resource-item-main">
                     <div class="resource-item-details">
-                      <div class="resource-item-name">Premier Jet Center Flying Cloud</div>
-                      <div class="resource-item-meta">
-                        <span>Code: FCM</span>
+                      <div class="resource-item-name" style="font-weight: 600; font-size: 14px; color: #333;">Premier Jet Center Flying Cloud</div>
+                      <div class="resource-item-meta" style="font-size: 12px; color: #666; margin-top: 4px;">
+                        <span style="background: #607d8b; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: 600;">FCM</span>
                       </div>
                     </div>
                   </div>
                 </div>
-                <div class="resource-item" data-code="MSP-SIG" data-name="Signature MSP" data-address="4300 Glumack Dr, Terminal 2" data-city="St. Paul" data-state="MN" data-zip="55111" data-country="United States" data-latitude="44.8848" data-longitude="-93.2223">
+                <div class="resource-item airport-item" data-code="MSP-SIG" data-name="Signature MSP" data-address="4300 Glumack Dr, Terminal 2" data-city="St. Paul" data-state="MN" data-zip="55111" data-country="United States" data-latitude="44.8848" data-longitude="-93.2223" style="border: 1px solid #ddd; background: #fff; border-radius: 8px; padding: 12px 15px; cursor: pointer; transition: all 0.2s ease;">
                   <div class="resource-item-main">
                     <div class="resource-item-details">
-                      <div class="resource-item-name">Signature MSP</div>
-                      <div class="resource-item-meta">
-                        <span>Code: MSP-SIG</span>
+                      <div class="resource-item-name" style="font-weight: 600; font-size: 14px; color: #333;">Signature MSP</div>
+                      <div class="resource-item-meta" style="font-size: 12px; color: #666; margin-top: 4px;">
+                        <span style="background: #607d8b; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: 600;">MSP-SIG</span>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-              <div class="resource-actions">
-                <button class="btn btn-primary btn-large">+ Add New Airport</button>
               </div>
             </div>
 

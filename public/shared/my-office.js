@@ -8228,6 +8228,12 @@ class MyOffice {
       });
     }
 
+    // Delete Affiliate button
+    const deleteAffiliateBtn = document.getElementById('deleteAffiliateBtn');
+    if (deleteAffiliateBtn) {
+      deleteAffiliateBtn.addEventListener('click', () => this.deleteAffiliate());
+    }
+
     // Setup "Add Another Driver" button for affiliate driver associations
     const addDriverBtn = document.getElementById('addAnotherDriverBtn');
     if (addDriverBtn) {
@@ -8695,6 +8701,47 @@ class MyOffice {
     }
   }
 
+  async deleteAffiliate() {
+    if (!this.currentAffiliate?.id) {
+      alert('No affiliate selected to delete');
+      return;
+    }
+
+    const affiliateName = this.currentAffiliate.company_name || 'this affiliate';
+    const confirmed = confirm(`Are you sure you want to delete "${affiliateName}"?\n\nThis action cannot be undone.`);
+    
+    if (!confirmed) return;
+
+    try {
+      // Clear affiliate association from any linked drivers
+      const driverIds = this.currentAffiliate.associated_driver_ids || [];
+      for (const driverId of driverIds) {
+        try {
+          await updateDriver(driverId, { affiliate_id: null, affiliate_name: null });
+        } catch (e) {
+          console.warn('Could not clear affiliate from driver:', driverId, e);
+        }
+      }
+
+      // Delete the affiliate
+      const result = await deleteAffiliate(this.currentAffiliate.id);
+      
+      if (result) {
+        alert('Affiliate deleted successfully!');
+        this.clearAffiliateForm();
+        await this.loadAffiliatesList();
+        // Hide delete button
+        const deleteBtn = document.getElementById('deleteAffiliateBtn');
+        if (deleteBtn) deleteBtn.style.display = 'none';
+      } else {
+        alert('Failed to delete affiliate. Check console for details.');
+      }
+    } catch (error) {
+      console.error('Error deleting affiliate:', error);
+      alert('Error deleting affiliate: ' + error.message);
+    }
+  }
+
   async loadDriversList(selectedDriverId = null) {
     if (!this.apiReady) {
       const container = document.getElementById('driversListContainer');
@@ -8946,6 +8993,12 @@ class MyOffice {
     this.currentAffiliate = affiliate;
     const form = document.querySelector('.affiliates-form-panel');
     if (!form) return;
+
+    // Show delete button when editing existing affiliate
+    const deleteBtn = document.getElementById('deleteAffiliateBtn');
+    if (deleteBtn) {
+      deleteBtn.style.display = affiliate?.id ? 'inline-block' : 'none';
+    }
 
     // DEBUG: Log affiliate data to see structure
     console.log('📋 Loading affiliate form with data:', affiliate);
