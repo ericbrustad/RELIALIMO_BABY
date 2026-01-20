@@ -8118,17 +8118,40 @@ further assistance.</textarea>
                 </div>
                 <div class="form-row">
                   <div class="form-group">
-                    <label>Driver En Route Notification</label>
-                    <select id="customerDriverEnRoute" class="form-control">
-                      <option value="yes" selected>Yes</option>
-                      <option value="no">No</option>
+                    <label>Pickup Reminder Method</label>
+                    <select id="customerPickupReminderMethod" class="form-control">
+                      <option value="email-sms" selected>Email + SMS</option>
+                      <option value="email">Email Only</option>
+                      <option value="sms">SMS Only</option>
                     </select>
                   </div>
                   <div class="form-group">
+                    <label>Driver En Route Notification</label>
+                    <select id="customerDriverEnRoute" class="form-control">
+                      <option value="email-sms" selected>Email + SMS</option>
+                      <option value="email">Email Only</option>
+                      <option value="sms">SMS Only</option>
+                      <option value="none">None</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
                     <label>Trip Completed Notification</label>
                     <select id="customerTripComplete" class="form-control">
-                      <option value="yes" selected>Yes</option>
-                      <option value="no">No</option>
+                      <option value="email-sms" selected>Email + SMS</option>
+                      <option value="email">Email Only</option>
+                      <option value="sms">SMS Only</option>
+                      <option value="none">None</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Driver Arrived Notification</label>
+                    <select id="customerDriverArrived" class="form-control">
+                      <option value="email-sms" selected>Email + SMS</option>
+                      <option value="email">Email Only</option>
+                      <option value="sms">SMS Only</option>
+                      <option value="none">None</option>
                     </select>
                   </div>
                 </div>
@@ -8211,11 +8234,113 @@ further assistance.</textarea>
 
             <div style="text-align: right; margin-top: 20px; padding-right: 20px;">
               <button class="btn btn-secondary" style="margin-right: 10px;">Reset</button>
+              <button class="btn btn-info" id="previewCustomerPortal" style="margin-right: 10px; background: #17a2b8; border-color: #17a2b8;">👁️ Preview Customer Portal</button>
               <button class="btn btn-primary" id="saveCustomerAccountSettings">Save Customer Account Settings</button>
             </div>
           </div>
         </section>
       </main>
+    </div>
+
+    <!-- Customer Portal Preview Modal -->
+    <div class="modal-overlay" id="customerPortalPreviewModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 10000; overflow-y: auto;">
+      <div style="max-width: 500px; margin: 40px auto; background: #1a1a1a; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
+        <!-- Preview Header -->
+        <div style="background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%); padding: 15px 20px; display: flex; justify-content: space-between; align-items: center;">
+          <h2 style="color: #000; margin: 0; font-size: 18px;">📱 Customer Portal Preview</h2>
+          <button onclick="document.getElementById('customerPortalPreviewModal').style.display='none'" style="background: none; border: none; color: #000; font-size: 24px; cursor: pointer;">&times;</button>
+        </div>
+        
+        <!-- Preview Content -->
+        <div style="padding: 20px;">
+          <!-- Phone Frame -->
+          <div style="background: #222; border-radius: 30px; padding: 10px; max-width: 320px; margin: 0 auto; border: 3px solid #333;">
+            <!-- Phone Screen -->
+            <div style="background: #121212; border-radius: 20px; min-height: 500px; overflow: hidden;">
+              
+              <!-- App Header -->
+              <div id="previewHeader" style="padding: 20px; text-align: center; border-bottom: 1px solid #333;">
+                <div id="previewLogo" style="font-size: 24px; font-weight: bold; margin-bottom: 10px;">🚗 RELIA LIMO</div>
+                <p id="previewWelcome" style="color: #888; font-size: 12px; margin: 0;">Welcome to your customer portal</p>
+              </div>
+              
+              <!-- Onboarding Preview -->
+              <div id="previewOnboarding" style="padding: 20px;">
+                <h3 style="color: #d4af37; font-size: 14px; margin-bottom: 15px;">Create Account</h3>
+                
+                <div style="margin-bottom: 12px;">
+                  <label style="color: #888; font-size: 11px; display: block; margin-bottom: 4px;">Email *</label>
+                  <input type="text" disabled style="width: 100%; padding: 8px; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #fff; font-size: 12px;" placeholder="your@email.com">
+                </div>
+                
+                <div id="previewEmailVerifyField" style="margin-bottom: 12px;">
+                  <label style="color: #888; font-size: 11px; display: block; margin-bottom: 4px;">📧 Email Verification Code *</label>
+                  <input type="text" disabled style="width: 100%; padding: 8px; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #fff; font-size: 12px;" placeholder="Enter 6-digit code">
+                </div>
+                
+                <div style="margin-bottom: 12px;">
+                  <label style="color: #888; font-size: 11px; display: block; margin-bottom: 4px;">Phone *</label>
+                  <input type="text" disabled style="width: 100%; padding: 8px; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #fff; font-size: 12px;" placeholder="(555) 123-4567">
+                </div>
+                
+                <div id="previewPhoneVerifyField" style="margin-bottom: 12px; display: none;">
+                  <label style="color: #888; font-size: 11px; display: block; margin-bottom: 4px;">📱 SMS Verification Code *</label>
+                  <input type="text" disabled style="width: 100%; padding: 8px; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #fff; font-size: 12px;" placeholder="Enter 6-digit code">
+                </div>
+                
+                <div id="previewCreditCardField" style="margin-bottom: 12px;">
+                  <label style="color: #888; font-size: 11px; display: block; margin-bottom: 4px;">💳 Credit Card <span id="previewCardRequired">(Optional)</span></label>
+                  <input type="text" disabled style="width: 100%; padding: 8px; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; color: #fff; font-size: 12px;" placeholder="4242 4242 4242 4242">
+                </div>
+                
+                <button disabled style="width: 100%; padding: 12px; background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%); border: none; border-radius: 6px; color: #000; font-weight: bold; font-size: 13px; margin-top: 10px;">Create Account</button>
+              </div>
+              
+              <!-- Booking Preview -->
+              <div id="previewBooking" style="padding: 20px; border-top: 1px solid #333;">
+                <h3 style="color: #d4af37; font-size: 14px; margin-bottom: 15px;">📅 Book a Ride</h3>
+                <div id="previewMinAdvance" style="color: #888; font-size: 11px; margin-bottom: 10px;">⏰ Minimum 4 hours advance booking</div>
+                <div id="previewPaymentUpfront" style="color: #888; font-size: 11px;">💰 Payment: Pay after trip</div>
+              </div>
+              
+              <!-- Notifications Preview -->
+              <div id="previewNotifications" style="padding: 20px; border-top: 1px solid #333;">
+                <h3 style="color: #d4af37; font-size: 14px; margin-bottom: 15px;">🔔 You'll Receive</h3>
+                <div style="font-size: 11px; color: #ccc;">
+                  <div id="previewNotifConfirm" style="margin-bottom: 6px;">✓ Booking confirmation (Email + SMS)</div>
+                  <div id="previewNotifReminder" style="margin-bottom: 6px;">✓ Pickup reminder 24hrs before (Email + SMS)</div>
+                  <div id="previewNotifEnRoute" style="margin-bottom: 6px;">✓ Driver en route alert (Email + SMS)</div>
+                  <div id="previewNotifArrived" style="margin-bottom: 6px;">✓ Driver arrived alert (Email + SMS)</div>
+                  <div id="previewNotifComplete" style="margin-bottom: 6px;">✓ Trip completed receipt (Email + SMS)</div>
+                </div>
+              </div>
+              
+              <!-- Payment Options Preview -->
+              <div id="previewPayment" style="padding: 20px; border-top: 1px solid #333;">
+                <h3 style="color: #d4af37; font-size: 14px; margin-bottom: 15px;">💳 Payment Options</h3>
+                <div style="font-size: 11px; color: #ccc;">
+                  <div id="previewPayCC" style="margin-bottom: 6px;">✓ Credit Card</div>
+                  <div id="previewPayCash" style="margin-bottom: 6px;">✓ Cash</div>
+                  <div id="previewPayInvoice" style="margin-bottom: 6px;">✓ Invoice (Approved Accounts)</div>
+                </div>
+              </div>
+              
+              <!-- Loyalty Preview -->
+              <div id="previewLoyalty" style="padding: 20px; border-top: 1px solid #333; display: none;">
+                <h3 style="color: #d4af37; font-size: 14px; margin-bottom: 15px;">🎁 Loyalty Program</h3>
+                <div style="font-size: 11px; color: #ccc;">
+                  <div id="previewLoyaltyPoints" style="margin-bottom: 6px;">Earn 1 point per $1 spent</div>
+                  <div id="previewLoyaltyRedeem" style="margin-bottom: 6px;">Redeem 100 points = $1 discount</div>
+                  <div id="previewLoyaltyReferral" style="margin-bottom: 6px;">Refer a friend = 500 bonus points!</div>
+                </div>
+              </div>
+              
+            </div>
+          </div>
+          
+          <p style="text-align: center; color: #666; font-size: 11px; margin-top: 15px;">This preview updates live as you change settings</p>
+        </div>
+      </div>
     </div>
 
     <!-- Trip Tag Selector Modal -->
