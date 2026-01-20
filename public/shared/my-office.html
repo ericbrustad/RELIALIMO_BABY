@@ -31,7 +31,7 @@
           <button class="window-tab" data-tab="list-management">List Management</button>
           <button class="window-tab" data-tab="custom-forms">Custom Forms</button>
           <button class="window-tab" data-tab="driver-app-settings">Driver App</button>
-          <button class="window-tab" data-tab="customer-account-settings">Customer Account</button>
+          <button class="window-tab" data-tab="customer-account-settings">Customer Account App</button>
         </div>
       </div>
 
@@ -7906,11 +7906,9 @@ further assistance.</textarea>
                   </div>
                   <div class="form-group">
                     <label>GPS Tracking</label>
-                    <select id="driverGpsTracking" class="form-control">
-                      <option value="always" selected>Always On During Trip</option>
-                      <option value="optional">Optional</option>
-                      <option value="disabled">Disabled</option>
-                    </select>
+                    <input type="text" class="form-control" value="Always On During Trip" disabled style="background: #2a2a2a; color: #28a745; font-weight: bold;">
+                    <input type="hidden" id="driverGpsTracking" value="always">
+                    <small style="color: #888;">GPS tracking is required for all trips</small>
                   </div>
                 </div>
                 <div class="form-row">
@@ -8063,16 +8061,6 @@ further assistance.</textarea>
                       <div id="driverPreviewStatus" style="margin-bottom: 6px;">✓ Full status updates</div>
                       <div id="driverPreviewIncidentals" style="margin-bottom: 6px;">✓ Post-trip incidentals required</div>
                       <div id="driverPreviewPhoto" style="margin-bottom: 6px;">✓ Photo upload available</div>
-                    </div>
-                  </div>
-                  
-                  <!-- Payment Preview -->
-                  <div id="driverPreviewPayment" style="padding: 20px; border-top: 1px solid #333;">
-                    <h3 style="color: #28a745; font-size: 14px; margin-bottom: 15px;">💰 Earnings</h3>
-                    <div style="font-size: 11px; color: #ccc;">
-                      <div id="driverPreviewPayRate" style="margin-bottom: 6px;">Earn 70% of fare</div>
-                      <div id="driverPreviewPaySchedule" style="margin-bottom: 6px;">Paid weekly</div>
-                      <div id="driverPreviewCashCollection" style="margin-bottom: 6px;">✓ Cash collection allowed</div>
                     </div>
                   </div>
                   
@@ -8338,7 +8326,7 @@ further assistance.</textarea>
             <div style="text-align: right; margin-top: 20px; padding-right: 20px;">
               <button class="btn btn-secondary" style="margin-right: 10px;">Reset</button>
               <button class="btn btn-info" id="previewCustomerPortal" style="margin-right: 10px; background: #17a2b8; border-color: #17a2b8;">👁️ Preview Customer Portal</button>
-              <button class="btn btn-primary" id="saveCustomerAccountSettings">Save Customer Account Settings</button>
+              <button class="btn btn-primary" id="saveCustomerAccountSettings">Save Customer Account App Settings</button>
             </div>
           </div>
         </section>
