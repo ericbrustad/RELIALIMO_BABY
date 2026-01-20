@@ -30,6 +30,8 @@
           <button class="window-tab" data-tab="rate-management">Rate Management</button>
           <button class="window-tab" data-tab="list-management">List Management</button>
           <button class="window-tab" data-tab="custom-forms">Custom Forms</button>
+          <button class="window-tab" data-tab="driver-app-settings">Driver App</button>
+          <button class="window-tab" data-tab="customer-account-settings">Customer Account</button>
         </div>
       </div>
 
@@ -92,6 +94,26 @@
                   <button class="btn btn-secondary btn-small" style="width: 100%;">New</button>
                 </div>
               </div>
+            </div>
+
+            <!-- Driver App Settings Tab Items (hidden by default) -->
+            <div class="sidebar-group" id="driverAppSettingsGroup" style="display: none;">
+              <button class="sidebar-btn active" data-driver-setting="portal-branding">Portal Branding</button>
+              <button class="sidebar-btn" data-driver-setting="onboarding">Onboarding Settings</button>
+              <button class="sidebar-btn" data-driver-setting="requirements">Requirements</button>
+              <button class="sidebar-btn" data-driver-setting="notifications">Notifications</button>
+              <button class="sidebar-btn" data-driver-setting="trip-settings">Trip Settings</button>
+              <button class="sidebar-btn" data-driver-setting="payment-settings">Payment Settings</button>
+            </div>
+
+            <!-- Customer Account Settings Tab Items (hidden by default) -->
+            <div class="sidebar-group" id="customerAccountSettingsGroup" style="display: none;">
+              <button class="sidebar-btn active" data-customer-setting="portal-branding">Portal Branding</button>
+              <button class="sidebar-btn" data-customer-setting="onboarding">Onboarding Settings</button>
+              <button class="sidebar-btn" data-customer-setting="booking">Booking Settings</button>
+              <button class="sidebar-btn" data-customer-setting="payment">Payment Settings</button>
+              <button class="sidebar-btn" data-customer-setting="notifications">Notifications</button>
+              <button class="sidebar-btn" data-customer-setting="loyalty">Loyalty Program</button>
             </div>
         </aside>
 
@@ -7731,6 +7753,465 @@ further assistance.</textarea>
                   <button class="btn btn-primary">Save</button>
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Driver App Settings Section -->
+        <section id="driver-app-settings-section" class="office-section" style="display: none;">
+          <div class="content-area" style="padding: 20px;">
+            
+            <!-- Portal Branding -->
+            <div id="driver-portal-branding" class="driver-setting-panel">
+              <div class="section-header">
+                <h2>🚗 Driver Portal Branding</h2>
+              </div>
+              <div class="form-container">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Portal Logo</label>
+                    <div class="logo-upload-area" style="border: 2px dashed #444; padding: 20px; text-align: center; border-radius: 8px;">
+                      <img id="driverPortalLogo" src="" alt="Driver Portal Logo" style="max-height: 80px; display: none;">
+                      <p id="driverLogoPlaceholder">Click to upload logo (recommended: 200x60px)</p>
+                      <input type="file" id="driverLogoUpload" accept="image/*" style="display: none;">
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label>Primary Color</label>
+                    <input type="color" id="driverPrimaryColor" value="#d4af37" class="form-control" style="height: 40px;">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Welcome Message</label>
+                    <textarea id="driverWelcomeMessage" class="form-control" rows="3" placeholder="Welcome to our driver portal..."></textarea>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Onboarding Settings -->
+            <div id="driver-onboarding-settings" class="driver-setting-panel" style="display: none;">
+              <div class="section-header">
+                <h2>📝 Driver Onboarding Settings</h2>
+              </div>
+              <div class="form-container">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Require Email Verification</label>
+                    <select id="driverRequireEmailVerify" class="form-control">
+                      <option value="yes" selected>Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Require Phone Verification</label>
+                    <select id="driverRequirePhoneVerify" class="form-control">
+                      <option value="yes" selected>Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Auto-Approve New Drivers</label>
+                    <select id="driverAutoApprove" class="form-control">
+                      <option value="no" selected>No - Manual Approval Required</option>
+                      <option value="yes">Yes - Auto Approve</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Onboarding Email Template</label>
+                    <select id="driverOnboardingTemplate" class="form-control">
+                      <option value="default">Default Template</option>
+                      <option value="custom">Custom Template</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Driver Requirements -->
+            <div id="driver-requirements" class="driver-setting-panel" style="display: none;">
+              <div class="section-header">
+                <h2>📋 Driver Requirements</h2>
+              </div>
+              <div class="form-container">
+                <div class="form-row">
+                  <div class="form-group full-width">
+                    <label>Required Documents</label>
+                    <div class="checkbox-list">
+                      <label class="checkbox-item"><input type="checkbox" checked> Driver's License</label>
+                      <label class="checkbox-item"><input type="checkbox" checked> Vehicle Registration</label>
+                      <label class="checkbox-item"><input type="checkbox" checked> Insurance Certificate</label>
+                      <label class="checkbox-item"><input type="checkbox"> TCP/Livery License</label>
+                      <label class="checkbox-item"><input type="checkbox"> Background Check</label>
+                      <label class="checkbox-item"><input type="checkbox"> Drug Test Results</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Notification Settings -->
+            <div id="driver-notification-settings" class="driver-setting-panel" style="display: none;">
+              <div class="section-header">
+                <h2>🔔 Driver Notification Settings</h2>
+              </div>
+              <div class="form-container">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>New Trip Offer Notification</label>
+                    <select id="driverNewTripNotify" class="form-control">
+                      <option value="push-sms-email">Push + SMS + Email</option>
+                      <option value="push-sms" selected>Push + SMS</option>
+                      <option value="push-only">Push Only</option>
+                      <option value="sms-only">SMS Only</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Offer Expiry Time (minutes)</label>
+                    <input type="number" id="driverOfferExpiry" class="form-control" value="15" min="5" max="60">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Reminder Before Pickup (minutes)</label>
+                    <input type="number" id="driverPickupReminder" class="form-control" value="60" min="15" max="180">
+                  </div>
+                  <div class="form-group">
+                    <label>Daily Summary Email</label>
+                    <select id="driverDailySummary" class="form-control">
+                      <option value="yes" selected>Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Trip Settings -->
+            <div id="driver-trip-settings" class="driver-setting-panel" style="display: none;">
+              <div class="section-header">
+                <h2>🚙 Trip Settings</h2>
+              </div>
+              <div class="form-container">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Allow Driver Status Updates</label>
+                    <select id="driverStatusUpdates" class="form-control">
+                      <option value="all" selected>All Statuses</option>
+                      <option value="limited">Limited Statuses</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>GPS Tracking</label>
+                    <select id="driverGpsTracking" class="form-control">
+                      <option value="always" selected>Always On During Trip</option>
+                      <option value="optional">Optional</option>
+                      <option value="disabled">Disabled</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Post-Trip Incidentals</label>
+                    <select id="driverIncidentals" class="form-control">
+                      <option value="required" selected>Required</option>
+                      <option value="optional">Optional</option>
+                      <option value="disabled">Disabled</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Photo Upload</label>
+                    <select id="driverPhotoUpload" class="form-control">
+                      <option value="optional" selected>Optional</option>
+                      <option value="required">Required</option>
+                      <option value="disabled">Disabled</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Payment Settings -->
+            <div id="driver-payment-settings" class="driver-setting-panel" style="display: none;">
+              <div class="section-header">
+                <h2>💰 Driver Payment Settings</h2>
+              </div>
+              <div class="form-container">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Default Pay Rate Type</label>
+                    <select id="driverPayRateType" class="form-control">
+                      <option value="percentage" selected>Percentage of Fare</option>
+                      <option value="flat">Flat Rate per Trip</option>
+                      <option value="hourly">Hourly Rate</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Default Pay Rate (%)</label>
+                    <input type="number" id="driverPayRate" class="form-control" value="70" min="0" max="100">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Allow Cash Collection</label>
+                    <select id="driverCashCollection" class="form-control">
+                      <option value="yes" selected>Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Payment Schedule</label>
+                    <select id="driverPaySchedule" class="form-control">
+                      <option value="weekly" selected>Weekly</option>
+                      <option value="biweekly">Bi-Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="text-align: right; margin-top: 20px; padding-right: 20px;">
+              <button class="btn btn-secondary" style="margin-right: 10px;">Reset</button>
+              <button class="btn btn-primary" id="saveDriverAppSettings">Save Driver App Settings</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Customer Account Settings Section -->
+        <section id="customer-account-settings-section" class="office-section" style="display: none;">
+          <div class="content-area" style="padding: 20px;">
+            
+            <!-- Portal Branding -->
+            <div id="customer-portal-branding" class="customer-setting-panel">
+              <div class="section-header">
+                <h2>🏢 Customer Portal Branding</h2>
+              </div>
+              <div class="form-container">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Portal Logo</label>
+                    <div class="logo-upload-area" style="border: 2px dashed #444; padding: 20px; text-align: center; border-radius: 8px;">
+                      <img id="customerPortalLogo" src="" alt="Customer Portal Logo" style="max-height: 80px; display: none;">
+                      <p id="customerLogoPlaceholder">Click to upload logo (recommended: 200x60px)</p>
+                      <input type="file" id="customerLogoUpload" accept="image/*" style="display: none;">
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label>Primary Color</label>
+                    <input type="color" id="customerPrimaryColor" value="#d4af37" class="form-control" style="height: 40px;">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Welcome Message</label>
+                    <textarea id="customerWelcomeMessage" class="form-control" rows="3" placeholder="Welcome to your customer portal..."></textarea>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Onboarding Settings -->
+            <div id="customer-onboarding-settings" class="customer-setting-panel" style="display: none;">
+              <div class="section-header">
+                <h2>📝 Customer Onboarding Settings</h2>
+              </div>
+              <div class="form-container">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Require Email Verification</label>
+                    <select id="customerRequireEmailVerify" class="form-control">
+                      <option value="yes" selected>Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Require Phone Verification</label>
+                    <select id="customerRequirePhoneVerify" class="form-control">
+                      <option value="no" selected>No</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Collect Credit Card During Signup</label>
+                    <select id="customerCollectCard" class="form-control">
+                      <option value="optional" selected>Optional</option>
+                      <option value="required">Required</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Welcome Email Template</label>
+                    <select id="customerWelcomeTemplate" class="form-control">
+                      <option value="default">Default Template</option>
+                      <option value="custom">Custom Template</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Booking Settings -->
+            <div id="customer-booking-settings" class="customer-setting-panel" style="display: none;">
+              <div class="section-header">
+                <h2>📅 Booking Settings</h2>
+              </div>
+              <div class="form-container">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Allow Online Booking</label>
+                    <select id="customerOnlineBooking" class="form-control">
+                      <option value="yes" selected>Yes</option>
+                      <option value="quote-only">Quote Only</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Minimum Advance Booking (hours)</label>
+                    <input type="number" id="customerMinAdvance" class="form-control" value="4" min="1" max="72">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Require Payment Upfront</label>
+                    <select id="customerPaymentUpfront" class="form-control">
+                      <option value="no" selected>No</option>
+                      <option value="deposit">Deposit Only</option>
+                      <option value="full">Full Payment</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Allow Service Type Selection</label>
+                    <select id="customerServiceSelection" class="form-control">
+                      <option value="all" selected>All Service Types</option>
+                      <option value="limited">Limited Selection</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Notification Settings -->
+            <div id="customer-notification-settings" class="customer-setting-panel" style="display: none;">
+              <div class="section-header">
+                <h2>🔔 Customer Notification Settings</h2>
+              </div>
+              <div class="form-container">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Booking Confirmation</label>
+                    <select id="customerBookingConfirm" class="form-control">
+                      <option value="email-sms" selected>Email + SMS</option>
+                      <option value="email">Email Only</option>
+                      <option value="sms">SMS Only</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Reminder Before Pickup (hours)</label>
+                    <input type="number" id="customerPickupReminder" class="form-control" value="24" min="1" max="72">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Driver En Route Notification</label>
+                    <select id="customerDriverEnRoute" class="form-control">
+                      <option value="yes" selected>Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Trip Completed Notification</label>
+                    <select id="customerTripComplete" class="form-control">
+                      <option value="yes" selected>Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Payment Settings -->
+            <div id="customer-payment-settings" class="customer-setting-panel" style="display: none;">
+              <div class="section-header">
+                <h2>💳 Customer Payment Settings</h2>
+              </div>
+              <div class="form-container">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Allow Credit Card Payments</label>
+                    <select id="customerCreditCard" class="form-control">
+                      <option value="yes" selected>Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Allow Cash Payments</label>
+                    <select id="customerCashPayment" class="form-control">
+                      <option value="yes" selected>Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Allow Invoice/Account</label>
+                    <select id="customerInvoice" class="form-control">
+                      <option value="approved-only" selected>Approved Accounts Only</option>
+                      <option value="all">All Customers</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Auto-Charge After Trip</label>
+                    <select id="customerAutoCharge" class="form-control">
+                      <option value="no" selected>No</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Loyalty Program -->
+            <div id="customer-loyalty-program" class="customer-setting-panel" style="display: none;">
+              <div class="section-header">
+                <h2>🎁 Loyalty Program</h2>
+              </div>
+              <div class="form-container">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Enable Loyalty Program</label>
+                    <select id="customerLoyaltyEnabled" class="form-control">
+                      <option value="no" selected>No</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Points per Dollar Spent</label>
+                    <input type="number" id="customerPointsPerDollar" class="form-control" value="1" min="0" max="10">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Points Redemption Rate</label>
+                    <input type="number" id="customerRedemptionRate" class="form-control" value="100" min="1" placeholder="Points per $1 discount">
+                  </div>
+                  <div class="form-group">
+                    <label>Referral Bonus Points</label>
+                    <input type="number" id="customerReferralBonus" class="form-control" value="500" min="0">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="text-align: right; margin-top: 20px; padding-right: 20px;">
+              <button class="btn btn-secondary" style="margin-right: 10px;">Reset</button>
+              <button class="btn btn-primary" id="saveCustomerAccountSettings">Save Customer Account Settings</button>
             </div>
           </div>
         </section>

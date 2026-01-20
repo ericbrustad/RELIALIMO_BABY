@@ -548,6 +548,40 @@ class MyOffice {
           this.navigateToListSection(section);
         }
       });
+
+    // Driver App Settings sidebar navigation
+    const driverAppSettingsGroup = document.getElementById('driverAppSettingsGroup');
+    if (driverAppSettingsGroup) {
+      driverAppSettingsGroup.addEventListener('click', (e) => {
+        const target = e.target;
+        const btn = target instanceof Element ? target.closest('.sidebar-btn') : null;
+        if (btn && btn.dataset.driverSetting) {
+          const setting = btn.dataset.driverSetting;
+          console.log('Switching to driver setting:', setting);
+          this.showDriverSettingPanel(setting);
+          // Update active state
+          driverAppSettingsGroup.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        }
+      });
+    }
+
+    // Customer Account Settings sidebar navigation
+    const customerAccountSettingsGroup = document.getElementById('customerAccountSettingsGroup');
+    if (customerAccountSettingsGroup) {
+      customerAccountSettingsGroup.addEventListener('click', (e) => {
+        const target = e.target;
+        const btn = target instanceof Element ? target.closest('.sidebar-btn') : null;
+        if (btn && btn.dataset.customerSetting) {
+          const setting = btn.dataset.customerSetting;
+          console.log('Switching to customer setting:', setting);
+          this.showCustomerSettingPanel(setting);
+          // Update active state
+          customerAccountSettingsGroup.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        }
+      });
+    }
     }
 
     // System Users - User selection
@@ -2076,16 +2110,22 @@ class MyOffice {
     const normalLayout = document.getElementById('normalLayout');
     const resourcesContainer = document.getElementById('companyResourcesContainer');
     const customFormsSection = document.getElementById('custom-forms-section');
+    const driverAppSection = document.getElementById('driver-app-settings-section');
+    const customerAccountSection = document.getElementById('customer-account-settings-section');
     const sidebarGroups = {
       'company-settings': document.getElementById('companySettingsGroup'),
       'rate-management': document.getElementById('rateManagementGroup'),
       'list-management': document.getElementById('listManagementGroup'),
       'custom-forms': document.getElementById('customFormsGroup'),
+      'driver-app-settings': document.getElementById('driverAppSettingsGroup'),
+      'customer-account-settings': document.getElementById('customerAccountSettingsGroup'),
     };
 
     if (normalLayout) normalLayout.style.display = 'none';
     if (resourcesContainer) resourcesContainer.style.display = 'none';
     if (customFormsSection) customFormsSection.style.display = 'none';
+    if (driverAppSection) driverAppSection.style.display = 'none';
+    if (customerAccountSection) customerAccountSection.style.display = 'none';
 
     Object.values(sidebarGroups).forEach(group => {
       if (group) group.style.display = 'none';
@@ -2114,6 +2154,16 @@ class MyOffice {
       case 'custom-forms':
         if (customFormsSection) customFormsSection.style.display = 'block';
         if (sidebarGroups['custom-forms']) sidebarGroups['custom-forms'].style.display = 'block';
+        break;
+      case 'driver-app-settings':
+        if (driverAppSection) driverAppSection.style.display = 'block';
+        if (sidebarGroups['driver-app-settings']) sidebarGroups['driver-app-settings'].style.display = 'block';
+        this.showDriverSettingPanel('portal-branding');
+        break;
+      case 'customer-account-settings':
+        if (customerAccountSection) customerAccountSection.style.display = 'block';
+        if (sidebarGroups['customer-account-settings']) sidebarGroups['customer-account-settings'].style.display = 'block';
+        this.showCustomerSettingPanel('portal-branding');
         break;
       default:
         if (normalLayout) normalLayout.style.display = 'block';
@@ -7125,6 +7175,62 @@ class MyOffice {
     }
 
     console.log('Switched to custom form category:', category);
+  }
+
+  showDriverSettingPanel(panelName) {
+    // Map panel names to element IDs
+    const panelMap = {
+      'portal-branding': 'driver-portal-branding',
+      'onboarding': 'driver-onboarding-settings',
+      'requirements': 'driver-requirements',
+      'notifications': 'driver-notification-settings',
+      'trip-settings': 'driver-trip-settings',
+      'payment-settings': 'driver-payment-settings'
+    };
+
+    // Hide all driver setting panels
+    document.querySelectorAll('.driver-setting-panel').forEach(panel => {
+      panel.style.display = 'none';
+    });
+
+    // Show the selected panel
+    const panelId = panelMap[panelName];
+    if (panelId) {
+      const panel = document.getElementById(panelId);
+      if (panel) {
+        panel.style.display = 'block';
+      }
+    }
+
+    console.log('Switched to driver setting panel:', panelName);
+  }
+
+  showCustomerSettingPanel(panelName) {
+    // Map panel names to element IDs
+    const panelMap = {
+      'portal-branding': 'customer-portal-branding',
+      'onboarding': 'customer-onboarding-settings',
+      'booking': 'customer-booking-settings',
+      'payment': 'customer-payment-settings',
+      'notifications': 'customer-notification-settings',
+      'loyalty': 'customer-loyalty-program'
+    };
+
+    // Hide all customer setting panels
+    document.querySelectorAll('.customer-setting-panel').forEach(panel => {
+      panel.style.display = 'none';
+    });
+
+    // Show the selected panel
+    const panelId = panelMap[panelName];
+    if (panelId) {
+      const panel = document.getElementById(panelId);
+      if (panel) {
+        panel.style.display = 'block';
+      }
+    }
+
+    console.log('Switched to customer setting panel:', panelName);
   }
 
   switchCustomFormTab(formTab) {
