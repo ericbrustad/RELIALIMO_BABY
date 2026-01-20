@@ -204,16 +204,16 @@
             <div class="form-section">
               <label class="form-label">Cell Phone Number</label>
               <div class="phone-input-wrapper" style="display:flex; align-items:center; gap:10px;">
-                <span style="font-size:18px; font-weight:600; color:#d4af37; background:#2a2a4e; padding:14px 16px; border-radius:8px; border:1px solid #3a3a5e;">+1</span>
+                <span id="phoneCountryCode" style="font-size:18px; font-weight:600; color:#d4af37; background:#2a2a4e; padding:14px 16px; border-radius:8px; border:1px solid #3a3a5e;">+1</span>
                 <input type="tel" 
                        id="cellPhoneInput" 
                        class="form-input phone-input"
-                       placeholder="(555) 123-4567"
+                       placeholder="(555) 123-4567 or +44..."
                        style="flex:1;">
               </div>
               <p class="input-hint">
                 <span class="hint-icon">ℹ️</span>
-                Enter your 10-digit US phone number
+                US numbers auto-format. For international, start with + and country code
               </p>
             </div>
 

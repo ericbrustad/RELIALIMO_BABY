@@ -607,26 +607,45 @@ function selectAirport(code) {
 }
 
 // ============================================
-// Phone Input (US Only)
+// Phone Input (Smart - handles US and international)
 // ============================================
 function setupPhoneInput() {
   const input = document.getElementById('cellPhoneInput');
   
   // Format phone as user types
   input.addEventListener('input', (e) => {
-    let value = e.target.value.replace(/\D/g, '');
-    if (value.length > 10) value = value.substring(0, 10);
+    let rawValue = e.target.value;
     
-    // Format as (XXX) XXX-XXXX
-    if (value.length >= 6) {
-      value = '(' + value.substring(0, 3) + ') ' + value.substring(3, 6) + '-' + value.substring(6);
-    } else if (value.length >= 3) {
-      value = '(' + value.substring(0, 3) + ') ' + value.substring(3);
-    } else if (value.length > 0) {
-      value = '(' + value;
+    // Check if they're entering an international number (starts with + and not +1)
+    if (rawValue.startsWith('+') && !rawValue.startsWith('+1')) {
+      // International number - don't format, just clean it up
+      e.target.value = rawValue.replace(/[^\d+]/g, '');
+      validatePhoneInput();
+      return;
     }
     
-    e.target.value = value;
+    // For US numbers, extract just digits
+    let digits = rawValue.replace(/\D/g, '');
+    
+    // If they entered +1 or 1 at the start, remove it for formatting
+    if (digits.startsWith('1') && digits.length > 10) {
+      digits = digits.substring(1);
+    }
+    
+    // Limit to 10 digits for US
+    if (digits.length > 10) digits = digits.substring(0, 10);
+    
+    // Format as (XXX) XXX-XXXX
+    let formatted = '';
+    if (digits.length >= 6) {
+      formatted = '(' + digits.substring(0, 3) + ') ' + digits.substring(3, 6) + '-' + digits.substring(6);
+    } else if (digits.length >= 3) {
+      formatted = '(' + digits.substring(0, 3) + ') ' + digits.substring(3);
+    } else if (digits.length > 0) {
+      formatted = '(' + digits;
+    }
+    
+    e.target.value = formatted;
     validatePhoneInput();
   });
   
@@ -637,15 +656,20 @@ function setupPhoneInput() {
   // Pre-fill if phone exists
   if (state.customer?.phone || state.customer?.cell_phone) {
     const existingPhone = state.customer.phone || state.customer.cell_phone;
-    // Remove +1 or country code if present and format
-    let digits = existingPhone.replace(/\D/g, '');
-    if (digits.startsWith('1') && digits.length === 11) {
-      digits = digits.substring(1);
-    }
-    if (digits.length === 10) {
-      input.value = '(' + digits.substring(0, 3) + ') ' + digits.substring(3, 6) + '-' + digits.substring(6);
-    } else {
+    // Check if international
+    if (existingPhone.startsWith('+') && !existingPhone.startsWith('+1')) {
       input.value = existingPhone;
+    } else {
+      // US number - remove +1 or 1 if present and format
+      let digits = existingPhone.replace(/\D/g, '');
+      if (digits.startsWith('1') && digits.length === 11) {
+        digits = digits.substring(1);
+      }
+      if (digits.length === 10) {
+        input.value = '(' + digits.substring(0, 3) + ') ' + digits.substring(3, 6) + '-' + digits.substring(6);
+      } else {
+        input.value = existingPhone;
+      }
     }
     validatePhoneInput();
   }
@@ -655,11 +679,48 @@ function validatePhoneInput() {
   const input = document.getElementById('cellPhoneInput');
   const statusDiv = document.getElementById('phoneVerificationStatus');
   const nextBtn = document.getElementById('step2NextBtn');
+  const countryCodeBadge = document.getElementById('phoneCountryCode');
   
-  // Get just the digits
-  const digits = input.value.replace(/\D/g, '');
-  const isValid = digits.length === 10;
-  const newPhone = isValid ? '+1' + digits : null;
+  const rawValue = input.value.trim();
+  let isValid = false;
+  let newPhone = null;
+  let formattedPhone = null;
+  let isInternational = false;
+  
+  // Check if international number (starts with + but not +1)
+  if (rawValue.startsWith('+') && !rawValue.startsWith('+1')) {
+    // International number - must have at least 8 digits after the +
+    const intlDigits = rawValue.replace(/\D/g, '');
+    if (intlDigits.length >= 8 && intlDigits.length <= 15) {
+      isValid = true;
+      newPhone = '+' + intlDigits;
+      formattedPhone = rawValue;
+      isInternational = true;
+    }
+  } else {
+    // US number
+    let digits = rawValue.replace(/\D/g, '');
+    
+    // Handle if they typed +1 or 1 at start
+    if (digits.startsWith('1') && digits.length === 11) {
+      digits = digits.substring(1);
+    }
+    
+    if (digits.length === 10) {
+      isValid = true;
+      newPhone = '+1' + digits;
+      formattedPhone = '+1 (' + digits.substring(0, 3) + ') ' + digits.substring(3, 6) + '-' + digits.substring(6);
+    }
+  }
+  
+  // Show/hide +1 badge based on international
+  if (countryCodeBadge) {
+    if (isInternational) {
+      countryCodeBadge.style.display = 'none';
+    } else {
+      countryCodeBadge.style.display = 'block';
+    }
+  }
   
   // Reset OTP if phone number changed
   if (state.cellPhone && newPhone !== state.cellPhone) {
@@ -677,7 +738,7 @@ function validatePhoneInput() {
   
   if (isValid) {
     state.cellPhone = newPhone; // E.164 format
-    state.cellPhoneFormatted = '+1 (' + digits.substring(0, 3) + ') ' + digits.substring(3, 6) + '-' + digits.substring(6);
+    state.cellPhoneFormatted = formattedPhone;
     
     statusDiv.classList.remove('hidden');
     nextBtn.disabled = false;
@@ -692,7 +753,7 @@ function validatePhoneInput() {
     nextBtn.disabled = true;
     nextBtn.textContent = 'Send Verification Code';
     
-    if (input.value.trim()) {
+    if (rawValue) {
       input.classList.add('invalid');
       input.classList.remove('valid');
     } else {
