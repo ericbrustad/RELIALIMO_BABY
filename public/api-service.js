@@ -758,8 +758,8 @@ export async function upsertVehicleType(payload) {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify(payload)
     });
-    if (res.status === 401 || res.status === 403) {
-      console.warn('[api-service] Vehicle type PATCH unauthorized; falling back to direct Supabase request');
+    if (res.status === 401 || res.status === 403 || res.status === 404 || res.status === 405) {
+      console.warn('[api-service] Vehicle type PATCH unauthorized or route missing; falling back to direct Supabase request');
       return upsertViaSupabase(token);
     }
     const text = await res.text();
@@ -774,8 +774,8 @@ export async function upsertVehicleType(payload) {
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify(payload)
   });
-  if (res.status === 401 || res.status === 403) {
-    console.warn('[api-service] Vehicle type POST unauthorized; falling back to direct Supabase request');
+  if (res.status === 401 || res.status === 403 || res.status === 404 || res.status === 405) {
+    console.warn('[api-service] Vehicle type POST unauthorized or route missing; falling back to direct Supabase request');
     return upsertViaSupabase(token);
   }
   const text = await res.text();
@@ -891,6 +891,10 @@ export async function updateFleetVehicle(id, payload) {
     body: JSON.stringify(payload)
   });
   return Array.isArray(rows) ? rows[0] : rows;
+}
+
+export async function deleteFleetVehicle(id) {
+  return await request(`/fleet_vehicles?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export async function fetchFleetVehicles({ limit, offset, includeInactive } = {}) {
@@ -1068,6 +1072,7 @@ export default {
   fetchActiveVehicles,
   createFleetVehicle,
   updateFleetVehicle,
+  deleteFleetVehicle,
   fetchFleetVehicles,
   deleteVehicleTypeImage,
   fetchVehicleTypeImages,

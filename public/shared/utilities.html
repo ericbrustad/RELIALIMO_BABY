@@ -748,6 +748,29 @@ if (deleteLocalVehiclesBtn) {
   });
 }
 
+// Helper function to clear localStorage caches after delete operations
+function clearLocalStorageCaches(type) {
+  const cacheKeys = {
+    'Fleet': ['cr_fleet', 'relia_fleet_cache'],
+    'Drivers': ['relia_driver_directory', 'cr_drivers', 'relia_driver_status_overrides'],
+    'Vehicles': ['cr_fleet', 'local_vehicles', 'dev_vehicles', 'relia_fleet_cache'],
+    'Accounts': ['cr_accounts', 'local_accounts'],
+    'Affiliates': ['cr_affiliates'],
+    'VehicleTypes': ['vehicleTypeDrafts', 'cr_vehicle_types'],
+    'Reservations': ['local_reservations', 'dev_reservations'],
+    'All': ['cr_fleet', 'cr_drivers', 'cr_accounts', 'cr_affiliates', 'cr_vehicle_types', 'vehicleTypeDrafts', 'relia_driver_directory', 'relia_driver_status_overrides', 'relia_fleet_cache', 'local_vehicles', 'dev_vehicles', 'local_accounts', 'local_reservations', 'dev_reservations']
+  };
+  const keys = cacheKeys[type] || cacheKeys['All'];
+  keys.forEach(key => {
+    try {
+      localStorage.removeItem(key);
+      console.log(`✅ Cleared localStorage cache: ${key}`);
+    } catch (e) {
+      console.warn(`Could not clear ${key}:`, e);
+    }
+  });
+  console.log(`🧹 Cleared all ${type} localStorage caches`);
+}
 
 function setupDeleteButton(btnId, fn, label) {
   const btn = document.getElementById(btnId);
@@ -763,7 +786,9 @@ function setupDeleteButton(btnId, fn, label) {
           if (label === 'Accounts') {
             resetAccountCounter();
           }
-          alert(`All ${label} deleted from Supabase.`);
+          // Clear related localStorage caches
+          clearLocalStorageCaches(label);
+          alert(`All ${label} deleted from Supabase. Local caches cleared.`);
         } else {
           alert(`Failed to delete ${label}. Check console for details.`);
         }
@@ -800,7 +825,9 @@ if (deleteAllFleetVehiclesBtn) {
       const client = getSupabaseClient();
       const { error } = await client.from('fleet_vehicles').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       if (error) throw error;
-      alert('✅ All fleet vehicles deleted successfully!');
+      // Clear fleet localStorage caches
+      clearLocalStorageCaches('Fleet');
+      alert('✅ All fleet vehicles deleted successfully! Local caches cleared.');
     } catch (e) {
       alert('❌ Error deleting fleet vehicles: ' + (e.message || e));
     } finally {

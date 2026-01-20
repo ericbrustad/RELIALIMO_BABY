@@ -1,5 +1,5 @@
 // Import API service
-import { setupAPI, apiFetch, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, fetchVehicleTypes, upsertVehicleType, deleteVehicleType, fetchActiveVehicles, fetchFleetVehicles, uploadVehicleTypeImage, fetchVehicleTypeImages, deleteVehicleTypeImage, updateVehicleTypeImage, updateFleetVehicle, createFleetVehicle } from './api-service.js';
+import { setupAPI, apiFetch, fetchDrivers, createDriver, updateDriver, deleteDriver, fetchAffiliates, createAffiliate, updateAffiliate, deleteAffiliate, fetchVehicleTypes, upsertVehicleType, deleteVehicleType, fetchActiveVehicles, fetchFleetVehicles, uploadVehicleTypeImage, fetchVehicleTypeImages, deleteVehicleTypeImage, updateVehicleTypeImage, updateFleetVehicle, createFleetVehicle, deleteFleetVehicle } from './api-service.js';
 import { wireMainNav } from './navigation.js';
 import { loadServiceTypes, SERVICE_TYPES_STORAGE_KEY } from './service-types-store.js';
 import { getSupabaseConfig } from './config.js';
@@ -137,15 +137,18 @@ class MyOffice {
       } catch (e) {
         console.error('[MyOffice] Supabase anon key missing or env.js not loaded:', e);
         this._setStatus('api-missing-key');
+        this._updateSupabaseStatus(false, 'Missing Key');
         this._showErrorBanner('Supabase configuration missing: `SUPABASE_ANON_KEY` not available in the browser. Run `npm run generate-env`, restart the server, then hard-refresh (clear cache / unregister service worker) and try again.');
         // stop initialization so we don't attempt remote calls that will fail and fallback to local saves
         return;
       }
 
       this._setStatus('api-start');
+      this._updateSupabaseStatus(false, 'Connecting...');
       await setupAPI();
       this.apiReady = true;
       this._setStatus('api-ready');
+      this._updateSupabaseStatus(true, 'Connected');
       console.log('API initialized successfully');
       await this.loadDriversList();
       this._setStatus('drivers-loaded');
@@ -157,6 +160,7 @@ class MyOffice {
     } catch (error) {
       console.error('Failed to initialize API:', error);
       this._setStatus('api-failed');
+      this._updateSupabaseStatus(false, 'Failed');
       this._showErrorBanner('Failed to initialize API', error);
     }
   }
@@ -164,15 +168,81 @@ class MyOffice {
   // ===== Diagnostics helpers =====
   _createStatusIndicator() {
     try {
-      const el = document.createElement('div');
-      el.id = 'myOfficeStatus';
-      el.style.cssText = 'position:fixed;bottom:12px;left:12px;z-index:9999;background:#fff;border:1px solid #ddd;padding:8px 10px;border-radius:4px;font-size:12px;color:#333;box-shadow:0 4px 8px rgba(0,0,0,0.06);font-family:Arial, sans-serif;';
-      el.textContent = 'status: starting';
-      document.documentElement.appendChild(el);
-      return el;
+      // Create debug panel container (hidden by default)
+      const panel = document.createElement('div');
+      panel.id = 'myOfficeDebugPanel';
+      panel.style.cssText = 'position:fixed;bottom:12px;left:12px;z-index:9999;background:#fff;border:1px solid #ddd;padding:10px 14px;border-radius:6px;font-size:12px;color:#333;box-shadow:0 4px 12px rgba(0,0,0,0.1);font-family:Arial, sans-serif;display:none;flex-direction:column;gap:8px;min-width:200px;';
+      
+      // Supabase connection indicator
+      const supabaseRow = document.createElement('div');
+      supabaseRow.id = 'myOfficeSupabaseStatus';
+      supabaseRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
+      supabaseRow.innerHTML = '<span style="width:10px;height:10px;border-radius:50%;background:#9ca3af;"></span> Supabase: checking...';
+      panel.appendChild(supabaseRow);
+      
+      // Status indicator
+      const statusRow = document.createElement('div');
+      statusRow.id = 'myOfficeStatus';
+      statusRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
+      statusRow.textContent = 'status: starting';
+      panel.appendChild(statusRow);
+      
+      // Close button
+      const closeBtn = document.createElement('button');
+      closeBtn.textContent = 'Hide Debug';
+      closeBtn.style.cssText = 'margin-top:4px;padding:4px 8px;font-size:11px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;';
+      closeBtn.addEventListener('click', () => this._toggleDebugPanel(false));
+      panel.appendChild(closeBtn);
+      
+      document.documentElement.appendChild(panel);
+      
+      // Create toggle button (small, always visible in corner)
+      const toggleBtn = document.createElement('button');
+      toggleBtn.id = 'myOfficeDebugToggle';
+      toggleBtn.textContent = '🐛';
+      toggleBtn.title = 'Toggle Debug Panel';
+      toggleBtn.style.cssText = 'position:fixed;bottom:12px;left:12px;z-index:9998;width:32px;height:32px;border-radius:50%;background:#f3f4f6;border:1px solid #d1d5db;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.1);opacity:0.6;transition:opacity 0.2s;';
+      toggleBtn.addEventListener('mouseenter', () => toggleBtn.style.opacity = '1');
+      toggleBtn.addEventListener('mouseleave', () => toggleBtn.style.opacity = '0.6');
+      toggleBtn.addEventListener('click', () => this._toggleDebugPanel());
+      document.documentElement.appendChild(toggleBtn);
+      
+      // Store reference to panel
+      this._debugPanel = panel;
+      this._debugToggle = toggleBtn;
+      
+      return statusRow;
     } catch (e) {
       console.warn('[MyOffice] Could not create status indicator:', e);
       return null;
+    }
+  }
+  
+  _toggleDebugPanel(show) {
+    try {
+      const panel = this._debugPanel || document.getElementById('myOfficeDebugPanel');
+      const toggle = this._debugToggle || document.getElementById('myOfficeDebugToggle');
+      if (!panel) return;
+      
+      const isVisible = panel.style.display !== 'none';
+      const shouldShow = show !== undefined ? show : !isVisible;
+      
+      panel.style.display = shouldShow ? 'flex' : 'none';
+      if (toggle) toggle.style.display = shouldShow ? 'none' : 'flex';
+    } catch (e) {
+      console.warn('[MyOffice] _toggleDebugPanel error', e);
+    }
+  }
+  
+  _updateSupabaseStatus(connected, message) {
+    try {
+      const el = document.getElementById('myOfficeSupabaseStatus');
+      if (!el) return;
+      const color = connected ? '#22c55e' : '#ef4444';
+      const text = message || (connected ? 'Connected' : 'Disconnected');
+      el.innerHTML = `<span style="width:10px;height:10px;border-radius:50%;background:${color};"></span> Supabase: ${text}`;
+    } catch (e) {
+      console.warn('[MyOffice] _updateSupabaseStatus error', e);
     }
   }
 
@@ -5328,6 +5398,15 @@ class MyOffice {
           delete this.vehicleTypeDrafts[k];
         }
       });
+      
+      // Clear vehicle type localStorage caches
+      try {
+        localStorage.removeItem('vehicleTypeDrafts');
+        localStorage.removeItem('cr_vehicle_types');
+        console.log('🧹 Cleared vehicle type localStorage caches');
+      } catch (e) {
+        console.warn('Could not clear vehicle type caches:', e);
+      }
     } catch (e) {
       console.warn('⚠️ Error cleaning local vehicle type caches:', e);
     }
@@ -5631,16 +5710,12 @@ class MyOffice {
   }
 
   /**
-   * Load fleet from BOTH Supabase and localStorage (same source as dropdown)
-   * This ensures Fleet section shows the same vehicles as "Assign Driver to Car" dropdown
-   * localStorage is the primary source - Supabase vehicles are merged in but don't overwrite local edits
+   * Load fleet from Supabase (authoritative source)
+   * localStorage is only used as fallback when Supabase fails
+   * This ensures deleted vehicles stay deleted
    */
   async loadFleetFromAllSources() {
     try {
-      // Load localStorage fleet first (this is the primary/editable source)
-      const localFleet = this.loadFleetFromStorage();
-      const localIds = new Set(localFleet.map(v => v.id));
-      
       // Use fetchFleetVehicles to get from fleet_vehicles table (has assigned_driver_id)
       const vehicles = await fetchFleetVehicles({ includeInactive: true });
       console.log('[Fleet] Loaded', vehicles.length, 'vehicles from fleet_vehicles table');
@@ -5653,10 +5728,10 @@ class MyOffice {
         return true;
       });
       
-      // Start with Supabase fleet as primary source (has assigned_driver_id)
+      // Supabase is the authoritative source - start fresh
       this.fleetRecords = [];
       
-      // Add Supabase vehicles first (they have current assigned_driver_id)
+      // Add Supabase vehicles (they have current assigned_driver_id)
       for (const v of realVehicles) {
         this.fleetRecords.push({
           id: v.id,
@@ -5711,15 +5786,7 @@ class MyOffice {
         console.log('[Fleet] Vehicle:', v.veh_title || v.make, '- assigned_driver_id:', v.assigned_driver_id);
       }
       
-      // Add local fleet entries that aren't in Supabase (preserves local-only vehicles)
-      const supabaseIds = new Set(this.fleetRecords.map(v => v.id));
-      for (const local of localFleet) {
-        if (!supabaseIds.has(local.id)) {
-          this.fleetRecords.push(local);
-        }
-      }
-      
-      // Persist the merged result
+      // Persist the Supabase result to localStorage (as cache only)
       this.persistFleet();
       
     } catch (error) {
@@ -6262,25 +6329,106 @@ class MyOffice {
     this.clearFleetForm();
   }
 
-  handleFleetDelete() {
+  async handleFleetDelete() {
     if (!this.activeFleetId) {
       alert('Select a vehicle to delete.');
       return;
     }
-    const confirmed = confirm('Delete this vehicle from the fleet?');
-    if (!confirmed) return;
-    this.fleetRecords = this.fleetRecords.filter((r) => r.id !== this.activeFleetId);
-    this.activeFleetId = null;
-    this.persistFleet();
-    this.renderFleetList();
-    if (this.fleetRecords.length) {
-      this.setActiveFleet(this.fleetRecords[0].id);
-    } else {
-      this.clearFleetForm();
+    
+    const vehicleToDelete = this.fleetRecords.find(r => r.id === this.activeFleetId);
+    if (!vehicleToDelete) {
+      alert('Vehicle not found.');
+      return;
     }
     
-    // Also refresh the driver vehicle dropdown to remove deleted vehicle, but preserve current selection
-    this.populateDriverVehicleDropdown(this.currentDriver?.assigned_vehicle_id || null);
+    const vehicleName = vehicleToDelete.veh_disp_name || 
+      [vehicleToDelete.year, vehicleToDelete.make, vehicleToDelete.model].filter(Boolean).join(' ') || 
+      'this vehicle';
+    
+    const confirmed = confirm(`Delete "${vehicleName}" from the fleet?`);
+    if (!confirmed) return;
+    
+    // Check if vehicle has an assigned driver
+    const assignedDriverId = vehicleToDelete.assigned_driver_id;
+    let deleteDriver = false;
+    let driverToDelete = null;
+    
+    if (assignedDriverId) {
+      driverToDelete = this.drivers.find(d => d.id === assignedDriverId);
+      if (driverToDelete) {
+        const driverName = [driverToDelete.first_name, driverToDelete.last_name].filter(Boolean).join(' ') || 'the assigned driver';
+        deleteDriver = confirm(
+          `This vehicle is assigned to driver: "${driverName}"
+
+Would you also like to delete this driver?`
+        );
+      }
+    }
+    
+    try {
+      // Delete from Supabase if it's a UUID
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(this.activeFleetId);
+      if (isUUID) {
+        await deleteFleetVehicle(this.activeFleetId);
+      }
+      
+      // Remove from local records
+      this.fleetRecords = this.fleetRecords.filter((r) => r.id !== this.activeFleetId);
+      this.activeFleetId = null;
+      this.persistFleet();
+      
+      // Clear fleet localStorage caches to prevent stale data
+      try {
+        localStorage.removeItem('cr_fleet');
+        localStorage.removeItem('relia_fleet_cache');
+        console.log('🧹 Cleared fleet localStorage caches');
+      } catch (e) {
+        console.warn('Could not clear fleet caches:', e);
+      }
+      
+      this.renderFleetList();
+      
+      // If user chose to delete driver, delete them too
+      if (deleteDriver && driverToDelete) {
+        try {
+          const { deleteDriver: deleteDriverApi } = await import('./api-service.js');
+          await deleteDriverApi(driverToDelete.id);
+          this.drivers = this.drivers.filter(d => d.id !== driverToDelete.id);
+          this.renderDriversList();
+          
+          // If the deleted driver was the current driver, clear the form
+          if (this.currentDriver?.id === driverToDelete.id) {
+            this.currentDriver = null;
+            if (this.drivers.length > 0) {
+              this.loadDriverForm(this.drivers[0]);
+            } else {
+              this.renderDriverContactSummary(null);
+            }
+          }
+          
+          console.log('✅ Associated driver deleted');
+          alert('Vehicle and associated driver deleted successfully!');
+        } catch (drvErr) {
+          console.error('❌ Error deleting associated driver:', drvErr);
+          alert('Vehicle deleted, but failed to delete associated driver: ' + drvErr.message);
+        }
+      } else {
+        alert('Vehicle deleted successfully!');
+      }
+      
+      if (this.fleetRecords.length) {
+        this.setActiveFleet(this.fleetRecords[0].id);
+      } else {
+        this.clearFleetForm();
+      }
+      
+      // Also refresh the driver vehicle dropdown to remove deleted vehicle
+      this.populateDriverVehicleDropdown(this.currentDriver?.assigned_vehicle_id || null);
+      
+    } catch (error) {
+      console.error('❌ Error deleting vehicle:', error);
+      alert('Error deleting vehicle: ' + error.message);
+    }
   }
 
   setupFleetItemSelection() {
@@ -8727,6 +8875,14 @@ class MyOffice {
       const result = await deleteAffiliate(this.currentAffiliate.id);
       
       if (result) {
+        // Clear affiliate localStorage caches
+        try {
+          localStorage.removeItem('cr_affiliates');
+          console.log('🧹 Cleared affiliate localStorage caches');
+        } catch (e) {
+          console.warn('Could not clear affiliate caches:', e);
+        }
+        
         alert('Affiliate deleted successfully!');
         this.clearAffiliateForm();
         await this.loadAffiliatesList();
@@ -10494,9 +10650,68 @@ class MyOffice {
 
     try {
       const deletedDriverId = this.currentDriver.id;
+      const assignedVehicleId = this.currentDriver.assigned_vehicle_id;
+      
+      // Check if driver has an associated vehicle
+      let deleteVehicle = false;
+      if (assignedVehicleId) {
+        const vehicle = this.fleetRecords.find(v => v.id === assignedVehicleId);
+        if (vehicle) {
+          const vehicleName = vehicle.veh_disp_name || 
+            [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(' ') || 
+            'their assigned vehicle';
+          deleteVehicle = confirm(
+            `This driver is assigned to vehicle: "${vehicleName}"
+
+Would you also like to delete this vehicle?`
+          );
+        }
+      }
+      
+      // Delete the driver first
       await deleteDriver(deletedDriverId);
       console.log('✅ Driver deleted');
-      alert('Driver deleted successfully!');
+      
+      // Clear driver localStorage caches
+      try {
+        localStorage.removeItem('relia_driver_directory');
+        localStorage.removeItem('relia_driver_status_overrides');
+        console.log('🧹 Cleared driver localStorage caches');
+      } catch (e) {
+        console.warn('Could not clear driver caches:', e);
+      }
+      
+      // If user chose to delete vehicle, delete it too
+      if (deleteVehicle && assignedVehicleId) {
+        try {
+          // Delete from Supabase if it's a UUID
+          const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(assignedVehicleId);
+          if (isUUID) {
+            await deleteFleetVehicle(assignedVehicleId);
+          }
+          // Remove from local records
+          this.fleetRecords = this.fleetRecords.filter(r => r.id !== assignedVehicleId);
+          this.persistFleet();
+          
+          // Clear fleet localStorage caches
+          try {
+            localStorage.removeItem('cr_fleet');
+            localStorage.removeItem('relia_fleet_cache');
+            console.log('🧹 Cleared fleet localStorage caches after vehicle delete');
+          } catch (e) {
+            console.warn('Could not clear fleet caches:', e);
+          }
+          
+          this.renderFleetList();
+          console.log('✅ Associated vehicle deleted');
+          alert('Driver and associated vehicle deleted successfully!');
+        } catch (vehErr) {
+          console.error('❌ Error deleting associated vehicle:', vehErr);
+          alert('Driver deleted, but failed to delete associated vehicle: ' + vehErr.message);
+        }
+      } else {
+        alert('Driver deleted successfully!');
+      }
       
       this.currentDriver = null;
       
