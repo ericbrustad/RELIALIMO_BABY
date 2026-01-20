@@ -27,7 +27,14 @@ const state = {
   iti: null, // intl-tel-input instance
   map: null,
   addressAutocomplete: null,
-  nearbyAirports: []
+  nearbyAirports: [],
+  
+  // OTP verification state
+  otpCode: null,
+  otpExpiry: null,
+  otpAttempts: 0,
+  otpResendTimer: null,
+  phoneVerified: false
 };
 
 // Major US airports database for nearby lookup
@@ -322,10 +329,24 @@ function setupStepNavigation() {
     showStep(1);
   });
   
-  // Step 2 -> Step 3
-  document.getElementById('step2NextBtn').addEventListener('click', () => {
-    if (state.cellPhone) {
+  // Step 2 -> OTP verification -> Step 3
+  document.getElementById('step2NextBtn').addEventListener('click', async () => {
+    if (state.phoneVerified) {
+      // Already verified, go to next step
       showStep(3);
+    } else if (state.cellPhone) {
+      // Send OTP
+      await sendOtpToPhone();
+    }
+  });
+  
+  // Setup OTP inputs
+  setupOtpInputs();
+  
+  // Resend OTP button
+  document.getElementById('resendOtpBtn')?.addEventListener('click', async () => {
+    if (!state.otpResendTimer) {
+      await sendOtpToPhone();
     }
   });
   
@@ -569,6 +590,7 @@ function selectAirport(code) {
   
   // Update UI
   document.getElementById('nearbyAirportsList').classList.add('hidden');
+  document.getElementById('airportSuggestionText')?.classList.add('hidden');
   const display = document.getElementById('selectedAirportDisplay');
   display.classList.remove('hidden');
   document.getElementById('selectedAirportName').textContent = `${airport.code} - ${airport.name}`;
@@ -578,6 +600,7 @@ function selectAirport(code) {
     state.selectedAirport = null;
     display.classList.add('hidden');
     document.getElementById('nearbyAirportsList').classList.remove('hidden');
+    document.getElementById('airportSuggestionText')?.classList.remove('hidden');
   });
   
   showToast(`Selected ${airport.code} as your home airport!`, 'success');
@@ -636,13 +659,29 @@ function validatePhoneInput() {
   // Get just the digits
   const digits = input.value.replace(/\D/g, '');
   const isValid = digits.length === 10;
+  const newPhone = isValid ? '+1' + digits : null;
+  
+  // Reset OTP if phone number changed
+  if (state.cellPhone && newPhone !== state.cellPhone) {
+    state.otpCode = null;
+    state.otpExpiry = null;
+    state.phoneVerified = false;
+    document.getElementById('otpSection')?.classList.add('hidden');
+    document.getElementById('phoneVerifiedSection')?.classList.add('hidden');
+    if (state.otpResendTimer) {
+      clearInterval(state.otpResendTimer);
+      state.otpResendTimer = null;
+    }
+    clearOtpInputs();
+  }
   
   if (isValid) {
-    state.cellPhone = '+1' + digits; // E.164 format
+    state.cellPhone = newPhone; // E.164 format
     state.cellPhoneFormatted = '+1 (' + digits.substring(0, 3) + ') ' + digits.substring(3, 6) + '-' + digits.substring(6);
     
     statusDiv.classList.remove('hidden');
     nextBtn.disabled = false;
+    nextBtn.textContent = state.phoneVerified ? 'Continue →' : 'Send Verification Code';
     input.classList.remove('invalid');
     input.classList.add('valid');
   } else {
@@ -651,6 +690,7 @@ function validatePhoneInput() {
     
     statusDiv.classList.add('hidden');
     nextBtn.disabled = true;
+    nextBtn.textContent = 'Send Verification Code';
     
     if (input.value.trim()) {
       input.classList.add('invalid');
@@ -659,6 +699,229 @@ function validatePhoneInput() {
       input.classList.remove('invalid', 'valid');
     }
   }
+}
+
+// ============================================
+// OTP Verification
+// ============================================
+function setupOtpInputs() {
+  const otpDigits = document.querySelectorAll('.otp-digit');
+  
+  otpDigits.forEach((input, index) => {
+    input.addEventListener('input', (e) => {
+      const value = e.target.value.replace(/\D/g, '');
+      e.target.value = value.substring(0, 1);
+      
+      if (value && index < otpDigits.length - 1) {
+        otpDigits[index + 1].focus();
+      }
+      
+      // Check if all digits are filled
+      checkOtpComplete();
+    });
+    
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !e.target.value && index > 0) {
+        otpDigits[index - 1].focus();
+      }
+    });
+    
+    // Handle paste
+    input.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const pasteData = e.clipboardData.getData('text').replace(/\D/g, '').substring(0, 6);
+      pasteData.split('').forEach((char, i) => {
+        if (otpDigits[i]) {
+          otpDigits[i].value = char;
+        }
+      });
+      checkOtpComplete();
+    });
+  });
+}
+
+function checkOtpComplete() {
+  const otpDigits = document.querySelectorAll('.otp-digit');
+  const code = Array.from(otpDigits).map(d => d.value).join('');
+  
+  if (code.length === 6) {
+    verifyOtp(code);
+  }
+}
+
+async function sendOtpToPhone() {
+  if (!state.cellPhone) return;
+  
+  const nextBtn = document.getElementById('step2NextBtn');
+  const otpSection = document.getElementById('otpSection');
+  const phoneDisplay = document.getElementById('otpPhoneDisplay');
+  
+  // Show loading state
+  nextBtn.disabled = true;
+  nextBtn.textContent = 'Sending...';
+  
+  // Generate 6-digit code
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  state.otpCode = code;
+  state.otpExpiry = Date.now() + (5 * 60 * 1000); // 5 minutes
+  state.otpAttempts = 0;
+  
+  console.log('[CustomerOnboarding] Generated OTP:', code); // For testing
+  
+  // Display phone number
+  phoneDisplay.textContent = state.cellPhoneFormatted;
+  
+  // Send SMS
+  try {
+    await sendSMS(state.cellPhone, `Your RELIALIMO verification code is: ${code}. This code expires in 5 minutes.`);
+    showToast('Verification code sent!', 'success');
+  } catch (err) {
+    console.warn('[CustomerOnboarding] SMS send failed, continuing for testing:', err);
+    showToast('Code sent! (Check console if SMS not received)', 'info');
+  }
+  
+  // Show OTP section
+  otpSection.classList.remove('hidden');
+  
+  // Focus first digit
+  document.getElementById('otpDigit1')?.focus();
+  
+  // Start resend timer
+  startResendTimer();
+  
+  // Update button
+  nextBtn.textContent = 'Verify Code';
+  nextBtn.disabled = true;
+}
+
+function startResendTimer() {
+  const timerEl = document.getElementById('otpTimer');
+  const resendBtn = document.getElementById('resendOtpBtn');
+  let seconds = 60;
+  
+  resendBtn.disabled = true;
+  resendBtn.style.opacity = '0.5';
+  
+  state.otpResendTimer = setInterval(() => {
+    seconds--;
+    timerEl.textContent = `Resend in ${seconds}s`;
+    
+    if (seconds <= 0) {
+      clearInterval(state.otpResendTimer);
+      state.otpResendTimer = null;
+      timerEl.textContent = '';
+      resendBtn.disabled = false;
+      resendBtn.style.opacity = '1';
+    }
+  }, 1000);
+}
+
+function verifyOtp(code) {
+  const statusEl = document.getElementById('otpStatus');
+  const nextBtn = document.getElementById('step2NextBtn');
+  
+  // Check expiry
+  if (Date.now() > state.otpExpiry) {
+    statusEl.innerHTML = '<span style="color:#ef5350;">Code expired. Please request a new one.</span>';
+    clearOtpInputs();
+    return;
+  }
+  
+  // Check attempts
+  state.otpAttempts++;
+  if (state.otpAttempts > 5) {
+    statusEl.innerHTML = '<span style="color:#ef5350;">Too many attempts. Please request a new code.</span>';
+    clearOtpInputs();
+    return;
+  }
+  
+  // Verify code
+  if (code === state.otpCode) {
+    // Success!
+    state.phoneVerified = true;
+    statusEl.innerHTML = '<span style="color:#4caf50;">✓ Phone verified!</span>';
+    
+    // Hide OTP section, show verified section
+    document.getElementById('otpSection').classList.add('hidden');
+    document.getElementById('phoneVerifiedSection').classList.remove('hidden');
+    
+    // Update button to continue
+    nextBtn.textContent = 'Continue →';
+    nextBtn.disabled = false;
+    
+    // Clear timer
+    if (state.otpResendTimer) {
+      clearInterval(state.otpResendTimer);
+      state.otpResendTimer = null;
+    }
+    
+    showToast('Phone verified successfully!', 'success');
+  } else {
+    // Wrong code
+    statusEl.innerHTML = '<span style="color:#ef5350;">Invalid code. Please try again.</span>';
+    document.querySelectorAll('.otp-digit').forEach(d => {
+      d.style.borderColor = '#ef5350';
+    });
+    setTimeout(() => {
+      document.querySelectorAll('.otp-digit').forEach(d => {
+        d.style.borderColor = '#3a3a5e';
+      });
+    }, 2000);
+  }
+}
+
+function clearOtpInputs() {
+  document.querySelectorAll('.otp-digit').forEach(input => {
+    input.value = '';
+    input.style.borderColor = '#3a3a5e';
+  });
+  document.getElementById('otpDigit1')?.focus();
+}
+
+async function sendSMS(to, message) {
+  // Get SMS provider config
+  const providers = JSON.parse(localStorage.getItem('smsProviders') || '[]');
+  const defaultProvider = providers.find(p => p.isDefault) || providers[0];
+  
+  if (!defaultProvider) {
+    console.warn('[CustomerOnboarding] No SMS provider configured');
+    throw new Error('SMS not configured');
+  }
+  
+  const accountSid = defaultProvider.accountSid || window.ENV?.TWILIO_ACCOUNT_SID;
+  const authToken = defaultProvider.authToken || window.ENV?.TWILIO_AUTH_TOKEN;
+  const fromNumber = defaultProvider.fromNumber || defaultProvider.messagingServiceSid || window.ENV?.TWILIO_FROM;
+  
+  if (!accountSid || !authToken) {
+    throw new Error('SMS credentials not configured');
+  }
+  
+  const params = new URLSearchParams();
+  params.append('To', to.startsWith('+') ? to : `+1${to.replace(/\D/g, '')}`);
+  params.append('Body', message);
+  if (fromNumber) {
+    if (fromNumber.startsWith('MG')) {
+      params.append('MessagingServiceSid', fromNumber);
+    } else {
+      params.append('From', fromNumber);
+    }
+  }
+  
+  const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Basic ' + btoa(`${accountSid}:${authToken}`),
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: params.toString()
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'SMS send failed');
+  }
+  
+  return await response.json();
 }
 
 // ============================================

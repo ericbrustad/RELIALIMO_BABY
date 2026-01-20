@@ -171,7 +171,7 @@
                 <span class="suggestion-icon">✈️</span>
                 <h3>Nearby Airports Found!</h3>
               </div>
-              <p class="suggestion-text">Would you like to use one of these airports for your home airport transportation needs?</p>
+              <p class="suggestion-text" id="airportSuggestionText">Would you like to use one of these airports for your home airport transportation needs?</p>
               
               <div id="nearbyAirportsList" class="nearby-airports-list">
                 <!-- Airports will be populated here -->
@@ -224,12 +224,46 @@
               </div>
             </div>
 
+            <!-- OTP Verification Section -->
+            <div id="otpSection" class="hidden" style="margin-top:24px;">
+              <div style="text-align:center; padding:20px; background:#252542; border-radius:12px; border:1px solid #3a3a5e;">
+                <div style="font-size:24px; margin-bottom:12px;">📨</div>
+                <h3 style="color:#d4af37; margin-bottom:8px;">Verify Your Phone</h3>
+                <p style="color:#888; font-size:14px; margin-bottom:16px;">Enter the 6-digit code sent to <strong id="otpPhoneDisplay" style="color:#fff;"></strong></p>
+                
+                <div id="otpInputGroup" style="display:flex; justify-content:center; gap:8px; margin-bottom:16px;">
+                  <input type="text" class="otp-digit" id="otpDigit1" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="one-time-code" style="width:45px; height:55px; text-align:center; font-size:24px; font-weight:600; background:#1a1a2e; border:2px solid #3a3a5e; border-radius:8px; color:#fff;">
+                  <input type="text" class="otp-digit" id="otpDigit2" maxlength="1" inputmode="numeric" pattern="[0-9]" style="width:45px; height:55px; text-align:center; font-size:24px; font-weight:600; background:#1a1a2e; border:2px solid #3a3a5e; border-radius:8px; color:#fff;">
+                  <input type="text" class="otp-digit" id="otpDigit3" maxlength="1" inputmode="numeric" pattern="[0-9]" style="width:45px; height:55px; text-align:center; font-size:24px; font-weight:600; background:#1a1a2e; border:2px solid #3a3a5e; border-radius:8px; color:#fff;">
+                  <input type="text" class="otp-digit" id="otpDigit4" maxlength="1" inputmode="numeric" pattern="[0-9]" style="width:45px; height:55px; text-align:center; font-size:24px; font-weight:600; background:#1a1a2e; border:2px solid #3a3a5e; border-radius:8px; color:#fff;">
+                  <input type="text" class="otp-digit" id="otpDigit5" maxlength="1" inputmode="numeric" pattern="[0-9]" style="width:45px; height:55px; text-align:center; font-size:24px; font-weight:600; background:#1a1a2e; border:2px solid #3a3a5e; border-radius:8px; color:#fff;">
+                  <input type="text" class="otp-digit" id="otpDigit6" maxlength="1" inputmode="numeric" pattern="[0-9]" style="width:45px; height:55px; text-align:center; font-size:24px; font-weight:600; background:#1a1a2e; border:2px solid #3a3a5e; border-radius:8px; color:#fff;">
+                </div>
+                
+                <div id="otpStatus" style="min-height:24px; margin-bottom:12px;"></div>
+                
+                <div style="display:flex; justify-content:center; align-items:center; gap:16px;">
+                  <button type="button" id="resendOtpBtn" class="btn btn-link" style="color:#d4af37; background:none; border:none; cursor:pointer;">Resend Code</button>
+                  <span id="otpTimer" style="color:#888; font-size:14px;"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Phone Verified Success -->
+            <div id="phoneVerifiedSection" class="hidden" style="margin-top:24px;">
+              <div style="text-align:center; padding:20px; background:linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%); border-radius:12px; border:1px solid #40916c;">
+                <div style="font-size:32px; margin-bottom:8px;">✅</div>
+                <h3 style="color:#52b788; margin-bottom:4px;">Phone Verified!</h3>
+                <p style="color:#95d5b2; font-size:14px;">Your phone number has been confirmed</p>
+              </div>
+            </div>
+
             <div class="step-actions">
               <button type="button" class="btn btn-secondary" id="step2BackBtn">
                 ← Back
               </button>
               <button type="button" class="btn btn-primary btn-lg" id="step2NextBtn" disabled>
-                Continue →
+                Send Verification Code
               </button>
             </div>
           </div>
