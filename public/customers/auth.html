@@ -450,41 +450,53 @@
     
     // Check if already authenticated and redirect
     async function checkAuth() {
-      // Check for logout parameter - force logout if present
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('logout') === 'true') {
-        // Force clear all customer auth data from localStorage
-        const keysToRemove = [
-          'customer_session', 
-          'current_customer', 
-          'customer_remember_me',
-          'customer_refresh_token',
-          'customer_last_activity',
-          'pending_verifications'
-        ];
-        keysToRemove.forEach(key => localStorage.removeItem(key));
+      try {
+        // Check for logout parameter - force logout if present
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('logout') === 'true') {
+          // Force clear all customer auth data from localStorage
+          const keysToRemove = [
+            'customer_session', 
+            'current_customer', 
+            'customer_remember_me',
+            'customer_refresh_token',
+            'customer_last_activity',
+            'pending_verifications'
+          ];
+          keysToRemove.forEach(key => localStorage.removeItem(key));
+          
+          // Also try using auth service if available
+          try { await CustomerAuth.logout(false); } catch(e) {}
+          
+          // Clear the logout parameter from URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+          console.log('✅ Logged out and cleared session');
+          return false;
+        }
         
-        // Also try using auth service if available
-        try { await CustomerAuth.logout(false); } catch(e) {}
-        
-        // Clear the logout parameter from URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-        console.log('✅ Logged out and cleared session');
+        const isAuth = await CustomerAuth.initAuth();
+        if (isAuth) {
+          const slug = CustomerAuth.getPortalSlug();
+          window.location.href = slug ? `/${slug}` : '/';
+          return true;
+        }
+        return false;
+      } catch (err) {
+        console.error('[Auth] checkAuth error:', err);
         return false;
       }
-      
-      const isAuth = await CustomerAuth.initAuth();
-      if (isAuth) {
-        const slug = CustomerAuth.getPortalSlug();
-        window.location.href = slug ? `/${slug}` : '/';
-        return true;
-      }
-      return false;
     }
 
     async function init() {
-      const isAuth = await checkAuth();
-      if (!isAuth) {
+      try {
+        const isAuth = await checkAuth();
+        if (!isAuth) {
+          document.getElementById('loadingScreen').classList.remove('active');
+          document.getElementById('authScreen').classList.add('active');
+        }
+      } catch (err) {
+        console.error('[Auth] Init error:', err);
+        // Always show auth screen on error so user can login
         document.getElementById('loadingScreen').classList.remove('active');
         document.getElementById('authScreen').classList.add('active');
       }
@@ -553,9 +565,22 @@
         showToast('Welcome back!', 'success');
         
         // Get the portal slug directly from the customer object returned by login
-        const slug = customer?.portal_slug || 
-          `${(customer?.first_name || '').toLowerCase()}_${(customer?.last_name || '').toLowerCase()}`.replace(/[^a-z0-9_]/g, '') ||
-          CustomerAuth.getPortalSlug();
+        let slug = customer?.portal_slug;
+        
+        // If no portal_slug, try to generate one from name
+        if (!slug && customer?.first_name && customer?.last_name) {
+          slug = `${customer.first_name.toLowerCase()}_${customer.last_name.toLowerCase()}`.replace(/[^a-z0-9_]/g, '');
+        }
+        
+        // Fallback to CustomerAuth if still no slug
+        if (!slug) {
+          slug = CustomerAuth.getPortalSlug();
+        }
+        
+        // Validate slug is not empty or just underscores
+        if (!slug || slug === '_' || slug.replace(/_/g, '') === '') {
+          slug = '';  // Go to root if no valid slug
+        }
         
         setTimeout(() => {
           window.location.href = slug ? `/${slug}` : '/';
@@ -691,19 +716,14 @@
         }
 
         // Create customer record in accounts table
-        const uniqueId = crypto.randomUUID().split('-')[0];
-        const portalSlug = `${firstName}_${lastName}_${uniqueId}`.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        // Only use columns that are known to exist in the accounts table
         const customerData = {
           first_name: firstName,
           last_name: lastName,
           email: email.toLowerCase(),
           phone: formatPhoneE164(phone),
-          portal_slug: portalSlug,
-          customer_type: 'individual',
+          account_type: 'individual',
           is_active: true,
-          email_verified: false,
-          phone_verified: true, // Phone is now verified!
-          onboarding_complete: false,
           created_at: new Date().toISOString()
         };
 
@@ -719,11 +739,16 @@
           body: JSON.stringify(customerData)
         });
 
+        let portalSlug = '';
         if (createResp.ok) {
           const newCustomers = await createResp.json();
           if (newCustomers && newCustomers.length > 0) {
             localStorage.setItem('current_customer', JSON.stringify(newCustomers[0]));
+            // Generate slug from name for redirect
+            portalSlug = `${firstName}_${lastName}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
           }
+        } else {
+          console.error('Failed to create account record:', await createResp.text());
         }
 
         // Send verification email

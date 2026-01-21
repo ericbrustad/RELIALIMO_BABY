@@ -37,8 +37,8 @@ export default function LandingPage() {
           <a href="https://account.relialimo.com" className="btn btn-primary">
             Book a Ride
           </a>
-          <a href="https://admin.relialimo.com" className="btn btn-secondary">
-            Admin Portal
+          <a href="https://account.relialimo.com/auth" className="btn btn-secondary">
+            Account Login
           </a>
         </div>
       </section>

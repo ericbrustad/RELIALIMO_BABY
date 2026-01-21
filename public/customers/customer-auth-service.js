@@ -402,6 +402,8 @@ async function fetchCustomerInfo(accessToken, email) {
       return null;
     }
     
+    console.log('[AuthService] Fetching customer info for email:', userEmail);
+    
     const response = await fetch(
       `${creds.url}/rest/v1/accounts?email=eq.${encodeURIComponent(userEmail.toLowerCase())}&select=*`,
       {
@@ -414,16 +416,87 @@ async function fetchCustomerInfo(accessToken, email) {
     
     if (response.ok) {
       const customers = await response.json();
+      console.log('[AuthService] Found customers:', customers?.length, customers);
       if (customers?.length > 0) {
         authState.customer = customers[0];
+        console.log('[AuthService] Customer loaded:', {
+          id: authState.customer.id,
+          email: authState.customer.email,
+          first_name: authState.customer.first_name,
+          last_name: authState.customer.last_name,
+          portal_slug: authState.customer.portal_slug
+        });
         localStorage.setItem(STORAGE_KEYS.CUSTOMER, JSON.stringify(authState.customer));
         return authState.customer;
+      } else {
+        console.warn('[AuthService] No account found in accounts table for email:', userEmail);
+        // Auto-create account record if it doesn't exist
+        const newCustomer = await createAccountRecord(token, userEmail);
+        if (newCustomer) {
+          authState.customer = newCustomer;
+          localStorage.setItem(STORAGE_KEYS.CUSTOMER, JSON.stringify(authState.customer));
+          return authState.customer;
+        }
       }
+    } else {
+      console.error('[AuthService] Failed to fetch accounts:', response.status, await response.text());
     }
     
     return null;
   } catch (err) {
     console.error('[AuthService] Failed to fetch customer info:', err);
+    return null;
+  }
+}
+
+/**
+ * Auto-create an account record for a user who authenticated but has no account
+ */
+async function createAccountRecord(accessToken, email) {
+  try {
+    const creds = getSupabaseCredentials();
+    
+    // Try to get user metadata from auth session (may have first_name, last_name)
+    const userMetadata = authState.session?.user?.user_metadata || {};
+    const firstName = userMetadata.first_name || '';
+    const lastName = userMetadata.last_name || '';
+    
+    console.log('[AuthService] Auto-creating account for:', email, { firstName, lastName });
+    
+    const accountData = {
+      email: email.toLowerCase(),
+      first_name: firstName,
+      last_name: lastName,
+      account_type: 'individual',
+      is_active: true,
+      created_at: new Date().toISOString()
+    };
+    
+    const createResp = await fetch(`${creds.url}/rest/v1/accounts`, {
+      method: 'POST',
+      headers: {
+        'apikey': creds.anonKey,
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify(accountData)
+    });
+    
+    if (createResp.ok) {
+      const newAccounts = await createResp.json();
+      if (newAccounts?.length > 0) {
+        console.log('[AuthService] Auto-created account:', newAccounts[0]);
+        return newAccounts[0];
+      }
+    } else {
+      const errorText = await createResp.text();
+      console.error('[AuthService] Failed to auto-create account:', createResp.status, errorText);
+    }
+    
+    return null;
+  } catch (err) {
+    console.error('[AuthService] Error auto-creating account:', err);
     return null;
   }
 }
@@ -509,8 +582,25 @@ export function getAccessToken() {
 
 export function getPortalSlug() {
   if (!authState.customer) return '';
-  return authState.customer.portal_slug || 
-    `${(authState.customer.first_name || '').toLowerCase()}_${(authState.customer.last_name || '').toLowerCase()}`.replace(/[^a-z0-9_]/g, '');
+  
+  // Use stored portal_slug if available
+  if (authState.customer.portal_slug) {
+    return authState.customer.portal_slug;
+  }
+  
+  // Generate from name if both first and last name exist
+  const firstName = (authState.customer.first_name || '').toLowerCase().trim();
+  const lastName = (authState.customer.last_name || '').toLowerCase().trim();
+  
+  if (firstName && lastName) {
+    const slug = `${firstName}_${lastName}`.replace(/[^a-z0-9_]/g, '');
+    // Validate slug is not empty or just underscores
+    if (slug && slug !== '_' && slug.replace(/_/g, '') !== '') {
+      return slug;
+    }
+  }
+  
+  return '';
 }
 
 // ============================================
