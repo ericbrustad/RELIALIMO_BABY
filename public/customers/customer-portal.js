@@ -617,6 +617,9 @@ async function loadAirports() {
         state.airports.map(a => `<option value="${a.code}" data-address="${a.address || ''}">${a.name}</option>`).join('');
     }
   });
+  
+  // Prefill airports AFTER dropdowns are populated (fixes timing issue)
+  prefillAirports();
 }
 
 // ============================================
@@ -708,8 +711,11 @@ function populatePassengerDropdown() {
   const select = document.getElementById('passengerSelect');
   if (!select) return;
   
-  // Self is always first
-  select.innerHTML = '<option value="self">Myself (Billing Account)</option>';
+  // Self is always first - show customer's actual name
+  const selfName = state.customer ? 
+    `${state.customer.first_name || ''} ${state.customer.last_name || ''}`.trim() || 'Myself' : 
+    'Myself';
+  select.innerHTML = `<option value="self">${selfName}</option>`;
   
   // Add saved passengers (excluding primary/self which is the account holder)
   state.savedPassengers.forEach(p => {
@@ -1034,25 +1040,25 @@ function prefillBookingDefaults() {
         selectSavedAddress(homeAddress.id, homeAddress.full_address || homeAddress.address, 'pickup');
       }, 100);
     }
+  } else if (state.customer.home_address) {
+    // Fallback: If no saved addresses but home_address is set on account, prefill pickup input
+    const pickupSelect = document.getElementById('pickupAddressSelect');
+    if (pickupSelect) {
+      pickupSelect.value = 'new';
+      const event = new Event('change', { bubbles: true });
+      pickupSelect.dispatchEvent(event);
+    }
+    setTimeout(() => {
+      const pickupInput = document.getElementById('pickupAddressInput');
+      if (pickupInput) {
+        pickupInput.value = state.customer.home_address;
+        state.selectedPickupAddress = state.customer.home_address;
+      }
+    }, 100);
   }
   
-  // 3. Set preferred airport if available (check both home_airport and preferred_pickup_airport)
-  const preferredPickupAirport = state.customer.preferred_pickup_airport || state.customer.home_airport;
-  if (preferredPickupAirport) {
-    const pickupAirport = document.getElementById('pickupAirport');
-    if (pickupAirport) {
-      pickupAirport.value = preferredPickupAirport;
-    }
-  }
-  
-  // Also set dropoff airport (use home_airport if no preferred_dropoff)
-  const preferredDropoffAirport = state.customer.preferred_dropoff_airport || state.customer.home_airport;
-  if (preferredDropoffAirport) {
-    const dropoffAirport = document.getElementById('dropoffAirport');
-    if (dropoffAirport) {
-      dropoffAirport.value = preferredDropoffAirport;
-    }
-  }
+  // 3. Airport prefill is now handled by prefillAirports() after airports are loaded
+  // This fixes the timing issue where airports weren't populated yet
   
   // 4. Set default passenger count
   const passengerCount = state.customer.default_passenger_count || 1;
@@ -1078,6 +1084,31 @@ function prefillBookingDefaults() {
   }
   
   console.log('[CustomerPortal] Booking defaults prefilled');
+}
+
+// Prefill airport selects (called after airports are loaded)
+function prefillAirports() {
+  if (!state.customer) return;
+  
+  // Set preferred pickup airport (check both home_airport and preferred_pickup_airport)
+  const preferredPickupAirport = state.customer.preferred_pickup_airport || state.customer.home_airport;
+  if (preferredPickupAirport) {
+    const pickupAirport = document.getElementById('pickupAirport');
+    if (pickupAirport) {
+      pickupAirport.value = preferredPickupAirport;
+      console.log('[CustomerPortal] Prefilled pickup airport:', preferredPickupAirport);
+    }
+  }
+  
+  // Set preferred dropoff airport (use home_airport if no preferred_dropoff)
+  const preferredDropoffAirport = state.customer.preferred_dropoff_airport || state.customer.home_airport;
+  if (preferredDropoffAirport) {
+    const dropoffAirport = document.getElementById('dropoffAirport');
+    if (dropoffAirport) {
+      dropoffAirport.value = preferredDropoffAirport;
+      console.log('[CustomerPortal] Prefilled dropoff airport:', preferredDropoffAirport);
+    }
+  }
 }
 
 // Find the home address from saved addresses
