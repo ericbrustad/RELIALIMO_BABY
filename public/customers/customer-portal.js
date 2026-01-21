@@ -1222,6 +1222,23 @@ async function bookTrip(includeReturn = false) {
     const reservationData = buildReservationData();
     reservationData.confirmation_number = confirmationNumber;
     
+    // Validate required database fields
+    if (!reservationData.organization_id) {
+      throw new Error('Missing organization_id - cannot create reservation');
+    }
+    if (!reservationData.booked_by_user_id) {
+      throw new Error('Missing user session - please log in again');
+    }
+    
+    console.log('[CustomerPortal] Reservation data:', {
+      confirmation_number: reservationData.confirmation_number,
+      organization_id: reservationData.organization_id,
+      booked_by_user_id: reservationData.booked_by_user_id,
+      account_id: reservationData.account_id,
+      pickup_address: reservationData.pickup_address,
+      dropoff_address: reservationData.dropoff_address
+    });
+    
     // Save passenger to customer_passengers table for future use
     const passengerFirstName = document.getElementById('passengerFirstName').value.trim();
     const passengerLastName = document.getElementById('passengerLastName').value.trim();
@@ -1253,6 +1270,7 @@ async function bookTrip(includeReturn = false) {
     
     if (response.ok) {
       const newReservation = await response.json();
+      console.log('[CustomerPortal] Reservation created successfully:', newReservation[0]?.id || newReservation?.id);
       
       // Save any new addresses to customer_addresses
       await saveUsedAddresses();
@@ -1281,15 +1299,23 @@ async function bookTrip(includeReturn = false) {
       resetBookingForm();
       
     } else {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to book trip');
+      const errorText = await response.text();
+      console.error('[CustomerPortal] Reservation creation failed:', response.status, errorText);
+      let errorMessage = 'Failed to book trip';
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.message || errorJson.error || errorJson.details || errorMessage;
+      } catch (e) {
+        errorMessage = errorText || errorMessage;
+      }
+      throw new Error(errorMessage);
     }
   } catch (err) {
     console.error('[CustomerPortal] Booking error:', err);
     showToast(err.message || 'Failed to book trip', 'error');
   } finally {
     bookBtn.disabled = false;
-    bookBtn.textContent = includeReturn ? '🔄 Book One Way and Enter Return Trip' : '� Book One Way Trip';
+    bookBtn.textContent = includeReturn ? '🔄 Book One Way and Enter Return Trip' : '📍 Book One Way Trip';
   }
 }
 
@@ -1338,6 +1364,16 @@ function buildReservationData() {
   const pickupDate = document.getElementById('pickupDate').value;
   const pickupTime = document.getElementById('pickupTime').value;
   const pickupDateTime = `${pickupDate}T${pickupTime}:00`;
+  
+  // Get organization_id for multi-tenant support (required by database)
+  const organizationId = window.ENV?.ORGANIZATION_ID || 
+                        localStorage.getItem('relia_organization_id') || 
+                        '54eb6ce7-ba97-4198-8566-6ac075828160'; // Default ReliaLimo org
+  
+  // Get booked_by_user_id from session (required by database)
+  const bookedByUserId = state.session?.user?.id || 
+                        state.customer?.user_id || 
+                        state.customer?.id;
   
   // Get pickup address
   let pickupAddress;
@@ -1414,6 +1450,10 @@ function buildReservationData() {
   const dropoffAirportCode = dropoffType === 'airport' ? document.getElementById('dropoffAirport')?.value : null;
   
   return {
+    // Required database fields
+    organization_id: organizationId,
+    booked_by_user_id: bookedByUserId,
+    
     // Account & Passenger
     account_id: state.customer?.id,
     billing_name: `${state.customer?.first_name || ''} ${state.customer?.last_name || ''}`.trim(),
