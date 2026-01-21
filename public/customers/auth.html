@@ -453,9 +453,23 @@
       // Check for logout parameter - force logout if present
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('logout') === 'true') {
-        await CustomerAuth.logout(false); // Don't redirect
+        // Force clear all customer auth data from localStorage
+        const keysToRemove = [
+          'customer_session', 
+          'current_customer', 
+          'customer_remember_me',
+          'customer_refresh_token',
+          'customer_last_activity',
+          'pending_verifications'
+        ];
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        
+        // Also try using auth service if available
+        try { await CustomerAuth.logout(false); } catch(e) {}
+        
         // Clear the logout parameter from URL
         window.history.replaceState({}, document.title, window.location.pathname);
+        console.log('✅ Logged out and cleared session');
         return false;
       }
       
