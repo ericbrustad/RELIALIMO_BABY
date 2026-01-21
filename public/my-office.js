@@ -167,6 +167,9 @@ class MyOffice {
 
   // ===== Diagnostics helpers =====
   _createStatusIndicator() {
+    // Debug panel disabled for production - uncomment to enable debugging
+    return null;
+    /*
     try {
       // Create debug panel container (hidden by default)
       const panel = document.createElement('div');
@@ -216,6 +219,7 @@ class MyOffice {
       console.warn('[MyOffice] Could not create status indicator:', e);
       return null;
     }
+    */
   }
   
   _toggleDebugPanel(show) {
