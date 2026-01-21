@@ -450,6 +450,15 @@
     
     // Check if already authenticated and redirect
     async function checkAuth() {
+      // Check for logout parameter - force logout if present
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('logout') === 'true') {
+        await CustomerAuth.logout(false); // Don't redirect
+        // Clear the logout parameter from URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return false;
+      }
+      
       const isAuth = await CustomerAuth.initAuth();
       if (isAuth) {
         const slug = CustomerAuth.getPortalSlug();
