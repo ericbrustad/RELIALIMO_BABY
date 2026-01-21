@@ -1872,6 +1872,9 @@ function setupEventListeners() {
   elements.cashappEnabled?.addEventListener('change', (e) => togglePaymentDetails('cashapp', e.target.checked));
   elements.bankEnabled?.addEventListener('change', (e) => togglePaymentDetails('bank', e.target.checked));
   
+  // Availability preferences - 24/7 is mutually exclusive with other options
+  setupAvailabilityCheckboxes();
+  
   // Welcome Screen - Location Permission
   elements.enableLocationBtn?.addEventListener('click', requestLocationPermission);
   elements.skipLocationBtn?.addEventListener('click', skipLocationAndContinue);
@@ -2363,6 +2366,34 @@ function loadCheckboxValues(name, values) {
 function getCheckboxValues(name) {
   const checked = document.querySelectorAll(`input[name="${name}"]:checked`);
   return Array.from(checked).map(cb => cb.value);
+}
+
+/**
+ * Setup availability checkboxes - 24/7 Available is mutually exclusive with other options
+ */
+function setupAvailabilityCheckboxes() {
+  const avail247 = document.getElementById('avail-247');
+  const otherAvailCheckboxes = document.querySelectorAll('input[name="availability"]:not(#avail-247)');
+  
+  if (!avail247) return;
+  
+  // When 24/7 Available is checked, uncheck all others
+  avail247.addEventListener('change', () => {
+    if (avail247.checked) {
+      otherAvailCheckboxes.forEach(cb => {
+        cb.checked = false;
+      });
+    }
+  });
+  
+  // When any other checkbox is checked, uncheck 24/7 Available
+  otherAvailCheckboxes.forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        avail247.checked = false;
+      }
+    });
+  });
 }
 
 function updateBioCharCount() {
@@ -4723,6 +4754,8 @@ async function handleRegistration() {
       password_hash: passwordHash,
       // Auto-assign new drivers to level 10 (highest priority for farmout)
       driver_level: '10',
+      // Default availability - 24/7 Available unless changed
+      availability: ['24/7 Available'],
       // Company info (optional)
       primary_address: companyInfo.address,
       city: companyInfo.city,
@@ -5084,6 +5117,68 @@ async function loadVehicleTypes() {
 }
 
 /**
+ * Update the vehicle preview image based on selected make/model
+ * Uses image_url from database, or falls back to a search-based image
+ */
+function updateVehiclePreview() {
+  const makeSelect = document.getElementById('regVehicleMake');
+  const modelSelect = document.getElementById('regVehicleModel');
+  const previewContainer = document.getElementById('vehiclePreviewContainer');
+  const previewImage = document.getElementById('vehiclePreviewImage');
+  const previewLabel = document.getElementById('vehiclePreviewLabel');
+  
+  if (!previewContainer || !previewImage || !previewLabel) return;
+  
+  const make = makeSelect?.value || '';
+  const model = modelSelect?.value || '';
+  
+  // If no make selected or "Other" selected, hide preview
+  if (!make || make === '__other__' || model === '__other__') {
+    previewContainer.style.display = 'none';
+    return;
+  }
+  
+  // Try to get image_url from stored models
+  let imageUrl = null;
+  if (model && window._vehicleModels) {
+    const modelData = window._vehicleModels.find(m => m.name === model);
+    if (modelData && modelData.image_url) {
+      imageUrl = modelData.image_url;
+    }
+  }
+  
+  // If no model image, try make logo
+  if (!imageUrl && make && window._vehicleMakes) {
+    const makeData = window._vehicleMakes.find(m => m.name === make);
+    if (makeData && makeData.logo_url) {
+      imageUrl = makeData.logo_url;
+    }
+  }
+  
+  // If no image URL from database, use a placeholder or fallback image search
+  if (!imageUrl) {
+    // Use a simple placeholder - could be enhanced with a vehicle image API later
+    const searchTerm = model ? `${make} ${model}` : make;
+    // Using a placeholder service or generic vehicle silhouette
+    imageUrl = `https://via.placeholder.com/200x120/1a1a2e/c5a572?text=${encodeURIComponent(searchTerm)}`;
+  }
+  
+  // Update the preview
+  previewImage.src = imageUrl;
+  previewImage.alt = model ? `${make} ${model}` : make;
+  previewLabel.textContent = model ? `${make} ${model}` : make;
+  previewContainer.style.display = 'flex';
+  
+  // Add error handler for failed images
+  previewImage.onerror = () => {
+    const fallbackText = model ? `${make} ${model}` : make;
+    previewImage.src = `https://via.placeholder.com/200x120/1a1a2e/c5a572?text=${encodeURIComponent(fallbackText)}`;
+  };
+  
+  console.log('[DriverPortal] Vehicle preview updated:', { make, model, imageUrl });
+}
+
+/**
  * Populate Year dropdown with years starting from 2019
  */
 function populateVehicleYearOptions() {
@@ -5104,52 +5199,52 @@ function populateVehicleYearOptions() {
 }
 
 /**
- * Populate Make dropdown with common limousine/luxury vehicle makes
+ * Populate Make dropdown from database
  */
-function populateVehicleMakeOptions() {
+async function populateVehicleMakeOptions() {
   const makeSelect = document.getElementById('regVehicleMake');
   const otherInput = document.getElementById('regVehicleMakeOther');
   if (!makeSelect) return;
   
-  const makes = [
-    'Cadillac',
-    'Chevrolet',
-    'Chrysler',
-    'Dodge',
-    'Ford',
-    'GMC',
-    'Infiniti',
-    'Jaguar',
-    'Lexus',
-    'Lincoln',
-    'Mercedes-Benz',
-    'BMW',
-    'Audi',
-    'Tesla',
-    'Toyota',
-    'Rolls-Royce',
-    'Bentley',
-    'Land Rover',
-    'Range Rover',
-    'Porsche',
-    'Sprinter',
-    'Freightliner',
-    'International',
-    'Prevost',
-    'MCI',
-    'Van Hool',
-    'Grech',
-    'Executive Coach Builders',
-    'Battisti',
-    'Tiffany'
-  ].sort();
+  // Fetch makes from database (including logo_url)
+  let makes = [];
+  try {
+    const response = await fetch(`${window.ENV?.SUPABASE_URL || 'https://qdrtpfgpqrfblpmskeig.supabase.co'}/rest/v1/vehicle_makes?is_active=eq.true&order=sort_order,name&select=id,name,display_name,logo_url`, {
+      headers: {
+        'apikey': window.ENV?.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkcnRwZmdwcXJmYmxwbXNrZWlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ0MDcxNjMsImV4cCI6MjA1OTk4MzE2M30.YxGuvE7hqVfXirlnIbcNvEKnKR1LZMh1SfKPISIVn2c',
+        'Content-Type': 'application/json'
+      }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      makes = data.map(m => ({ id: m.id, name: m.name, display_name: m.display_name || m.name, logo_url: m.logo_url }));
+      console.log('[DriverPortal] Loaded', makes.length, 'vehicle makes from database');
+    }
+  } catch (err) {
+    console.warn('[DriverPortal] Could not load makes from database, using fallback:', err);
+  }
+  
+  // Fallback to hardcoded if database empty or failed
+  if (makes.length === 0) {
+    makes = [
+      'Audi', 'Battisti', 'Bentley', 'BMW', 'Cadillac', 'Chevrolet', 'Chrysler', 'Dodge',
+      'Executive Coach Builders', 'Ford', 'Freightliner', 'GMC', 'Grech', 'Infiniti',
+      'International', 'Jaguar', 'Land Rover', 'Lexus', 'Lincoln', 'MCI', 'Mercedes-Benz',
+      'Porsche', 'Prevost', 'Range Rover', 'Rolls-Royce', 'Sprinter', 'Tesla', 'Tiffany', 'Toyota', 'Van Hool'
+    ].map(name => ({ name, display_name: name, logo_url: null }));
+  }
+  
+  // Store makes globally for image lookup
+  window._vehicleMakes = makes;
   
   const currentValue = makeSelect.value;
   makeSelect.innerHTML = '<option value="">Select Make</option>';
   makes.forEach(make => {
     const option = document.createElement('option');
-    option.value = make;
-    option.textContent = make;
+    option.value = make.name;
+    option.textContent = make.display_name;
+    option.dataset.makeId = make.id || '';
+    option.dataset.logoUrl = make.logo_url || '';
     makeSelect.appendChild(option);
   });
   
@@ -5163,6 +5258,9 @@ function populateVehicleMakeOptions() {
   
   // Setup model population and "Other" handling when make changes
   makeSelect.addEventListener('change', () => {
+    // Update vehicle preview
+    updateVehiclePreview();
+    
     if (makeSelect.value === '__other__') {
       if (otherInput) {
         otherInput.style.display = 'block';
@@ -5193,9 +5291,9 @@ function populateVehicleMakeOptions() {
 }
 
 /**
- * Populate Model dropdown based on selected Make
+ * Populate Model dropdown from database based on selected Make
  */
-function populateVehicleModelOptions() {
+async function populateVehicleModelOptions() {
   const makeSelect = document.getElementById('regVehicleMake');
   const modelSelect = document.getElementById('regVehicleModel');
   const otherInput = document.getElementById('regVehicleModelOther');
@@ -5209,86 +5307,132 @@ function populateVehicleModelOptions() {
     otherInput.value = '';
   }
   
-  // Model options by make
-  const modelsByMake = {
-    'Cadillac': ['Escalade', 'Escalade ESV', 'CT6', 'XTS', 'XT5', 'XT6', 'Lyriq', 'DTS', 'CTS'],
-    'Chevrolet': ['Suburban', 'Tahoe', 'Express', 'Express 2500', 'Express 3500', 'Traverse', 'Silverado'],
-    'Chrysler': ['300', '300C', 'Pacifica', 'Town & Country', 'Voyager'],
-    'Dodge': ['Durango', 'Grand Caravan', 'Charger', 'Ram ProMaster'],
-    'Ford': ['Expedition', 'Expedition MAX', 'Explorer', 'Transit', 'Transit 350', 'E-350', 'E-450', 'F-550', 'Excursion'],
-    'GMC': ['Yukon', 'Yukon XL', 'Savana', 'Savana 2500', 'Savana 3500', 'Sierra', 'Acadia'],
-    'Infiniti': ['QX80', 'QX60', 'QX56', 'Q70L'],
-    'Jaguar': ['XJ', 'XJL', 'F-Pace', 'I-Pace'],
-    'Lexus': ['LS 460', 'LS 500', 'LX 570', 'LX 600', 'GX 460', 'ES 350'],
-    'Lincoln': ['Navigator', 'Navigator L', 'MKT', 'MKS', 'Continental', 'Town Car', 'Aviator'],
-    'Mercedes-Benz': ['S-Class', 'S550', 'S560', 'S580', 'Maybach', 'E-Class', 'GLS', 'GLE', 'V-Class', 'Sprinter', 'Metris'],
-    'BMW': ['7 Series', '740i', '750i', 'X7', 'X5', 'i7'],
-    'Audi': ['A8', 'A8L', 'Q7', 'Q8', 'e-tron'],
-    'Tesla': ['Model S', 'Model X', 'Model Y', 'Model 3'],
-    'Toyota': ['Sequoia', 'Land Cruiser', 'Sienna', 'Highlander'],
-    'Rolls-Royce': ['Phantom', 'Ghost', 'Cullinan', 'Dawn', 'Wraith'],
-    'Bentley': ['Flying Spur', 'Bentayga', 'Continental GT', 'Mulsanne'],
-    'Land Rover': ['Range Rover', 'Range Rover Sport', 'Defender', 'Discovery'],
-    'Range Rover': ['Autobiography', 'Sport', 'Velar', 'Evoque', 'LWB'],
-    'Porsche': ['Panamera', 'Cayenne', 'Taycan'],
-    'Sprinter': ['2500', '3500', '4500', 'Executive', 'Limo', 'Party Bus'],
-    'Freightliner': ['M2', 'S2C', 'Party Bus Chassis'],
-    'International': ['3200', '3400', 'Party Bus Chassis'],
-    'Prevost': ['H3-45', 'X3-45', 'Entertainer Coach'],
-    'MCI': ['J4500', 'D4500', 'D45 CRT LE'],
-    'Van Hool': ['CX35', 'CX45', 'TX'],
-    'Grech': ['GM33', 'GM40', 'Limo Bus'],
-    'Executive Coach Builders': ['Sprinter Executive', 'Mobile Office', 'Luxury Van'],
-    'Battisti': ['Custom Sedan', 'Custom SUV', 'Custom Sprinter'],
-    'Tiffany': ['Town Car', 'Sprinter Conversion', 'Executive Van']
-  };
+  // Fetch models from database for selected make (including image_url)
+  let models = [];
+  if (selectedMake && selectedMake !== '__other__') {
+    try {
+      // First get the make_id
+      const makeResponse = await fetch(`${window.ENV?.SUPABASE_URL || 'https://qdrtpfgpqrfblpmskeig.supabase.co'}/rest/v1/vehicle_makes?name=eq.${encodeURIComponent(selectedMake)}&select=id`, {
+        headers: {
+          'apikey': window.ENV?.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkcnRwZmdwcXJmYmxwbXNrZWlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ0MDcxNjMsImV4cCI6MjA1OTk4MzE2M30.YxGuvE7hqVfXirlnIbcNvEKnKR1LZMh1SfKPISIVn2c',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (makeResponse.ok) {
+        const makeData = await makeResponse.json();
+        if (makeData.length > 0) {
+          const makeId = makeData[0].id;
+          // Then get models for that make (including image_url)
+          const modelResponse = await fetch(`${window.ENV?.SUPABASE_URL || 'https://qdrtpfgpqrfblpmskeig.supabase.co'}/rest/v1/vehicle_models?make_id=eq.${makeId}&is_active=eq.true&order=sort_order,name&select=id,name,display_name,image_url`, {
+            headers: {
+              'apikey': window.ENV?.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkcnRwZmdwcXJmYmxwbXNrZWlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ0MDcxNjMsImV4cCI6MjA1OTk4MzE2M30.YxGuvE7hqVfXirlnIbcNvEKnKR1LZMh1SfKPISIVn2c',
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (modelResponse.ok) {
+            const modelData = await modelResponse.json();
+            models = modelData.map(m => ({ name: m.name, display_name: m.display_name || m.name, image_url: m.image_url }));
+            console.log('[DriverPortal] Loaded', models.length, 'models for', selectedMake, 'from database');
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[DriverPortal] Could not load models from database, using fallback:', err);
+    }
+  }
   
-  const models = modelsByMake[selectedMake] || [];
+  // Store models globally for image lookup
+  window._vehicleModels = models;
+  
+  // Store models globally for image lookup
+  window._vehicleModels = models;
+  
+  // Fallback to hardcoded if database empty or failed
+  if (models.length === 0 && selectedMake) {
+    const fallbackModelsByMake = {
+      'Cadillac': ['Escalade', 'Escalade ESV', 'CT6', 'XTS', 'XT5', 'XT6', 'Lyriq', 'DTS', 'CTS'],
+      'Chevrolet': ['Suburban', 'Tahoe', 'Express', 'Express 2500', 'Express 3500', 'Traverse', 'Silverado'],
+      'Chrysler': ['300', '300C', 'Pacifica', 'Town & Country', 'Voyager'],
+      'Dodge': ['Durango', 'Grand Caravan', 'Charger', 'Ram ProMaster'],
+      'Ford': ['Expedition', 'Expedition MAX', 'Explorer', 'Transit', 'Transit 350', 'E-350', 'E-450', 'F-550', 'Excursion'],
+      'GMC': ['Yukon', 'Yukon XL', 'Savana', 'Savana 2500', 'Savana 3500', 'Sierra', 'Acadia'],
+      'Infiniti': ['QX80', 'QX60', 'QX56', 'Q70L'],
+      'Jaguar': ['XJ', 'XJL', 'F-Pace', 'I-Pace'],
+      'Lexus': ['LS 460', 'LS 500', 'LX 570', 'LX 600', 'GX 460', 'ES 350'],
+      'Lincoln': ['Navigator', 'Navigator L', 'MKT', 'MKS', 'Continental', 'Town Car', 'Aviator'],
+      'Mercedes-Benz': ['S-Class', 'S550', 'S560', 'S580', 'Maybach', 'E-Class', 'GLS', 'GLE', 'V-Class', 'Sprinter', 'Metris'],
+      'BMW': ['7 Series', '740i', '750i', 'X7', 'X5', 'i7'],
+      'Audi': ['A8', 'A8L', 'Q7', 'Q8', 'e-tron'],
+      'Tesla': ['Model S', 'Model X', 'Model Y', 'Model 3'],
+      'Toyota': ['Sequoia', 'Land Cruiser', 'Sienna', 'Highlander'],
+      'Rolls-Royce': ['Phantom', 'Ghost', 'Cullinan', 'Dawn', 'Wraith'],
+      'Bentley': ['Flying Spur', 'Bentayga', 'Continental GT', 'Mulsanne'],
+      'Land Rover': ['Range Rover', 'Range Rover Sport', 'Defender', 'Discovery'],
+      'Range Rover': ['Autobiography', 'Sport', 'Velar', 'Evoque', 'LWB'],
+      'Porsche': ['Panamera', 'Cayenne', 'Taycan'],
+      'Sprinter': ['2500', '3500', '4500', 'Executive', 'Limo', 'Party Bus'],
+      'Freightliner': ['M2', 'S2C', 'Party Bus Chassis'],
+      'International': ['3200', '3400', 'Party Bus Chassis'],
+      'Prevost': ['H3-45', 'X3-45', 'Entertainer Coach'],
+      'MCI': ['J4500', 'D4500', 'D45 CRT LE'],
+      'Van Hool': ['CX35', 'CX45', 'TX'],
+      'Grech': ['GM33', 'GM40', 'Limo Bus'],
+      'Executive Coach Builders': ['Sprinter Executive', 'Mobile Office', 'Luxury Van'],
+      'Battisti': ['Custom Sedan', 'Custom SUV', 'Custom Sprinter'],
+      'Tiffany': ['Town Car', 'Sprinter Conversion', 'Executive Van']
+    };
+    const fallbackModels = fallbackModelsByMake[selectedMake] || [];
+    models = fallbackModels.map(name => ({ name, display_name: name, image_url: null }));
+    window._vehicleModels = models;
+  }
+  
   const currentValue = modelSelect.value;
   
   modelSelect.innerHTML = '<option value="">Select Model</option>';
   models.forEach(model => {
     const option = document.createElement('option');
-    option.value = model;
-    option.textContent = model;
+    option.value = model.name;
+    option.textContent = model.display_name;
+    option.dataset.imageUrl = model.image_url || '';
     modelSelect.appendChild(option);
   });
   
-  // Add "Other" option at end
-  const otherOption = document.createElement('option');
-  otherOption.value = '__other__';
-  otherOption.textContent = '-- Other (specify) --';
-  modelSelect.appendChild(otherOption);
-  
-  // Get or create the custom input field
-  let otherInput = document.getElementById('regVehicleModelOther');
-  if (!otherInput) {
-    otherInput = document.createElement('input');
-    otherInput.type = 'text';
-    otherInput.id = 'regVehicleModelOther';
-    otherInput.placeholder = 'Enter custom model';
-    otherInput.style.display = 'none';
-    otherInput.style.marginTop = '8px';
-    modelSelect.parentNode.appendChild(otherInput);
-  }
-  
-  // Handle "Other" selection
-  modelSelect.addEventListener('change', function() {
-    if (this.value === '__other__') {
-      otherInput.style.display = 'block';
-      otherInput.required = true;
-      otherInput.focus();
-    } else {
-      otherInput.style.display = 'none';
-      otherInput.required = false;
-      otherInput.value = '';
-    }
-  });
+  // Add "Other" option at the end
+  const otherOpt = document.createElement('option');
+  otherOpt.value = '__other__';
+  otherOpt.textContent = '➕ Other (enter custom model)';
+  modelSelect.appendChild(otherOpt);
   
   // Try to restore previous value if it exists in new list
-  if (currentValue && models.includes(currentValue)) {
+  const modelNames = models.map(m => m.name);
+  if (currentValue && currentValue !== '__other__' && modelNames.includes(currentValue)) {
     modelSelect.value = currentValue;
   }
+  
+  // Handle "Other" selection - show/hide text input
+  // Remove old listener first to prevent duplicates
+  const newModelSelect = modelSelect.cloneNode(true);
+  modelSelect.parentNode.replaceChild(newModelSelect, modelSelect);
+  
+  newModelSelect.addEventListener('change', () => {
+    // Update vehicle preview
+    updateVehiclePreview();
+    
+    const modelOtherInput = document.getElementById('regVehicleModelOther');
+    if (newModelSelect.value === '__other__') {
+      if (modelOtherInput) {
+        modelOtherInput.style.display = 'block';
+        modelOtherInput.focus();
+      }
+    } else {
+      if (modelOtherInput) {
+        modelOtherInput.style.display = 'none';
+        modelOtherInput.value = '';
+      }
+    }
+  });
 }
 
 /**
