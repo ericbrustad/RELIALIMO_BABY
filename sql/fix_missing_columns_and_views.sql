@@ -20,7 +20,7 @@ BEGIN
 END $$;
 
 -- 2. Fix v_saved_rate_schemes view - use scheme_name instead of name
-DROP VIEW IF EXISTS v_saved_rate_schemes;
+DROP VIEW IF EXISTS v_saved_rate_schemes CASCADE;
 
 CREATE OR REPLACE VIEW v_saved_rate_schemes AS
 SELECT 
@@ -41,7 +41,7 @@ GRANT SELECT ON v_saved_rate_schemes TO anon, authenticated;
 
 -- 3. Create vehicles view pointing to fleet_vehicles for backward compatibility
 -- (Some older code references 'vehicles' table instead of 'fleet_vehicles')
-DROP VIEW IF EXISTS vehicles;
+DROP VIEW IF EXISTS vehicles CASCADE;
 
 CREATE OR REPLACE VIEW vehicles AS
 SELECT 
