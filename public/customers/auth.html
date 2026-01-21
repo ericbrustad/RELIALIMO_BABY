@@ -552,8 +552,11 @@
         
         showToast('Welcome back!', 'success');
         
-        // Redirect to portal
-        const slug = CustomerAuth.getPortalSlug();
+        // Get the portal slug directly from the customer object returned by login
+        const slug = customer?.portal_slug || 
+          `${(customer?.first_name || '').toLowerCase()}_${(customer?.last_name || '').toLowerCase()}`.replace(/[^a-z0-9_]/g, '') ||
+          CustomerAuth.getPortalSlug();
+        
         setTimeout(() => {
           window.location.href = slug ? `/${slug}` : '/';
         }, 500);

@@ -170,6 +170,8 @@ async function init() {
     state.session = CustomerAuth.getSession();
     state.customer = CustomerAuth.getCustomer();
     
+    console.log('[CustomerPortal] Synced customer from auth service:', state.customer);
+    
     // Inject user menu styles and initialize user menu
     injectUserMenuStyles();
     initUserMenu('userMenuContainer');
@@ -711,10 +713,13 @@ function populatePassengerDropdown() {
   const select = document.getElementById('passengerSelect');
   if (!select) return;
   
+  console.log('[CustomerPortal] Populating passenger dropdown, customer:', state.customer);
+  
   // Self is always first - show customer's actual name
   const selfName = state.customer ? 
     `${state.customer.first_name || ''} ${state.customer.last_name || ''}`.trim() || 'Myself' : 
     'Myself';
+  console.log('[CustomerPortal] Self name for dropdown:', selfName);
   select.innerHTML = `<option value="self">${selfName}</option>`;
   
   // Add saved passengers (excluding primary/self which is the account holder)
@@ -738,6 +743,8 @@ function populatePassengerDropdown() {
 }
 
 function fillPassengerDetails(passengerId) {
+  console.log('[CustomerPortal] fillPassengerDetails called with:', passengerId);
+  
   if (passengerId === 'new') {
     // Open new passenger modal
     openModal('passengerModal');
@@ -748,16 +755,25 @@ function fillPassengerDetails(passengerId) {
   
   if (passengerId === 'self') {
     passenger = state.customer;
+    console.log('[CustomerPortal] Using self/customer data:', passenger);
   } else {
     passenger = state.savedPassengers.find(p => p.id == passengerId);
   }
   
   if (passenger) {
+    console.log('[CustomerPortal] Filling passenger details:', {
+      first_name: passenger.first_name,
+      last_name: passenger.last_name,
+      phone: passenger.cell_phone || passenger.phone,
+      email: passenger.email
+    });
     document.getElementById('passengerFirstName').value = passenger.first_name || '';
     document.getElementById('passengerLastName').value = passenger.last_name || '';
     // Check both cell_phone and phone fields (customer may have cell_phone from onboarding)
     document.getElementById('passengerPhone').value = passenger.cell_phone || passenger.phone || '';
     document.getElementById('passengerEmail').value = passenger.email || '';
+  } else {
+    console.warn('[CustomerPortal] No passenger data found for:', passengerId);
   }
 }
 
@@ -2653,12 +2669,7 @@ function setupEventListeners() {
     });
   });
   
-  // Header buttons
-  document.getElementById('preferencesBtn')?.addEventListener('click', () => {
-    document.getElementById('preferencesModal').classList.remove('hidden');
-  });
-  
-  // Note: Logout is now handled by the user menu component (customer-user-menu.js)
+  // Note: Preferences and logout are now handled by the user menu component (customer-user-menu.js)
   
   // Passenger selection
   document.getElementById('passengerSelect')?.addEventListener('change', (e) => {

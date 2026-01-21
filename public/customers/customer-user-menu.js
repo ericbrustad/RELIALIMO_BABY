@@ -89,20 +89,12 @@ function renderUserMenu(container, isAuthenticated, customer) {
   
   container.innerHTML = `
     <div class="user-menu-wrapper" id="userMenuWrapper">
-      <button class="user-menu-trigger" id="userMenuTrigger" aria-expanded="false" aria-haspopup="true">
-        <div class="user-avatar">
-          ${customer.avatar_url ? 
-            `<img src="${customer.avatar_url}" alt="${fullName}" class="avatar-img">` : 
-            `<span class="avatar-initials">${initials}</span>`
-          }
-          <span class="online-indicator"></span>
-        </div>
-        <div class="user-info-brief">
-          <span class="user-name">${escapeHtml(fullName)}</span>
-          <svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </div>
+      <button class="user-menu-trigger hamburger-trigger" id="userMenuTrigger" aria-expanded="false" aria-haspopup="true" aria-label="Menu">
+        <svg class="hamburger-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
       </button>
       
       <div class="user-menu-dropdown" id="userMenuDropdown" role="menu" aria-hidden="true">
@@ -152,6 +144,14 @@ function renderUserMenu(container, isAuthenticated, customer) {
             <span>My Profile</span>
           </a>
           
+          <button class="menu-item" id="changePasswordMenuItem" role="menuitem">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <span>Change Password</span>
+          </button>
+          
           <button class="menu-item" id="preferencesMenuItem" role="menuitem">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="3"></circle>
@@ -199,6 +199,7 @@ function renderUserMenu(container, isAuthenticated, customer) {
   const dropdown = container.querySelector('#userMenuDropdown');
   const logoutBtn = container.querySelector('#logoutMenuItem');
   const preferencesBtn = container.querySelector('#preferencesMenuItem');
+  const changePasswordBtn = container.querySelector('#changePasswordMenuItem');
   
   trigger?.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -211,8 +212,16 @@ function renderUserMenu(container, isAuthenticated, customer) {
   
   preferencesBtn?.addEventListener('click', () => {
     closeMenu();
-    // Trigger the main preferences button if it exists
-    document.getElementById('preferencesBtn')?.click();
+    // Open the preferences modal directly
+    const preferencesModal = document.getElementById('preferencesModal');
+    if (preferencesModal) {
+      preferencesModal.classList.remove('hidden');
+    }
+  });
+  
+  changePasswordBtn?.addEventListener('click', () => {
+    closeMenu();
+    openChangePasswordModal();
   });
   
   // Handle keyboard navigation
@@ -302,6 +311,113 @@ function handleMenuKeyboard(e, dropdown) {
 }
 
 // ============================================
+// Change Password Modal
+// ============================================
+
+function openChangePasswordModal() {
+  // Check if modal already exists
+  let modal = document.getElementById('changePasswordModal');
+  if (!modal) {
+    // Create the modal
+    modal = document.createElement('div');
+    modal.id = 'changePasswordModal';
+    modal.className = 'password-modal-overlay';
+    modal.innerHTML = `
+      <div class="password-modal">
+        <div class="password-modal-header">
+          <h3>Change Password</h3>
+          <button class="password-modal-close" id="closePasswordModal">&times;</button>
+        </div>
+        <form id="changePasswordForm" class="password-modal-form">
+          <div class="form-group">
+            <label for="newPassword">New Password</label>
+            <input type="password" id="newPassword" class="form-input" placeholder="Enter new password" required minlength="6">
+          </div>
+          <div class="form-group">
+            <label for="confirmPassword">Confirm Password</label>
+            <input type="password" id="confirmPassword" class="form-input" placeholder="Confirm new password" required minlength="6">
+          </div>
+          <div class="password-error hidden" id="passwordError"></div>
+          <div class="password-modal-actions">
+            <button type="button" class="btn-secondary" id="cancelPasswordChange">Cancel</button>
+            <button type="submit" class="btn-primary" id="submitPasswordChange">Update Password</button>
+          </div>
+        </form>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    
+    // Add event listeners
+    modal.querySelector('#closePasswordModal').addEventListener('click', closeChangePasswordModal);
+    modal.querySelector('#cancelPasswordChange').addEventListener('click', closeChangePasswordModal);
+    modal.querySelector('#changePasswordForm').addEventListener('submit', handleChangePassword);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeChangePasswordModal();
+    });
+  }
+  
+  // Show modal
+  modal.classList.add('open');
+  modal.querySelector('#newPassword').focus();
+}
+
+function closeChangePasswordModal() {
+  const modal = document.getElementById('changePasswordModal');
+  if (modal) {
+    modal.classList.remove('open');
+    // Reset form
+    modal.querySelector('#changePasswordForm').reset();
+    modal.querySelector('#passwordError').classList.add('hidden');
+  }
+}
+
+async function handleChangePassword(e) {
+  e.preventDefault();
+  
+  const newPassword = document.getElementById('newPassword').value;
+  const confirmPassword = document.getElementById('confirmPassword').value;
+  const errorDiv = document.getElementById('passwordError');
+  const submitBtn = document.getElementById('submitPasswordChange');
+  
+  // Validate passwords match
+  if (newPassword !== confirmPassword) {
+    errorDiv.textContent = 'Passwords do not match';
+    errorDiv.classList.remove('hidden');
+    return;
+  }
+  
+  // Validate password length
+  if (newPassword.length < 6) {
+    errorDiv.textContent = 'Password must be at least 6 characters';
+    errorDiv.classList.remove('hidden');
+    return;
+  }
+  
+  // Show loading state
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Updating...';
+  errorDiv.classList.add('hidden');
+  
+  try {
+    await CustomerAuth.updatePassword(newPassword);
+    
+    closeChangePasswordModal();
+    // Show success toast if available
+    if (typeof showToast === 'function') {
+      showToast('Password updated successfully', 'success');
+    } else {
+      alert('Password updated successfully');
+    }
+  } catch (err) {
+    errorDiv.textContent = err.message || 'Failed to update password';
+    errorDiv.classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Update Password';
+  }
+}
+
+// ============================================
 // Utility Functions
 // ============================================
 
@@ -368,6 +484,27 @@ export function injectUserMenuStyles() {
       border-radius: 50px;
       cursor: pointer;
       transition: all 0.3s ease;
+    }
+    
+    /* Hamburger Menu Trigger */
+    .user-menu-trigger.hamburger-trigger {
+      padding: 8px;
+      border-radius: 8px;
+      background: transparent;
+      border: none;
+    }
+    
+    .user-menu-trigger.hamburger-trigger:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    
+    .hamburger-icon {
+      color: white;
+      transition: transform 0.3s ease;
+    }
+    
+    .user-menu-trigger[aria-expanded="true"] .hamburger-icon {
+      transform: rotate(90deg);
     }
     
     .user-menu-trigger:hover {
@@ -660,6 +797,164 @@ export function injectUserMenuStyles() {
       .user-menu-dropdown.open {
         transform: translateY(0);
       }
+    }
+    
+    /* Password Modal Styles */
+    .password-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+    
+    .password-modal-overlay.open {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    .password-modal {
+      background: linear-gradient(135deg, #1e1e3f 0%, #252549 100%);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      transform: scale(0.9) translateY(-20px);
+      transition: transform 0.3s ease;
+    }
+    
+    .password-modal-overlay.open .password-modal {
+      transform: scale(1) translateY(0);
+    }
+    
+    .password-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .password-modal-header h3 {
+      margin: 0;
+      color: white;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    
+    .password-modal-close {
+      background: transparent;
+      border: none;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+      transition: color 0.2s ease;
+    }
+    
+    .password-modal-close:hover {
+      color: white;
+    }
+    
+    .password-modal-form {
+      padding: 20px;
+    }
+    
+    .password-modal-form .form-group {
+      margin-bottom: 16px;
+    }
+    
+    .password-modal-form label {
+      display: block;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    
+    .password-modal-form .form-input {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      color: white;
+      font-size: 14px;
+      transition: all 0.2s ease;
+      box-sizing: border-box;
+    }
+    
+    .password-modal-form .form-input:focus {
+      outline: none;
+      border-color: #6366f1;
+      background: rgba(99, 102, 241, 0.1);
+    }
+    
+    .password-error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    
+    .password-error.hidden {
+      display: none;
+    }
+    
+    .password-modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+    
+    .password-modal-actions .btn-secondary {
+      padding: 10px 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .password-modal-actions .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+    
+    .password-modal-actions .btn-primary {
+      padding: 10px 20px;
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .password-modal-actions .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+    }
+    
+    .password-modal-actions .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
     }
   `;
   
