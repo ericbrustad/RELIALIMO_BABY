@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verifying Email - RELIALIMO</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1e3a5f 0%, #0f1f32 100%);
+      color: white;
+      padding: 20px;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 450px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    .logo {
+      width: 120px;
+      height: auto;
+      margin-bottom: 20px;
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 15px;
+    }
+    p {
+      font-size: 16px;
+      opacity: 0.9;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid rgba(255, 255, 255, 0.2);
+      border-top-color: #c9a227;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .success-icon {
+      font-size: 60px;
+      margin-bottom: 15px;
+    }
+    .error-icon {
+      font-size: 60px;
+      margin-bottom: 15px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 12px 30px;
+      background: linear-gradient(135deg, #c9a227, #8b7020);
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      margin-top: 15px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(201, 162, 39, 0.4);
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img src="/images/logo-white.png" alt="RELIALIMO" class="logo" onerror="this.style.display='none'">
+    
+    <!-- Verifying State -->
+    <div id="verifying-state">
+      <div class="spinner"></div>
+      <h1>Verifying Your Email</h1>
+      <p>Please wait while we confirm your email address...</p>
+    </div>
+    
+    <!-- Success State -->
+    <div id="success-state" class="hidden">
+      <div class="success-icon">✅</div>
+      <h1>Email Verified!</h1>
+      <p>Your email has been successfully verified. You can now access your account.</p>
+      <a href="/customers/auth.html" class="btn">Continue to Login</a>
+    </div>
+    
+    <!-- Error State -->
+    <div id="error-state" class="hidden">
+      <div class="error-icon">❌</div>
+      <h1>Verification Failed</h1>
+      <p id="error-message">The verification link may have expired or is invalid.</p>
+      <a href="/customers/auth.html" class="btn">Back to Login</a>
+    </div>
+  </div>
+
+  <script src="/env.js"></script>
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    
+    const SUPABASE_URL = window.ENV?.SUPABASE_URL || 'https://siumiadylwcrkaqsfwkj.supabase.co';
+    const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY || '';
+    
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    const verifyingState = document.getElementById('verifying-state');
+    const successState = document.getElementById('success-state');
+    const errorState = document.getElementById('error-state');
+    const errorMessage = document.getElementById('error-message');
+    
+    function showSuccess() {
+      verifyingState.classList.add('hidden');
+      successState.classList.remove('hidden');
+      errorState.classList.add('hidden');
+    }
+    
+    function showError(message) {
+      verifyingState.classList.add('hidden');
+      successState.classList.add('hidden');
+      errorState.classList.remove('hidden');
+      if (message) errorMessage.textContent = message;
+    }
+    
+    async function verifyEmail() {
+      try {
+        console.log('[Verify] Starting email verification...');
+        console.log('[Verify] Full URL:', window.location.href);
+        console.log('[Verify] Hash:', window.location.hash);
+        
+        // Supabase puts verification tokens in the URL hash or query params
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const queryParams = new URLSearchParams(window.location.search);
+        
+        // Check for various token types
+        const accessToken = hashParams.get('access_token') || queryParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token');
+        const type = hashParams.get('type') || queryParams.get('type');
+        const tokenHash = queryParams.get('token_hash');
+        const errorCode = hashParams.get('error') || queryParams.get('error');
+        const errorDescription = hashParams.get('error_description') || queryParams.get('error_description');
+        
+        console.log('[Verify] Token type:', type);
+        console.log('[Verify] Has access_token:', !!accessToken);
+        console.log('[Verify] Has token_hash:', !!tokenHash);
+        console.log('[Verify] Error:', errorCode, errorDescription);
+        
+        // Check for errors in URL
+        if (errorCode) {
+          showError(errorDescription || 'Verification failed: ' + errorCode);
+          return;
+        }
+        
+        // Handle PKCE flow (token_hash in query params)
+        if (tokenHash && type) {
+          console.log('[Verify] Processing PKCE verification...');
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: type === 'email' ? 'email' : type
+          });
+          
+          if (error) {
+            console.error('[Verify] PKCE verification error:', error);
+            showError(error.message);
+            return;
+          }
+          
+          console.log('[Verify] PKCE verification successful!');
+          showSuccess();
+          return;
+        }
+        
+        // Handle implicit flow (access_token in hash)
+        if (accessToken && refreshToken) {
+          console.log('[Verify] Processing implicit flow verification...');
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+          
+          if (error) {
+            console.error('[Verify] Session set error:', error);
+            showError(error.message);
+            return;
+          }
+          
+          console.log('[Verify] Session set successfully!');
+          showSuccess();
+          return;
+        }
+        
+        // Check if already verified (user came here directly)
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user?.email_confirmed_at) {
+          console.log('[Verify] User already verified');
+          showSuccess();
+          return;
+        }
+        
+        // Try to exchange URL code if present (some Supabase setups use code parameter)
+        const code = queryParams.get('code');
+        if (code) {
+          console.log('[Verify] Processing code exchange...');
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          
+          if (error) {
+            console.error('[Verify] Code exchange error:', error);
+            showError(error.message);
+            return;
+          }
+          
+          console.log('[Verify] Code exchange successful!');
+          showSuccess();
+          return;
+        }
+        
+        // No verification parameters found
+        console.warn('[Verify] No verification parameters found in URL');
+        showError('Invalid verification link. Please request a new verification email.');
+        
+      } catch (error) {
+        console.error('[Verify] Error:', error);
+        showError('An unexpected error occurred. Please try again.');
+      }
+    }
+    
+    // Start verification on page load
+    verifyEmail();
+  </script>
+</body>
+</html>
