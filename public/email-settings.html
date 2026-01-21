@@ -545,7 +545,7 @@
           
           const data = await response.json();
           
-          if (response.ok && data.ok) {
+          if (response.ok && (data.ok || data.success)) {
             showToast(`✅ Test email sent to ${testEmail}!`, 'success');
             console.log('Email sent successfully:', data);
             // Hide any error displays on success
