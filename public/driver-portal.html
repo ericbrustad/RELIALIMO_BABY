@@ -1450,6 +1450,17 @@
               <input type="number" id="maxPickupDistance" min="0" step="5" value="50" placeholder="50">
               <small class="field-hint">Don't show trips with pickups farther than this</small>
             </div>
+            
+            <div class="settings-toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">Show Map on Offers</span>
+                <small>Display route map with distance/duration on new trip offers</small>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="showMapOnOffers" checked>
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
           </div>
         </div>
         
@@ -1602,6 +1613,79 @@
         <div class="modal-footer">
           <button type="button" id="cancelDeleteBtn" class="btn btn-secondary">Cancel</button>
           <button type="button" id="confirmDeleteBtn" class="btn btn-danger">🗑️ Delete My Account</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trip Offer Overlay Modal -->
+    <div id="tripOfferOverlay" class="trip-offer-overlay" style="display: none;">
+      <div class="trip-offer-modal">
+        <div class="offer-header">
+          <div class="offer-badge">🚗 NEW TRIP OFFER</div>
+          <div class="offer-expires" id="offerExpiresTimer">Expires in 15:00</div>
+        </div>
+        
+        <div class="offer-payout">
+          <span class="payout-label">YOUR PAYOUT</span>
+          <span class="payout-amount" id="offerPayout">$0.00</span>
+        </div>
+        
+        <div class="offer-datetime">
+          <div class="offer-date" id="offerDate">Mon, Jan 20</div>
+          <div class="offer-time" id="offerTime">10:30 AM</div>
+        </div>
+        
+        <div class="offer-route">
+          <div class="offer-location pickup">
+            <div class="location-marker">PU</div>
+            <div class="location-details">
+              <div class="location-address" id="offerPickupAddress">Loading...</div>
+            </div>
+          </div>
+          <div class="route-line"></div>
+          <div class="offer-location dropoff">
+            <div class="location-marker">DO</div>
+            <div class="location-details">
+              <div class="location-address" id="offerDropoffAddress">Loading...</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="offer-trip-info">
+          <div class="trip-stat">
+            <span class="stat-icon">📏</span>
+            <span class="stat-value" id="offerDistance">-- mi</span>
+            <span class="stat-label">Distance</span>
+          </div>
+          <div class="trip-stat">
+            <span class="stat-icon">⏱️</span>
+            <span class="stat-value" id="offerDuration">-- min</span>
+            <span class="stat-label">Duration</span>
+          </div>
+          <div class="trip-stat">
+            <span class="stat-icon">👥</span>
+            <span class="stat-value" id="offerPax">1</span>
+            <span class="stat-label">Passengers</span>
+          </div>
+        </div>
+        
+        <!-- Map Container (shown if setting enabled) -->
+        <div class="offer-map-container" id="offerMapContainer" style="display: none;">
+          <div id="offerRouteMap" class="offer-route-map"></div>
+        </div>
+        
+        <div class="offer-vehicle-type" id="offerVehicleType">
+          <span class="vehicle-icon">🚙</span>
+          <span class="vehicle-name">Black SUV</span>
+        </div>
+        
+        <div class="offer-actions">
+          <button type="button" class="btn btn-decline" id="declineOfferBtn">
+            ✗ Decline
+          </button>
+          <button type="button" class="btn btn-accept" id="acceptOfferBtn">
+            ✓ Accept Trip
+          </button>
         </div>
       </div>
     </div>

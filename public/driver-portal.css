@@ -3528,3 +3528,298 @@ body {
   --status-waiting: #8b5cf6;
   --status-done: #10b981;
 }
+
+/* ============================================
+   Trip Offer Overlay Modal
+   ============================================ */
+.trip-offer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.95);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md);
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(50px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+.trip-offer-modal {
+  background: linear-gradient(145deg, #1a1a2e 0%, #16162a 100%);
+  border-radius: var(--radius-xl);
+  width: 100%;
+  max-width: 420px;
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 2px solid var(--primary);
+  box-shadow: 0 0 60px rgba(79, 70, 229, 0.4), 0 20px 60px rgba(0, 0, 0, 0.6);
+  animation: slideUp 0.4s ease, pulse 2s ease-in-out infinite;
+}
+
+.offer-header {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  padding: var(--space-lg);
+  text-align: center;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+.offer-badge {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  margin-bottom: var(--space-sm);
+}
+
+.offer-expires {
+  background: rgba(255, 255, 255, 0.2);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-full);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: white;
+  display: inline-block;
+}
+
+.offer-expires.urgent {
+  background: var(--danger);
+  animation: pulse 0.5s ease infinite;
+}
+
+.offer-payout {
+  background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
+  padding: var(--space-lg);
+  text-align: center;
+  margin: var(--space-md);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+}
+
+.payout-label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: var(--space-xs);
+}
+
+.payout-amount {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.offer-datetime {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-lg);
+  padding: var(--space-md);
+  background: var(--bg-card);
+  margin: 0 var(--space-md);
+  border-radius: var(--radius-md);
+}
+
+.offer-date, .offer-time {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.offer-route {
+  padding: var(--space-lg) var(--space-md);
+  position: relative;
+}
+
+.offer-location {
+  display: flex;
+  gap: var(--space-md);
+  align-items: flex-start;
+  margin-bottom: var(--space-md);
+}
+
+.offer-location:last-child {
+  margin-bottom: 0;
+}
+
+.location-marker {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.offer-location.pickup .location-marker {
+  background: var(--success);
+  color: white;
+}
+
+.offer-location.dropoff .location-marker {
+  background: var(--danger);
+  color: white;
+}
+
+.location-details {
+  flex: 1;
+}
+
+.location-address {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.route-line {
+  position: absolute;
+  left: calc(var(--space-md) + 17px);
+  top: 66px;
+  width: 2px;
+  height: 30px;
+  background: linear-gradient(to bottom, var(--success), var(--danger));
+}
+
+.offer-trip-info {
+  display: flex;
+  justify-content: space-around;
+  padding: var(--space-md);
+  background: var(--bg-card);
+  margin: 0 var(--space-md);
+  border-radius: var(--radius-md);
+  gap: var(--space-sm);
+}
+
+.trip-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.stat-icon {
+  font-size: 1.25rem;
+  margin-bottom: var(--space-xs);
+}
+
+.stat-value {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.stat-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.offer-map-container {
+  margin: var(--space-md);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.offer-route-map {
+  width: 100%;
+  height: 180px;
+  background: var(--bg-input);
+}
+
+.offer-vehicle-type {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--bg-card);
+  margin: var(--space-md);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.vehicle-icon {
+  font-size: 1.25rem;
+}
+
+.offer-actions {
+  display: flex;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  padding-top: var(--space-sm);
+}
+
+.offer-actions .btn {
+  flex: 1;
+  padding: var(--space-md) var(--space-lg);
+  font-size: 1.125rem;
+  font-weight: 700;
+  border-radius: var(--radius-lg);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-decline {
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border: 2px solid var(--border) !important;
+}
+
+.btn-decline:hover {
+  background: var(--danger);
+  color: white;
+  border-color: var(--danger) !important;
+}
+
+.btn-accept {
+  background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
+  color: white;
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+}
+
+.btn-accept:hover {
+  transform: scale(1.02);
+  box-shadow: 0 6px 24px rgba(16, 185, 129, 0.5);
+}
+
+/* Responsive adjustments */
+@media (max-width: 380px) {
+  .trip-offer-modal {
+    max-height: 95vh;
+  }
+  
+  .payout-amount {
+    font-size: 2rem;
+  }
+  
+  .offer-actions .btn {
+    font-size: 1rem;
+    padding: var(--space-sm) var(--space-md);
+  }
+}

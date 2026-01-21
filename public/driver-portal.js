@@ -1244,12 +1244,15 @@ async function handleOfferParameter() {
 function setupNotificationSoundHandlers() {
   // Listen for farmout offer events
   window.addEventListener('farmoutOfferSent', (event) => {
-    const { driverId, driverName, offerDetails } = event.detail;
+    const { driverId, driverName, offerDetails, reservationId } = event.detail;
     
-    // Only play sound if this is for the current driver
+    // Only show if this is for the current driver
     if (driverId === state.driverId) {
-      console.log('[DriverPortal] New farmout offer received, playing sound');
+      console.log('[DriverPortal] New farmout offer received, showing overlay');
       playNotificationSound('new_offer');
+      
+      // Show the hard offer overlay
+      showTripOfferOverlay(reservationId, offerDetails);
       
       // Also show browser notification if permission granted
       showBrowserNotification('🚗 New Trip Offer!', 
@@ -1275,6 +1278,260 @@ function setupNotificationSoundHandlers() {
   });
   
   console.log('[DriverPortal] Notification sound handlers setup complete');
+}
+
+// ============================================
+// Trip Offer Overlay
+// ============================================
+let offerCountdownTimer = null;
+let currentOfferData = null;
+
+/**
+ * Show the hard overlay for a new trip offer
+ */
+function showTripOfferOverlay(reservationId, offerDetails) {
+  const overlay = document.getElementById('tripOfferOverlay');
+  if (!overlay) {
+    console.warn('[DriverPortal] Trip offer overlay element not found');
+    return;
+  }
+  
+  currentOfferData = { reservationId, ...offerDetails };
+  
+  // Populate offer details
+  document.getElementById('offerPayout').textContent = `$${offerDetails.driverPay || '0.00'}`;
+  
+  // Format date and time
+  const pickupDate = offerDetails.pickupDatetime ? new Date(offerDetails.pickupDatetime) : new Date();
+  const dateOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+  const timeOptions = { hour: 'numeric', minute: '2-digit', hour12: true };
+  document.getElementById('offerDate').textContent = pickupDate.toLocaleDateString('en-US', dateOptions);
+  document.getElementById('offerTime').textContent = pickupDate.toLocaleTimeString('en-US', timeOptions);
+  
+  // Addresses
+  document.getElementById('offerPickupAddress').textContent = offerDetails.pickupAddress || offerDetails.pickupCity || 'Pickup location';
+  document.getElementById('offerDropoffAddress').textContent = offerDetails.dropoffAddress || offerDetails.dropoffCity || 'Dropoff location';
+  
+  // Passengers
+  document.getElementById('offerPax').textContent = offerDetails.paxCount || 1;
+  
+  // Vehicle type
+  const vehicleTypeEl = document.getElementById('offerVehicleType');
+  if (vehicleTypeEl) {
+    vehicleTypeEl.innerHTML = `<span class="vehicle-icon">🚙</span><span class="vehicle-name">${offerDetails.vehicleType || 'Vehicle'}</span>`;
+  }
+  
+  // Distance and duration (will be updated by map calculation)
+  document.getElementById('offerDistance').textContent = offerDetails.distance || '-- mi';
+  document.getElementById('offerDuration').textContent = offerDetails.duration || '-- min';
+  
+  // Setup countdown timer
+  const expiresAt = offerDetails.expiresAt ? new Date(offerDetails.expiresAt) : new Date(Date.now() + 15 * 60 * 1000);
+  startOfferCountdown(expiresAt);
+  
+  // Check if map should be shown (setting)
+  const showMapSetting = document.getElementById('showMapOnOffers');
+  const showMap = showMapSetting ? showMapSetting.checked : true;
+  const mapContainer = document.getElementById('offerMapContainer');
+  
+  if (mapContainer) {
+    if (showMap && offerDetails.pickupAddress && offerDetails.dropoffAddress) {
+      mapContainer.style.display = 'block';
+      initOfferRouteMap(offerDetails.pickupAddress, offerDetails.dropoffAddress);
+    } else {
+      mapContainer.style.display = 'none';
+    }
+  }
+  
+  // Setup button handlers
+  document.getElementById('acceptOfferBtn').onclick = () => handleOfferAccept(reservationId);
+  document.getElementById('declineOfferBtn').onclick = () => handleOfferDecline(reservationId);
+  
+  // Show the overlay
+  overlay.style.display = 'flex';
+  
+  console.log('[DriverPortal] Trip offer overlay shown for reservation:', reservationId);
+}
+
+/**
+ * Hide the trip offer overlay
+ */
+function hideTripOfferOverlay() {
+  const overlay = document.getElementById('tripOfferOverlay');
+  if (overlay) {
+    overlay.style.display = 'none';
+  }
+  
+  if (offerCountdownTimer) {
+    clearInterval(offerCountdownTimer);
+    offerCountdownTimer = null;
+  }
+  
+  currentOfferData = null;
+}
+
+/**
+ * Start the countdown timer for offer expiry
+ */
+function startOfferCountdown(expiresAt) {
+  if (offerCountdownTimer) {
+    clearInterval(offerCountdownTimer);
+  }
+  
+  const timerEl = document.getElementById('offerExpiresTimer');
+  
+  function updateTimer() {
+    const now = Date.now();
+    const remaining = expiresAt.getTime() - now;
+    
+    if (remaining <= 0) {
+      timerEl.textContent = 'EXPIRED';
+      timerEl.classList.add('urgent');
+      hideTripOfferOverlay();
+      showToast('Trip offer expired', 'warning');
+      return;
+    }
+    
+    const minutes = Math.floor(remaining / 60000);
+    const seconds = Math.floor((remaining % 60000) / 1000);
+    timerEl.textContent = `Expires in ${minutes}:${seconds.toString().padStart(2, '0')}`;
+    
+    // Add urgent class when less than 2 minutes
+    if (remaining < 120000) {
+      timerEl.classList.add('urgent');
+    } else {
+      timerEl.classList.remove('urgent');
+    }
+  }
+  
+  updateTimer();
+  offerCountdownTimer = setInterval(updateTimer, 1000);
+}
+
+/**
+ * Initialize the route map for the offer
+ */
+async function initOfferRouteMap(pickupAddress, dropoffAddress) {
+  const mapContainer = document.getElementById('offerRouteMap');
+  if (!mapContainer) return;
+  
+  // Try to use Google Maps if available
+  if (typeof google !== 'undefined' && google.maps) {
+    try {
+      const map = new google.maps.Map(mapContainer, {
+        zoom: 10,
+        center: { lat: 44.9778, lng: -93.2650 }, // Default to Minneapolis
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        styles: [
+          { elementType: 'geometry', stylers: [{ color: '#1a1a2e' }] },
+          { elementType: 'labels.text.stroke', stylers: [{ color: '#1a1a2e' }] },
+          { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
+          { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2d2d4a' }] },
+          { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#1a1a2e' }] },
+          { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f0f1a' }] }
+        ]
+      });
+      
+      const directionsService = new google.maps.DirectionsService();
+      const directionsRenderer = new google.maps.DirectionsRenderer({
+        map: map,
+        suppressMarkers: false,
+        polylineOptions: {
+          strokeColor: '#4f46e5',
+          strokeWeight: 4
+        }
+      });
+      
+      const result = await directionsService.route({
+        origin: pickupAddress,
+        destination: dropoffAddress,
+        travelMode: google.maps.TravelMode.DRIVING
+      });
+      
+      directionsRenderer.setDirections(result);
+      
+      // Update distance and duration from the result
+      if (result.routes && result.routes[0] && result.routes[0].legs && result.routes[0].legs[0]) {
+        const leg = result.routes[0].legs[0];
+        document.getElementById('offerDistance').textContent = leg.distance.text;
+        document.getElementById('offerDuration').textContent = leg.duration.text;
+      }
+      
+      console.log('[DriverPortal] Offer route map initialized');
+    } catch (err) {
+      console.warn('[DriverPortal] Failed to initialize offer route map:', err);
+      mapContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Map unavailable</div>';
+    }
+  } else {
+    // Fallback: show a static message
+    mapContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Map requires Google Maps API</div>';
+  }
+}
+
+/**
+ * Handle accepting the offer from the overlay
+ */
+async function handleOfferAccept(reservationId) {
+  hideTripOfferOverlay();
+  await window.acceptTrip(reservationId);
+}
+
+/**
+ * Handle declining the offer from the overlay
+ */
+async function handleOfferDecline(reservationId) {
+  hideTripOfferOverlay();
+  await window.declineTrip(reservationId);
+}
+
+/**
+ * Check for new offers and show overlay for the most recent one
+ * Only shows overlay for offers that haven't been shown before
+ */
+function checkAndShowNewOfferOverlay() {
+  if (!state.trips.offered || state.trips.offered.length === 0) return;
+  
+  // Get list of previously shown offers from sessionStorage
+  const shownOffers = JSON.parse(sessionStorage.getItem('shown_offer_overlays') || '[]');
+  
+  // Find offers we haven't shown yet
+  const newOffers = state.trips.offered.filter(trip => 
+    trip.is_farmout_offer && !shownOffers.includes(trip.id)
+  );
+  
+  if (newOffers.length === 0) return;
+  
+  // Show the first new offer (most recent by date)
+  const offer = newOffers[0];
+  
+  // Mark as shown
+  shownOffers.push(offer.id);
+  sessionStorage.setItem('shown_offer_overlays', JSON.stringify(shownOffers));
+  
+  // Build offer details from the trip object
+  const offerDetails = {
+    reservationId: offer.id,
+    confirmationNumber: offer.confirmation_number,
+    pickupDatetime: offer.pickup_date_time,
+    pickupAddress: offer.pickup_address || offer.pickup_location,
+    dropoffAddress: offer.dropoff_address || offer.dropoff_location,
+    pickupCity: offer.pickup_location,
+    dropoffCity: offer.dropoff_location,
+    driverPay: offer.driver_pay,
+    paxCount: offer.passenger_count,
+    vehicleType: offer.vehicle_type,
+    expiresAt: offer.expires_at,
+    distance: offer.distance,
+    duration: offer.duration
+  };
+  
+  // Play sound and show overlay
+  playNotificationSound('new_offer');
+  showTripOfferOverlay(offer.id, offerDetails);
+  
+  console.log('[DriverPortal] Auto-showing overlay for new offer:', offer.id);
 }
 
 // ============================================
@@ -5674,6 +5931,9 @@ async function refreshTrips() {
     // Sort by date
     state.trips.offered.sort((a, b) => new Date(a.pickup_date_time) - new Date(b.pickup_date_time));
     state.trips.upcoming.sort((a, b) => new Date(a.pickup_date_time) - new Date(b.pickup_date_time));
+    
+    // Check for new offers and show overlay for the first one
+    checkAndShowNewOfferOverlay();
     
     // Update UI
     renderTripLists();
