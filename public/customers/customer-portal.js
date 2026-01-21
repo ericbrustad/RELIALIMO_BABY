@@ -539,10 +539,10 @@ async function loadVehicleTypes() {
     console.error('[CustomerPortal] Failed to load vehicle types:', err);
     // Fallback default types
     state.vehicleTypes = [
-      { id: 'sedan', name: 'Sedan', icon: '🚗', capacity: '1-3 passengers' },
-      { id: 'suv', name: 'SUV', icon: '🚙', capacity: '1-5 passengers' },
-      { id: 'van', name: 'Van', icon: '🚐', capacity: '1-7 passengers' },
-      { id: 'limo', name: 'Limousine', icon: '🚖', capacity: '1-8 passengers' }
+      { id: 'sedan', name: 'Sedan', icon: '�', capacity: '1-3 passengers' },
+      { id: 'suv', name: 'SUV', icon: '🚘', capacity: '1-5 passengers' },
+      { id: 'van', name: 'Van', icon: '🚘', capacity: '1-7 passengers' },
+      { id: 'limo', name: 'Limousine', icon: '🚘', capacity: '1-8 passengers' }
     ];
     renderVehicleTypes();
   }
@@ -555,7 +555,7 @@ function renderVehicleTypes() {
   container.innerHTML = state.vehicleTypes.map(type => `
     <div class="vehicle-type-option ${state.selectedVehicleType === type.id ? 'selected' : ''}" 
          data-type="${type.id}">
-      <span class="vehicle-icon">${type.icon || '🚗'}</span>
+      <span class="vehicle-icon">${type.icon || '�'}</span>
       <span class="vehicle-name">${type.name}</span>
       <span class="vehicle-capacity">${type.capacity || ''}</span>
     </div>
@@ -1242,7 +1242,7 @@ async function bookTrip(includeReturn = false) {
     showToast(err.message || 'Failed to book trip', 'error');
   } finally {
     bookBtn.disabled = false;
-    bookBtn.textContent = includeReturn ? '🔄 Book One Way and Enter Return Trip' : '🚗 Book One Way Trip';
+    bookBtn.textContent = includeReturn ? '🔄 Book One Way and Enter Return Trip' : '� Book One Way Trip';
   }
 }
 
@@ -2037,7 +2037,7 @@ function initTrackingMap() {
   
   state.maps.tracking = new mapboxgl.Map({
     container: 'trackingMap',
-    style: 'mapbox://styles/mapbox/dark-v11',
+    style: 'mapbox://styles/mapbox/streets-v12',
     center: defaultCenter,
     zoom: 13
   });
@@ -2073,7 +2073,7 @@ async function updateDriverLocation() {
         } else {
           const el = document.createElement('div');
           el.className = 'driver-marker';
-          el.innerHTML = '🚗';
+          el.innerHTML = '�';
           el.style.fontSize = '30px';
           
           state.driverMarker = new mapboxgl.Marker(el)
@@ -2157,7 +2157,7 @@ function openMapSelection(type) {
     
     state.maps.selection = new mapboxgl.Map({
       container: 'selectionMap',
-      style: 'mapbox://styles/mapbox/dark-v11',
+      style: 'mapbox://styles/mapbox/streets-v12',
       center: [-93.265, 44.978],
       zoom: 12
     });

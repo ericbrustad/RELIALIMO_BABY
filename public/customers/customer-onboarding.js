@@ -1214,7 +1214,7 @@ function initializeDriversMap() {
   
   state.map = new mapboxgl.Map({
     container: 'driversMap',
-    style: 'mapbox://styles/mapbox/dark-v11',
+    style: 'mapbox://styles/mapbox/streets-v12',
     center: [center.lng, center.lat],
     zoom: 11
   });
@@ -1238,7 +1238,7 @@ function initializeDriversMap() {
     
     const driverMarker = document.createElement('div');
     driverMarker.className = 'driver-marker';
-    driverMarker.innerHTML = '🚗';
+    driverMarker.innerHTML = '�';
     driverMarker.title = driver.name;
     
     new mapboxgl.Marker({ element: driverMarker })

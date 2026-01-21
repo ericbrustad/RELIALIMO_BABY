@@ -219,7 +219,7 @@ const DEFAULT_EMAIL_TEMPLATES = {
               
               <h3 style="color: #1565c0; margin: 30px 0 15px 0; font-size: 18px;">✨ What We Offer</h3>
               <ul style="color: #555; line-height: 2; font-size: 15px; padding-left: 20px;">
-                <li>🚗 Professional, licensed chauffeurs</li>
+                <li>� Professional, licensed chauffeurs</li>
                 <li>🌟 Premium fleet of luxury vehicles</li>
                 <li>⏰ Punctual and reliable service, 24/7</li>
                 <li>📱 Easy online booking and real-time updates</li>
@@ -316,7 +316,7 @@ const DEFAULT_EMAIL_TEMPLATES = {
               
               <!-- Trip Details Box -->
               <div style="background: #f8f9fa; border-left: 4px solid #1976d2; border-radius: 8px; padding: 25px; margin-bottom: 25px;">
-                <h3 style="margin: 0 0 20px 0; color: #1976d2; font-size: 18px;">🚗 Trip Details</h3>
+                <h3 style="margin: 0 0 20px 0; color: #1976d2; font-size: 18px;">� Trip Details</h3>
                 <table style="width: 100%;">
                   <tr>
                     <td style="padding: 10px 0; color: #666; font-size: 14px; width: 140px; vertical-align: top;">📅 Date:</td>
@@ -453,7 +453,7 @@ const DEFAULT_EMAIL_TEMPLATES = {
               
               <!-- Trip Details Box -->
               <div style="background: #f8f9fa; border-left: 4px solid #1976d2; border-radius: 8px; padding: 25px; margin-bottom: 25px;">
-                <h3 style="margin: 0 0 20px 0; color: #1976d2; font-size: 18px;">🚗 Your Trip Details</h3>
+                <h3 style="margin: 0 0 20px 0; color: #1976d2; font-size: 18px;">� Your Trip Details</h3>
                 <table style="width: 100%;">
                   <tr>
                     <td style="padding: 10px 0; color: #666; font-size: 14px; width: 140px; vertical-align: top;">📅 Date:</td>

@@ -1843,7 +1843,7 @@ async function initDriverViewMap() {
     
     driverViewMap = new mapboxgl.Map({
       container: mapContainer,
-      style: 'mapbox://styles/mapbox/dark-v11',
+      style: 'mapbox://styles/mapbox/streets-v12',
       center: center,
       zoom: 12
     });

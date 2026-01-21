@@ -6113,9 +6113,9 @@ class MyOffice {
       const driver = (this.drivers || []).find(d => d.id === record.assigned_driver_id);
       if (driver) {
         const driverName = `${driver.first_name || ''} ${driver.last_name || ''}`.trim() || 'Unknown Driver';
-        driverLabel = `🚗 ${driverName}`;
+        driverLabel = `� ${driverName}`;
       } else {
-        driverLabel = '🚗 Driver Assigned';
+        driverLabel = '🚘 Driver Assigned';
       }
     } else {
       driverLabel = '<span style="color: #999;">No Driver Assigned</span>';
