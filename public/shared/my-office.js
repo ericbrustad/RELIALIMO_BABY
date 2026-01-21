@@ -9556,9 +9556,22 @@ Would you also like to delete this driver?`
     const affiliateIdInput = document.getElementById('driverAffiliateId');
     const affiliateOriginalInput = document.getElementById('driverAffiliateOriginal');
     
-    if (affiliateSelect) {
-      affiliateSelect.value = driver.affiliate_id || '';
-      console.log('📋 Setting affiliate dropdown to:', driver.affiliate_id || '(none)');
+    if (affiliateSelect && driver.affiliate_id) {
+      affiliateSelect.value = driver.affiliate_id;
+      // Verify the option exists
+      if (affiliateSelect.value !== driver.affiliate_id) {
+        console.warn('⚠️ Affiliate not found in dropdown, adding it:', driver.affiliate_id, driver.affiliate_name);
+        // Add the missing affiliate as an option
+        const option = document.createElement('option');
+        option.value = driver.affiliate_id;
+        option.textContent = driver.affiliate_name || `Affiliate ${driver.affiliate_id}`;
+        affiliateSelect.appendChild(option);
+        affiliateSelect.value = driver.affiliate_id;
+      }
+      console.log('📋 Setting affiliate dropdown to:', driver.affiliate_id, '(' + (driver.affiliate_name || 'unknown') + ')');
+    } else if (affiliateSelect) {
+      affiliateSelect.value = '';
+      console.log('📋 Driver has no affiliate association');
     }
     if (affiliateIdInput) {
       affiliateIdInput.value = driver.affiliate_id || '';
