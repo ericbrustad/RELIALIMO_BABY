@@ -12,6 +12,42 @@ export async function OPTIONS() {
   });
 }
 
+// Verify Twilio credentials by fetching account info
+async function verifyTwilioConnection(accountSid, auth) {
+  try {
+    const verifyUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}.json`;
+    const response = await fetch(verifyUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+      },
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('❌ Twilio verification failed:', response.status, errorData);
+      return { verified: false, error: errorData.message || `HTTP ${response.status}` };
+    }
+    
+    const data = await response.json();
+    console.log('✅ Twilio connection verified:', { 
+      accountSid: data.sid, 
+      friendlyName: data.friendly_name,
+      status: data.status 
+    });
+    
+    // Check if account is active
+    if (data.status !== 'active') {
+      return { verified: false, error: `Account status: ${data.status}` };
+    }
+    
+    return { verified: true, account: data };
+  } catch (error) {
+    console.error('❌ Twilio verification error:', error);
+    return { verified: false, error: error.message };
+  }
+}
+
 export async function POST(request) {
   console.log('📱 SMS API called');
   
@@ -64,6 +100,22 @@ export async function POST(request) {
       auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
     } else {
       auth = Buffer.from(`${apiKeySid}:${apiKeySecret}`).toString('base64');
+    }
+
+    // Verify Twilio connection before sending
+    console.log('🔐 Verifying Twilio connection...');
+    const verification = await verifyTwilioConnection(accountSid, auth);
+    
+    if (!verification.verified) {
+      console.error('❌ Twilio connection verification failed:', verification.error);
+      return NextResponse.json(
+        { 
+          error: 'Twilio connection verification failed',
+          details: verification.error,
+          hint: 'Check your TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are correct and the account is active'
+        },
+        { status: 503 }
+      );
     }
 
     // Build Twilio API request
