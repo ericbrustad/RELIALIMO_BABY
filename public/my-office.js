@@ -3866,7 +3866,8 @@ class MyOffice {
     try {
       let schemes = [];
       try {
-        schemes = await apiFetch('/v_saved_rate_schemes?select=*&order=name.asc');
+        // View uses scheme_name column
+        schemes = await apiFetch('/v_saved_rate_schemes?select=*&order=scheme_name.asc');
       } catch (viewErr) {
         console.warn('v_saved_rate_schemes view not available, trying saved_rate_schemes table:', viewErr);
         schemes = await apiFetch('/saved_rate_schemes?select=*&order=name.asc');
@@ -3882,9 +3883,11 @@ class MyOffice {
 
       schemes.forEach(scheme => {
         const option = document.createElement('option');
-        option.value = scheme.id;
+        option.value = scheme.scheme_id || scheme.id;
         const rateTypeLabel = this.getRateTypeLabel(scheme.rate_type);
-        option.textContent = `${scheme.name} (${rateTypeLabel})`;
+        // View uses scheme_name, table uses name
+        const schemeName = scheme.scheme_name || scheme.name || 'Unnamed';
+        option.textContent = `${schemeName} (${rateTypeLabel})`;
         dropdown.appendChild(option);
       });
 
@@ -4368,7 +4371,8 @@ class MyOffice {
       // Try to fetch from the view first
       let schemes = [];
       try {
-        schemes = await apiFetch('/v_saved_rate_schemes?select=*&order=name.asc');
+        // View uses scheme_name column
+        schemes = await apiFetch('/v_saved_rate_schemes?select=*&order=scheme_name.asc');
       } catch (viewErr) {
         console.warn('v_saved_rate_schemes view not available, trying saved_rate_schemes table:', viewErr);
         schemes = await apiFetch('/saved_rate_schemes?select=*,saved_rate_scheme_entries(*)&order=name.asc');
@@ -4404,9 +4408,11 @@ class MyOffice {
 
     schemes.forEach(scheme => {
       const option = document.createElement('option');
-      option.value = scheme.id;
+      option.value = scheme.scheme_id || scheme.id;
       const rateTypeLabel = this.getRateTypeLabel(scheme.rate_type);
-      option.textContent = `${scheme.name} (${rateTypeLabel})`;
+      // View uses scheme_name, table uses name
+      const schemeName = scheme.scheme_name || scheme.name || 'Unnamed';
+      option.textContent = `${schemeName} (${rateTypeLabel})`;
       option.dataset.rateType = scheme.rate_type;
       option.dataset.sourceVehicle = scheme.source_vehicle_type_name || scheme.source_vehicle_type_id || '';
       select.appendChild(option);

@@ -456,9 +456,9 @@ SET slug = generate_slug(name)
 WHERE slug IS NULL OR slug = '';
 
 -- Update image_url to use Supabase storage public URLs
--- Pattern: https://qdrtpfgpqrfblpmskeig.supabase.co/storage/v1/object/public/images/vehicles/models/{make_slug}/{model_slug}.jpg
+-- Pattern: https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/vehicles/models/{make_slug}/{model_slug}.jpg
 UPDATE vehicle_models vm
-SET image_url = 'https://qdrtpfgpqrfblpmskeig.supabase.co/storage/v1/object/public/images/vehicles/models/' || m.slug || '/' || vm.slug || '.jpg'
+SET image_url = 'https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/vehicles/models/' || m.slug || '/' || vm.slug || '.jpg'
 FROM vehicle_makes m
 WHERE vm.make_id = m.id;
 
