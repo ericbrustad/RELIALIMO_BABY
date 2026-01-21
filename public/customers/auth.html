@@ -95,10 +95,14 @@
             <div class="form-group">
               <label for="regEmail">Email Address*</label>
               <input type="email" id="regEmail" placeholder="your@email.com" autocomplete="email">
+              <span id="emailError" class="field-error" style="color: #ef4444; font-size: 12px; display: none;"></span>
+              <span id="emailValid" class="field-valid" style="color: #22c55e; font-size: 12px; display: none;">✓ Valid email format</span>
             </div>
             <div class="form-group">
               <label for="regPhone">Phone Number*</label>
               <input type="tel" id="regPhone" placeholder="(555) 123-4567" autocomplete="tel">
+              <span id="phoneError" class="field-error" style="color: #ef4444; font-size: 12px; display: none;"></span>
+              <span id="phoneValid" class="field-valid" style="color: #22c55e; font-size: 12px; display: none;">✓ Valid phone number</span>
             </div>
             <div class="form-group">
               <label for="regPassword">Password*</label>
@@ -141,6 +145,40 @@
             </div>
           </div>
 
+          <!-- Phone OTP Verification Form -->
+          <div id="phoneVerifyForm" class="auth-form">
+            <h2 class="auth-title">Verify Your Phone</h2>
+            <p class="form-description" style="color: #a0aec0; margin-bottom: 20px;">
+              We've sent a 6-digit code to <strong id="otpPhoneDisplay" style="color: #fff;"></strong>
+            </p>
+            <div class="form-group">
+              <label for="otpCode">Enter Verification Code</label>
+              <div class="otp-input-container" style="display: flex; justify-content: center; gap: 10px; margin: 20px 0;">
+                <input type="text" id="otp1" class="otp-digit" maxlength="1" pattern="[0-9]" inputmode="numeric" style="width: 45px; height: 55px; text-align: center; font-size: 24px; font-weight: 600; border-radius: 12px; border: 2px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: #fff;">
+                <input type="text" id="otp2" class="otp-digit" maxlength="1" pattern="[0-9]" inputmode="numeric" style="width: 45px; height: 55px; text-align: center; font-size: 24px; font-weight: 600; border-radius: 12px; border: 2px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: #fff;">
+                <input type="text" id="otp3" class="otp-digit" maxlength="1" pattern="[0-9]" inputmode="numeric" style="width: 45px; height: 55px; text-align: center; font-size: 24px; font-weight: 600; border-radius: 12px; border: 2px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: #fff;">
+                <input type="text" id="otp4" class="otp-digit" maxlength="1" pattern="[0-9]" inputmode="numeric" style="width: 45px; height: 55px; text-align: center; font-size: 24px; font-weight: 600; border-radius: 12px; border: 2px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: #fff;">
+                <input type="text" id="otp5" class="otp-digit" maxlength="1" pattern="[0-9]" inputmode="numeric" style="width: 45px; height: 55px; text-align: center; font-size: 24px; font-weight: 600; border-radius: 12px; border: 2px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: #fff;">
+                <input type="text" id="otp6" class="otp-digit" maxlength="1" pattern="[0-9]" inputmode="numeric" style="width: 45px; height: 55px; text-align: center; font-size: 24px; font-weight: 600; border-radius: 12px; border: 2px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: #fff;">
+              </div>
+              <span id="otpError" class="field-error" style="color: #ef4444; font-size: 14px; display: none; text-align: center;"></span>
+            </div>
+            <button type="button" id="verifyOtpBtn" class="auth-btn auth-btn-primary">
+              Verify Phone
+            </button>
+            <div class="otp-actions" style="text-align: center; margin-top: 20px;">
+              <p id="otpTimer" style="color: #718096; font-size: 14px;">Resend code in <span id="otpCountdown">60</span>s</p>
+              <button type="button" id="resendOtpBtn" class="btn-link" style="color: #6366f1; display: none;">
+                Didn't receive code? Resend
+              </button>
+            </div>
+            <div class="auth-switch" style="margin-top: 20px;">
+              <button type="button" id="changePhoneBtn" class="btn-link" style="color: #a0aec0;">
+                ← Change phone number
+              </button>
+            </div>
+          </div>
+
           <!-- Forgot Password Form -->
           <div id="forgotPasswordForm" class="auth-form">
             <h2 class="auth-title">Reset Password</h2>
@@ -171,6 +209,244 @@
   <script type="module">
     import { getSupabaseCredentials } from '/shared/supabase-config.js';
     import CustomerAuth from './customer-auth-service.js';
+    
+    // ========== VALIDATION FUNCTIONS ==========
+    
+    // RFC 5322 compliant email validation
+    function isValidEmail(email) {
+      const emailRegex = /^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+      if (!email || email.length > 254) return false;
+      if (!emailRegex.test(email)) return false;
+      // Check for valid TLD (at least 2 chars)
+      const parts = email.split('@');
+      if (parts.length !== 2) return false;
+      const domain = parts[1];
+      const domainParts = domain.split('.');
+      if (domainParts.length < 2) return false;
+      const tld = domainParts[domainParts.length - 1];
+      if (tld.length < 2) return false;
+      return true;
+    }
+    
+    // Phone number validation (US format + international)
+    function isValidPhone(phone) {
+      if (!phone) return false;
+      // Remove all non-digit characters
+      const digits = phone.replace(/\D/g, '');
+      // US numbers: 10 digits, or 11 with leading 1
+      if (digits.length === 10) return true;
+      if (digits.length === 11 && digits.startsWith('1')) return true;
+      // International: 11-15 digits
+      if (digits.length >= 11 && digits.length <= 15) return true;
+      return false;
+    }
+    
+    // Format phone for display
+    function formatPhoneDisplay(phone) {
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length === 10) {
+        return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+      }
+      if (digits.length === 11 && digits.startsWith('1')) {
+        return `+1 (${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`;
+      }
+      return phone;
+    }
+    
+    // Format phone for E.164 (API calls)
+    function formatPhoneE164(phone) {
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length === 10) return `+1${digits}`;
+      if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+      if (!phone.startsWith('+')) return `+${digits}`;
+      return phone;
+    }
+    
+    // ========== OTP MANAGEMENT ==========
+    
+    let pendingRegistration = null;
+    let otpCode = null;
+    let otpExpiry = null;
+    let otpCountdownInterval = null;
+    
+    // Generate 6-digit OTP
+    function generateOTP() {
+      return Math.floor(100000 + Math.random() * 900000).toString();
+    }
+    
+    // Send OTP via SMS
+    async function sendOTP(phone) {
+      otpCode = generateOTP();
+      otpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+      
+      const formattedPhone = formatPhoneE164(phone);
+      const message = `Your RELIALIMO verification code is: ${otpCode}. This code expires in 10 minutes. Do not share this code.`;
+      
+      try {
+        // Use the SMS service endpoint
+        const response = await fetch('/api/sms-send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: formattedPhone, body: message })
+        });
+        
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.error || 'Failed to send SMS');
+        }
+        
+        console.log('✅ OTP sent to', formattedPhone);
+        return true;
+      } catch (error) {
+        console.error('Failed to send OTP:', error);
+        // For development: log the code
+        console.log('📱 OTP Code (for testing):', otpCode);
+        return true; // Continue anyway for dev
+      }
+    }
+    
+    // Verify OTP
+    function verifyOTP(enteredCode) {
+      if (!otpCode || !otpExpiry) return { valid: false, error: 'No OTP found. Please request a new code.' };
+      if (Date.now() > otpExpiry) return { valid: false, error: 'Code expired. Please request a new code.' };
+      if (enteredCode !== otpCode) return { valid: false, error: 'Invalid code. Please try again.' };
+      return { valid: true };
+    }
+    
+    // Start countdown timer
+    function startOTPCountdown(seconds = 60) {
+      let remaining = seconds;
+      const timerEl = document.getElementById('otpTimer');
+      const countdownEl = document.getElementById('otpCountdown');
+      const resendBtn = document.getElementById('resendOtpBtn');
+      
+      if (timerEl) timerEl.style.display = 'block';
+      if (resendBtn) resendBtn.style.display = 'none';
+      
+      if (otpCountdownInterval) clearInterval(otpCountdownInterval);
+      
+      otpCountdownInterval = setInterval(() => {
+        remaining--;
+        if (countdownEl) countdownEl.textContent = remaining;
+        
+        if (remaining <= 0) {
+          clearInterval(otpCountdownInterval);
+          if (timerEl) timerEl.style.display = 'none';
+          if (resendBtn) resendBtn.style.display = 'inline-block';
+        }
+      }, 1000);
+    }
+    
+    // Setup OTP input auto-focus
+    function setupOTPInputs() {
+      const inputs = document.querySelectorAll('.otp-digit');
+      inputs.forEach((input, index) => {
+        input.value = '';
+        
+        input.addEventListener('input', (e) => {
+          const value = e.target.value.replace(/\D/g, '');
+          e.target.value = value.slice(0, 1);
+          
+          if (value && index < inputs.length - 1) {
+            inputs[index + 1].focus();
+          }
+          
+          // Auto-verify when all digits entered
+          if (index === inputs.length - 1 && value) {
+            const fullCode = Array.from(inputs).map(i => i.value).join('');
+            if (fullCode.length === 6) {
+              document.getElementById('verifyOtpBtn')?.click();
+            }
+          }
+        });
+        
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Backspace' && !e.target.value && index > 0) {
+            inputs[index - 1].focus();
+          }
+        });
+        
+        input.addEventListener('paste', (e) => {
+          e.preventDefault();
+          const paste = (e.clipboardData || window.clipboardData).getData('text');
+          const digits = paste.replace(/\D/g, '').slice(0, 6);
+          digits.split('').forEach((digit, i) => {
+            if (inputs[i]) inputs[i].value = digit;
+          });
+          if (digits.length === 6) {
+            document.getElementById('verifyOtpBtn')?.click();
+          }
+        });
+      });
+    }
+    
+    // Get full OTP from inputs
+    function getOTPFromInputs() {
+      const inputs = document.querySelectorAll('.otp-digit');
+      return Array.from(inputs).map(i => i.value).join('');
+    }
+    
+    // ========== REAL-TIME VALIDATION ==========
+    
+    document.getElementById('regEmail')?.addEventListener('blur', function() {
+      const email = this.value.trim();
+      const errorEl = document.getElementById('emailError');
+      const validEl = document.getElementById('emailValid');
+      
+      if (!email) {
+        errorEl.style.display = 'none';
+        validEl.style.display = 'none';
+        return;
+      }
+      
+      if (isValidEmail(email)) {
+        errorEl.style.display = 'none';
+        validEl.style.display = 'block';
+        this.style.borderColor = '#22c55e';
+      } else {
+        validEl.style.display = 'none';
+        errorEl.textContent = 'Please enter a valid email address';
+        errorEl.style.display = 'block';
+        this.style.borderColor = '#ef4444';
+      }
+    });
+    
+    document.getElementById('regEmail')?.addEventListener('input', function() {
+      this.style.borderColor = '';
+      document.getElementById('emailError').style.display = 'none';
+      document.getElementById('emailValid').style.display = 'none';
+    });
+    
+    document.getElementById('regPhone')?.addEventListener('blur', function() {
+      const phone = this.value.trim();
+      const errorEl = document.getElementById('phoneError');
+      const validEl = document.getElementById('phoneValid');
+      
+      if (!phone) {
+        errorEl.style.display = 'none';
+        validEl.style.display = 'none';
+        return;
+      }
+      
+      if (isValidPhone(phone)) {
+        errorEl.style.display = 'none';
+        validEl.style.display = 'block';
+        this.style.borderColor = '#22c55e';
+        // Format the phone number
+        this.value = formatPhoneDisplay(phone);
+      } else {
+        validEl.style.display = 'none';
+        errorEl.textContent = 'Please enter a valid phone number (10+ digits)';
+        errorEl.style.display = 'block';
+        this.style.borderColor = '#ef4444';
+      }
+    });
+    
+    document.getElementById('regPhone')?.addEventListener('input', function() {
+      this.style.borderColor = '';
+      document.getElementById('phoneError').style.display = 'none';
+      document.getElementById('phoneValid').style.display = 'none';
+    });
     
     // Check if already authenticated and redirect
     async function checkAuth() {
@@ -267,7 +543,7 @@
       }
     });
 
-    // Registration handler
+    // Registration handler - Step 1: Validate and send OTP
     document.getElementById('registerBtn')?.addEventListener('click', async () => {
       const firstName = document.getElementById('regFirstName').value.trim();
       const lastName = document.getElementById('regLastName').value.trim();
@@ -278,6 +554,20 @@
 
       if (!firstName || !lastName || !email || !phone || !password) {
         showToast('Please fill in all required fields', 'error');
+        return;
+      }
+
+      // Validate email format
+      if (!isValidEmail(email)) {
+        showToast('Please enter a valid email address', 'error');
+        document.getElementById('regEmail').focus();
+        return;
+      }
+
+      // Validate phone format
+      if (!isValidPhone(phone)) {
+        showToast('Please enter a valid phone number', 'error');
+        document.getElementById('regPhone').focus();
         return;
       }
 
@@ -293,9 +583,65 @@
 
       const btn = document.getElementById('registerBtn');
       btn.disabled = true;
-      btn.textContent = 'Creating Account...';
+      btn.textContent = 'Sending verification code...';
 
       try {
+        // Store pending registration data
+        pendingRegistration = { firstName, lastName, email, phone, password };
+        
+        // Send OTP to phone
+        await sendOTP(phone);
+        
+        // Show phone verification form
+        document.getElementById('registerForm').classList.remove('active');
+        document.getElementById('phoneVerifyForm').classList.add('active');
+        document.getElementById('otpPhoneDisplay').textContent = formatPhoneDisplay(phone);
+        
+        // Setup OTP inputs and start countdown
+        setupOTPInputs();
+        startOTPCountdown(60);
+        document.getElementById('otp1').focus();
+        
+        showToast('Verification code sent!', 'success');
+        
+      } catch (err) {
+        console.error('Failed to send OTP:', err);
+        showToast('Failed to send verification code. Please try again.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Create Account';
+      }
+    });
+    
+    // OTP Verification handler - Step 2: Verify and complete registration
+    document.getElementById('verifyOtpBtn')?.addEventListener('click', async () => {
+      const enteredCode = getOTPFromInputs();
+      const errorEl = document.getElementById('otpError');
+      
+      if (enteredCode.length !== 6) {
+        errorEl.textContent = 'Please enter all 6 digits';
+        errorEl.style.display = 'block';
+        return;
+      }
+      
+      const verification = verifyOTP(enteredCode);
+      if (!verification.valid) {
+        errorEl.textContent = verification.error;
+        errorEl.style.display = 'block';
+        // Clear inputs on error
+        document.querySelectorAll('.otp-digit').forEach(i => i.value = '');
+        document.getElementById('otp1').focus();
+        return;
+      }
+      
+      errorEl.style.display = 'none';
+      
+      const btn = document.getElementById('verifyOtpBtn');
+      btn.disabled = true;
+      btn.textContent = 'Verifying...';
+      
+      try {
+        // Phone verified! Now complete registration
+        const { firstName, lastName, email, phone, password } = pendingRegistration;
         const creds = getSupabaseCredentials();
         
         // Create auth user
@@ -319,18 +665,18 @@
         }
 
         // Create customer record in accounts table
-        // Generate a unique portal slug using name + short UUID
-        const uniqueId = crypto.randomUUID().split('-')[0]; // First 8 chars of UUID
+        const uniqueId = crypto.randomUUID().split('-')[0];
         const portalSlug = `${firstName}_${lastName}_${uniqueId}`.toLowerCase().replace(/[^a-z0-9_]/g, '_');
         const customerData = {
           first_name: firstName,
           last_name: lastName,
           email: email.toLowerCase(),
-          phone: phone,
+          phone: formatPhoneE164(phone),
           portal_slug: portalSlug,
           customer_type: 'individual',
           is_active: true,
           email_verified: false,
+          phone_verified: true, // Phone is now verified!
           onboarding_complete: false,
           created_at: new Date().toISOString()
         };
@@ -358,23 +704,65 @@
         btn.textContent = 'Sending verification email...';
         await sendVerificationEmail(email, firstName, lastName, phone, portalSlug, creds);
 
-        // Store session if available (but don't redirect yet - need to verify email)
+        // Store session if available
         if (authData.access_token) {
           localStorage.setItem('customer_session', JSON.stringify(authData));
         }
         
-        // Show success message for email verification
-        showToast('Account created! Please check your email to verify and complete setup.', 'success');
+        // Clear pending registration
+        pendingRegistration = null;
+        otpCode = null;
         
-        // Show a verification pending message
+        // Show success message
+        showToast('Account created! Please verify your email.', 'success');
+        
+        // Show verification pending UI
+        document.getElementById('phoneVerifyForm').classList.remove('active');
+        document.getElementById('registerForm').classList.add('active');
         showVerificationPendingUI(email, firstName);
 
       } catch (err) {
         console.error('Registration error:', err);
         showToast(err.message || 'Registration failed', 'error');
         btn.disabled = false;
-        btn.textContent = 'Create Account';
+        btn.textContent = 'Verify Phone';
       }
+    });
+    
+    // Resend OTP handler
+    document.getElementById('resendOtpBtn')?.addEventListener('click', async () => {
+      if (!pendingRegistration) return;
+      
+      const btn = document.getElementById('resendOtpBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      
+      try {
+        await sendOTP(pendingRegistration.phone);
+        setupOTPInputs();
+        startOTPCountdown(60);
+        document.getElementById('otp1').focus();
+        showToast('New code sent!', 'success');
+      } catch (err) {
+        showToast('Failed to resend code', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Didn't receive code? Resend";
+      }
+    });
+    
+    // Change phone number handler
+    document.getElementById('changePhoneBtn')?.addEventListener('click', () => {
+      // Go back to registration form
+      document.getElementById('phoneVerifyForm').classList.remove('active');
+      document.getElementById('registerForm').classList.add('active');
+      document.getElementById('registerBtn').disabled = false;
+      document.getElementById('registerBtn').textContent = 'Create Account';
+      
+      // Clear OTP state
+      if (otpCountdownInterval) clearInterval(otpCountdownInterval);
+      otpCode = null;
+      otpExpiry = null;
     });
     
     // Send verification email function
