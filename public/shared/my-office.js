@@ -6468,15 +6468,22 @@ class MyOffice {
       if (isNewVehicle) {
         supabaseData.created_at = new Date().toISOString();
         console.log('🚗 Creating new vehicle in Supabase:', supabaseData);
-        await createFleetVehicle(supabaseData);
-        console.log('✅ Vehicle created in Supabase');
+        const result = await createFleetVehicle(supabaseData);
+        if (!result) {
+          throw new Error('Create returned no result - check RLS policies');
+        }
+        console.log('✅ Vehicle created in Supabase:', result);
       } else {
         console.log('🚗 Updating vehicle in Supabase:', data.id, supabaseData);
-        await updateFleetVehicle(data.id, supabaseData);
-        console.log('✅ Vehicle updated in Supabase');
+        const result = await updateFleetVehicle(data.id, supabaseData);
+        if (!result) {
+          throw new Error('Update returned no result - check RLS policies');
+        }
+        console.log('✅ Vehicle updated in Supabase:', result);
       }
     } catch (err) {
-      console.warn('⚠️ Could not sync vehicle to Supabase (saved locally):', err);
+      console.error('❌ Fleet vehicle Supabase sync failed:', err);
+      alert(`⚠️ Vehicle saved locally but NOT synced to database!\n\nError: ${err.message}\n\nPlease check the browser console for details.`);
     }
     
     // Update driver's assigned_vehicle_id when assigning/unassigning from Fleet
