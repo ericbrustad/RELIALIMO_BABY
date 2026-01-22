@@ -65,6 +65,11 @@ export function middleware(request: NextRequest) {
       return NextResponse.rewrite(new URL(`/customers/reset-password.html${request.nextUrl.search}`, request.url))
     }
     
+    // Handle verified route: /verified - show success/login page
+    if (pathname === '/verified') {
+      return NextResponse.rewrite(new URL('/customers/auth.html?verified=true', request.url))
+    }
+    
     // Handle onboarding route: /onboarding
     if (pathname === '/onboarding' || pathname === '/onboarding.html') {
       return NextResponse.rewrite(new URL(`/customers/customer-onboarding.html${request.nextUrl.search}`, request.url))
