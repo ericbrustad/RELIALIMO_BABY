@@ -654,7 +654,7 @@ export async function createDriver(payload) {
 }
 export async function listDriverNames({ limit, offset } = {}) {
   // Include address fields for garage time calculations
-  let q = `/drivers?select=id,dispatch_display_name,first_name,last_name,status,assigned_vehicle_id,primary_address,city,state,postal_code&order=last_name.asc,first_name.asc`;
+  let q = `/drivers?select=id,dispatch_display_name,first_name,last_name,status,assigned_vehicle_id,affiliate_id,primary_address,city,state,postal_code&order=last_name.asc,first_name.asc`;
   if (limit) q += `&limit=${limit}`;
   if (offset) q += `&offset=${offset}`;
   try {
@@ -662,7 +662,7 @@ export async function listDriverNames({ limit, offset } = {}) {
   } catch (err) {
     // Fallback when dispatch_display_name column doesn't exist on older schemas
     if (/dispatch_display_name/i.test(err.message) || /dispatch_display_name does not exist/i.test(err.message)) {
-      const q2 = `/drivers?select=id,first_name,last_name,status,assigned_vehicle_id,primary_address,city,state,postal_code&order=last_name.asc,first_name.asc${limit?`&limit=${limit}`:''}${offset?`&offset=${offset}`:''}`;
+      const q2 = `/drivers?select=id,first_name,last_name,status,assigned_vehicle_id,affiliate_id,primary_address,city,state,postal_code&order=last_name.asc,first_name.asc${limit?`&limit=${limit}`:''}${offset?`&offset=${offset}`:''}`;
       const rows = await request(q2);
       return rows.map(r => ({
         ...r,

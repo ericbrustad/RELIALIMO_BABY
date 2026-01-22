@@ -31,6 +31,38 @@ ALTER TABLE public.fleet_vehicles
     ALTER COLUMN status SET DEFAULT 'ACTIVE';
 
 -- ============================================
+-- PART 1B: Add affiliate_id column to fleet_vehicles
+-- This syncs the driver's affiliate to the vehicle
+-- ============================================
+ALTER TABLE public.fleet_vehicles 
+ADD COLUMN IF NOT EXISTS affiliate_id UUID;
+
+-- Add FK to affiliates table (if it exists)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'affiliates') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints 
+            WHERE constraint_name = 'fleet_vehicles_affiliate_fkey'
+            AND table_name = 'fleet_vehicles'
+        ) THEN
+            ALTER TABLE public.fleet_vehicles 
+            ADD CONSTRAINT fleet_vehicles_affiliate_fkey 
+            FOREIGN KEY (affiliate_id) 
+            REFERENCES public.affiliates(id) 
+            ON DELETE SET NULL;
+            RAISE NOTICE 'Added fleet_vehicles_affiliate_fkey constraint';
+        END IF;
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Could not add affiliate FK: %', SQLERRM;
+END $$;
+
+-- Create index for faster affiliate lookups
+CREATE INDEX IF NOT EXISTS idx_fleet_vehicles_affiliate ON public.fleet_vehicles(affiliate_id);
+
+-- ============================================
 -- PART 2: Ensure assigned_vehicle_id exists on drivers
 -- ============================================
 

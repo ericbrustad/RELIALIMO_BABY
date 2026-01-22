@@ -6540,6 +6540,14 @@ class MyOffice {
     
     // Sync to Supabase fleet_vehicles table
     try {
+      // Get driver's affiliate_id if a driver is assigned
+      let driverAffiliateId = null;
+      if (newDriverId) {
+        const assignedDriver = this.drivers?.find(d => d.id === newDriverId);
+        driverAffiliateId = assignedDriver?.affiliate_id || null;
+        console.log(`🔗 Driver ${newDriverId} has affiliate_id: ${driverAffiliateId}`);
+      }
+      
       // Prepare data for Supabase - only include valid fields
       const supabaseData = {
         id: data.id,
@@ -6556,6 +6564,7 @@ class MyOffice {
         license_plate: data.license_plate || null,
         veh_disp_name: data.veh_disp_name || null,
         assigned_driver_id: data.assigned_driver_id || null,
+        affiliate_id: driverAffiliateId,
         updated_at: new Date().toISOString()
       };
       
