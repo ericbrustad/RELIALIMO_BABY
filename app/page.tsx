@@ -34,7 +34,7 @@ export default function LandingPage() {
         </p>
         
         <div className="cta-buttons">
-          <a href="https://account.relialimo.com" className="btn btn-primary">
+          <a href="/book" className="btn btn-primary">
             Book a Ride
           </a>
           <a href="https://account.relialimo.com/auth" className="btn btn-secondary">

@@ -99,6 +99,16 @@ export function middleware(request: NextRequest) {
       // Show the Next.js landing page
       return NextResponse.next()
     }
+    
+    // /book route - serve customer portal for booking
+    if (pathname === '/book' || pathname === '/book/') {
+      return NextResponse.rewrite(new URL('/customers/customer-portal.html', request.url))
+    }
+    
+    // /login or /auth route - redirect to account subdomain for auth
+    if (pathname === '/login' || pathname === '/auth') {
+      return NextResponse.redirect(new URL('https://account.relialimo.com/auth', request.url))
+    }
   }
 
   return NextResponse.next()
