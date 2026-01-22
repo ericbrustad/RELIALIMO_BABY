@@ -503,20 +503,25 @@ async function createAccountRecord(accessToken, email) {
     
     // Try to get user metadata from auth session (may have first_name, last_name)
     const userMetadata = authState.session?.user?.user_metadata || {};
-    const userId = authState.session?.user?.id || null;
     const firstName = userMetadata.first_name || '';
     const lastName = userMetadata.last_name || '';
     
-    console.log('[AuthService] Auto-creating account for:', email, { firstName, lastName, userId });
+    // Generate portal slug from name
+    let portalSlug = '';
+    if (firstName && lastName) {
+      portalSlug = `${firstName}_${lastName}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    }
     
+    console.log('[AuthService] Auto-creating account for:', email, { firstName, lastName });
+    
+    // Only include columns that exist in the accounts table
     const accountData = {
       organization_id: CUSTOMER_ORG_ID,
-      user_id: userId,
       email: email.toLowerCase(),
       first_name: firstName,
       last_name: lastName,
-      account_type: 'customer',
-      is_active: true,
+      status: 'active',
+      portal_slug: portalSlug || null,
       created_at: new Date().toISOString()
     };
     
