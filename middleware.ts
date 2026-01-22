@@ -95,10 +95,11 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // Admin subdomain: admin.relialimo.com - serve index.html directly
+  // Admin subdomain: admin.relialimo.com - serve admin.html (login gate)
   if (host.startsWith('admin.')) {
     if (pathname === '/' || pathname === '') {
-      return NextResponse.rewrite(new URL('/index.html', request.url))
+      // Serve admin.html which handles auth check and shows login or app
+      return NextResponse.rewrite(new URL('/admin.html', request.url))
     }
     // Admin files are at the root of public, no rewrite needed
   }
