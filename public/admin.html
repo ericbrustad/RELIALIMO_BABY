@@ -648,11 +648,26 @@
             }
         });
         
-        // Listen for messages from iframe (logout)
+        // Listen for messages from iframe (logout or session requests)
         window.addEventListener('message', async (event) => {
+            // Only accept same-origin messages
+            if (event.origin !== window.location.origin) return;
+            
             if (event.data.action === 'logout') {
                 await supabase.auth.signOut();
                 setAuthState(false);
+            }
+            
+            // Handle session requests from child iframes
+            if (event.data.type === 'RELIA_REQUEST_SUPABASE_SESSION') {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session) {
+                    event.source?.postMessage({
+                        type: 'RELIA_SUPABASE_SESSION',
+                        requestId: event.data.requestId,
+                        session: session
+                    }, event.origin);
+                }
             }
         });
     </script>
