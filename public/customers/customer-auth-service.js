@@ -632,7 +632,8 @@ export async function redirectIfAuthenticated() {
   const isAuth = await initAuth();
   if (isAuth) {
     const slug = getPortalSlug();
-    window.location.href = slug ? `/${slug}` : '/';
+    // If user has a valid slug, go to their portal. Otherwise go to booking page.
+    window.location.href = slug ? `/${slug}` : 'https://relialimo.com/book';
     return true;
   }
   return false;
