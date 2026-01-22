@@ -97,8 +97,13 @@ export function middleware(request: NextRequest) {
 
   // Admin subdomain: admin.relialimo.com - serve admin.html (login gate)
   if (host.startsWith('admin.')) {
-    if (pathname === '/' || pathname === '') {
+    // All entry points go through admin.html login gate
+    if (pathname === '/' || pathname === '' || pathname === '/index.html') {
       // Serve admin.html which handles auth check and shows login or app
+      return NextResponse.rewrite(new URL('/admin.html', request.url))
+    }
+    // Block direct access to auth.html on admin subdomain
+    if (pathname === '/auth.html') {
       return NextResponse.rewrite(new URL('/admin.html', request.url))
     }
     // Admin files are at the root of public, no rewrite needed
