@@ -91,6 +91,7 @@ body {
   display: none;
   flex-direction: column;
   height: 100%;
+  width: 100%;
 }
 
 .screen.active {
@@ -167,6 +168,11 @@ body {
 /* ============================================
    Auth Screen - Luxury Gold & Black Theme
    ============================================ */
+#authScreen {
+  justify-content: center;
+  align-items: center;
+}
+
 .auth-container {
   max-width: 100%;
   margin: 0 auto;
