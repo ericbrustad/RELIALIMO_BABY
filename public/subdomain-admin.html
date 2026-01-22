@@ -77,21 +77,66 @@
         display: block;
       }
       
-      .auto-farmout-badge {
+      /* Badge Container for Multiple Badges */
+      .badge-container {
         position: absolute;
-        top: -5px;
-        right: -5px;
-        background: #ff6b6b;
-        color: white;
-        font-size: 10px;
-        padding: 2px 4px;
+        top: -6px;
+        right: -6px;
+        display: flex;
+        gap: 2px;
+        z-index: 10;
+      }
+      
+      .auto-farmout-badge {
+        font-size: 12px;
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        border: 2px solid #f59e0b;
         border-radius: 50%;
-        min-width: 16px;
-        height: 16px;
+        width: 20px;
+        height: 20px;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        animation: badgeBounce 1s ease-in-out infinite;
+        cursor: help;
+      }
+
+      /* Default Driver Badge */
+      .default-driver-badge {
+        font-size: 12px;
+        background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 100%);
+        border: 2px solid #3b82f6;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        animation: badgeBounce 1.2s ease-in-out infinite;
+        cursor: help;
+      }
+
+      /* Default Vehicle Badge */
+      .default-vehicle-badge {
+        font-size: 12px;
+        background: linear-gradient(135deg, #d1fae5 0%, #6ee7b7 100%);
+        border: 2px solid #10b981;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        animation: badgeBounce 1.4s ease-in-out infinite;
+        cursor: help;
+      }
+      
+      @keyframes badgeBounce {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.1); }
       }
 
       .status-indicator {

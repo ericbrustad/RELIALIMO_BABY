@@ -546,7 +546,7 @@ export class CompanyResourcesManager {
       drivers: {
         title: 'Drivers',
         listType: 'table',
-        tableColumns: ['first_name', 'last_name', 'phone'],
+        tableColumns: ['first_name', 'last_name', 'phone', 'is_default_driver'],
         formTitle: (mode) => mode === 'edit' ? 'Edit Driver' : 'Add New Driver',
         listLabel: (x) => `${x.first_name || ''} ${x.last_name || ''}`.trim(),
         blocks: [
@@ -557,11 +557,19 @@ export class CompanyResourcesManager {
               { id: 'first_name', label: 'First Name', type: 'text' },
               { id: 'last_name', label: 'Last Name', type: 'text' },
               { id: 'phone', label: 'Phone', type: 'tel' },
+              { id: 'email', label: 'Email', type: 'email' },
               { id: 'assigned_vehicle_id', label: 'Assign Driver to Car', type: 'select', dataSource: 'fleet' },
             ],
           },
+          {
+            head: 'Default Assignment Settings',
+            columns: 1,
+            fields: [
+              { id: 'is_default_driver', label: 'Default Driver for In-House Reservations', type: 'checkbox' },
+            ],
+          },
         ],
-        defaults: {},
+        defaults: { is_default_driver: false },
         storageKey: 'cr_drivers',
       },
       affiliates: {
@@ -587,11 +595,32 @@ export class CompanyResourcesManager {
       'vehicle-types': {
         title: 'Vehicle Types',
         listType: 'table',
-        tableColumns: ['name'],
+        tableColumns: ['name', 'passenger_capacity', 'is_app_default'],
         formTitle: (mode) => mode === 'edit' ? 'Edit Vehicle Type' : 'Add New Vehicle Type',
         listLabel: (x) => x.name || '',
-        blocks: [{ head: 'Vehicle Type', columns: 1, fields: [{ id: 'name', label: 'Name', type: 'text' }] }],
-        defaults: {},
+        blocks: [
+          { 
+            head: 'Vehicle Type', 
+            columns: 2, 
+            fields: [
+              { id: 'name', label: 'Name', type: 'text' },
+              { id: 'passenger_capacity', label: 'Max Passengers', type: 'number' },
+              { id: 'base_rate', label: 'Base Rate ($)', type: 'number' },
+              { id: 'per_mile_rate', label: 'Per Mile Rate ($)', type: 'number' },
+              { id: 'per_hour_rate', label: 'Per Hour Rate ($)', type: 'number' },
+              { id: 'minimum_charge', label: 'Minimum Charge ($)', type: 'number' }
+            ] 
+          },
+          {
+            head: 'App Settings',
+            columns: 1,
+            fields: [
+              { id: 'is_app_default', label: 'Default Vehicle Type for Customer App', type: 'checkbox' },
+              { id: 'show_in_app', label: 'Show in Customer App', type: 'checkbox' }
+            ]
+          }
+        ],
+        defaults: { passenger_capacity: 4, show_in_app: true },
         storageKey: 'cr_vehicle_types',
       },
       fleet: {

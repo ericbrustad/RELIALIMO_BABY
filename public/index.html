@@ -644,42 +644,99 @@
       
       /**
        * Initialize Auto Farmout Mode badge on Reservations button if enabled
+       * Also shows indicators for default driver and default vehicle
        */
       function initAutoFarmoutBadge() {
         const isEnabled = localStorage.getItem('autoFarmoutMode') === 'true';
         const reservationsBtn = document.querySelector('[data-section="reservations"]');
         if (!reservationsBtn) return;
         
-        if (isEnabled) {
-          let badge = reservationsBtn.querySelector('.auto-farmout-badge');
-          if (!badge) {
-            badge = document.createElement('span');
-            badge.className = 'auto-farmout-badge';
-            badge.textContent = '🏠';
-            badge.title = 'Auto Farmout Mode Active';
-            reservationsBtn.style.position = 'relative';
-            reservationsBtn.appendChild(badge);
-          }
+        reservationsBtn.style.position = 'relative';
+        
+        // Create or get badge container
+        let badgeContainer = reservationsBtn.querySelector('.badge-container');
+        if (!badgeContainer) {
+          badgeContainer = document.createElement('div');
+          badgeContainer.className = 'badge-container';
+          reservationsBtn.appendChild(badgeContainer);
         }
+        
+        // Clear existing badges
+        badgeContainer.innerHTML = '';
+        
+        // Auto Farmout badge
+        if (isEnabled) {
+          const farmBadge = document.createElement('span');
+          farmBadge.className = 'auto-farmout-badge';
+          farmBadge.textContent = '🏠';
+          farmBadge.title = 'Auto Farmout Mode Active';
+          badgeContainer.appendChild(farmBadge);
+        }
+        
+        // Check for default driver and vehicle from database
+        checkDefaultsAndShowBadges(badgeContainer);
         
         // Listen for changes from user menu
         window.addEventListener('message', (event) => {
           if (event.data?.type === 'autoFarmoutModeChanged') {
-            const badge = reservationsBtn.querySelector('.auto-farmout-badge');
-            if (event.data.enabled) {
-              if (!badge) {
-                const newBadge = document.createElement('span');
-                newBadge.className = 'auto-farmout-badge';
-                newBadge.textContent = '🏠';
-                newBadge.title = 'Auto Farmout Mode Active';
-                reservationsBtn.style.position = 'relative';
-                reservationsBtn.appendChild(newBadge);
-              }
-            } else if (badge) {
-              badge.remove();
-            }
+            initAutoFarmoutBadge(); // Reinitialize all badges
+          }
+          if (event.data?.type === 'defaultDriverChanged' || event.data?.type === 'defaultVehicleChanged') {
+            initAutoFarmoutBadge(); // Reinitialize all badges
           }
         });
+      }
+      
+      /**
+       * Check for default drivers and vehicles and show badges
+       */
+      async function checkDefaultsAndShowBadges(container) {
+        try {
+          // Get Supabase credentials
+          const supabaseUrl = localStorage.getItem('relia_supabase_url') || 
+            document.querySelector('meta[name="supabase-url"]')?.content;
+          const supabaseKey = localStorage.getItem('relia_supabase_key') || 
+            document.querySelector('meta[name="supabase-anon-key"]')?.content;
+          
+          if (!supabaseUrl || !supabaseKey) return;
+          
+          // Check for default driver
+          const driverResp = await fetch(
+            `${supabaseUrl}/rest/v1/drivers?is_default_driver=eq.true&is_active=eq.true&select=id,first_name,last_name&limit=5`,
+            { headers: { 'apikey': supabaseKey } }
+          );
+          
+          if (driverResp.ok) {
+            const defaultDrivers = await driverResp.json();
+            if (defaultDrivers.length > 0) {
+              const driverBadge = document.createElement('span');
+              driverBadge.className = 'default-driver-badge';
+              driverBadge.textContent = '👤';
+              const driverNames = defaultDrivers.map(d => `${d.first_name || ''} ${d.last_name || ''}`.trim()).join(', ');
+              driverBadge.title = `Default Driver${defaultDrivers.length > 1 ? 's' : ''}: ${driverNames}`;
+              container.appendChild(driverBadge);
+            }
+          }
+          
+          // Check for default vehicle
+          const vehicleResp = await fetch(
+            `${supabaseUrl}/rest/v1/vehicle_types?is_app_default=eq.true&select=id,name&limit=1`,
+            { headers: { 'apikey': supabaseKey } }
+          );
+          
+          if (vehicleResp.ok) {
+            const defaultVehicles = await vehicleResp.json();
+            if (defaultVehicles.length > 0) {
+              const vehicleBadge = document.createElement('span');
+              vehicleBadge.className = 'default-vehicle-badge';
+              vehicleBadge.textContent = '🚗';
+              vehicleBadge.title = `Default Vehicle: ${defaultVehicles[0].name}`;
+              container.appendChild(vehicleBadge);
+            }
+          }
+        } catch (err) {
+          console.warn('[Badges] Could not check defaults:', err.message);
+        }
       }
 
       /**

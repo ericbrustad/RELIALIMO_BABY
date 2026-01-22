@@ -524,6 +524,7 @@ function savePreferences() {
 async function loadVehicleTypes() {
   try {
     const creds = getSupabaseCredentials();
+    // Load vehicle types that are active and shown in app
     const response = await fetch(
       `${creds.url}/rest/v1/vehicle_types?is_active=eq.true&select=*&order=sort_order.asc`,
       {
@@ -534,34 +535,75 @@ async function loadVehicleTypes() {
     );
     
     if (response.ok) {
-      state.vehicleTypes = await response.json();
+      const allTypes = await response.json();
+      // Filter to only show types with show_in_app = true (or if not set, show all)
+      state.vehicleTypes = allTypes.filter(t => t.show_in_app !== false);
+      
+      // Find and set the default app vehicle type
+      const defaultType = state.vehicleTypes.find(t => t.is_app_default === true);
+      if (defaultType) {
+        state.selectedVehicleType = defaultType.id;
+        console.log('[CustomerPortal] Default app vehicle type:', defaultType.name);
+      }
+      
       renderVehicleTypes();
     }
   } catch (err) {
     console.error('[CustomerPortal] Failed to load vehicle types:', err);
     // Fallback default types
     state.vehicleTypes = [
-      { id: 'sedan', name: 'Sedan', icon: '�', capacity: '1-3 passengers' },
-      { id: 'suv', name: 'SUV', icon: '🚘', capacity: '1-5 passengers' },
-      { id: 'van', name: 'Van', icon: '🚘', capacity: '1-7 passengers' },
-      { id: 'limo', name: 'Limousine', icon: '🚘', capacity: '1-8 passengers' }
+      { id: 'sedan', name: 'Sedan', icon: '🚗', capacity: '1-3 passengers', passenger_capacity: 3 },
+      { id: 'suv', name: 'SUV', icon: '🚘', capacity: '1-5 passengers', passenger_capacity: 5 },
+      { id: 'van', name: 'Van', icon: '🚐', capacity: '1-7 passengers', passenger_capacity: 7 },
+      { id: 'limo', name: 'Limousine', icon: '🚙', capacity: '1-8 passengers', passenger_capacity: 8 }
     ];
     renderVehicleTypes();
   }
 }
 
-function renderVehicleTypes() {
+function renderVehicleTypes(filterByCapacity = null) {
   const container = document.getElementById('vehicleTypeSelector');
   if (!container) return;
   
-  container.innerHTML = state.vehicleTypes.map(type => `
-    <div class="vehicle-type-option ${state.selectedVehicleType === type.id ? 'selected' : ''}" 
-         data-type="${type.id}">
-      <span class="vehicle-icon">${type.icon || '�'}</span>
-      <span class="vehicle-name">${type.name}</span>
-      <span class="vehicle-capacity">${type.capacity || ''}</span>
-    </div>
-  `).join('');
+  // Get current passenger count
+  const passengerCount = filterByCapacity || parseInt(document.getElementById('passengerCount')?.value || '1');
+  
+  // Filter vehicles by passenger capacity if count > 7
+  let displayTypes = state.vehicleTypes;
+  if (passengerCount > 7) {
+    // Show only vehicles that can accommodate 8+ passengers
+    displayTypes = state.vehicleTypes.filter(t => (t.passenger_capacity || 4) >= passengerCount);
+    
+    // Show message if filtered
+    if (displayTypes.length === 0) {
+      container.innerHTML = `<p class="no-vehicles-msg">No vehicles available for ${passengerCount} passengers. Please contact us for group bookings.</p>`;
+      return;
+    }
+    
+    // Show info that vehicles have been filtered
+    showToast(`Showing vehicles that accommodate ${passengerCount}+ passengers`, 'info');
+  }
+  
+  container.innerHTML = displayTypes.map(type => {
+    const capacityText = type.passenger_capacity ? 
+      `Up to ${type.passenger_capacity} passengers` : 
+      (type.capacity || '');
+    const rateInfo = type.base_rate ? `From $${type.base_rate}` : '';
+    
+    return `
+      <div class="vehicle-type-option ${state.selectedVehicleType === type.id ? 'selected' : ''}" 
+           data-type="${type.id}"
+           data-capacity="${type.passenger_capacity || 4}"
+           data-base-rate="${type.base_rate || 0}"
+           data-per-mile="${type.per_mile_rate || 0}"
+           data-per-hour="${type.per_hour_rate || 0}">
+        <span class="vehicle-icon">${type.icon || '🚗'}</span>
+        <span class="vehicle-name">${type.name}</span>
+        <span class="vehicle-capacity">${capacityText}</span>
+        ${rateInfo ? `<span class="vehicle-rate">${rateInfo}</span>` : ''}
+      </div>
+    `;
+  }).join('');
   
   // Add click handlers
   container.querySelectorAll('.vehicle-type-option').forEach(option => {
@@ -574,10 +616,11 @@ function renderVehicleTypes() {
     });
   });
   
-  // Select first by default
-  if (state.vehicleTypes.length > 0 && !state.selectedVehicleType) {
-    state.selectedVehicleType = state.vehicleTypes[0].id;
-    container.querySelector('.vehicle-type-option')?.classList.add('selected');
+  // Select default app type or first by default
+  if (displayTypes.length > 0 && !state.selectedVehicleType) {
+    const defaultType = displayTypes.find(t => t.is_app_default === true) || displayTypes[0];
+    state.selectedVehicleType = defaultType.id;
+    container.querySelector(`[data-type="${defaultType.id}"]`)?.classList.add('selected');
   }
 }
 
@@ -622,6 +665,40 @@ async function loadAirports() {
   
   // Prefill airports AFTER dropdowns are populated (fixes timing issue)
   prefillAirports();
+}
+
+// ============================================
+// Passenger Count Change Handler
+// Filters vehicle types based on passenger count
+// ============================================
+function handlePassengerCountChange(count) {
+  console.log('[CustomerPortal] Passenger count changed to:', count);
+  
+  // If count > 7, show only vehicles that can accommodate
+  if (count > 7) {
+    // Re-render vehicle types with capacity filter
+    renderVehicleTypes(count);
+    
+    // Check if currently selected vehicle can accommodate
+    const selectedVehicle = state.vehicleTypes.find(t => t.id === state.selectedVehicleType);
+    if (selectedVehicle && (selectedVehicle.passenger_capacity || 4) < count) {
+      // Auto-select a vehicle that can accommodate
+      const suitableVehicle = state.vehicleTypes.find(t => (t.passenger_capacity || 4) >= count);
+      if (suitableVehicle) {
+        state.selectedVehicleType = suitableVehicle.id;
+        const container = document.getElementById('vehicleTypeSelector');
+        container?.querySelectorAll('.vehicle-type-option').forEach(o => o.classList.remove('selected'));
+        container?.querySelector(`[data-type="${suitableVehicle.id}"]`)?.classList.add('selected');
+        showToast(`Switched to ${suitableVehicle.name} to accommodate ${count} passengers`, 'info');
+      }
+    }
+  } else {
+    // Show all vehicles
+    renderVehicleTypes();
+  }
+  
+  // Recalculate price
+  calculatePrice();
 }
 
 // ============================================
@@ -1197,6 +1274,145 @@ function renderStops() {
 }
 
 // ============================================
+// Default Driver Assignment
+// Gets default drivers and checks for conflicts
+// ============================================
+
+/**
+ * Get all drivers marked as default for In-House reservations
+ */
+async function getDefaultDrivers() {
+  try {
+    const creds = getSupabaseCredentials();
+    const response = await fetch(
+      `${creds.url}/rest/v1/drivers?is_default_driver=eq.true&is_active=eq.true&select=*`,
+      {
+        headers: {
+          'apikey': creds.anonKey
+        }
+      }
+    );
+    
+    if (response.ok) {
+      const drivers = await response.json();
+      console.log('[CustomerPortal] Default drivers:', drivers.length);
+      return drivers;
+    }
+  } catch (err) {
+    console.error('[CustomerPortal] Failed to load default drivers:', err);
+  }
+  return [];
+}
+
+/**
+ * Check if a driver has a conflicting reservation at the given time
+ * Uses garage_out_time and garage_in_time to determine conflicts
+ */
+async function checkDriverConflict(driverId, pickupDateTime) {
+  try {
+    const creds = getSupabaseCredentials();
+    const pickupDate = pickupDateTime.split('T')[0];
+    
+    // Get all reservations for this driver on the same day
+    const response = await fetch(
+      `${creds.url}/rest/v1/reservations?driver_id=eq.${driverId}&pickup_date_time=gte.${pickupDate}T00:00:00&pickup_date_time=lte.${pickupDate}T23:59:59&select=id,pickup_date_time,garage_out_time,garage_in_time,status`,
+      {
+        headers: {
+          'apikey': creds.anonKey
+        }
+      }
+    );
+    
+    if (!response.ok) return false;
+    
+    const reservations = await response.json();
+    const newPickupTime = new Date(pickupDateTime);
+    
+    // Estimated duration for this trip: 2 hours default if no route info
+    const estimatedDuration = state.routeInfo?.durationSeconds 
+      ? state.routeInfo.durationSeconds / 60 
+      : 120;
+    
+    // Calculate estimated garage times for new reservation
+    const newGarageOut = new Date(newPickupTime.getTime() - 30 * 60000); // 30 min before pickup
+    const newGarageIn = new Date(newPickupTime.getTime() + estimatedDuration * 60000 + 15 * 60000); // trip + 15 min
+    
+    for (const res of reservations) {
+      // Skip cancelled reservations
+      if (res.status?.toLowerCase()?.includes('cancel')) continue;
+      
+      // Get garage times from reservation, or calculate from pickup
+      let garageOut, garageIn;
+      
+      if (res.garage_out_time) {
+        // Parse garage times (they're stored as time strings like "14:30")
+        const [outHour, outMin] = res.garage_out_time.split(':').map(Number);
+        garageOut = new Date(new Date(res.pickup_date_time).setHours(outHour, outMin, 0, 0));
+      } else {
+        // Default: 30 min before pickup
+        garageOut = new Date(new Date(res.pickup_date_time).getTime() - 30 * 60000);
+      }
+      
+      if (res.garage_in_time) {
+        const [inHour, inMin] = res.garage_in_time.split(':').map(Number);
+        garageIn = new Date(new Date(res.pickup_date_time).setHours(inHour, inMin, 0, 0));
+        // If garage in is before garage out, it must be next day
+        if (garageIn < garageOut) {
+          garageIn.setDate(garageIn.getDate() + 1);
+        }
+      } else {
+        // Default: 2 hours after pickup
+        garageIn = new Date(new Date(res.pickup_date_time).getTime() + 150 * 60000);
+      }
+      
+      // Check for overlap: new trip's garage window overlaps with existing trip
+      // Overlap if: newGarageOut < existingGarageIn AND newGarageIn > existingGarageOut
+      if (newGarageOut < garageIn && newGarageIn > garageOut) {
+        console.log(`[CustomerPortal] Driver conflict found with reservation ${res.id}`);
+        return true; // Conflict found
+      }
+    }
+    
+    return false; // No conflict
+  } catch (err) {
+    console.error('[CustomerPortal] Error checking driver conflict:', err);
+    return false; // Assume no conflict on error
+  }
+}
+
+/**
+ * Find an available default driver for the given pickup time
+ */
+async function findAvailableDefaultDriver(pickupDateTime) {
+  const defaultDrivers = await getDefaultDrivers();
+  
+  if (defaultDrivers.length === 0) {
+    console.log('[CustomerPortal] No default drivers configured');
+    return null;
+  }
+  
+  // Check each default driver for conflicts
+  for (const driver of defaultDrivers) {
+    const hasConflict = await checkDriverConflict(driver.id, pickupDateTime);
+    if (!hasConflict) {
+      console.log(`[CustomerPortal] Found available default driver: ${driver.first_name} ${driver.last_name}`);
+      return driver;
+    }
+  }
+  
+  console.log('[CustomerPortal] All default drivers have conflicts');
+  return null; // All default drivers are busy
+}
+
+/**
+ * Check if auto-farm mode is enabled
+ */
+function isAutoFarmEnabled() {
+  // Check localStorage setting (set in admin settings)
+  return localStorage.getItem('autoFarmoutMode') === 'true';
+}
+
+// ============================================
 // Booking
 // ============================================
 async function bookTrip(includeReturn = false) {
@@ -1222,6 +1438,47 @@ async function bookTrip(includeReturn = false) {
     const reservationData = buildReservationData();
     reservationData.confirmation_number = String(confirmationNumber); // Must be text for database
     
+    // ============================================
+    // Determine Assignment Based on Auto-Farm Toggle
+    // ============================================
+    const autoFarmEnabled = isAutoFarmEnabled();
+    console.log('[CustomerPortal] Auto-farm mode:', autoFarmEnabled);
+    
+    if (autoFarmEnabled) {
+      // AUTO-FARM ON: Set to Farm-out Unassigned with automatic mode
+      reservationData.driver_id = null;
+      reservationData.res_status = 'Farmout';
+      reservationData.assignment_type = 'Farm-out';
+      reservationData.affiliate = null;
+      reservationData.farm_status = 'unassigned';
+      reservationData.farm_mode = 'automatic';
+      console.log('[CustomerPortal] Auto-farm enabled: Setting to Farm-out Unassigned (automatic)');
+    } else {
+      // AUTO-FARM OFF: Set to In-House, try to assign default driver
+      reservationData.assignment_type = 'In-House';
+      reservationData.affiliate = 'in-house';
+      reservationData.farm_status = null;
+      reservationData.farm_mode = null;
+      
+      // Try to find an available default driver
+      const pickupDateTime = reservationData.pickup_date_time;
+      const availableDriver = await findAvailableDefaultDriver(pickupDateTime);
+      
+      if (availableDriver) {
+        // Assign the default driver
+        reservationData.driver_id = availableDriver.id;
+        reservationData.driver_name = `${availableDriver.first_name || ''} ${availableDriver.last_name || ''}`.trim();
+        reservationData.driver_phone = availableDriver.phone || availableDriver.cell_phone;
+        reservationData.res_status = 'Confirmed';
+        console.log(`[CustomerPortal] Assigned default driver: ${reservationData.driver_name}`);
+      } else {
+        // No default driver available - leave unassigned In-House
+        reservationData.driver_id = null;
+        reservationData.res_status = 'Unassigned';
+        console.log('[CustomerPortal] No default driver available: Setting to In-House Unassigned');
+      }
+    }
+    
     // Validate required database fields
     if (!reservationData.organization_id) {
       throw new Error('Missing organization_id - cannot create reservation');
@@ -1236,7 +1493,10 @@ async function bookTrip(includeReturn = false) {
       booked_by_user_id: reservationData.booked_by_user_id,
       account_id: reservationData.account_id,
       pickup_address: reservationData.pickup_address,
-      dropoff_address: reservationData.dropoff_address
+      dropoff_address: reservationData.dropoff_address,
+      assignment_type: reservationData.assignment_type,
+      driver_id: reservationData.driver_id,
+      driver_name: reservationData.driver_name
     });
     
     // Save passenger to customer_passengers table for future use
@@ -1335,8 +1595,10 @@ function validateBookingForm() {
   const pickupType = document.getElementById('pickupAddressSelect').value;
   if (pickupType === 'airport') {
     const airport = document.getElementById('pickupAirport').value;
+    const airlineCode = document.getElementById('airlineCode')?.value;
     const flightNumber = document.getElementById('flightNumber').value.trim();
     if (!airport) return { valid: false, message: 'Please select airport' };
+    if (!airlineCode) return { valid: false, message: 'Please select airline for airport pickup' };
     if (!flightNumber) return { valid: false, message: 'Please enter flight number for airport pickup' };
   } else if (pickupType === 'new') {
     const address = document.getElementById('pickupAddressInput').value.trim();
@@ -1478,12 +1740,12 @@ function buildReservationData() {
     vehicle_type: vehicleTypeName,
     service_type: serviceType,
     
-    // Assignment: Farm-out unassigned, type In-House (as per user request)
-    driver_id: null,                    // Unassigned
-    res_status: 'Farmout',              // Farm-out status for unassigned
-    assignment_type: 'In-House',        // Type is In-House
-    affiliate: 'in-house',              // In-house affiliate
-    farm_status: 'unassigned',          // Unassigned status
+    // Assignment: Set dynamically in bookTrip based on auto-farm toggle
+    // These are defaults - will be overwritten in bookTrip()
+    driver_id: null,
+    res_status: 'Unassigned',
+    assignment_type: 'In-House',
+    affiliate: 'in-house',
     
     // Status
     status: 'confirmed',
@@ -2722,13 +2984,25 @@ function setupEventListeners() {
   document.getElementById('countMinus')?.addEventListener('click', () => {
     const input = document.getElementById('passengerCount');
     const val = parseInt(input.value) || 1;
-    if (val > 1) input.value = val - 1;
+    if (val > 1) {
+      input.value = val - 1;
+      handlePassengerCountChange(val - 1);
+    }
   });
   
   document.getElementById('countPlus')?.addEventListener('click', () => {
     const input = document.getElementById('passengerCount');
     const val = parseInt(input.value) || 1;
-    if (val < 50) input.value = val + 1;
+    if (val < 50) {
+      input.value = val + 1;
+      handlePassengerCountChange(val + 1);
+    }
+  });
+  
+  // Also listen for direct input changes
+  document.getElementById('passengerCount')?.addEventListener('change', (e) => {
+    const val = parseInt(e.target.value) || 1;
+    handlePassengerCountChange(val);
   });
   
   // Address selectors
