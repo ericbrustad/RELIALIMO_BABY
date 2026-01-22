@@ -250,6 +250,7 @@ async function checkAuth() {
     if (isAuth) {
       state.customer = CustomerAuth.getCustomer();
       state.session = CustomerAuth.getSession();
+      console.log('[CustomerOnboarding] Authenticated via CustomerAuth:', state.customer?.email);
       return true;
     }
     
@@ -257,7 +258,20 @@ async function checkAuth() {
     const customerInfo = localStorage.getItem('current_customer');
     if (customerInfo) {
       state.customer = JSON.parse(customerInfo);
+      console.log('[CustomerOnboarding] Customer loaded from localStorage:', state.customer?.email);
       return !!state.customer;
+    }
+    
+    // Also try the customer_session
+    const sessionInfo = localStorage.getItem('customer_session');
+    if (sessionInfo) {
+      const session = JSON.parse(sessionInfo);
+      if (session.customer) {
+        state.customer = session.customer;
+        state.session = session;
+        console.log('[CustomerOnboarding] Customer loaded from session:', state.customer?.email);
+        return true;
+      }
     }
     
     return false;
@@ -1099,6 +1113,23 @@ async function completeOnboarding() {
   
   try {
     const creds = getSupabaseCredentials();
+    
+    // Ensure we have customer data
+    if (!state.customer) {
+      // Try to reload customer from CustomerAuth or localStorage
+      state.customer = CustomerAuth.getCustomer();
+      if (!state.customer) {
+        const storedCustomer = localStorage.getItem('current_customer');
+        if (storedCustomer) {
+          state.customer = JSON.parse(storedCustomer);
+        }
+      }
+    }
+    
+    // If still no customer, show error
+    if (!state.customer || !state.customer.email) {
+      throw new Error('Session expired. Please log in again.');
+    }
     
     // Prepare update data
     const updateData = {
