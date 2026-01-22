@@ -1365,10 +1365,12 @@ function buildReservationData() {
   const pickupTime = document.getElementById('pickupTime').value;
   const pickupDateTime = `${pickupDate}T${pickupTime}:00`;
   
-  // Get organization_id for multi-tenant support (required by database)
+  // Customer portal reservations use the main admin org so admins can see/manage them
+  // Customer Org is only for account records, not reservations
+  const ADMIN_ORG_ID = '54eb6ce7-ba97-4198-8566-6ac075828160';
   const organizationId = window.ENV?.ORGANIZATION_ID || 
                         localStorage.getItem('relia_organization_id') || 
-                        '54eb6ce7-ba97-4198-8566-6ac075828160'; // Default ReliaLimo org
+                        ADMIN_ORG_ID;
   
   // Get booked_by_user_id from session (required by database)
   const bookedByUserId = state.session?.user?.id || 

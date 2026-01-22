@@ -460,18 +460,24 @@ async function createAccountRecord(accessToken, email) {
   try {
     const creds = getSupabaseCredentials();
     
+    // Customer organization ID for all customer accounts
+    const CUSTOMER_ORG_ID = 'c0000000-0000-0000-0000-000000000001';
+    
     // Try to get user metadata from auth session (may have first_name, last_name)
     const userMetadata = authState.session?.user?.user_metadata || {};
+    const userId = authState.session?.user?.id || null;
     const firstName = userMetadata.first_name || '';
     const lastName = userMetadata.last_name || '';
     
-    console.log('[AuthService] Auto-creating account for:', email, { firstName, lastName });
+    console.log('[AuthService] Auto-creating account for:', email, { firstName, lastName, userId });
     
     const accountData = {
+      organization_id: CUSTOMER_ORG_ID,
+      user_id: userId,
       email: email.toLowerCase(),
       first_name: firstName,
       last_name: lastName,
-      account_type: 'individual',
+      account_type: 'customer',
       is_active: true,
       created_at: new Date().toISOString()
     };

@@ -718,13 +718,17 @@
         }
 
         // Create customer record in accounts table
-        // Only use columns that are known to exist in the accounts table
+        // Use Customer organization for all customer portal registrations
+        const CUSTOMER_ORG_ID = 'c0000000-0000-0000-0000-000000000001';
+        
         const customerData = {
+          organization_id: CUSTOMER_ORG_ID,
+          user_id: authData.user?.id || null,  // Link to auth.users
           first_name: firstName,
           last_name: lastName,
           email: email.toLowerCase(),
           phone: formatPhoneE164(phone),
-          account_type: 'individual',
+          account_type: 'customer',
           is_active: true,
           created_at: new Date().toISOString()
         };
