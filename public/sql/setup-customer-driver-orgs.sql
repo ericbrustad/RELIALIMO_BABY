@@ -30,6 +30,20 @@ ON CONFLICT (id) DO NOTHING;
 -- Admin Org ID:    54eb6ce7-ba97-4198-8566-6ac075828160 (existing)
 
 -- ===================================
+-- 2.5 ADD user_id COLUMN TO ACCOUNTS IF MISSING (must be before policies)
+-- ===================================
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'accounts' AND column_name = 'user_id'
+  ) THEN
+    ALTER TABLE public.accounts ADD COLUMN user_id uuid REFERENCES auth.users(id);
+    CREATE INDEX idx_accounts_user_id ON public.accounts(user_id);
+  END IF;
+END $$;
+
+-- ===================================
 -- 3. UPDATE RLS POLICIES FOR ACCOUNTS
 -- ===================================
 
@@ -157,20 +171,6 @@ WITH CHECK (
     WHERE user_id = auth.uid()
   )
 );
-
--- ===================================
--- 5. ADD user_id COLUMN TO ACCOUNTS IF MISSING
--- ===================================
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns 
-    WHERE table_name = 'accounts' AND column_name = 'user_id'
-  ) THEN
-    ALTER TABLE public.accounts ADD COLUMN user_id uuid REFERENCES auth.users(id);
-    CREATE INDEX idx_accounts_user_id ON public.accounts(user_id);
-  END IF;
-END $$;
 
 -- ===================================
 -- 6. VERIFY SETUP
