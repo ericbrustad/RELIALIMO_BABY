@@ -837,6 +837,12 @@ function fillPassengerDetails(passengerId) {
     passenger = state.savedPassengers.find(p => p.id == passengerId);
   }
   
+  // Get DOM elements
+  const firstNameInput = document.getElementById('passengerFirstName');
+  const lastNameInput = document.getElementById('passengerLastName');
+  const phoneInput = document.getElementById('passengerPhone');
+  const emailInput = document.getElementById('passengerEmail');
+  
   if (passenger) {
     console.log('[CustomerPortal] Filling passenger details:', {
       first_name: passenger.first_name,
@@ -844,13 +850,21 @@ function fillPassengerDetails(passengerId) {
       phone: passenger.cell_phone || passenger.phone,
       email: passenger.email
     });
-    document.getElementById('passengerFirstName').value = passenger.first_name || '';
-    document.getElementById('passengerLastName').value = passenger.last_name || '';
+    
+    if (firstNameInput) firstNameInput.value = passenger.first_name || '';
+    if (lastNameInput) lastNameInput.value = passenger.last_name || '';
     // Check both cell_phone and phone fields (customer may have cell_phone from onboarding)
-    document.getElementById('passengerPhone').value = passenger.cell_phone || passenger.phone || '';
-    document.getElementById('passengerEmail').value = passenger.email || '';
+    if (phoneInput) phoneInput.value = passenger.cell_phone || passenger.phone || '';
+    if (emailInput) emailInput.value = passenger.email || '';
+    
+    console.log('[CustomerPortal] Passenger form filled successfully');
   } else {
     console.warn('[CustomerPortal] No passenger data found for:', passengerId);
+    // Clear the fields if no passenger data
+    if (firstNameInput) firstNameInput.value = '';
+    if (lastNameInput) lastNameInput.value = '';
+    if (phoneInput) phoneInput.value = '';
+    if (emailInput) emailInput.value = '';
   }
 }
 
@@ -1112,8 +1126,25 @@ function prefillBookingDefaults() {
     return;
   }
   
-  // 1. Prefill passenger details (default to "Myself")
-  fillPassengerDetails('self');
+  console.log('[CustomerPortal] Customer data available:', {
+    first_name: state.customer.first_name,
+    last_name: state.customer.last_name,
+    email: state.customer.email,
+    phone: state.customer.phone,
+    cell_phone: state.customer.cell_phone
+  });
+  
+  // 1. ALWAYS prefill passenger details with customer's own info (default to "Myself")
+  // Set the dropdown to "self" first
+  const passengerSelect = document.getElementById('passengerSelect');
+  if (passengerSelect) {
+    passengerSelect.value = 'self';
+  }
+  
+  // Then fill the details - use setTimeout to ensure DOM is fully ready
+  setTimeout(() => {
+    fillPassengerDetails('self');
+  }, 50);
   
   // 2. Show saved addresses section automatically if customer has saved addresses
   if (state.savedAddresses && state.savedAddresses.length > 0) {
