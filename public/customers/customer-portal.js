@@ -874,64 +874,130 @@ async function addNewPassenger() {
   const phone = document.getElementById('newPassengerPhone').value.trim();
   const email = document.getElementById('newPassengerEmail').value.trim();
   const relationship = document.getElementById('newPassengerRelationship')?.value || 'other';
-  const saveForFuture = document.getElementById('savePassengerForFuture').checked;
   
   if (!firstName || !lastName) {
     showToast('Please enter first and last name', 'error');
     return;
   }
   
-  if (saveForFuture) {
-    try {
-      const creds = getSupabaseCredentials();
-      const response = await fetch(`${creds.url}/rest/v1/customer_passengers`, {
-        method: 'POST',
+  // ALWAYS save passenger for future use in the dropdown
+  let newPassengerId = null;
+  try {
+    const creds = getSupabaseCredentials();
+    
+    // First check if this passenger already exists (by name)
+    const checkResponse = await fetch(
+      `${creds.url}/rest/v1/customer_passengers?account_id=eq.${state.customer?.id}&first_name=ilike.${encodeURIComponent(firstName)}&last_name=ilike.${encodeURIComponent(lastName)}&select=*`,
+      {
         headers: {
           'apikey': creds.anonKey,
-          'Authorization': `Bearer ${state.session?.access_token}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation'
-        },
-        body: JSON.stringify({
-          account_id: state.customer?.id,
-          first_name: firstName,
-          last_name: lastName,
-          phone: phone,
-          email: email,
-          relationship: relationship,
-          is_primary: false,
-          is_visible: true,
-          usage_count: 1,
-          last_used_at: new Date().toISOString()
-        })
-      });
-      
-      if (response.ok) {
-        const newPassengers = await response.json();
-        if (newPassengers?.length > 0) {
-          state.savedPassengers.push(newPassengers[0]);
+          'Authorization': `Bearer ${state.session?.access_token}`
         }
       }
-    } catch (err) {
-      console.error('[CustomerPortal] Failed to save passenger:', err);
+    );
+    
+    if (checkResponse.ok) {
+      const existing = await checkResponse.json();
+      
+      if (existing.length > 0) {
+        // Update existing passenger
+        newPassengerId = existing[0].id;
+        await fetch(
+          `${creds.url}/rest/v1/customer_passengers?id=eq.${existing[0].id}`,
+          {
+            method: 'PATCH',
+            headers: {
+              'apikey': creds.anonKey,
+              'Authorization': `Bearer ${state.session?.access_token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              phone: phone || existing[0].phone,
+              email: email || existing[0].email,
+              relationship: relationship,
+              usage_count: (existing[0].usage_count || 0) + 1,
+              last_used_at: new Date().toISOString(),
+              is_visible: true
+            })
+          }
+        );
+        
+        // Update in state
+        const stateIdx = state.savedPassengers.findIndex(p => p.id === existing[0].id);
+        if (stateIdx >= 0) {
+          state.savedPassengers[stateIdx] = {
+            ...state.savedPassengers[stateIdx],
+            phone: phone || existing[0].phone,
+            email: email || existing[0].email,
+            relationship: relationship,
+            is_visible: true
+          };
+        } else {
+          state.savedPassengers.push({...existing[0], phone, email, relationship, is_visible: true});
+        }
+        
+        console.log('[CustomerPortal] Updated existing passenger:', newPassengerId);
+      } else {
+        // Insert new passenger
+        const response = await fetch(`${creds.url}/rest/v1/customer_passengers`, {
+          method: 'POST',
+          headers: {
+            'apikey': creds.anonKey,
+            'Authorization': `Bearer ${state.session?.access_token}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            account_id: state.customer?.id,
+            first_name: firstName,
+            last_name: lastName,
+            phone: phone,
+            email: email,
+            relationship: relationship,
+            is_primary: false,
+            is_visible: true,
+            usage_count: 1,
+            last_used_at: new Date().toISOString()
+          })
+        });
+        
+        if (response.ok) {
+          const newPassengers = await response.json();
+          if (newPassengers?.length > 0) {
+            state.savedPassengers.push(newPassengers[0]);
+            newPassengerId = newPassengers[0].id;
+            console.log('[CustomerPortal] Created new passenger:', newPassengerId);
+          }
+        }
+      }
     }
+  } catch (err) {
+    console.error('[CustomerPortal] Failed to save passenger:', err);
   }
   
-  // Update form
+  // Update booking form fields
   document.getElementById('passengerFirstName').value = firstName;
   document.getElementById('passengerLastName').value = lastName;
   document.getElementById('passengerPhone').value = phone;
   document.getElementById('passengerEmail').value = email;
   
-  // Reset passenger select to avoid "new" being selected
-  document.getElementById('passengerSelect').value = 'self';
-  
-  // Update dropdown
+  // Update dropdown with new passengers
   populatePassengerDropdown();
+  
+  // Select the newly added passenger in the dropdown
+  if (newPassengerId) {
+    document.getElementById('passengerSelect').value = newPassengerId;
+  }
+  
+  // Clear the modal form for next use
+  document.getElementById('newPassengerFirstName').value = '';
+  document.getElementById('newPassengerLastName').value = '';
+  document.getElementById('newPassengerPhone').value = '';
+  document.getElementById('newPassengerEmail').value = '';
   
   // Close modal
   closeModal('passengerModal');
-  showToast('Passenger added', 'success');
+  showToast('Passenger saved for future use', 'success');
 }
 
 // Delete (hide) a saved passenger

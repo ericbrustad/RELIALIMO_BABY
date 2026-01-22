@@ -1049,6 +1049,152 @@ export function isLocalDevModeEnabled() {
   try { if (typeof window === 'undefined') return false; const host = window.location.hostname; if (!host) return false; if (host === 'localhost' || host === '127.0.0.1') return true; if (window.ENV && (window.ENV.NODE_ENV === 'development' || window.ENV.LOCAL === 'true')) return true; return false; } catch (e) { return false; }
 }
 
+// ============================================
+// Customer Passengers & Addresses Functions
+// For shared access between customer portal and reservation-form
+// ============================================
+
+/**
+ * Get all saved passengers for an account (from customer_passengers table)
+ * @param {string} accountId - The account UUID
+ * @returns {Promise<Array>} - Array of passenger objects
+ */
+export async function getCustomerPassengers(accountId) {
+  if (!accountId) return [];
+  try {
+    const rows = await request(`/customer_passengers?account_id=eq.${encodeURIComponent(accountId)}&is_visible=eq.true&order=is_primary.desc,usage_count.desc`);
+    return Array.isArray(rows) ? rows : [];
+  } catch (err) {
+    console.error('[API] Failed to fetch customer passengers:', err);
+    return [];
+  }
+}
+
+/**
+ * Get all saved addresses for an account (from customer_addresses table)
+ * @param {string} accountId - The account UUID
+ * @returns {Promise<Array>} - Array of address objects
+ */
+export async function getCustomerAddresses(accountId) {
+  if (!accountId) return [];
+  try {
+    const rows = await request(`/customer_addresses?account_id=eq.${encodeURIComponent(accountId)}&is_deleted=eq.false&is_visible=eq.true&order=is_favorite.desc,usage_count.desc`);
+    return Array.isArray(rows) ? rows : [];
+  } catch (err) {
+    console.error('[API] Failed to fetch customer addresses:', err);
+    return [];
+  }
+}
+
+/**
+ * Save a passenger to customer_passengers table
+ * @param {Object} passengerData - Passenger data with account_id, first_name, last_name, phone, email
+ * @returns {Promise<Object|null>} - Saved passenger or null
+ */
+export async function saveCustomerPassenger(passengerData) {
+  if (!passengerData.account_id) return null;
+  try {
+    // Check if exists
+    const existing = await request(
+      `/customer_passengers?account_id=eq.${encodeURIComponent(passengerData.account_id)}&first_name=ilike.${encodeURIComponent(passengerData.first_name)}&last_name=ilike.${encodeURIComponent(passengerData.last_name)}`
+    );
+    
+    if (existing?.length > 0) {
+      // Update existing
+      const rows = await request(
+        `/customer_passengers?id=eq.${existing[0].id}`,
+        {
+          method: 'PATCH',
+          headers: { 'Prefer': 'return=representation' },
+          body: JSON.stringify({
+            phone: passengerData.phone || existing[0].phone,
+            email: passengerData.email || existing[0].email,
+            usage_count: (existing[0].usage_count || 0) + 1,
+            last_used_at: new Date().toISOString()
+          })
+        }
+      );
+      return Array.isArray(rows) && rows.length ? rows[0] : existing[0];
+    } else {
+      // Insert new
+      const rows = await request('/customer_passengers', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          account_id: passengerData.account_id,
+          first_name: passengerData.first_name,
+          last_name: passengerData.last_name,
+          phone: passengerData.phone || '',
+          email: passengerData.email || '',
+          relationship: passengerData.relationship || 'other',
+          is_primary: passengerData.is_primary || false,
+          is_visible: true,
+          usage_count: 1,
+          last_used_at: new Date().toISOString()
+        })
+      });
+      return Array.isArray(rows) && rows.length ? rows[0] : rows;
+    }
+  } catch (err) {
+    console.error('[API] Failed to save customer passenger:', err);
+    return null;
+  }
+}
+
+/**
+ * Save an address to customer_addresses table
+ * @param {Object} addressData - Address data with account_id, full_address, label, etc.
+ * @returns {Promise<Object|null>} - Saved address or null
+ */
+export async function saveCustomerAddress(addressData) {
+  if (!addressData.account_id || !addressData.full_address) return null;
+  try {
+    // Check if exists
+    const existing = await request(
+      `/customer_addresses?account_id=eq.${encodeURIComponent(addressData.account_id)}&full_address=ilike.${encodeURIComponent(addressData.full_address)}`
+    );
+    
+    if (existing?.length > 0) {
+      // Update existing
+      const rows = await request(
+        `/customer_addresses?id=eq.${existing[0].id}`,
+        {
+          method: 'PATCH',
+          headers: { 'Prefer': 'return=representation' },
+          body: JSON.stringify({
+            usage_count: (existing[0].usage_count || 0) + 1,
+            last_used_at: new Date().toISOString()
+          })
+        }
+      );
+      return Array.isArray(rows) && rows.length ? rows[0] : existing[0];
+    } else {
+      // Insert new
+      const rows = await request('/customer_addresses', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          account_id: addressData.account_id,
+          full_address: addressData.full_address,
+          label: addressData.label || 'Recent',
+          address_type: addressData.address_type || 'other',
+          latitude: addressData.latitude || null,
+          longitude: addressData.longitude || null,
+          is_favorite: addressData.is_favorite || false,
+          is_visible: true,
+          is_deleted: false,
+          usage_count: 1,
+          last_used_at: new Date().toISOString()
+        })
+      });
+      return Array.isArray(rows) && rows.length ? rows[0] : rows;
+    }
+  } catch (err) {
+    console.error('[API] Failed to save customer address:', err);
+    return null;
+  }
+}
+
 // Export a default helper object for older modules
 export default {
   apiFetch,

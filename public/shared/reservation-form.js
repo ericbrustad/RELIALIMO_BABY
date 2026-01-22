@@ -8186,6 +8186,9 @@ class ReservationForm {
           console.log('📞 [ReservationForm] Populated booking agent from account (is_booking_contact)');
         }
         
+        // Load saved passengers and addresses for this account
+        await this.loadSavedPassengersAndAddresses(accountId);
+        
         // Parse passenger info from special_instructions if available (override account defaults)
         if (record?.special_instructions) {
           this.parseAndFillPassengerFromInstructions(record.special_instructions);
@@ -8201,6 +8204,75 @@ class ReservationForm {
     } catch (error) {
       console.error('⚠️ [ReservationForm] Error loading account by ID:', error);
     }
+  }
+  
+  /**
+   * Load saved passengers and addresses from customer_passengers and customer_addresses tables
+   */
+  async loadSavedPassengersAndAddresses(accountId) {
+    try {
+      const { getCustomerPassengers, getCustomerAddresses } = await import('./api-service.js');
+      
+      // Load saved passengers
+      const passengers = await getCustomerPassengers(accountId);
+      if (passengers?.length > 0) {
+        this.savedPassengers = passengers;
+        console.log('👥 [ReservationForm] Loaded saved passengers for account:', passengers.length);
+        this.populateSavedPassengersDropdown();
+      }
+      
+      // Load saved addresses
+      const addresses = await getCustomerAddresses(accountId);
+      if (addresses?.length > 0) {
+        this.savedAddresses = addresses;
+        console.log('📍 [ReservationForm] Loaded saved addresses for account:', addresses.length);
+        this.populateSavedAddressesDropdown();
+      }
+    } catch (err) {
+      console.error('⚠️ [ReservationForm] Error loading saved passengers/addresses:', err);
+    }
+  }
+  
+  /**
+   * Populate passenger dropdown with saved passengers from customer portal
+   */
+  populateSavedPassengersDropdown() {
+    const dropdown = document.getElementById('savedPassengersDropdown');
+    if (!dropdown || !this.savedPassengers?.length) return;
+    
+    dropdown.innerHTML = '<option value="">-- Select Saved Passenger --</option>';
+    this.savedPassengers.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = `${p.first_name} ${p.last_name}${p.relationship && p.relationship !== 'self' ? ` (${p.relationship})` : ''}`;
+      dropdown.appendChild(opt);
+    });
+    
+    // Show the dropdown
+    dropdown.closest('.form-group')?.classList.remove('hidden');
+    
+    // Handle selection
+    dropdown.addEventListener('change', (e) => {
+      const passenger = this.savedPassengers.find(p => p.id === e.target.value);
+      if (passenger) {
+        this.safeSetValue('passengerFirstName', passenger.first_name || '');
+        this.safeSetValue('passengerLastName', passenger.last_name || '');
+        this.safeSetValue('passengerPhone', passenger.phone || '');
+        this.safeSetValue('passengerEmail', passenger.email || '');
+        console.log('👤 [ReservationForm] Selected saved passenger:', passenger.first_name, passenger.last_name);
+      }
+    });
+  }
+  
+  /**
+   * Populate address suggestions with saved addresses from customer portal
+   */
+  populateSavedAddressesDropdown() {
+    // Store addresses for use in autocomplete/suggestions
+    if (!this.savedAddresses?.length) return;
+    
+    console.log('📍 [ReservationForm] Saved addresses available for autocomplete:', 
+      this.savedAddresses.map(a => a.label || a.full_address?.substring(0, 30)));
   }
   
   /**
