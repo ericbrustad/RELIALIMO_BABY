@@ -1,15 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getSupabaseCredentials, getSupabaseAuthUrl } from './supabase-config.js';
 
-// Suppress expected AbortError from Supabase lock mechanism (multiple clients)
-window.addEventListener('unhandledrejection', (event) => {
-    if (event.reason?.name === 'AbortError' && 
-        event.reason?.message?.includes('signal is aborted')) {
-        event.preventDefault(); // Suppress the console error
-        return;
-    }
-});
-
 const { anonKey: SUPABASE_ANON_KEY } = getSupabaseCredentials();
 const SUPABASE_URL = getSupabaseAuthUrl();
 

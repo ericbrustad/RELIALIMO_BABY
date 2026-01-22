@@ -427,15 +427,6 @@
     </div>
 
     <script type="module">
-        // Suppress expected AbortError from Supabase lock mechanism (multiple clients)
-        window.addEventListener('unhandledrejection', (event) => {
-            if (event.reason?.name === 'AbortError' && 
-                event.reason?.message?.includes('signal is aborted')) {
-                event.preventDefault(); // Suppress the console error
-                return;
-            }
-        });
-        
         import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         
         // Get Supabase credentials from env.js
