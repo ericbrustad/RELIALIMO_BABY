@@ -41,7 +41,8 @@ export function middleware(request: NextRequest) {
   // Customer/Account subdomain: account.relialimo.com
   if (host.startsWith('account.')) {
     if (pathname === '/' || pathname === '') {
-      return NextResponse.rewrite(new URL('/customers/customer-portal.html', request.url))
+      // Root of account subdomain shows login page
+      return NextResponse.rewrite(new URL('/customers/auth.html', request.url))
     }
     
     // Handle email verification route: /verify?token=xxx&email=xxx
