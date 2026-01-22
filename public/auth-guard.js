@@ -93,8 +93,15 @@ if (typeof document !== 'undefined') {
   });
 }
 
-// Start the proactive refresh timer on load
-scheduleTokenRefresh();
+// Start the proactive refresh timer on load (delayed to avoid init race conditions)
+setTimeout(() => {
+  scheduleTokenRefresh().catch(e => {
+    // Ignore AbortError - happens when page navigates during init
+    if (e?.name !== 'AbortError') {
+      console.warn('AuthGuard: Initial token refresh scheduling failed:', e);
+    }
+  });
+}, 100);
 
 // Expose a single, SDK-managed session refresher for the rest of the app.
 // This prevents refresh-token races between multiple auth implementations.
@@ -297,8 +304,15 @@ supabase.auth.onAuthStateChange((event, session) => {
   }
 });
 
-// Initial auth check on page load
-handleAuth();
+// Initial auth check on page load (delayed to allow parent session sharing)
+setTimeout(() => {
+  handleAuth().catch(e => {
+    // Ignore AbortError - happens when page navigates during init
+    if (e?.name !== 'AbortError') {
+      console.error('AuthGuard: Initial auth check failed:', e);
+    }
+  });
+}, 50);
 
 export { supabase };
 
