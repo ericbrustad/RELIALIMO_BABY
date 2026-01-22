@@ -17,6 +17,10 @@ const STORAGE_KEYS = {
   PENDING_VERIFICATIONS: 'pending_verifications'
 };
 
+// Auth URLs - always use account.relialimo.com for login
+const AUTH_BASE_URL = 'https://account.relialimo.com';
+const AUTH_LOGIN_URL = `${AUTH_BASE_URL}/auth`;
+
 // Session timeout: 30 days if "remember me", 24 hours otherwise
 const SESSION_TIMEOUT_REMEMBERED = 30 * 24 * 60 * 60 * 1000; // 30 days
 const SESSION_TIMEOUT_DEFAULT = 24 * 60 * 60 * 1000; // 24 hours
@@ -246,7 +250,7 @@ export async function logout(redirectToLogin = true) {
   await clearAuth();
   
   if (redirectToLogin) {
-    window.location.href = '/auth';
+    window.location.href = AUTH_LOGIN_URL;
   }
 }
 
@@ -615,7 +619,7 @@ export async function requireAuth(returnUrl) {
   const isAuth = await initAuth();
   if (!isAuth) {
     const redirect = returnUrl ? `?redirect=${encodeURIComponent(returnUrl)}` : '';
-    window.location.href = `/auth${redirect}`;
+    window.location.href = `${AUTH_LOGIN_URL}${redirect}`;
     return false;
   }
   return true;
@@ -693,5 +697,7 @@ export default {
   requireAuth,
   redirectIfAuthenticated,
   onAuthStateChange,
-  updateCustomer
+  updateCustomer,
+  AUTH_LOGIN_URL,
+  AUTH_BASE_URL
 };

@@ -1220,7 +1220,7 @@ async function bookTrip(includeReturn = false) {
     
     // Build reservation data
     const reservationData = buildReservationData();
-    reservationData.confirmation_number = confirmationNumber;
+    reservationData.confirmation_number = String(confirmationNumber); // Must be text for database
     
     // Validate required database fields
     if (!reservationData.organization_id) {
