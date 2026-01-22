@@ -610,6 +610,10 @@
         
         showLoginMessage('Welcome back! Redirecting...', false);
         
+        // Check if onboarding is complete (has home address and airport set)
+        const onboardingComplete = customer?.onboarding_complete || 
+                                   (customer?.home_address && customer?.home_airport);
+        
         // Get the portal slug directly from the customer object returned by login
         let slug = customer?.portal_slug;
         
@@ -629,8 +633,16 @@
         }
         
         setTimeout(() => {
-          // If user has a valid slug, go to their portal. Otherwise complete profile.
-          window.location.href = slug ? `/${slug}` : '/complete-profile';
+          // If onboarding not complete, go to onboarding flow
+          if (!onboardingComplete) {
+            window.location.href = '/onboarding';
+          } else if (slug) {
+            // Go to their portal
+            window.location.href = `/${slug}`;
+          } else {
+            // Fallback to booking page
+            window.location.href = 'https://relialimo.com/book';
+          }
         }, 500);
 
       } catch (err) {

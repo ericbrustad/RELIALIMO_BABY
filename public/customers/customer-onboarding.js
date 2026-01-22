@@ -4,6 +4,7 @@
 // ============================================
 
 import { getSupabaseCredentials } from '/shared/supabase-config.js';
+import CustomerAuth from './customer-auth-service.js';
 
 // ============================================
 // State Management
@@ -243,28 +244,23 @@ async function handleEmailVerification(token, email, redirect) {
 // ============================================
 async function checkAuth() {
   try {
-    const session = localStorage.getItem('customer_session');
-    const customerInfo = localStorage.getItem('current_customer');
+    // Use CustomerAuth service for consistent auth checking
+    const isAuth = await CustomerAuth.initAuth();
     
+    if (isAuth) {
+      state.customer = CustomerAuth.getCustomer();
+      state.session = CustomerAuth.getSession();
+      return true;
+    }
+    
+    // Fallback: Also check if we have customer info from verification
+    const customerInfo = localStorage.getItem('current_customer');
     if (customerInfo) {
       state.customer = JSON.parse(customerInfo);
+      return !!state.customer;
     }
     
-    if (session) {
-      const parsed = JSON.parse(session);
-      if (parsed?.access_token) {
-        // Check token expiry
-        if (parsed.expires_at && parsed.expires_at * 1000 < Date.now()) {
-          localStorage.removeItem('customer_session');
-          return false;
-        }
-        state.session = parsed;
-        return true;
-      }
-    }
-    
-    // Also check if we have customer info from verification
-    return !!state.customer;
+    return false;
   } catch (err) {
     console.error('[CustomerOnboarding] Auth check error:', err);
     return false;
@@ -1273,10 +1269,21 @@ function displayNearbyDrivers() {
 // Portal Redirect
 // ============================================
 function redirectToPortal() {
-  const slug = state.customer?.portal_slug || 
-    `${state.customer?.first_name || ''}_${state.customer?.last_name || ''}`.replace(/[^a-zA-Z0-9]/g, '_');
+  // Try to get slug from CustomerAuth first, then state
+  let slug = CustomerAuth.getPortalSlug() || state.customer?.portal_slug;
   
-  window.location.href = `/${slug}`;
+  // Generate from name if not available
+  if (!slug && state.customer?.first_name && state.customer?.last_name) {
+    slug = `${state.customer.first_name}_${state.customer.last_name}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  }
+  
+  // Validate slug
+  if (slug && slug !== '_' && slug.replace(/_/g, '') !== '') {
+    window.location.href = `/${slug}`;
+  } else {
+    // Fallback to booking page
+    window.location.href = 'https://relialimo.com/book';
+  }
 }
 
 // ============================================
