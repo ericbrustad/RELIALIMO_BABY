@@ -157,6 +157,17 @@ if (typeof window !== 'undefined') {
 
 let lastKnownSession = null;
 
+// Check if we're inside an iframe (e.g., admin.html loads index.html in iframe)
+// If in iframe, the parent handles auth - don't redirect
+function isInsideIframe() {
+  try {
+    return window !== window.top;
+  } catch (e) {
+    // Cross-origin iframe access will throw
+    return true;
+  }
+}
+
 // Try to hydrate session from localStorage cache
 async function hydrateFromCache() {
   try {
@@ -228,6 +239,25 @@ window.addEventListener('message', async (event) => {
 
 // Function to handle redirection
 const handleAuth = async () => {
+  // If we're inside an iframe (e.g., admin.html embedding index.html),
+  // don't redirect - the parent window handles authentication
+  if (isInsideIframe()) {
+    console.log('AuthGuard: Running in iframe, skipping redirect (parent handles auth)');
+    // Still try to get session from parent for API calls
+    const parentSession = await requestSessionFromParent();
+    if (parentSession?.access_token && parentSession?.refresh_token) {
+      const { data, error } = await supabase.auth.setSession({
+        access_token: parentSession.access_token,
+        refresh_token: parentSession.refresh_token,
+      });
+      if (!error && data?.session) {
+        console.log('AuthGuard: Session received from parent');
+        lastKnownSession = data.session;
+      }
+    }
+    return;
+  }
+
   const { data: { session: liveSession } } = await supabase.auth.getSession();
   let session = liveSession;
   const isAuthPage = window.location.pathname.endsWith('/auth.html');
@@ -264,6 +294,7 @@ const handleAuth = async () => {
 supabase.auth.onAuthStateChange((event, session) => {
   console.log(`AuthGuard: Auth state changed. Event: ${event}`);
   const isAuthPage = window.location.pathname.endsWith('/auth.html');
+  const inIframe = isInsideIframe();
 
   if (event === 'SIGNED_OUT') {
     // Clear refresh timer on sign out
@@ -271,10 +302,11 @@ supabase.auth.onAuthStateChange((event, session) => {
       clearTimeout(refreshTimer);
       refreshTimer = null;
     }
-    if (!isAuthPage) {
+    // Only redirect if not in iframe - parent handles iframe auth
+    if (!isAuthPage && !inIframe) {
       window.location.replace('/auth.html');
     }
-  } else if (event === 'SIGNED_IN' && isAuthPage) {
+  } else if (event === 'SIGNED_IN' && isAuthPage && !inIframe) {
     window.location.replace('/');
   }
   
