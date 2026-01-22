@@ -6625,8 +6625,11 @@ class MyOffice {
             console.log(`🔄 Live updated Driver dropdown to show no vehicle (unassigned)`);
           }
         }
+        
+        console.log('✅ Driver-vehicle sync completed successfully');
       } catch (err) {
-        console.warn('Could not sync driver vehicle assignment:', err);
+        console.error('❌ Driver-vehicle sync failed:', err);
+        alert(`⚠️ Vehicle saved but driver assignment NOT synced!\n\nError: ${err.message}\n\nPlease run the SQL migration in Supabase.`);
       }
     }
     
