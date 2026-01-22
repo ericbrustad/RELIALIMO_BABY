@@ -122,6 +122,16 @@ export function middleware(request: NextRequest) {
       return NextResponse.rewrite(new URL('/customers/customer-portal.html', request.url))
     }
     
+    // Allow /customers/* assets to be served (CSS, JS, etc.)
+    if (pathname.startsWith('/customers/')) {
+      return NextResponse.next()
+    }
+    
+    // Allow /shared/* assets to be served (env.js, etc.)
+    if (pathname.startsWith('/shared/')) {
+      return NextResponse.next()
+    }
+    
     // /login or /auth route - redirect to account subdomain for auth
     if (pathname === '/login' || pathname === '/auth') {
       return NextResponse.redirect(new URL('https://account.relialimo.com/auth', request.url))
