@@ -214,17 +214,20 @@ async function handleEmailVerification(token, email, redirect) {
       portal_slug: verificationData.user_data?.portalSlug || redirect || ''
     };
     
-    // Store in localStorage
+    // Store in localStorage for prefilling
     localStorage.setItem('current_customer', JSON.stringify(state.customer));
+    
+    // Store email for prefilling login form
+    localStorage.setItem('verified_email', email.toLowerCase());
     
     // Show success
     verifySpinner.classList.add('hidden');
     verifySuccess.classList.remove('hidden');
+    document.querySelector('#verifySuccess p').textContent = 'Redirecting you to login...';
     
-    // Redirect to onboarding after delay
+    // Redirect to login page with verified flag (they need to log in to get a session)
     setTimeout(() => {
-      showScreen('onboardingScreen');
-      setupOnboarding();
+      window.location.href = '/auth?verified=true';
     }, 2000);
     
   } catch (err) {

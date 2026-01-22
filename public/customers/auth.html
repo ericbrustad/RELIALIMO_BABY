@@ -498,6 +498,30 @@
         if (!isAuth) {
           document.getElementById('loadingScreen').classList.remove('active');
           document.getElementById('authScreen').classList.add('active');
+          
+          // Check for verified=true parameter (user just verified their email)
+          const urlParams = new URLSearchParams(window.location.search);
+          if (urlParams.get('verified') === 'true') {
+            // Show success message
+            const loginMessage = document.getElementById('loginMessage');
+            loginMessage.textContent = '✅ Email verified! Please log in to continue.';
+            loginMessage.style.display = 'block';
+            loginMessage.style.background = 'rgba(34, 197, 94, 0.15)';
+            loginMessage.style.border = '1px solid rgba(34, 197, 94, 0.3)';
+            loginMessage.style.color = '#22c55e';
+            
+            // Prefill email if we have it
+            const verifiedEmail = localStorage.getItem('verified_email');
+            if (verifiedEmail) {
+              document.getElementById('loginEmail').value = verifiedEmail;
+              localStorage.removeItem('verified_email');
+              // Focus on password field
+              document.getElementById('loginPassword').focus();
+            }
+            
+            // Clear URL param
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
         }
       } catch (err) {
         console.error('[Auth] Init error:', err);
