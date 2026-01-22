@@ -489,6 +489,20 @@ function renderSkeleton(container) {
           <span class="toggle-slider"></span>
           <span class="toggle-label">🏠 Auto Farm</span>
         </label>
+        <!-- Default Driver Selector -->
+        <div class="default-selector" title="Default Driver for In-House reservations">
+          <span class="selector-icon">🚗</span>
+          <select id="defaultDriverSelect" class="default-select">
+            <option value="">No Default Driver</option>
+          </select>
+        </div>
+        <!-- Default Vehicle Selector -->
+        <div class="default-selector" title="Default Vehicle Type for customer portal">
+          <span class="selector-icon">🚙</span>
+          <select id="defaultVehicleSelect" class="default-select">
+            <option value="">No Default Vehicle</option>
+          </select>
+        </div>
         <span id="autoFarmoutIndicator" class="auto-farmout-indicator" style="display: none;">✅ Auto-Farmed</span>
         <span id="globalSupabaseBadge" class="supabase-status-badge admin-only inline-badge" title="Supabase connection status">Checking…</span>
       </div>
@@ -751,6 +765,9 @@ function wireLayoutToggle() {
 
   // Wire up Auto Farmout toggle
   wireAutoFarmoutToggle();
+  
+  // Wire up Default Driver/Vehicle selectors
+  wireDefaultSelectors();
 
   // Also expose a global function to trigger badge update from other UI
   window.updateGlobalSupabaseBadge = updateGlobalSupabaseBadge;
@@ -827,6 +844,160 @@ function updateAutoFarmoutUI(enabled) {
       } catch (e) { /* cross-origin */ }
     });
   } catch (e) { /* ignore */ }
+}
+
+// Default Driver/Vehicle Selectors
+async function wireDefaultSelectors() {
+  const driverSelect = document.getElementById('defaultDriverSelect');
+  const vehicleSelect = document.getElementById('defaultVehicleSelect');
+  
+  if (!driverSelect && !vehicleSelect) return;
+  
+  // Load drivers and vehicles from database
+  await loadDefaultDrivers();
+  await loadDefaultVehicles();
+  
+  // Wire up change handlers
+  if (driverSelect) {
+    driverSelect.addEventListener('change', async () => {
+      const driverId = driverSelect.value;
+      await setDefaultDriver(driverId);
+    });
+  }
+  
+  if (vehicleSelect) {
+    vehicleSelect.addEventListener('change', async () => {
+      const vehicleId = vehicleSelect.value;
+      await setDefaultVehicle(vehicleId);
+    });
+  }
+}
+
+async function loadDefaultDrivers() {
+  const select = document.getElementById('defaultDriverSelect');
+  if (!select || !supabase) return;
+  
+  try {
+    const { data: drivers, error } = await supabase
+      .from('drivers')
+      .select('id, first_name, last_name, is_default_driver')
+      .eq('is_active', true)
+      .order('last_name');
+    
+    if (error) throw error;
+    
+    select.innerHTML = '<option value="">No Default Driver</option>';
+    
+    let currentDefault = '';
+    (drivers || []).forEach(d => {
+      const name = `${d.first_name || ''} ${d.last_name || ''}`.trim();
+      const isDefault = d.is_default_driver;
+      if (isDefault) currentDefault = d.id;
+      select.innerHTML += `<option value="${d.id}" ${isDefault ? 'selected' : ''}>${name}${isDefault ? ' ⭐' : ''}</option>`;
+    });
+    
+    // Store the current default
+    if (currentDefault) {
+      localStorage.setItem('defaultDriverId', currentDefault);
+    }
+  } catch (err) {
+    console.warn('Failed to load drivers for default selector:', err);
+  }
+}
+
+async function loadDefaultVehicles() {
+  const select = document.getElementById('defaultVehicleSelect');
+  if (!select || !supabase) return;
+  
+  try {
+    const { data: vehicles, error } = await supabase
+      .from('vehicle_types')
+      .select('id, name, is_app_default')
+      .eq('show_in_app', true)
+      .order('name');
+    
+    if (error) throw error;
+    
+    select.innerHTML = '<option value="">No Default Vehicle</option>';
+    
+    let currentDefault = '';
+    (vehicles || []).forEach(v => {
+      const isDefault = v.is_app_default;
+      if (isDefault) currentDefault = v.id;
+      select.innerHTML += `<option value="${v.id}" ${isDefault ? 'selected' : ''}>${v.name}${isDefault ? ' ⭐' : ''}</option>`;
+    });
+    
+    // Store the current default
+    if (currentDefault) {
+      localStorage.setItem('defaultVehicleId', currentDefault);
+    }
+  } catch (err) {
+    console.warn('Failed to load vehicle types for default selector:', err);
+  }
+}
+
+async function setDefaultDriver(driverId) {
+  if (!supabase) return;
+  
+  try {
+    // First, clear all default drivers
+    await supabase
+      .from('drivers')
+      .update({ is_default_driver: false })
+      .eq('is_default_driver', true);
+    
+    // Then set the new default if selected
+    if (driverId) {
+      await supabase
+        .from('drivers')
+        .update({ is_default_driver: true })
+        .eq('id', driverId);
+      
+      localStorage.setItem('defaultDriverId', driverId);
+    } else {
+      localStorage.removeItem('defaultDriverId');
+    }
+    
+    // Reload the dropdown to show updated state
+    await loadDefaultDrivers();
+    
+    // Broadcast change
+    window.postMessage({ type: 'defaultDriverChanged', driverId }, '*');
+  } catch (err) {
+    console.error('Failed to set default driver:', err);
+  }
+}
+
+async function setDefaultVehicle(vehicleId) {
+  if (!supabase) return;
+  
+  try {
+    // First, clear all default vehicles
+    await supabase
+      .from('vehicle_types')
+      .update({ is_app_default: false })
+      .eq('is_app_default', true);
+    
+    // Then set the new default if selected
+    if (vehicleId) {
+      await supabase
+        .from('vehicle_types')
+        .update({ is_app_default: true })
+        .eq('id', vehicleId);
+      
+      localStorage.setItem('defaultVehicleId', vehicleId);
+    } else {
+      localStorage.removeItem('defaultVehicleId');
+    }
+    
+    // Reload the dropdown to show updated state
+    await loadDefaultVehicles();
+    
+    // Broadcast change
+    window.postMessage({ type: 'defaultVehicleChanged', vehicleId }, '*');
+  } catch (err) {
+    console.error('Failed to set default vehicle:', err);
+  }
 }
 
 async function refreshUser() {

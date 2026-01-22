@@ -412,6 +412,46 @@
   color: #166534;
 }
 
+/* Default Driver/Vehicle Selector */
+.default-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  margin-left: 8px;
+}
+
+.default-selector .selector-icon {
+  font-size: 14px;
+}
+
+.default-selector .default-select {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 4px;
+  cursor: pointer;
+  max-width: 120px;
+}
+
+.default-selector .default-select:focus {
+  outline: none;
+}
+
+.default-selector .default-select option {
+  background: #1f2a44;
+  color: white;
+}
+
+html[data-layout="horizontal"] .default-selector .default-select option {
+  background: #333;
+}
+
 /* Auto Farmout Indicator */
 .auto-farmout-indicator {
   display: inline-flex;
