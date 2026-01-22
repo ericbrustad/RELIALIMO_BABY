@@ -1114,22 +1114,69 @@ async function completeOnboarding() {
   try {
     const creds = getSupabaseCredentials();
     
-    // Ensure we have customer data
-    if (!state.customer) {
-      // Try to reload customer from CustomerAuth or localStorage
+    // Ensure we have customer data - try multiple sources
+    let customerEmail = null;
+    
+    if (!state.customer || !state.customer.email) {
+      console.log('[CustomerOnboarding] Customer not in state, trying to reload...');
+      
+      // Try CustomerAuth
       state.customer = CustomerAuth.getCustomer();
-      if (!state.customer) {
+      customerEmail = state.customer?.email;
+      console.log('[CustomerOnboarding] From CustomerAuth:', customerEmail);
+      
+      // Try localStorage current_customer
+      if (!customerEmail) {
         const storedCustomer = localStorage.getItem('current_customer');
         if (storedCustomer) {
           state.customer = JSON.parse(storedCustomer);
+          customerEmail = state.customer?.email;
+          console.log('[CustomerOnboarding] From current_customer:', customerEmail);
         }
       }
+      
+      // Try customer_session
+      if (!customerEmail) {
+        const sessionStr = localStorage.getItem('customer_session');
+        if (sessionStr) {
+          const session = JSON.parse(sessionStr);
+          customerEmail = session?.customer?.email || session?.user?.email;
+          if (customerEmail && !state.customer) {
+            state.customer = session.customer || { email: customerEmail };
+          }
+          console.log('[CustomerOnboarding] From customer_session:', customerEmail);
+        }
+      }
+      
+      // Try Supabase session user
+      if (!customerEmail) {
+        const session = CustomerAuth.getSession();
+        customerEmail = session?.user?.email;
+        if (customerEmail && !state.customer) {
+          state.customer = { email: customerEmail };
+        }
+        console.log('[CustomerOnboarding] From Supabase session:', customerEmail);
+      }
+      
+      // Final fallback: verified_email in localStorage
+      if (!customerEmail) {
+        customerEmail = localStorage.getItem('verified_email');
+        if (customerEmail && !state.customer) {
+          state.customer = { email: customerEmail };
+        }
+        console.log('[CustomerOnboarding] From verified_email:', customerEmail);
+      }
+    } else {
+      customerEmail = state.customer.email;
     }
     
-    // If still no customer, show error
-    if (!state.customer || !state.customer.email) {
+    // If still no email, show error
+    if (!customerEmail) {
+      console.error('[CustomerOnboarding] Could not find customer email from any source');
       throw new Error('Session expired. Please log in again.');
     }
+    
+    console.log('[CustomerOnboarding] Using email:', customerEmail);
     
     // Prepare update data
     const updateData = {
@@ -1155,7 +1202,7 @@ async function completeOnboarding() {
     
     // Update account in Supabase
     const response = await fetch(
-      `${creds.url}/rest/v1/accounts?email=eq.${encodeURIComponent(state.customer.email.toLowerCase())}`,
+      `${creds.url}/rest/v1/accounts?email=eq.${encodeURIComponent(customerEmail.toLowerCase())}`,
       {
         method: 'PATCH',
         headers: {
