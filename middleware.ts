@@ -70,9 +70,14 @@ export function middleware(request: NextRequest) {
       return NextResponse.rewrite(new URL('/customers/auth.html?verified=true', request.url))
     }
     
+    // Handle profile completion route: /complete-profile
+    if (pathname === '/complete-profile') {
+      return NextResponse.rewrite(new URL('/customers/complete-profile.html', request.url))
+    }
+    
     // Handle onboarding route: /onboarding
     if (pathname === '/onboarding' || pathname === '/onboarding.html') {
-      return NextResponse.rewrite(new URL(`/customers/customer-onboarding.html${request.nextUrl.search}`, request.url))
+      return NextResponse.rewrite(new URL(`/customers/customer-onboarding.html${request.nextUrl.search}`, request.url)))
     }
     
     // Handle customer portal slug routes like /First_Name_Last_Name or /john_smith

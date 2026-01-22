@@ -112,6 +112,14 @@ export async function initAuth() {
       }
     } else {
       authState.session = session;
+      
+      // Validate session is still valid on server
+      const isValid = await validateSessionOnServer(session.access_token);
+      if (!isValid) {
+        console.log('[AuthService] Session invalid on server, clearing...');
+        await clearAuth();
+        return false;
+      }
     }
     
     // Load customer info
@@ -140,6 +148,36 @@ export async function initAuth() {
   } catch (err) {
     console.error('[AuthService] Init error:', err);
     await clearAuth();
+    return false;
+  }
+}
+
+/**
+ * Validate session token is still valid on Supabase server
+ */
+async function validateSessionOnServer(accessToken) {
+  try {
+    const creds = getSupabaseCredentials();
+    const response = await fetch(`${creds.url}/auth/v1/user`, {
+      headers: {
+        'apikey': creds.anonKey,
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    
+    if (response.ok) {
+      const user = await response.json();
+      // Update session user data
+      if (authState.session) {
+        authState.session.user = user;
+      }
+      return true;
+    }
+    
+    console.log('[AuthService] Server validation failed:', response.status);
+    return false;
+  } catch (err) {
+    console.error('[AuthService] Server validation error:', err);
     return false;
   }
 }
@@ -638,8 +676,8 @@ export async function redirectIfAuthenticated() {
   const isAuth = await initAuth();
   if (isAuth) {
     const slug = getPortalSlug();
-    // If user has a valid slug, go to their portal. Otherwise go to booking page.
-    window.location.href = slug ? `/${slug}` : 'https://relialimo.com/book';
+    // If user has a valid slug, go to their portal. Otherwise complete profile.
+    window.location.href = slug ? `/${slug}` : '/complete-profile';
     return true;
   }
   return false;

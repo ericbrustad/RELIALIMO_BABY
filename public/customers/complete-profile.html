@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Complete Your Profile | ReliaLimo</title>
+  <link rel="stylesheet" href="auth.css">
+  <style>
+    .profile-form {
+      max-width: 400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    
+    .profile-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    
+    .profile-header h1 {
+      font-size: 1.5rem;
+      color: #1a1a2e;
+      margin-bottom: 0.5rem;
+    }
+    
+    .profile-header p {
+      color: #666;
+      font-size: 0.9rem;
+    }
+    
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+      color: #333;
+    }
+    
+    .form-group input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+    
+    .form-group input:focus {
+      outline: none;
+      border-color: #c9a227;
+    }
+    
+    .submit-btn {
+      width: 100%;
+      padding: 0.875rem;
+      background: linear-gradient(135deg, #c9a227, #d4af37);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .submit-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(201, 162, 39, 0.3);
+    }
+    
+    .submit-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .logout-link {
+      display: block;
+      text-align: center;
+      margin-top: 1.5rem;
+      color: #666;
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    
+    .logout-link:hover {
+      color: #c9a227;
+    }
+    
+    .error-message {
+      background: #fee;
+      color: #c00;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      display: none;
+    }
+    
+    .success-message {
+      background: #efe;
+      color: #080;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="profile-form">
+        <div class="profile-header">
+          <img src="/shared/images/relialimo-logo.png" alt="ReliaLimo" style="height: 60px; margin-bottom: 1rem;" onerror="this.style.display='none'">
+          <h1>Complete Your Profile</h1>
+          <p>Please enter your name to continue</p>
+        </div>
+        
+        <div id="errorMessage" class="error-message"></div>
+        <div id="successMessage" class="success-message"></div>
+        
+        <form id="profileForm">
+          <div class="form-group">
+            <label for="firstName">First Name *</label>
+            <input type="text" id="firstName" name="firstName" required autocomplete="given-name">
+          </div>
+          
+          <div class="form-group">
+            <label for="lastName">Last Name *</label>
+            <input type="text" id="lastName" name="lastName" required autocomplete="family-name">
+          </div>
+          
+          <div class="form-group">
+            <label for="phone">Phone Number</label>
+            <input type="tel" id="phone" name="phone" autocomplete="tel">
+          </div>
+          
+          <button type="submit" id="submitBtn" class="submit-btn">
+            Save & Continue
+          </button>
+        </form>
+        
+        <a href="#" id="logoutLink" class="logout-link">Sign out and start over</a>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { getSupabaseCredentials } from '/shared/supabase-config.js';
+    import CustomerAuth from './customer-auth-service.js';
+    
+    const CUSTOMER_ORG_ID = 'c0000000-0000-0000-0000-000000000001';
+    
+    // Check if user is authenticated
+    async function init() {
+      const isAuth = await CustomerAuth.initAuth();
+      
+      if (!isAuth) {
+        // Not logged in - go to login
+        window.location.href = '/auth';
+        return;
+      }
+      
+      // Check if they already have a valid slug
+      const slug = CustomerAuth.getPortalSlug();
+      if (slug && slug !== '_' && slug.replace(/_/g, '') !== '') {
+        // Already has a slug - go to portal
+        window.location.href = `/${slug}`;
+        return;
+      }
+      
+      // Pre-fill any existing data
+      const customer = CustomerAuth.getCustomer();
+      if (customer) {
+        if (customer.first_name) document.getElementById('firstName').value = customer.first_name;
+        if (customer.last_name) document.getElementById('lastName').value = customer.last_name;
+        if (customer.phone || customer.cell_phone) {
+          document.getElementById('phone').value = customer.phone || customer.cell_phone;
+        }
+      }
+    }
+    
+    // Handle form submission
+    document.getElementById('profileForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const btn = document.getElementById('submitBtn');
+      const errorDiv = document.getElementById('errorMessage');
+      const successDiv = document.getElementById('successMessage');
+      
+      const firstName = document.getElementById('firstName').value.trim();
+      const lastName = document.getElementById('lastName').value.trim();
+      const phone = document.getElementById('phone').value.trim();
+      
+      if (!firstName || !lastName) {
+        errorDiv.textContent = 'Please enter your first and last name';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      errorDiv.style.display = 'none';
+      
+      try {
+        const creds = getSupabaseCredentials();
+        const session = CustomerAuth.getSession();
+        const customer = CustomerAuth.getCustomer();
+        
+        if (!session?.access_token) {
+          throw new Error('Session expired. Please sign in again.');
+        }
+        
+        const updates = {
+          first_name: firstName,
+          last_name: lastName,
+          phone: phone || undefined,
+          updated_at: new Date().toISOString()
+        };
+        
+        let success = false;
+        
+        // If customer exists, update it
+        if (customer?.id) {
+          const response = await fetch(
+            `${creds.url}/rest/v1/accounts?id=eq.${customer.id}`,
+            {
+              method: 'PATCH',
+              headers: {
+                'apikey': creds.anonKey,
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+              },
+              body: JSON.stringify(updates)
+            }
+          );
+          
+          if (response.ok) {
+            const updated = await response.json();
+            if (updated?.length > 0) {
+              localStorage.setItem('current_customer', JSON.stringify(updated[0]));
+              success = true;
+            }
+          } else {
+            console.error('Update failed:', await response.text());
+          }
+        }
+        
+        // If no customer record, create one
+        if (!success) {
+          const userId = session.user?.id;
+          const email = session.user?.email || customer?.email;
+          
+          const newAccount = {
+            organization_id: CUSTOMER_ORG_ID,
+            user_id: userId,
+            first_name: firstName,
+            last_name: lastName,
+            email: email,
+            phone: phone || null,
+            account_type: 'customer',
+            is_active: true,
+            created_at: new Date().toISOString()
+          };
+          
+          const response = await fetch(
+            `${creds.url}/rest/v1/accounts`,
+            {
+              method: 'POST',
+              headers: {
+                'apikey': creds.anonKey,
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+              },
+              body: JSON.stringify(newAccount)
+            }
+          );
+          
+          if (response.ok) {
+            const created = await response.json();
+            if (created?.length > 0) {
+              localStorage.setItem('current_customer', JSON.stringify(created[0]));
+              success = true;
+            }
+          } else {
+            const errorText = await response.text();
+            console.error('Create failed:', errorText);
+            throw new Error('Failed to save profile. Please try again.');
+          }
+        }
+        
+        if (success) {
+          successDiv.textContent = 'Profile saved! Redirecting...';
+          successDiv.style.display = 'block';
+          
+          // Generate slug and redirect
+          const slug = `${firstName}_${lastName}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
+          
+          setTimeout(() => {
+            window.location.href = slug ? `/${slug}` : 'https://relialimo.com/book';
+          }, 1000);
+        } else {
+          throw new Error('Failed to save profile');
+        }
+        
+      } catch (err) {
+        console.error('Profile save error:', err);
+        errorDiv.textContent = err.message || 'Failed to save profile';
+        errorDiv.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Save & Continue';
+      }
+    });
+    
+    // Handle logout
+    document.getElementById('logoutLink').addEventListener('click', async (e) => {
+      e.preventDefault();
+      await CustomerAuth.logout(true);
+    });
+    
+    // Initialize
+    init();
+  </script>
+</body>
+</html>
