@@ -5545,6 +5545,90 @@ class MyOffice {
     
     // Auto-update Vehicle Title when Year, Make, or Model changes
     this.setupFleetTitleAutoUpdate();
+    
+    // Setup required field validation styling
+    this.setupFleetRequiredFieldValidation();
+  }
+  
+  /**
+   * Setup required field validation - orange when empty, green when filled
+   */
+  setupFleetRequiredFieldValidation() {
+    // Define required fleet fields
+    const requiredFields = [
+      { id: 'fleetStatus', type: 'select' },
+      { id: 'fleetVehicleType', type: 'select' },
+      { id: 'fleetYear', type: 'select' },
+      { id: 'fleetMake', type: 'select' },
+      { id: 'fleetModel', type: 'select' },
+      { id: 'fleetPassengers', type: 'input' },
+      { id: 'fleetLicense', type: 'input' }
+    ];
+    
+    requiredFields.forEach(field => {
+      const element = document.getElementById(field.id);
+      if (!element) return;
+      
+      // Apply initial state
+      this.updateFleetFieldValidationState(element);
+      
+      // Attach event listener if not already bound
+      if (!element.dataset.validationBound) {
+        element.dataset.validationBound = 'true';
+        
+        const eventType = field.type === 'select' ? 'change' : 'input';
+        element.addEventListener(eventType, () => {
+          this.updateFleetFieldValidationState(element);
+        });
+        
+        // Also listen for blur to catch any missed updates
+        element.addEventListener('blur', () => {
+          this.updateFleetFieldValidationState(element);
+        });
+      }
+    });
+    
+    console.log('[Fleet] Required field validation setup complete');
+  }
+  
+  /**
+   * Update a single field's validation state (orange empty / green filled)
+   */
+  updateFleetFieldValidationState(element) {
+    if (!element) return;
+    
+    const value = element.value?.trim() || '';
+    const isEmpty = !value || value === '';
+    
+    // Remove both classes first
+    element.classList.remove('fleet-required-empty', 'fleet-required-filled');
+    
+    // Add appropriate class
+    if (isEmpty) {
+      element.classList.add('fleet-required-empty');
+    } else {
+      element.classList.add('fleet-required-filled');
+    }
+  }
+  
+  /**
+   * Validate all fleet required fields and update their states
+   */
+  validateAllFleetRequiredFields() {
+    const requiredFieldIds = [
+      'fleetStatus',
+      'fleetVehicleType', 
+      'fleetYear',
+      'fleetMake',
+      'fleetModel',
+      'fleetPassengers',
+      'fleetLicense'
+    ];
+    
+    requiredFieldIds.forEach(fieldId => {
+      const element = document.getElementById(fieldId);
+      this.updateFleetFieldValidationState(element);
+    });
   }
   
   /**
@@ -6320,6 +6404,9 @@ class MyOffice {
     if (serviceNotes) {
       serviceNotes.value = record.service_notes || '';
     }
+    
+    // Update required field validation styling
+    this.validateAllFleetRequiredFields();
   }
 
   applyFleetFeatures(features) {
@@ -6360,6 +6447,9 @@ class MyOffice {
       }
     });
     this.applyFleetFeatures([]);
+    
+    // Update required field validation styling (show empty state)
+    this.validateAllFleetRequiredFields();
   }
 
   getFleetFormData() {
