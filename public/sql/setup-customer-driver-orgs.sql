@@ -7,22 +7,18 @@
 -- ===================================
 
 -- Create Customers organization (for all customer portal users)
-INSERT INTO public.organizations (id, name, slug, settings)
+INSERT INTO public.organizations (id, name)
 VALUES (
   'c0000000-0000-0000-0000-000000000001',
-  'ReliaLimo Customers',
-  'customers',
-  '{"type": "customers", "description": "All customer portal users"}'::jsonb
+  'ReliaLimo Customers'
 )
 ON CONFLICT (id) DO NOTHING;
 
 -- Create Drivers organization (for all driver portal users)
-INSERT INTO public.organizations (id, name, slug, settings)
+INSERT INTO public.organizations (id, name)
 VALUES (
   'd0000000-0000-0000-0000-000000000001',
-  'ReliaLimo Drivers',
-  'drivers',
-  '{"type": "drivers", "description": "All driver portal users"}'::jsonb
+  'ReliaLimo Drivers'
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -179,7 +175,7 @@ END $$;
 -- ===================================
 -- 6. VERIFY SETUP
 -- ===================================
-SELECT 'Organizations' as table_name, id, name, slug FROM public.organizations WHERE slug IN ('customers', 'drivers');
+SELECT 'Organizations' as table_name, id, name FROM public.organizations WHERE name IN ('ReliaLimo Customers', 'ReliaLimo Drivers');
 
 SELECT 'Policies' as info, tablename, policyname, cmd 
 FROM pg_policies 
