@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60" width="120" height="60">
+  <!-- Mercedes Sprinter Van - Black Executive -->
+  <defs>
+    <linearGradient id="vanBodyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2a2a2a"/>
+      <stop offset="50%" style="stop-color:#1a1a1a"/>
+      <stop offset="100%" style="stop-color:#0d0d0d"/>
+    </linearGradient>
+    <linearGradient id="vanWindowGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4a5568"/>
+      <stop offset="100%" style="stop-color:#2d3748"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Shadow -->
+  <ellipse cx="60" cy="52" rx="45" ry="4" fill="rgba(0,0,0,0.3)"/>
+  
+  <!-- Main Body - Tall Van Profile -->
+  <path d="M15 48 L15 22 L25 12 L95 12 L105 22 L105 48 Z" fill="url(#vanBodyGradient)" stroke="#333" stroke-width="0.5"/>
+  
+  <!-- Front Cab Section -->
+  <path d="M85 12 L105 12 L110 20 L110 48 L85 48 Z" fill="url(#vanBodyGradient)" stroke="#333" stroke-width="0.5"/>
+  
+  <!-- Windshield -->
+  <path d="M88 14 L103 14 L108 22 L108 32 L88 32 Z" fill="url(#vanWindowGradient)" stroke="#555" stroke-width="0.3"/>
+  
+  <!-- Side Windows -->
+  <rect x="20" y="14" width="18" height="12" rx="1" fill="url(#vanWindowGradient)" stroke="#555" stroke-width="0.3"/>
+  <rect x="42" y="14" width="18" height="12" rx="1" fill="url(#vanWindowGradient)" stroke="#555" stroke-width="0.3"/>
+  <rect x="64" y="14" width="18" height="12" rx="1" fill="url(#vanWindowGradient)" stroke="#555" stroke-width="0.3"/>
+  
+  <!-- Headlights -->
+  <rect x="106" y="24" width="3" height="6" rx="1" fill="#fff9e0"/>
+  
+  <!-- Taillights -->
+  <rect x="16" y="30" width="2" height="10" rx="0.5" fill="#ff3333"/>
+  
+  <!-- Sliding Door Line -->
+  <line x1="60" y1="28" x2="60" y2="48" stroke="#444" stroke-width="1"/>
+  
+  <!-- Door Handle -->
+  <rect x="62" y="36" width="4" height="1.5" rx="0.5" fill="#666"/>
+  
+  <!-- Wheels - Larger van wheels -->
+  <circle cx="30" cy="48" r="9" fill="#222"/>
+  <circle cx="30" cy="48" r="7" fill="#333"/>
+  <circle cx="30" cy="48" r="4" fill="#555"/>
+  <circle cx="30" cy="48" r="2" fill="#777"/>
+  
+  <circle cx="95" cy="48" r="9" fill="#222"/>
+  <circle cx="95" cy="48" r="7" fill="#333"/>
+  <circle cx="95" cy="48" r="4" fill="#555"/>
+  <circle cx="95" cy="48" r="2" fill="#777"/>
+  
+  <!-- Chrome trim -->
+  <line x1="15" y1="40" x2="85" y2="40" stroke="#666" stroke-width="0.5"/>
+  
+  <!-- Mercedes Star on front -->
+  <circle cx="100" cy="36" r="2" fill="none" stroke="#888" stroke-width="0.5"/>
+</svg>

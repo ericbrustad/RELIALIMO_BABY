@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" width="60" height="60">
+  <!-- Female Driver Avatar 2 -->
+  <defs>
+    <linearGradient id="f2SkinGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#deb887"/>
+      <stop offset="100%" style="stop-color:#c9a66b"/>
+    </linearGradient>
+    <linearGradient id="f2HairGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2c1810"/>
+      <stop offset="100%" style="stop-color:#1a0f0a"/>
+    </linearGradient>
+    <clipPath id="f2Circle">
+      <circle cx="30" cy="30" r="28"/>
+    </clipPath>
+  </defs>
+  
+  <!-- Background Circle -->
+  <circle cx="30" cy="30" r="29" fill="#8b5cf6" stroke="#7c3aed" stroke-width="2"/>
+  
+  <g clip-path="url(#f2Circle)">
+    <!-- Neck -->
+    <rect x="22" y="42" width="16" height="12" fill="url(#f2SkinGradient)"/>
+    
+    <!-- Professional Blazer -->
+    <path d="M10 58 L18 46 L30 44 L42 46 L50 58 L50 65 L10 65 Z" fill="#374151"/>
+    <!-- Blouse underneath -->
+    <path d="M24 46 L30 52 L36 46" fill="#f3f4f6"/>
+    <!-- Blazer lapels -->
+    <path d="M18 46 L26 46 L30 52 L22 58" fill="none" stroke="#1f2937" stroke-width="1.5"/>
+    <path d="M42 46 L34 46 L30 52 L38 58" fill="none" stroke="#1f2937" stroke-width="1.5"/>
+    
+    <!-- Face -->
+    <ellipse cx="30" cy="30" rx="14" ry="16" fill="url(#f2SkinGradient)"/>
+    
+    <!-- Long Hair - pulled back professional -->
+    <path d="M14 35 L14 18 Q14 6 30 6 Q46 6 46 18 L46 35 Q46 30 42 26 L42 16 Q42 12 30 12 Q18 12 18 16 L18 26 Q14 30 14 35 Z" fill="url(#f2HairGradient)"/>
+    <!-- Hair bun hint at back -->
+    <circle cx="30" cy="8" r="6" fill="url(#f2HairGradient)"/>
+    
+    <!-- Eyes -->
+    <ellipse cx="24" cy="28" rx="3.5" ry="3" fill="white"/>
+    <ellipse cx="36" cy="28" rx="3.5" ry="3" fill="white"/>
+    <circle cx="24.5" cy="28.5" r="1.8" fill="#4a3728"/>
+    <circle cx="36.5" cy="28.5" r="1.8" fill="#4a3728"/>
+    <circle cx="25" cy="28" r="0.5" fill="white"/>
+    <circle cx="37" cy="28" r="0.5" fill="white"/>
+    
+    <!-- Eyelashes -->
+    <path d="M20 26 L21 25" stroke="#2c1810" stroke-width="0.8"/>
+    <path d="M22 25 L22 24" stroke="#2c1810" stroke-width="0.8"/>
+    <path d="M38 25 L38 24" stroke="#2c1810" stroke-width="0.8"/>
+    <path d="M40 26 L39 25" stroke="#2c1810" stroke-width="0.8"/>
+    
+    <!-- Eyebrows -->
+    <path d="M20 24 Q24 22 28 24" fill="none" stroke="#2c1810" stroke-width="1" stroke-linecap="round"/>
+    <path d="M32 24 Q36 22 40 24" fill="none" stroke="#2c1810" stroke-width="1" stroke-linecap="round"/>
+    
+    <!-- Nose -->
+    <path d="M30 30 L29 35 L31 35" fill="none" stroke="#b08860" stroke-width="1" stroke-linecap="round"/>
+    
+    <!-- Smile with lipstick -->
+    <path d="M25 39 Q30 43 35 39" fill="none" stroke="#be185d" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- Small earrings -->
+    <circle cx="14" cy="30" r="1.5" fill="#c0c0c0"/>
+    <circle cx="46" cy="30" r="1.5" fill="#c0c0c0"/>
+  </g>
+</svg>

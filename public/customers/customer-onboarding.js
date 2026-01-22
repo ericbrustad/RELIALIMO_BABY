@@ -66,13 +66,63 @@ const MAJOR_AIRPORTS = [
   { code: 'STC', name: 'St. Cloud Regional Airport', city: 'St. Cloud', state: 'MN', lat: 45.5466, lng: -94.0597 }
 ];
 
-// Mock drivers for demonstration
+// Mock drivers for demonstration with real vehicle images
 const MOCK_DRIVERS = [
-  { id: 1, name: 'Michael R.', rating: 4.9, trips: 1247, vehicle: 'Black Escalade', photo: '👨‍✈️', distance: 2.3 },
-  { id: 2, name: 'Sarah K.', rating: 4.8, trips: 892, vehicle: 'Lincoln Navigator', photo: '👩‍✈️', distance: 3.1 },
-  { id: 3, name: 'James T.', rating: 4.9, trips: 2103, vehicle: 'Mercedes S-Class', photo: '🧑‍✈️', distance: 4.7 },
-  { id: 4, name: 'Emily W.', rating: 5.0, trips: 567, vehicle: 'Cadillac CT6', photo: '👩‍✈️', distance: 5.2 },
-  { id: 5, name: 'David L.', rating: 4.7, trips: 1456, vehicle: 'Sprinter Van', photo: '👨‍✈️', distance: 6.8 }
+  { 
+    id: 1, 
+    name: 'Michael R.', 
+    rating: 4.9, 
+    trips: 1247, 
+    vehicle: 'Black Escalade', 
+    vehicleImage: '/assets/vehicles/escalade.svg',
+    photo: '/assets/drivers/driver-m1.svg', 
+    initials: 'MR',
+    distance: 2.3 
+  },
+  { 
+    id: 2, 
+    name: 'Sarah K.', 
+    rating: 4.8, 
+    trips: 892, 
+    vehicle: 'Lincoln Navigator', 
+    vehicleImage: '/assets/vehicles/navigator.svg',
+    photo: '/assets/drivers/driver-f1.svg', 
+    initials: 'SK',
+    distance: 3.1 
+  },
+  { 
+    id: 3, 
+    name: 'James T.', 
+    rating: 4.9, 
+    trips: 2103, 
+    vehicle: 'Mercedes S-Class', 
+    vehicleImage: '/assets/vehicles/mercedes-s.svg',
+    photo: '/assets/drivers/driver-m2.svg', 
+    initials: 'JT',
+    distance: 4.7 
+  },
+  { 
+    id: 4, 
+    name: 'Emily W.', 
+    rating: 5.0, 
+    trips: 567, 
+    vehicle: 'Cadillac CT6', 
+    vehicleImage: '/assets/vehicles/cadillac-ct6.svg',
+    photo: '/assets/drivers/driver-f2.svg', 
+    initials: 'EW',
+    distance: 5.2 
+  },
+  { 
+    id: 5, 
+    name: 'David L.', 
+    rating: 4.7, 
+    trips: 1456, 
+    vehicle: 'Sprinter Van', 
+    vehicleImage: '/assets/vehicles/sprinter.svg',
+    photo: '/assets/drivers/driver-m3.svg', 
+    initials: 'DL',
+    distance: 6.8 
+  }
 ];
 
 // ============================================
@@ -1291,36 +1341,56 @@ function initializeDriversMap() {
   
   state.map = new mapboxgl.Map({
     container: 'driversMap',
-    style: 'mapbox://styles/mapbox/streets-v12',
+    style: 'mapbox://styles/mapbox/dark-v11',
     center: [center.lng, center.lat],
-    zoom: 11
+    zoom: 11,
+    attributionControl: true
   });
   
-  // Add user location marker
-  const homeMarker = document.createElement('div');
-  homeMarker.className = 'home-marker';
-  homeMarker.innerHTML = '🏠';
-  
-  new mapboxgl.Marker({ element: homeMarker })
-    .setLngLat([center.lng, center.lat])
-    .addTo(state.map);
-  
-  // Add mock driver markers
-  MOCK_DRIVERS.forEach((driver, index) => {
-    const offset = 0.02 + (index * 0.01);
-    const angle = (index * 72) * Math.PI / 180; // Spread around the center
+  state.map.on('load', () => {
+    // Add user location marker
+    const homeMarker = document.createElement('div');
+    homeMarker.className = 'home-marker';
+    homeMarker.innerHTML = '🏠';
+    homeMarker.style.fontSize = '28px';
+    homeMarker.style.cursor = 'pointer';
     
-    const driverLng = center.lng + offset * Math.cos(angle);
-    const driverLat = center.lat + offset * Math.sin(angle);
-    
-    const driverMarker = document.createElement('div');
-    driverMarker.className = 'driver-marker';
-    driverMarker.innerHTML = '�';
-    driverMarker.title = driver.name;
-    
-    new mapboxgl.Marker({ element: driverMarker })
-      .setLngLat([driverLng, driverLat])
+    new mapboxgl.Marker({ element: homeMarker })
+      .setLngLat([center.lng, center.lat])
       .addTo(state.map);
+    
+    // Add mock driver markers with car icons
+    MOCK_DRIVERS.forEach((driver, index) => {
+      const offset = 0.015 + (index * 0.008);
+      const angle = (index * 72 + 15) * Math.PI / 180; // Spread around the center
+      
+      const driverLng = center.lng + offset * Math.cos(angle);
+      const driverLat = center.lat + offset * Math.sin(angle);
+      
+      const driverMarker = document.createElement('div');
+      driverMarker.className = 'driver-marker';
+      driverMarker.innerHTML = `
+        <div class="car-icon" style="
+          width: 32px;
+          height: 32px;
+          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 2px solid white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          cursor: pointer;
+        ">
+          <span style="font-size: 16px;">🚗</span>
+        </div>
+      `;
+      driverMarker.title = `${driver.name} - ${driver.vehicle}`;
+      
+      new mapboxgl.Marker({ element: driverMarker })
+        .setLngLat([driverLng, driverLat])
+        .addTo(state.map);
+    });
   });
 }
 
@@ -1328,17 +1398,25 @@ function displayNearbyDrivers() {
   const list = document.getElementById('nearbyDriversList');
   
   list.innerHTML = MOCK_DRIVERS.slice(0, 3).map(driver => `
-    <div class="driver-card">
-      <div class="driver-photo">${driver.photo}</div>
-      <div class="driver-info">
-        <div class="driver-name">${driver.name}</div>
-        <div class="driver-vehicle">${driver.vehicle}</div>
-        <div class="driver-stats">
+    <div class="driver-card" style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 12px; margin-bottom: 10px;">
+      <div class="driver-photo" style="width: 50px; height: 50px; border-radius: 50%; overflow: hidden; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <img src="${driver.photo}" alt="${driver.name}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <span style="display: none; color: white; font-weight: bold; font-size: 16px;">${driver.initials}</span>
+      </div>
+      <div class="driver-info" style="flex: 1; min-width: 0;">
+        <div class="driver-name" style="font-weight: 600; color: #fff; font-size: 14px;">${driver.name}</div>
+        <div class="driver-vehicle" style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+          <img src="${driver.vehicleImage}" alt="${driver.vehicle}" style="width: 40px; height: 20px; object-fit: contain;" onerror="this.style.display='none';">
+          <span style="color: rgba(255,255,255,0.7); font-size: 12px;">${driver.vehicle}</span>
+        </div>
+        <div class="driver-stats" style="display: flex; gap: 10px; margin-top: 4px; font-size: 11px; color: rgba(255,255,255,0.6);">
           <span class="rating">⭐ ${driver.rating}</span>
-          <span class="trips">${driver.trips} trips</span>
+          <span class="trips">${driver.trips.toLocaleString()} trips</span>
         </div>
       </div>
-      <div class="driver-distance">${driver.distance} mi</div>
+      <div class="driver-distance" style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 6px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; flex-shrink: 0;">
+        ${driver.distance} mi
+      </div>
     </div>
   `).join('');
 }

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60" width="120" height="60">
+  <!-- Lincoln Navigator - Black Luxury SUV -->
+  <defs>
+    <linearGradient id="navBodyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2a2a2a"/>
+      <stop offset="50%" style="stop-color:#1a1a1a"/>
+      <stop offset="100%" style="stop-color:#0d0d0d"/>
+    </linearGradient>
+    <linearGradient id="navWindowGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4a5568"/>
+      <stop offset="100%" style="stop-color:#2d3748"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Shadow -->
+  <ellipse cx="60" cy="52" rx="48" ry="4" fill="rgba(0,0,0,0.3)"/>
+  
+  <!-- Main Body -->
+  <path d="M12 38 L18 25 L35 20 L85 20 L102 25 L108 38 L108 45 L12 45 Z" fill="url(#navBodyGradient)" stroke="#333" stroke-width="0.5"/>
+  
+  <!-- Roof/Cabin -->
+  <path d="M28 25 L38 15 L82 15 L92 25 Z" fill="url(#navBodyGradient)" stroke="#333" stroke-width="0.5"/>
+  
+  <!-- Windows -->
+  <path d="M30 24 L39 17 L55 17 L55 24 Z" fill="url(#navWindowGradient)" stroke="#555" stroke-width="0.3"/>
+  <rect x="57" y="17" width="15" height="7" fill="url(#navWindowGradient)" stroke="#555" stroke-width="0.3"/>
+  <path d="M74 17 L81 17 L88 24 L74 24 Z" fill="url(#navWindowGradient)" stroke="#555" stroke-width="0.3"/>
+  
+  <!-- Headlights -->
+  <rect x="102" y="30" width="5" height="6" rx="1" fill="#fff9e0"/>
+  <rect x="13" y="30" width="5" height="6" rx="1" fill="#ff4444"/>
+  
+  <!-- Grill -->
+  <rect x="103" y="36" width="4" height="6" rx="1" fill="#444"/>
+  <line x1="104" y1="37" x2="104" y2="41" stroke="#666" stroke-width="0.5"/>
+  <line x1="105.5" y1="37" x2="105.5" y2="41" stroke="#666" stroke-width="0.5"/>
+  
+  <!-- Wheels -->
+  <circle cx="28" cy="45" r="9" fill="#222"/>
+  <circle cx="28" cy="45" r="7" fill="#333"/>
+  <circle cx="28" cy="45" r="4" fill="#555"/>
+  <circle cx="28" cy="45" r="2" fill="#777"/>
+  
+  <circle cx="92" cy="45" r="9" fill="#222"/>
+  <circle cx="92" cy="45" r="7" fill="#333"/>
+  <circle cx="92" cy="45" r="4" fill="#555"/>
+  <circle cx="92" cy="45" r="2" fill="#777"/>
+  
+  <!-- Chrome trim -->
+  <line x1="20" y1="38" x2="100" y2="38" stroke="#888" stroke-width="0.8"/>
+  <line x1="28" y1="25" x2="92" y2="25" stroke="#666" stroke-width="0.5"/>
+</svg>

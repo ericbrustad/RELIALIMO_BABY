@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60" width="120" height="60">
+  <!-- Cadillac CT6 - Black Luxury Sedan -->
+  <defs>
+    <linearGradient id="cadBodyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2a2a2a"/>
+      <stop offset="50%" style="stop-color:#1a1a1a"/>
+      <stop offset="100%" style="stop-color:#0d0d0d"/>
+    </linearGradient>
+    <linearGradient id="cadWindowGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4a5568"/>
+      <stop offset="100%" style="stop-color:#2d3748"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Shadow -->
+  <ellipse cx="60" cy="50" rx="50" ry="3" fill="rgba(0,0,0,0.3)"/>
+  
+  <!-- Main Body - Sharp Cadillac Lines -->
+  <path d="M6 40 L12 32 L28 27 L92 27 L108 32 L114 40 L114 44 L6 44 Z" fill="url(#cadBodyGradient)" stroke="#333" stroke-width="0.5"/>
+  
+  <!-- Roof/Cabin - Angular Cadillac design -->
+  <path d="M30 27 L40 17 L80 17 L90 27 Z" fill="url(#cadBodyGradient)" stroke="#333" stroke-width="0.5"/>
+  
+  <!-- Windows - Sharp angles -->
+  <path d="M32 26 L41 19 L56 19 L56 26 Z" fill="url(#cadWindowGradient)" stroke="#555" stroke-width="0.3"/>
+  <rect x="58" y="19" width="14" height="7" fill="url(#cadWindowGradient)" stroke="#555" stroke-width="0.3"/>
+  <path d="M74 19 L79 19 L87 26 L74 26 Z" fill="url(#cadWindowGradient)" stroke="#555" stroke-width="0.3"/>
+  
+  <!-- Cadillac Vertical Headlights -->
+  <rect x="108" y="32" width="2" height="8" rx="0.5" fill="#fff9e0"/>
+  <rect x="111" y="33" width="2" height="6" rx="0.5" fill="#fff9e0"/>
+  
+  <!-- Cadillac Vertical Taillights -->
+  <rect x="8" y="32" width="2" height="8" rx="0.5" fill="#ff2222"/>
+  <rect x="11" y="33" width="2" height="6" rx="0.5" fill="#ff2222"/>
+  
+  <!-- Grill - Cadillac shield shape -->
+  <path d="M109 39 L113 39 L113 43 L111 44 L109 43 Z" fill="#444"/>
+  <line x1="111" y1="39" x2="111" y2="43" stroke="#666" stroke-width="0.5"/>
+  
+  <!-- Wheels -->
+  <circle cx="28" cy="44" r="8" fill="#222"/>
+  <circle cx="28" cy="44" r="6" fill="#333"/>
+  <circle cx="28" cy="44" r="3.5" fill="#555"/>
+  <circle cx="28" cy="44" r="1.5" fill="#777"/>
+  
+  <circle cx="92" cy="44" r="8" fill="#222"/>
+  <circle cx="92" cy="44" r="6" fill="#333"/>
+  <circle cx="92" cy="44" r="3.5" fill="#555"/>
+  <circle cx="92" cy="44" r="1.5" fill="#777"/>
+  
+  <!-- Chrome trim -->
+  <line x1="12" y1="40" x2="108" y2="40" stroke="#888" stroke-width="0.6"/>
+</svg>

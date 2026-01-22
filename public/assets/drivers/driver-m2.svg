@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60" width="60" height="60">
+  <!-- Male Driver Avatar 2 -->
+  <defs>
+    <linearGradient id="m2SkinGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8d5524"/>
+      <stop offset="100%" style="stop-color:#6b4423"/>
+    </linearGradient>
+    <linearGradient id="m2HairGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a1a"/>
+      <stop offset="100%" style="stop-color:#0d0d0d"/>
+    </linearGradient>
+    <clipPath id="m2Circle">
+      <circle cx="30" cy="30" r="28"/>
+    </clipPath>
+  </defs>
+  
+  <!-- Background Circle -->
+  <circle cx="30" cy="30" r="29" fill="#10b981" stroke="#059669" stroke-width="2"/>
+  
+  <g clip-path="url(#m2Circle)">
+    <!-- Neck -->
+    <rect x="22" y="42" width="16" height="12" fill="url(#m2SkinGradient)"/>
+    
+    <!-- Professional Suit -->
+    <path d="M10 58 L18 46 L30 44 L42 46 L50 58 L50 65 L10 65 Z" fill="#1f2937"/>
+    <!-- Tie -->
+    <path d="M28 44 L30 46 L32 44 L31 54 L30 55 L29 54 Z" fill="#dc2626"/>
+    <!-- Collar -->
+    <path d="M24 46 L28 44 L30 46" fill="none" stroke="#111827" stroke-width="1"/>
+    <path d="M36 46 L32 44 L30 46" fill="none" stroke="#111827" stroke-width="1"/>
+    <!-- White shirt -->
+    <path d="M28 44 L30 48 L32 44" fill="white"/>
+    
+    <!-- Face -->
+    <ellipse cx="30" cy="30" rx="14" ry="16" fill="url(#m2SkinGradient)"/>
+    
+    <!-- Short Hair -->
+    <path d="M16 26 L16 18 Q16 8 30 8 Q44 8 44 18 L44 26 Q42 20 30 20 Q18 20 16 26 Z" fill="url(#m2HairGradient)"/>
+    
+    <!-- Eyes -->
+    <ellipse cx="24" cy="28" rx="3" ry="2.5" fill="white"/>
+    <ellipse cx="36" cy="28" rx="3" ry="2.5" fill="white"/>
+    <circle cx="24.5" cy="28.5" r="1.8" fill="#1a1a1a"/>
+    <circle cx="36.5" cy="28.5" r="1.8" fill="#1a1a1a"/>
+    <circle cx="25" cy="28" r="0.5" fill="white"/>
+    <circle cx="37" cy="28" r="0.5" fill="white"/>
+    
+    <!-- Eyebrows -->
+    <path d="M20 24 Q24 22 28 24" fill="none" stroke="#0d0d0d" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M32 24 Q36 22 40 24" fill="none" stroke="#0d0d0d" stroke-width="1.5" stroke-linecap="round"/>
+    
+    <!-- Nose -->
+    <path d="M30 30 L28 36 L32 36" fill="none" stroke="#6b4423" stroke-width="1.2" stroke-linecap="round"/>
+    
+    <!-- Smile -->
+    <path d="M25 40 Q30 44 35 40" fill="none" stroke="#5a3a1a" stroke-width="1.5" stroke-linecap="round"/>
+    
+    <!-- Goatee/Beard -->
+    <path d="M26 42 Q30 46 34 42" fill="url(#m2HairGradient)" stroke="#0d0d0d" stroke-width="0.5"/>
+  </g>
+</svg>
