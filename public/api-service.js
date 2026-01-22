@@ -613,7 +613,11 @@ function transformReservationPayload(payload) {
 export async function createReservation(payload) {
   // Transform to database schema
   const dbPayload = transformReservationPayload(payload);
-  const rows = await request('/reservations', { method: 'POST', body: JSON.stringify(dbPayload) });
+  const rows = await request('/reservations', { 
+    method: 'POST', 
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(dbPayload) 
+  });
   return Array.isArray(rows) ? rows[0] : rows;
 }
 export async function updateReservation(id, payload) {
