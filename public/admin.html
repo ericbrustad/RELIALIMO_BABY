@@ -508,23 +508,37 @@
         
         // Check initial auth state
         async function init() {
-            const { data: { session } } = await supabase.auth.getSession();
-            
-            if (session?.user) {
-                const isAdmin = await checkAdminAccess(session.user.id);
-                if (isAdmin) {
-                    hideSplash(false); // Show admin app
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                
+                if (session?.user) {
+                    const isAdmin = await checkAdminAccess(session.user.id);
+                    if (isAdmin) {
+                        hideSplash(false); // Show admin app
+                    } else {
+                        hideSplash(true); // Show login
+                        setTimeout(() => {
+                            showMessage('Access denied. You are not an admin.', true);
+                        }, 1200);
+                        await supabase.auth.signOut();
+                    }
                 } else {
                     hideSplash(true); // Show login
-                    setTimeout(() => {
-                        showMessage('Access denied. You are not an admin.', true);
-                    }, 1200);
-                    await supabase.auth.signOut();
                 }
-            } else {
-                hideSplash(true); // Show login
+            } catch (e) {
+                console.error('Init error:', e);
+                hideSplash(true); // Show login on error
             }
         }
+        
+        // Failsafe: hide splash after 8 seconds no matter what
+        setTimeout(() => {
+            const splash = document.getElementById('splashScreen');
+            if (splash && !splash.classList.contains('fade-out')) {
+                console.warn('Splash timeout - forcing hide');
+                hideSplash(true);
+            }
+        }, 8000);
         
         init();
         
