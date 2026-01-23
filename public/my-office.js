@@ -2071,28 +2071,53 @@ class MyOffice {
       return;
     }
 
-    statusEl.textContent = 'Looking up route via Google...';
+    statusEl.textContent = 'Looking up route via Mapbox...';
     distanceEl.textContent = '-';
     durationEl.textContent = '-';
 
     try {
-      // Check if Google Maps service is available
-      if (!this.googleMapsService) {
-        throw new Error('Google Maps service not initialized');
+      // Check if Mapbox service is available
+      if (!this.mapboxService) {
+        throw new Error('Mapbox service not initialized');
       }
 
-      const summary = await this.googleMapsService.getRouteSummary({ origin, destination });
-      if (!summary) {
+      // Get origin coordinates - prefer stored company lat/lng
+      const companyLat = parseFloat(document.getElementById('companyLatitude')?.value);
+      const companyLng = parseFloat(document.getElementById('companyLongitude')?.value);
+      
+      let origCoords;
+      if (companyLat && companyLng && !isNaN(companyLat) && !isNaN(companyLng)) {
+        origCoords = [companyLng, companyLat]; // Mapbox uses [lng, lat]
+      } else {
+        // Fallback: geocode the origin address
+        const origGeo = await this.mapboxService.geocodeAddress(origin);
+        if (!origGeo || !origGeo[0]?.coordinates) {
+          throw new Error('Could not geocode origin address');
+        }
+        origCoords = origGeo[0].coordinates;
+      }
+
+      // Geocode destination
+      const destGeo = await this.mapboxService.geocodeAddress(destination);
+      if (!destGeo || !destGeo[0]?.coordinates) {
+        throw new Error('Could not geocode destination address');
+      }
+      const destCoords = destGeo[0].coordinates;
+
+      // Get route from Mapbox Directions API
+      const route = await this.mapboxService.getRoute([origCoords, destCoords]);
+      
+      if (!route) {
         statusEl.textContent = 'No route found.';
         return;
       }
 
-      distanceEl.textContent = summary.distanceText || '-';
-      durationEl.textContent = summary.durationText || '-';
-      statusEl.textContent = 'Route loaded.';
+      distanceEl.textContent = route.distance || '-';
+      durationEl.textContent = route.duration || '-';
+      statusEl.textContent = 'Route loaded via Mapbox.';
 
-      // Render map with Mapbox (visual only) using the two addresses
-      this.renderCompanyRouteMap(origin, destination).catch((err) => {
+      // Render map with Mapbox static image
+      this.renderCompanyRouteMapFromCoords(origCoords, destCoords).catch((err) => {
         console.warn('Map render failed:', err);
         statusEl.textContent = 'Route loaded (map preview unavailable).';
       });
@@ -2100,14 +2125,58 @@ class MyOffice {
       console.warn('Route lookup failed:', err);
       const errorMessage = err?.message || 'Unknown error';
       
-      if (errorMessage.includes('Directions service not ready')) {
-        statusEl.textContent = 'Google Maps API loading... Please try again in a moment.';
-      } else if (errorMessage.includes('API key') || errorMessage.includes('billing')) {
-        statusEl.textContent = 'Google Maps API key issue. Check console for details.';
+      if (errorMessage.includes('token not configured')) {
+        statusEl.textContent = 'Mapbox token not configured.';
+      } else if (errorMessage.includes('geocode')) {
+        statusEl.textContent = errorMessage;
       } else {
         statusEl.textContent = 'Route lookup failed. Check console for details.';
       }
     }
+  }
+
+  async renderCompanyRouteMapFromCoords(origCoords, destCoords) {
+    const mapImg = document.getElementById('companyRouteMapImg');
+    const mapCard = document.getElementById('companyRouteMapCard');
+    if (!mapImg || !mapCard) return;
+
+    const token = this.mapboxService?.accessToken;
+    if (!token || token === 'YOUR_MAPBOX_TOKEN_HERE') {
+      mapImg.alt = 'Mapbox token missing';
+      return;
+    }
+
+    const [origLng, origLat] = origCoords;
+    const [destLng, destLat] = destCoords;
+
+    // Build static map with two pins and a path
+    const markers = [
+      `pin-s-a+285A98(${origLng},${origLat})`,
+      `pin-s-b+cc3333(${destLng},${destLat})`
+    ];
+    const path = `path-4+285A98-0.7(${origLng},${origLat};${destLng},${destLat})`;
+
+    const centerLng = (origLng + destLng) / 2;
+    const centerLat = (origLat + destLat) / 2;
+
+    // Calculate zoom based on distance between points
+    const latDiff = Math.abs(origLat - destLat);
+    const lngDiff = Math.abs(origLng - destLng);
+    const maxDiff = Math.max(latDiff, lngDiff);
+    
+    let zoom = 10;
+    if (maxDiff > 5) zoom = 5;
+    else if (maxDiff > 2) zoom = 7;
+    else if (maxDiff > 1) zoom = 8;
+    else if (maxDiff > 0.5) zoom = 9;
+    else if (maxDiff > 0.2) zoom = 10;
+    else if (maxDiff > 0.1) zoom = 11;
+    else zoom = 12;
+
+    const url = `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/${markers.join(',')},${path}/${centerLng},${centerLat},${zoom}/480x320?access_token=${token}`;
+
+    mapImg.src = url;
+    mapImg.alt = 'Route map preview';
   }
 
   async renderCompanyRouteMap(origin, destination) {
