@@ -782,7 +782,8 @@
 
           // Check if CompanySettingsManager is available
           if (!window.CompanySettingsManager) {
-            console.log('[StartupPage] CompanySettingsManager not available yet');
+            console.log('[StartupPage] CompanySettingsManager not available yet, showing default section');
+            switchMainSection('reservations');
             return;
           }
 
@@ -819,16 +820,14 @@
           console.log('[StartupPage] Available sections:', Object.keys(STARTUP_SECTIONS));
           console.log('[StartupPage] Section lookup result:', section);
           
-          // If we found a valid section and it's not the default, navigate to it
-          if (section && section !== 'office') { // 'office' is the default
-            console.log('[StartupPage] ✅ Navigating to startup section:', section);
-            switchMainSection(section);
-            return;
-          }
-          
-          console.log('[StartupPage] Using default section (office)');
+          // Navigate to the configured startup section (or 'office' as default)
+          const targetSection = section || 'office';
+          console.log('[StartupPage] ✅ Navigating to startup section:', targetSection);
+          switchMainSection(targetSection);
         } catch (error) {
           console.error('[StartupPage] Error checking startup page:', error);
+          // On error, still show the default section
+          switchMainSection('office');
         }
       }
 
