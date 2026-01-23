@@ -1042,9 +1042,6 @@ class MyOffice {
     // Company Logo Upload
     this.setupLogoUpload();
     
-    // Logo Bucket Browser (choose from database)
-    this.setupLogoBucketBrowser();
-    
     // Vehicle Type Image Upload
     this.setupVehicleTypeImageUpload();
 
@@ -1232,7 +1229,6 @@ class MyOffice {
   loadLogoSettings() {
     // Moved to logo-management.html
   }
-
   loadSavedLogo() {
     // Legacy support - load from old format
     const savedLogo = localStorage.getItem('companyLogo');
@@ -1240,261 +1236,10 @@ class MyOffice {
       try {
         const logoData = JSON.parse(savedLogo);
         console.log('Legacy logo found:', logoData.name);
-        // Update preview if available
-        const logoPreviewImg = document.getElementById('logoPreviewImg');
-        if (logoPreviewImg && logoData.data) {
-          logoPreviewImg.src = logoData.data;
-        }
       } catch (e) {
         console.error('Error loading saved logo:', e);
       }
     }
-  }
-
-  getCompanyLogoUrl() {
-    // First check the preview image - it has the current logo
-    const logoPreviewImg = document.getElementById('logoPreviewImg');
-    if (logoPreviewImg && logoPreviewImg.src) {
-      const src = logoPreviewImg.src;
-      // Don't return the placeholder SVG
-      if (!src.includes('data:image/svg+xml') && src !== '') {
-        return src;
-      }
-    }
-    
-    // Fallback to stored logo
-    try {
-      const savedLogo = localStorage.getItem('companyLogo');
-      if (savedLogo) {
-        const logoData = JSON.parse(savedLogo);
-        return logoData.data || '';
-      }
-    } catch (e) {
-      console.warn('Could not get logo URL:', e);
-    }
-    
-    return '';
-  }
-
-  // ===================================
-  // LOGO BUCKET BROWSER
-  // ===================================
-
-  setupLogoBucketBrowser() {
-    const chooseFromDbBtn = document.getElementById('logoChooseFromDbBtn');
-    const modal = document.getElementById('logoBucketModal');
-    const closeBtn = document.getElementById('closeLogoBucketModal');
-    const refreshBtn = document.getElementById('refreshLogoBucketBtn');
-    const folderSelect = document.getElementById('logoBucketFolderSelect');
-
-    if (!chooseFromDbBtn || !modal) {
-      console.log('Logo bucket browser elements not found');
-      return;
-    }
-
-    // Open modal
-    chooseFromDbBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      modal.style.display = 'flex';
-      this.loadLogoBucketImages();
-    });
-
-    // Close modal
-    closeBtn?.addEventListener('click', () => {
-      modal.style.display = 'none';
-    });
-
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) modal.style.display = 'none';
-    });
-
-    // Refresh button
-    refreshBtn?.addEventListener('click', () => this.loadLogoBucketImages());
-
-    // Folder change
-    folderSelect?.addEventListener('change', () => this.loadLogoBucketImages());
-  }
-
-  async loadLogoBucketImages() {
-    const grid = document.getElementById('logoBucketGrid');
-    const countEl = document.getElementById('logoBucketImageCount');
-    const refreshBtn = document.getElementById('refreshLogoBucketBtn');
-    const folderSelect = document.getElementById('logoBucketFolderSelect');
-    const selectedFolder = folderSelect?.value || '';
-
-    if (!grid) return;
-
-    // Show loading state
-    grid.innerHTML = `
-      <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #888;">
-        <div style="font-size: 36px; margin-bottom: 10px;">🔄</div>
-        <p style="margin: 0;">Loading images from bucket...</p>
-      </div>
-    `;
-
-    if (refreshBtn) {
-      refreshBtn.disabled = true;
-      refreshBtn.textContent = '⏳ Loading...';
-    }
-
-    try {
-      // Get Supabase credentials
-      const { getSupabaseCredentials } = await import('./supabase-config.js');
-      const { url: supabaseUrl, anonKey } = getSupabaseCredentials();
-
-      // Get auth token
-      let authToken = anonKey;
-      if (window.__reliaGetValidSession) {
-        const session = await window.__reliaGetValidSession();
-        if (session?.access_token) authToken = session.access_token;
-      } else if (localStorage.getItem('supabase_access_token')) {
-        authToken = localStorage.getItem('supabase_access_token');
-      }
-
-      const BUCKET_NAME = 'images';
-      let allFiles = [];
-
-      // If no specific folder selected, search multiple common logo folders
-      const foldersToSearch = selectedFolder ? [selectedFolder] : ['', 'logos', 'company', 'email-images'];
-
-      for (const prefix of foldersToSearch) {
-        try {
-          const listUrl = `${supabaseUrl}/storage/v1/object/list/${BUCKET_NAME}`;
-          const response = await fetch(listUrl, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${authToken}`,
-              'apikey': anonKey,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              prefix: prefix,
-              limit: 100,
-              offset: 0,
-              sortBy: { column: 'name', order: 'asc' }
-            })
-          });
-
-          if (response.ok) {
-            const files = await response.json();
-            // Filter to only image files
-            const imageFiles = files.filter(f =>
-              !f.id?.includes('.emptyFolderPlaceholder') &&
-              f.name &&
-              /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(f.name)
-            ).map(f => ({
-              ...f,
-              folder: prefix,
-              publicUrl: `${supabaseUrl}/storage/v1/object/public/${BUCKET_NAME}/${prefix ? prefix + '/' : ''}${f.name}`
-            }));
-            allFiles = allFiles.concat(imageFiles);
-          }
-        } catch (e) {
-          console.warn(`Failed to list ${prefix || 'root'}:`, e);
-        }
-      }
-
-      // Remove duplicates by publicUrl
-      const uniqueFiles = [...new Map(allFiles.map(f => [f.publicUrl, f])).values()];
-
-      if (countEl) {
-        countEl.textContent = `${uniqueFiles.length} image${uniqueFiles.length !== 1 ? 's' : ''} found`;
-      }
-
-      if (uniqueFiles.length === 0) {
-        grid.innerHTML = `
-          <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #888;">
-            <div style="font-size: 36px; margin-bottom: 10px;">📭</div>
-            <p style="margin: 0 0 10px 0;">No images found in bucket</p>
-            <p style="margin: 0; font-size: 12px; color: #666;">Upload images using "Choose Local File" and "Upload" first</p>
-          </div>
-        `;
-      } else {
-        grid.innerHTML = uniqueFiles.map((file) => `
-          <div class="logo-bucket-item" data-url="${file.publicUrl}" data-name="${file.name}" style="
-            border: 2px solid #444;
-            border-radius: 8px;
-            overflow: hidden;
-            cursor: pointer;
-            transition: all 0.2s;
-            background: #2a2a3e;
-          " onmouseover="this.style.borderColor='#4f46e5'; this.style.transform='scale(1.03)';" onmouseout="this.style.borderColor='#444'; this.style.transform='scale(1)';">
-            <div style="aspect-ratio: 1; overflow: hidden; background: #1e1e2e; display: flex; align-items: center; justify-content: center; padding: 8px;">
-              <img src="${file.publicUrl}" alt="${file.name}" style="max-width: 100%; max-height: 100%; object-fit: contain;" onerror="this.parentElement.innerHTML='<span style=font-size:24px;color:#666>❌</span>'">
-            </div>
-            <div style="padding: 8px; font-size: 11px; color: #aaa; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; text-align: center;" title="${file.folder ? file.folder + '/' : ''}${file.name}">
-              ${file.name.length > 15 ? file.name.substring(0, 12) + '...' : file.name}
-            </div>
-          </div>
-        `).join('');
-
-        // Add click handlers
-        grid.querySelectorAll('.logo-bucket-item').forEach(item => {
-          item.addEventListener('click', () => {
-            const url = item.dataset.url;
-            const name = item.dataset.name;
-            if (url) {
-              this.selectLogoFromBucket(url, name);
-            }
-          });
-        });
-      }
-
-    } catch (error) {
-      console.error('Error loading bucket images:', error);
-      grid.innerHTML = `
-        <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #ef4444;">
-          <div style="font-size: 36px; margin-bottom: 10px;">❌</div>
-          <p style="margin: 0 0 10px 0;">Failed to load images</p>
-          <p style="margin: 0; font-size: 12px; color: #888;">${error.message}</p>
-        </div>
-      `;
-    } finally {
-      if (refreshBtn) {
-        refreshBtn.disabled = false;
-        refreshBtn.textContent = '🔄 Refresh';
-      }
-    }
-  }
-
-  selectLogoFromBucket(url, name) {
-    const modal = document.getElementById('logoBucketModal');
-    const logoPreviewImg = document.getElementById('logoPreviewImg');
-    const logoFileName = document.getElementById('logoFileName');
-
-    // Update preview
-    if (logoPreviewImg) {
-      logoPreviewImg.src = url;
-    }
-
-    if (logoFileName) {
-      logoFileName.textContent = name || 'Database image';
-    }
-
-    // Save to localStorage
-    const logoData = {
-      name: name || 'database-logo',
-      type: 'image/png',
-      data: url,
-      source: 'supabase'
-    };
-    localStorage.setItem('companyLogo', JSON.stringify(logoData));
-
-    // Also update companyInfo
-    try {
-      const companyInfo = JSON.parse(localStorage.getItem('companyInfo') || '{}');
-      companyInfo.logo_url = url;
-      localStorage.setItem('companyInfo', JSON.stringify(companyInfo));
-    } catch (err) {
-      console.warn('Could not update companyInfo with logo:', err);
-    }
-
-    // Close modal
-    if (modal) {
-      modal.style.display = 'none';
-    }
-
-    alert('✅ Logo selected from database and saved!');
   }
 
   // ===================================
@@ -1823,14 +1568,11 @@ class MyOffice {
           .single();
 
         if (!error && org) {
-          console.log('📥 Company info from Supabase:', org);
           this.populateCompanyInfoForm(org);
           // Also cache in localStorage
           localStorage.setItem('companyInfo', JSON.stringify(org));
           console.log('✅ Company info loaded from Supabase');
           return;
-        } else if (error) {
-          console.warn('Supabase load error:', error.message);
         }
       }
     } catch (e) {
@@ -1842,7 +1584,6 @@ class MyOffice {
     if (cached) {
       try {
         const info = JSON.parse(cached);
-        console.log('📥 Company info from localStorage:', info);
         this.populateCompanyInfoForm(info);
         console.log('✅ Company info loaded from localStorage');
       } catch (e) {
@@ -1852,8 +1593,6 @@ class MyOffice {
   }
 
   populateCompanyInfoForm(info) {
-    console.log('📝 Populating company form with:', info);
-    
     const fields = {
       'companyName': info.name || '',
       'companyStreetAddress': info.street_address || info.address || '',
@@ -1873,16 +1612,9 @@ class MyOffice {
       'companyWebsite': info.website || ''
     };
 
-    console.log('📝 Field mappings:', fields);
-
     for (const [id, value] of Object.entries(fields)) {
       const el = document.getElementById(id);
-      if (el) {
-        el.value = value;
-        console.log(`  ✓ Set ${id} = "${value}"`);
-      } else {
-        console.warn(`  ✗ Element not found: ${id}`);
-      }
+      if (el) el.value = value;
     }
 
     // Persist geocode values into hidden fields for later saves
@@ -1900,31 +1632,6 @@ class MyOffice {
     if (showEinCheckbox) {
       showEinCheckbox.checked = info.show_ein_on_docs || false;
     }
-
-    // Load logo from info or localStorage
-    const logoPreviewImg = document.getElementById('logoPreviewImg');
-    const logoFileName = document.getElementById('logoFileName');
-    if (logoPreviewImg) {
-      // Try logo_url from info first, then fall back to stored companyLogo
-      if (info.logo_url && !info.logo_url.includes('data:image/svg+xml')) {
-        logoPreviewImg.src = info.logo_url;
-        if (logoFileName) logoFileName.textContent = 'Saved logo';
-      } else {
-        // Try to load from companyLogo localStorage
-        try {
-          const savedLogo = localStorage.getItem('companyLogo');
-          if (savedLogo) {
-            const logoData = JSON.parse(savedLogo);
-            if (logoData.data) {
-              logoPreviewImg.src = logoData.data;
-              if (logoFileName) logoFileName.textContent = logoData.name || 'Saved logo';
-            }
-          }
-        } catch (e) {
-          console.warn('Could not load saved logo:', e);
-        }
-      }
-    }
   }
 
   setupCompanyAddressLookup() {
@@ -1940,7 +1647,6 @@ class MyOffice {
       const query = (e.target?.value || '').trim();
       if (query.length < 3) {
         suggestions.classList.remove('active');
-        suggestions.innerHTML = '';
         return;
       }
 
@@ -1950,28 +1656,8 @@ class MyOffice {
       }, 300);
     });
 
-    // Hide suggestions on blur (with delay for clicks)
     addressInput.addEventListener('blur', () => {
-      setTimeout(() => {
-        suggestions.classList.remove('active');
-        suggestions.innerHTML = '';
-      }, 250);
-    });
-
-    // Hide suggestions on Escape key
-    addressInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        suggestions.classList.remove('active');
-        suggestions.innerHTML = '';
-      }
-    });
-
-    // Hide suggestions when clicking outside
-    document.addEventListener('click', (e) => {
-      if (!addressInput.contains(e.target) && !suggestions.contains(e.target)) {
-        suggestions.classList.remove('active');
-        suggestions.innerHTML = '';
-      }
+      setTimeout(() => suggestions.classList.remove('active'), 200);
     });
   }
 
@@ -1984,38 +1670,26 @@ class MyOffice {
 
     if (!originInput || !destinationInput || !runBtn) return;
 
-    // Prefill origin from company address and keep it synced
-    const updateOriginFromCompanyAddress = () => {
+    // Prefill origin from company address if empty
+    const prefillOrigin = () => {
       const assembled = this.buildCompanyAddressString();
-      if (assembled) {
+      if (assembled && !originInput.value) {
         originInput.value = assembled;
       }
     };
-    updateOriginFromCompanyAddress();
-
-    // Make origin read-only - it's always the company address
-    originInput.setAttribute('readonly', 'true');
-    originInput.style.backgroundColor = '#f5f5f5';
-    originInput.title = 'Origin is set from company address above';
-
-    // Update origin when address fields change
-    const addressFields = ['companyStreetAddress', 'companyStreetAddress2', 'companyCity', 'companyState', 'companyZipCode'];
-    addressFields.forEach(fieldId => {
-      const field = document.getElementById(fieldId);
-      if (field) {
-        field.addEventListener('input', updateOriginFromCompanyAddress);
-      }
-    });
+    prefillOrigin();
 
     runBtn.addEventListener('click', () => {
       this.runCompanyRouteLookup();
     });
 
-    destinationInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        this.runCompanyRouteLookup();
-      }
+    [originInput, destinationInput].forEach(input => {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this.runCompanyRouteLookup();
+        }
+      });
     });
 
     if (expandBtn && mapCard) {
@@ -2054,71 +1728,32 @@ class MyOffice {
       return;
     }
 
-    statusEl.textContent = 'Looking up route via Mapbox...';
+    statusEl.textContent = 'Looking up route via Google...';
     distanceEl.textContent = '-';
     durationEl.textContent = '-';
 
     try {
-      // Check if Mapbox service is available
-      if (!this.mapboxService) {
-        throw new Error('Mapbox service not initialized');
-      }
-
-      // Get origin coordinates - prefer stored company lat/lng
-      const companyLat = parseFloat(document.getElementById('companyLatitude')?.value);
-      const companyLng = parseFloat(document.getElementById('companyLongitude')?.value);
-      
-      let origCoords;
-      if (companyLat && companyLng && !isNaN(companyLat) && !isNaN(companyLng)) {
-        origCoords = [companyLng, companyLat]; // Mapbox uses [lng, lat]
-      } else {
-        // Fallback: geocode the origin address
-        const origGeo = await this.mapboxService.geocodeAddress(origin);
-        if (!origGeo || !origGeo[0]?.coordinates) {
-          throw new Error('Could not geocode origin address');
-        }
-        origCoords = origGeo[0].coordinates;
-      }
-
-      // Geocode destination
-      const destGeo = await this.mapboxService.geocodeAddress(destination);
-      if (!destGeo || !destGeo[0]?.coordinates) {
-        throw new Error('Could not geocode destination address');
-      }
-      const destCoords = destGeo[0].coordinates;
-
-      // Get route from Mapbox Directions API
-      const route = await this.mapboxService.getRoute([origCoords, destCoords]);
-      
-      if (!route) {
+      const summary = await this.googleMapsService.getRouteSummary({ origin, destination });
+      if (!summary) {
         statusEl.textContent = 'No route found.';
         return;
       }
 
-      distanceEl.textContent = route.distance || '-';
-      durationEl.textContent = route.duration || '-';
-      statusEl.textContent = 'Route loaded via Mapbox.';
+      distanceEl.textContent = summary.distanceText || '-';
+      durationEl.textContent = summary.durationText || '-';
+      statusEl.textContent = 'Route loaded.';
 
-      // Render map with Mapbox static image
-      this.renderCompanyRouteMapFromCoords(origCoords, destCoords).catch((err) => {
+      // Render map with Mapbox (visual only) using the two addresses
+      this.renderCompanyRouteMap(origin, destination).catch((err) => {
         console.warn('Map render failed:', err);
-        statusEl.textContent = 'Route loaded (map preview unavailable).';
       });
     } catch (err) {
       console.warn('Route lookup failed:', err);
-      const errorMessage = err?.message || 'Unknown error';
-      
-      if (errorMessage.includes('token not configured')) {
-        statusEl.textContent = 'Mapbox token not configured.';
-      } else if (errorMessage.includes('geocode')) {
-        statusEl.textContent = errorMessage;
-      } else {
-        statusEl.textContent = 'Route lookup failed. Check console for details.';
-      }
+      statusEl.textContent = 'Route lookup failed.';
     }
   }
 
-  async renderCompanyRouteMapFromCoords(origCoords, destCoords) {
+  async renderCompanyRouteMap(origin, destination) {
     const mapImg = document.getElementById('companyRouteMapImg');
     const mapCard = document.getElementById('companyRouteMapCard');
     if (!mapImg || !mapCard) return;
@@ -2126,6 +1761,19 @@ class MyOffice {
     const token = this.mapboxService?.accessToken;
     if (!token || token === 'YOUR_MAPBOX_TOKEN_HERE') {
       mapImg.alt = 'Mapbox token missing';
+      return;
+    }
+
+    const [origGeo, destGeo] = await Promise.all([
+      this.mapboxService.geocodeAddress(origin),
+      this.mapboxService.geocodeAddress(destination)
+    ]);
+
+    const origCoords = Array.isArray(origGeo) && origGeo[0]?.coordinates ? origGeo[0].coordinates : null;
+    const destCoords = Array.isArray(destGeo) && destGeo[0]?.coordinates ? destGeo[0].coordinates : null;
+
+    if (!origCoords || !destCoords) {
+      mapImg.alt = 'Could not geocode addresses for map.';
       return;
     }
 
@@ -2142,94 +1790,7 @@ class MyOffice {
     const centerLng = (origLng + destLng) / 2;
     const centerLat = (origLat + destLat) / 2;
 
-    // Calculate zoom based on distance between points
-    const latDiff = Math.abs(origLat - destLat);
-    const lngDiff = Math.abs(origLng - destLng);
-    const maxDiff = Math.max(latDiff, lngDiff);
-    
-    let zoom = 10;
-    if (maxDiff > 5) zoom = 5;
-    else if (maxDiff > 2) zoom = 7;
-    else if (maxDiff > 1) zoom = 8;
-    else if (maxDiff > 0.5) zoom = 9;
-    else if (maxDiff > 0.2) zoom = 10;
-    else if (maxDiff > 0.1) zoom = 11;
-    else zoom = 12;
-
-    const url = `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/${markers.join(',')},${path}/${centerLng},${centerLat},${zoom}/480x320?access_token=${token}`;
-
-    mapImg.src = url;
-    mapImg.alt = 'Route map preview';
-  }
-
-  async renderCompanyRouteMap(origin, destination) {
-    const mapImg = document.getElementById('companyRouteMapImg');
-    const mapCard = document.getElementById('companyRouteMapCard');
-    if (!mapImg || !mapCard) return;
-
-    const token = this.mapboxService?.accessToken;
-    if (!token || token === 'YOUR_MAPBOX_TOKEN_HERE') {
-      mapImg.alt = 'Mapbox token missing';
-      return;
-    }
-
-    // Use stored company coordinates for origin (from company info form)
-    const companyLat = parseFloat(document.getElementById('companyLatitude')?.value);
-    const companyLng = parseFloat(document.getElementById('companyLongitude')?.value);
-    
-    let origLat, origLng;
-    
-    if (companyLat && companyLng && !isNaN(companyLat) && !isNaN(companyLng)) {
-      // Use stored coordinates
-      origLat = companyLat;
-      origLng = companyLng;
-    } else {
-      // Fallback: geocode the origin address
-      const origGeo = await this.mapboxService.geocodeAddress(origin);
-      const origCoords = Array.isArray(origGeo) && origGeo[0]?.coordinates ? origGeo[0].coordinates : null;
-      if (!origCoords) {
-        mapImg.alt = 'Could not geocode origin address for map.';
-        return;
-      }
-      [origLng, origLat] = origCoords;
-    }
-
-    // Geocode destination
-    const destGeo = await this.mapboxService.geocodeAddress(destination);
-    const destCoords = Array.isArray(destGeo) && destGeo[0]?.coordinates ? destGeo[0].coordinates : null;
-
-    if (!destCoords) {
-      mapImg.alt = 'Could not geocode destination address for map.';
-      return;
-    }
-
-    const [destLng, destLat] = destCoords;
-
-    // Build static map with two pins and a path
-    const markers = [
-      `pin-s-a+285A98(${origLng},${origLat})`,
-      `pin-s-b+cc3333(${destLng},${destLat})`
-    ];
-    const path = `path-4+285A98-0.7(${origLng},${origLat};${destLng},${destLat})`;
-
-    const centerLng = (origLng + destLng) / 2;
-    const centerLat = (origLat + destLat) / 2;
-
-    // Calculate zoom based on distance between points
-    const latDiff = Math.abs(origLat - destLat);
-    const lngDiff = Math.abs(origLng - destLng);
-    const maxDiff = Math.max(latDiff, lngDiff);
-    
-    let zoom = 10;
-    if (maxDiff > 5) zoom = 5;
-    else if (maxDiff > 2) zoom = 7;
-    else if (maxDiff > 1) zoom = 8;
-    else if (maxDiff > 0.5) zoom = 9;
-    else if (maxDiff > 0.2) zoom = 10;
-    else if (maxDiff > 0.1) zoom = 11;
-    else zoom = 12;
-
-    const url = `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/${markers.join(',')},${path}/${centerLng},${centerLat},${zoom}/480x320?access_token=${token}`;
+    const url = `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/${markers.join(',')},${path}/${centerLng},${centerLat},9/480x320?access_token=${token}`;
 
     mapImg.src = url;
     mapImg.alt = 'Route map preview';
@@ -2324,8 +1885,7 @@ class MyOffice {
       return;
     }
 
-    // Full info object for localStorage (includes all fields)
-    const fullInfo = {
+    const info = {
       name: document.getElementById('companyName')?.value?.trim() || '',
       street_address: document.getElementById('companyStreetAddress')?.value?.trim() || '',
       street_address_2: document.getElementById('companyStreetAddress2')?.value?.trim() || '',
@@ -2345,64 +1905,20 @@ class MyOffice {
       website: document.getElementById('companyWebsite')?.value?.trim() || '',
       latitude: parseFloat(document.getElementById('companyLatitude')?.value) || null,
       longitude: parseFloat(document.getElementById('companyLongitude')?.value) || null,
+      // Also set email to general_email for backwards compatibility
       email: document.getElementById('companyGeneralEmail')?.value?.trim() || '',
+      // Also set address to street_address for backwards compatibility
       address: document.getElementById('companyStreetAddress')?.value?.trim() || '',
-      logo_url: this.getCompanyLogoUrl(),
       updated_at: new Date().toISOString()
     };
 
-    // Supabase info - only include columns that exist in the database
-    const supabaseInfo = {
-      name: fullInfo.name,
-      street_address: fullInfo.street_address,
-      street_address_2: fullInfo.street_address_2,
-      city: fullInfo.city,
-      state: fullInfo.state,
-      postal_code: fullInfo.postal_code,
-      country: fullInfo.country,
-      ein: fullInfo.ein,
-      show_ein_on_docs: fullInfo.show_ein_on_docs,
-      phone: fullInfo.phone,
-      secondary_phone: fullInfo.secondary_phone,
-      fax: fullInfo.fax,
-      general_email: fullInfo.general_email,
-      reservation_email: fullInfo.reservation_email,
-      quote_email: fullInfo.quote_email,
-      billing_email: fullInfo.billing_email,
-      website: fullInfo.website,
-      latitude: fullInfo.latitude,
-      longitude: fullInfo.longitude,
-      email: fullInfo.email,
-      address: fullInfo.address,
-      updated_at: fullInfo.updated_at
-    };
-
-    if (!fullInfo.name) {
+    if (!info.name) {
       alert('Company Name is required.');
       return;
     }
 
-    // Save to localStorage immediately (includes logo_url)
-    localStorage.setItem('companyInfo', JSON.stringify(fullInfo));
-
-    // Also sync key fields to relia_company_settings for map region and other features
-    try {
-      const settingsRaw = localStorage.getItem('relia_company_settings') || '{}';
-      const settings = JSON.parse(settingsRaw);
-      settings.companyName = fullInfo.name;
-      settings.companyPhone = fullInfo.phone;
-      settings.companyEmail = fullInfo.general_email || fullInfo.email;
-      settings.companyWebsite = fullInfo.website;
-      settings.companyAddress = fullInfo.street_address || fullInfo.address;
-      settings.companyCity = fullInfo.city;
-      settings.companyState = fullInfo.state;
-      settings.companyZip = fullInfo.postal_code;
-      settings.updatedAt = new Date().toISOString();
-      localStorage.setItem('relia_company_settings', JSON.stringify(settings));
-      console.log('✅ Company settings synced to relia_company_settings');
-    } catch (e) {
-      console.warn('Could not sync to relia_company_settings:', e);
-    }
+    // Save to localStorage immediately
+    localStorage.setItem('companyInfo', JSON.stringify(info));
 
     // Try to save to Supabase
     try {
@@ -2412,44 +1928,30 @@ class MyOffice {
         throw new Error('Supabase client unavailable or invalid');
       }
 
-      console.log('📤 Saving company info to Supabase:', supabaseInfo);
-
       const { data: existingRows, error: fetchError } = await supabase
         .from('organizations')
         .select('id')
         .limit(1);
 
-      if (fetchError) {
-        console.error('Error fetching existing org:', fetchError);
-        throw fetchError;
-      }
+      if (fetchError) throw fetchError;
 
       const existing = Array.isArray(existingRows) ? existingRows[0] : null;
-      console.log('📋 Existing organization:', existing);
 
       if (existing?.id) {
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('organizations')
-          .update(supabaseInfo)
-          .eq('id', existing.id)
-          .select();
+          .update(info)
+          .eq('id', existing.id);
 
-        if (error) {
-          console.error('Update error:', error);
-          throw error;
-        }
-        console.log('✅ Company info updated in Supabase:', data);
+        if (error) throw error;
+        console.log('✅ Company info updated in Supabase');
       } else {
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('organizations')
-          .insert([{ ...supabaseInfo, created_at: new Date().toISOString() }])
-          .select();
+          .insert([{ ...info, created_at: new Date().toISOString() }]);
 
-        if (error) {
-          console.error('Insert error:', error);
-          throw error;
-        }
-        console.log('✅ Company info created in Supabase:', data);
+        if (error) throw error;
+        console.log('✅ Company info created in Supabase');
       }
 
       alert('✅ Company information saved locally and synced to cloud.');
@@ -2465,6 +1967,7 @@ class MyOffice {
       return;
     }
   }
+
   setupSystemUsers() {
     this.cacheUserInputs();
     this.renderUserList();

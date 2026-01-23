@@ -1230,36 +1230,21 @@ function prefillBookingDefaults() {
         selectSavedAddress(homeAddress.id, homeAddress.full_address || homeAddress.address, 'pickup');
       }, 100);
     }
-  } else {
-    // Fallback: construct home address from individual fields or use home_address
-    let homeAddressStr = state.customer.home_address;
-    
-    // If no home_address but has address1/city/state/zip, construct it
-    if (!homeAddressStr && state.customer.address1) {
-      const parts = [
-        state.customer.address1,
-        state.customer.city,
-        state.customer.state,
-        state.customer.zip_code
-      ].filter(Boolean);
-      homeAddressStr = parts.join(', ');
+  } else if (state.customer.home_address) {
+    // Fallback: If no saved addresses but home_address is set on account, prefill pickup input
+    const pickupSelect = document.getElementById('pickupAddressSelect');
+    if (pickupSelect) {
+      pickupSelect.value = 'new';
+      const event = new Event('change', { bubbles: true });
+      pickupSelect.dispatchEvent(event);
     }
-    
-    if (homeAddressStr) {
-      const pickupSelect = document.getElementById('pickupAddressSelect');
-      if (pickupSelect) {
-        pickupSelect.value = 'new';
-        const event = new Event('change', { bubbles: true });
-        pickupSelect.dispatchEvent(event);
+    setTimeout(() => {
+      const pickupInput = document.getElementById('pickupAddressInput');
+      if (pickupInput) {
+        pickupInput.value = state.customer.home_address;
+        state.selectedPickupAddress = state.customer.home_address;
       }
-      setTimeout(() => {
-        const pickupInput = document.getElementById('pickupAddressInput');
-        if (pickupInput) {
-          pickupInput.value = homeAddressStr;
-          state.selectedPickupAddress = homeAddressStr;
-        }
-      }, 100);
-    }
+    }, 100);
   }
   
   // 3. Airport prefill is now handled by prefillAirports() after airports are loaded

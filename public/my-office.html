@@ -300,8 +300,7 @@
                     <p class="form-hint">Supported: .JPG, .PNG</p>
                     <input type="file" id="logoFileInput" accept="image/jpeg,image/png" style="display: none;" />
                     <div class="file-upload-group">
-                      <button class="btn btn-secondary" id="logoChooseBtn">Choose Local File</button>
-                      <button class="btn btn-secondary" id="logoChooseFromDbBtn" style="margin-left: 8px;">📁 Choose from Database</button>
+                      <button class="btn btn-secondary" id="logoChooseBtn">Choose File</button>
                       <span class="file-name" id="logoFileName">No file chosen</span>
                       <button class="btn btn-primary" id="logoUploadBtn">Upload >></button>
                     </div>
@@ -339,8 +338,8 @@
                   <div class="route-controls-card">
                     <div class="route-controls-header">Quick Route Check</div>
                     <div class="form-group">
-                      <label>Origin (Company Address)</label>
-                      <input type="text" id="companyRouteOrigin" class="form-control" placeholder="Company address" readonly style="background-color: #f5f5f5;" />
+                      <label>Origin</label>
+                      <input type="text" id="companyRouteOrigin" class="form-control" placeholder="Company address" />
                     </div>
                     <div class="form-group">
                       <label>Destination</label>
@@ -8755,33 +8754,6 @@ further assistance.</textarea>
         border-bottom: 1px solid #e0e0e0;
     }
     </style>
-
-    <!-- Logo Bucket Browser Modal -->
-    <div id="logoBucketModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10001; justify-content: center; align-items: center;">
-      <div style="background: #1e1e2e; border-radius: 12px; width: 90%; max-width: 800px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); border-radius: 12px 12px 0 0;">
-          <h3 style="margin: 0; color: #fff; font-size: 18px;">📁 Choose Logo from Database</h3>
-          <button id="closeLogoBucketModal" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; padding: 0; line-height: 1;">&times;</button>
-        </div>
-        <div style="padding: 16px 20px; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-          <label style="color: #aaa; font-size: 14px;">Folder:</label>
-          <select id="logoBucketFolderSelect" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #444; background: #2a2a3e; color: #fff; font-size: 14px; min-width: 150px;">
-            <option value="">Root</option>
-            <option value="logos">logos</option>
-            <option value="company">company</option>
-            <option value="email-images">email-images</option>
-          </select>
-          <button id="refreshLogoBucketBtn" style="padding: 8px 16px; border-radius: 6px; border: none; background: #4f46e5; color: #fff; cursor: pointer; font-size: 14px;">🔄 Refresh</button>
-          <span id="logoBucketImageCount" style="color: #888; font-size: 13px; margin-left: auto;"></span>
-        </div>
-        <div id="logoBucketGrid" style="flex: 1; overflow-y: auto; padding: 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 16px; min-height: 200px;">
-          <!-- Images will be loaded here -->
-        </div>
-        <div style="padding: 12px 20px; background: #1a1a2e; border-radius: 0 0 12px 12px; border-top: 1px solid #333;">
-          <p style="margin: 0; color: #888; font-size: 12px;">💡 Click an image to select it as your company logo</p>
-        </div>
-      </div>
-    </div>
 
     <script src="env.js"></script>
     <script src="CompanySettingsManager.js"></script>

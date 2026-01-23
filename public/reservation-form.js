@@ -1832,11 +1832,10 @@ class ReservationForm {
       });
     }
     
-    // Copy passenger info button (optional - may not exist in all form layouts)
-    const copyPassengerBtn = document.getElementById('copyPassengerBtn');
-    if (copyPassengerBtn) {
-      copyPassengerBtn.addEventListener('click', () => this.copyPassengerInfo());
-    }
+    // Copy passenger info button
+    safeAddListener('copyPassengerBtn', 'click', () => {
+      this.copyPassengerInfo();
+    });
 
     // Create stop button
     // Bind exactly once to prevent duplicate rows (some browsers fire multiple handlers when mixing inline + JS).

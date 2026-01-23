@@ -97,14 +97,10 @@ export function middleware(request: NextRequest) {
 
   // Admin subdomain: admin.relialimo.com - serve admin.html (login gate)
   if (host.startsWith('admin.')) {
-    // Root entry point goes through admin.html login gate
-    if (pathname === '/' || pathname === '') {
+    // All entry points go through admin.html login gate
+    if (pathname === '/' || pathname === '' || pathname === '/index.html') {
       // Serve admin.html which handles auth check and shows login or app
       return NextResponse.rewrite(new URL('/admin.html', request.url))
-    }
-    // Allow index.html to be served directly (loaded by admin.html iframe after auth)
-    if (pathname === '/index.html') {
-      return NextResponse.next()
     }
     // Block direct access to auth.html on admin subdomain
     if (pathname === '/auth.html') {

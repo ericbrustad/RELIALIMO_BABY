@@ -278,16 +278,15 @@
       }
 
       html[data-layout="vertical"] #app > header.header .main-nav {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 6px !important;
-        flex: 1 !important;
-        min-height: 0 !important;
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
         padding-right: 4px;
         padding-bottom: 20px;
-        flex-wrap: nowrap !important;
       }
 
       /* Scrollbar styling for vertical nav */
@@ -516,8 +515,8 @@
           <div class="main-nav">
             <button class="nav-btn" data-section="new-reservation"><span>New Reservation</span><span style="font-size: 24px;">➕</span></button>
             <button class="nav-btn" data-section="reservations"><span>Reservations</span><span style="font-size: 24px;">📋</span></button>
-            <button class="nav-btn active" data-section="dashboard"><span>Farmout Dashboard</span><span style="font-size: 24px;">🏠</span></button>
-            <button class="nav-btn" data-section="office"><span>Office</span><span style="font-size: 24px;">🏢</span></button>
+            <button class="nav-btn" data-section="dashboard"><span>Farmout Dashboard</span><span style="font-size: 24px;">🏠</span></button>
+            <button class="nav-btn active" data-section="office"><span>Office</span><span style="font-size: 24px;">🏢</span></button>
             <button class="nav-btn" data-section="accounts"><span>Accounts</span><span style="font-size: 24px;">👤</span></button>
             <button class="nav-btn" data-section="passengers"><span>Passengers</span><span style="font-size: 24px;">🧳</span></button>
             <button class="nav-btn" data-section="drivers"><span>Drivers</span><span style="font-size: 24px;">🚗</span></button>
@@ -537,12 +536,12 @@
       </header>
 
       <!-- FARMOUT DASHBOARD SECTION (User View, Driver View, Farm-out) -->
-      <div id="dashboardSection" class="app-main-section active">
+      <div id="dashboardSection" class="app-main-section">
         <iframe src="index-reservations.html?view=reservations" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
       </div>
 
       <!-- OFFICE SECTION -->
-      <div id="officeSection" class="app-main-section">
+      <div id="officeSection" class="app-main-section active">
         <iframe src="my-office.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
       </div>
 
@@ -783,8 +782,7 @@
 
           // Check if CompanySettingsManager is available
           if (!window.CompanySettingsManager) {
-            console.log('[StartupPage] CompanySettingsManager not available yet, showing default section');
-            switchMainSection('reservations');
+            console.log('[StartupPage] CompanySettingsManager not available yet');
             return;
           }
 
@@ -821,14 +819,16 @@
           console.log('[StartupPage] Available sections:', Object.keys(STARTUP_SECTIONS));
           console.log('[StartupPage] Section lookup result:', section);
           
-          // Navigate to the configured startup section (or 'office' as default)
-          const targetSection = section || 'office';
-          console.log('[StartupPage] ✅ Navigating to startup section:', targetSection);
-          switchMainSection(targetSection);
+          // If we found a valid section and it's not the default, navigate to it
+          if (section && section !== 'office') { // 'office' is the default
+            console.log('[StartupPage] ✅ Navigating to startup section:', section);
+            switchMainSection(section);
+            return;
+          }
+          
+          console.log('[StartupPage] Using default section (office)');
         } catch (error) {
           console.error('[StartupPage] Error checking startup page:', error);
-          // On error, still show the default section
-          switchMainSection('office');
         }
       }
 

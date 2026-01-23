@@ -40,12 +40,6 @@ export default function LandingPage() {
           <a href="https://account.relialimo.com/auth" className="btn btn-secondary">
             Account Login
           </a>
-          <a href="https://driver.relialimo.com" className="btn btn-secondary">
-            Driver Login
-          </a>
-          <a href="https://admin.relialimo.com/index.html" className="btn btn-secondary">
-            Admin Login
-          </a>
         </div>
       </section>
 
@@ -186,25 +180,14 @@ export default function LandingPage() {
               Driver Login
             </a>
           </div>
-          
-          <div className="portal-card">
-            <div className="portal-icon">⚙️</div>
-            <h3 className="portal-title">Admin Portal</h3>
-            <p className="portal-desc">
-              Manage reservations, dispatch drivers, configure fleet, 
-              and oversee all company operations.
-            </p>
-            <a href="https://admin.relialimo.com" className="portal-link">
-              Admin Login
-            </a>
-          </div>
         </div>
       </section>
 
       {/* Footer */}
       <footer className="footer">
         <p className="footer-text">
-          © {new Date().getFullYear()} RELIALIMO. All rights reserved.
+          © {new Date().getFullYear()} RELIALIMO. All rights reserved. | 
+          <a href="https://admin.relialimo.com"> Admin Access</a>
         </p>
       </footer>
     </>
