@@ -1927,6 +1927,7 @@ class MyOffice {
       const query = (e.target?.value || '').trim();
       if (query.length < 3) {
         suggestions.classList.remove('active');
+        suggestions.innerHTML = '';
         return;
       }
 
@@ -1936,8 +1937,28 @@ class MyOffice {
       }, 300);
     });
 
+    // Hide suggestions on blur (with delay for clicks)
     addressInput.addEventListener('blur', () => {
-      setTimeout(() => suggestions.classList.remove('active'), 200);
+      setTimeout(() => {
+        suggestions.classList.remove('active');
+        suggestions.innerHTML = '';
+      }, 250);
+    });
+
+    // Hide suggestions on Escape key
+    addressInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        suggestions.classList.remove('active');
+        suggestions.innerHTML = '';
+      }
+    });
+
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!addressInput.contains(e.target) && !suggestions.contains(e.target)) {
+        suggestions.classList.remove('active');
+        suggestions.innerHTML = '';
+      }
     });
   }
 
