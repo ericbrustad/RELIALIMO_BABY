@@ -427,24 +427,9 @@
     </div>
 
     <script type="module">
-        import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-        
         // Get Supabase credentials from env.js
         const SUPABASE_URL = window.ENV?.SUPABASE_URL || 'https://siumiadylwcrkaqsfwkj.supabase.co';
         const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY || '';
-        
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            auth: {
-                autoRefreshToken: true,
-                persistSession: true,
-                detectSessionInUrl: true,
-                flowType: 'implicit',
-                // Disable lock to prevent AbortError in multi-tab/iframe scenarios
-                lock: false,
-                storageKey: 'sb-admin-auth-token'
-            }
-        });
-        
         const ADMIN_ORG_ID = '54eb6ce7-ba97-4198-8566-6ac075828160';
         
         const splashScreen = document.getElementById('splashScreen');
@@ -452,12 +437,27 @@
         const adminApp = document.getElementById('adminApp');
         const msgEl = document.getElementById('msg');
         
+        // Supabase client - created lazily to avoid lock issues on page load
+        let _supabase = null;
+        async function getSupabase() {
+            if (!_supabase) {
+                const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+                _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                    auth: {
+                        autoRefreshToken: true,
+                        persistSession: true,
+                        detectSessionInUrl: true,
+                        flowType: 'implicit'
+                    }
+                });
+            }
+            return _supabase;
+        }
+        
         // Hide splash and show content
         function hideSplash(showLogin) {
-            // Minimum splash display time for effect
             setTimeout(() => {
                 splashScreen.classList.add('fade-out');
-                
                 setTimeout(() => {
                     if (showLogin) {
                         authContainer.classList.add('visible');
@@ -473,32 +473,53 @@
             msgEl.textContent = message;
             msgEl.className = `auth-message ${isError ? 'auth-message--error' : 'auth-message--success'}`;
             msgEl.classList.remove('is-hidden');
-            
             if (!isError) {
-                setTimeout(() => {
-                    msgEl.classList.add('is-hidden');
-                }, 5000);
+                setTimeout(() => { msgEl.classList.add('is-hidden'); }, 5000);
             }
         };
         
-        // Check if user is admin (in admin org)
-        async function checkAdminAccess(userId) {
+        // Check if user is admin via REST API (no lock issues)
+        async function checkAdminAccessREST(userId, accessToken) {
             try {
-                const { data, error } = await supabase
-                    .from('organization_members')
-                    .select('role')
-                    .eq('user_id', userId)
-                    .eq('organization_id', ADMIN_ORG_ID)
-                    .single();
-                
-                return !error && data;
+                const resp = await fetch(
+                    `${SUPABASE_URL}/rest/v1/organization_members?user_id=eq.${userId}&organization_id=eq.${ADMIN_ORG_ID}&select=role`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${accessToken}`
+                        }
+                    }
+                );
+                if (!resp.ok) return false;
+                const data = await resp.json();
+                return data && data.length > 0;
             } catch (e) {
                 console.error('Admin check failed:', e);
                 return false;
             }
         }
         
-        // Set authenticated state (after splash)
+        // Get stored session from localStorage (bypass Supabase lock)
+        function getStoredSession() {
+            try {
+                // Try common Supabase storage keys
+                const keys = Object.keys(localStorage).filter(k => k.startsWith('sb-') && k.includes('-auth-token'));
+                for (const key of keys) {
+                    const raw = localStorage.getItem(key);
+                    if (raw) {
+                        const parsed = JSON.parse(raw);
+                        if (parsed?.access_token && parsed?.user) {
+                            return parsed;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not read stored session:', e);
+            }
+            return null;
+        }
+        
+        // Set authenticated state
         const setAuthState = (showAdmin) => {
             if (showAdmin) {
                 authContainer.classList.remove('visible');
@@ -510,50 +531,48 @@
             }
         };
         
-        // Check initial auth state
+        // Check initial auth state - use localStorage first to avoid lock issues
         async function init() {
             try {
-                const { data: { session } } = await supabase.auth.getSession();
+                // First try localStorage directly (no lock)
+                const storedSession = getStoredSession();
                 
-                if (session?.user) {
-                    const isAdmin = await checkAdminAccess(session.user.id);
-                    if (isAdmin) {
-                        hideSplash(false); // Show admin app
-                    } else {
-                        hideSplash(true); // Show login
-                        setTimeout(() => {
-                            showMessage('Access denied. You are not an admin.', true);
-                        }, 1200);
-                        await supabase.auth.signOut();
+                if (storedSession?.user?.id && storedSession?.access_token) {
+                    // Check token expiry
+                    const expiresAt = storedSession.expires_at || 0;
+                    const now = Math.floor(Date.now() / 1000);
+                    
+                    if (expiresAt > now) {
+                        // Token still valid, check admin access via REST
+                        const isAdmin = await checkAdminAccessREST(storedSession.user.id, storedSession.access_token);
+                        if (isAdmin) {
+                            hideSplash(false); // Show admin app
+                            return;
+                        }
                     }
-                } else {
-                    hideSplash(true); // Show login
                 }
+                
+                // No valid session in localStorage, show login
+                hideSplash(true);
+                
             } catch (e) {
                 console.error('Init error:', e);
-                // If it's an AbortError, retry once after a short delay
-                if (e.name === 'AbortError' && !window._authRetried) {
-                    window._authRetried = true;
-                    console.log('Retrying auth after AbortError...');
-                    setTimeout(() => init(), 500);
-                    return;
-                }
-                hideSplash(true); // Show login on error
+                hideSplash(true);
             }
         }
         
-        // Failsafe: hide splash after 8 seconds no matter what
+        // Failsafe: hide splash after 6 seconds
         setTimeout(() => {
             const splash = document.getElementById('splashScreen');
             if (splash && !splash.classList.contains('fade-out')) {
                 console.warn('Splash timeout - forcing hide');
                 hideSplash(true);
             }
-        }, 8000);
+        }, 6000);
         
         init();
         
-        // Handle login form
+        // Handle login form - only create Supabase client when user actually logs in
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('login-email').value.trim();
@@ -569,10 +588,8 @@
             submitBtn.textContent = 'Signing in...';
             
             try {
-                const { data, error } = await supabase.auth.signInWithPassword({
-                    email,
-                    password
-                });
+                const supabase = await getSupabase();
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
                 
                 if (error) {
                     showMessage(error.message, true);
@@ -581,8 +598,8 @@
                     return;
                 }
                 
-                // Check if user is admin
-                const isAdmin = await checkAdminAccess(data.user.id);
+                // Check if user is admin via REST
+                const isAdmin = await checkAdminAccessREST(data.user.id, data.session.access_token);
                 
                 if (!isAdmin) {
                     showMessage('Access denied. You are not authorized for admin access.', true);
@@ -593,10 +610,7 @@
                 }
                 
                 showMessage('Successfully signed in! Loading admin portal...', false);
-                
-                setTimeout(() => {
-                    setAuthState(true);
-                }, 1000);
+                setTimeout(() => { setAuthState(true); }, 1000);
                 
             } catch (err) {
                 console.error('Login error:', err);
@@ -616,11 +630,10 @@
             }
             
             try {
+                const supabase = await getSupabase();
                 const { error } = await supabase.auth.signInWithOtp({
                     email,
-                    options: {
-                        emailRedirectTo: window.location.origin
-                    }
+                    options: { emailRedirectTo: window.location.origin }
                 });
                 
                 if (error) {
@@ -644,6 +657,7 @@
             }
             
             try {
+                const supabase = await getSupabase();
                 const { error } = await supabase.auth.resetPasswordForEmail(email, {
                     redirectTo: window.location.origin
                 });
@@ -658,34 +672,20 @@
             }
         });
         
-        // Listen for auth state changes
-        supabase.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'SIGNED_IN' && session?.user) {
-                const isAdmin = await checkAdminAccess(session.user.id);
-                if (isAdmin) {
-                    setAuthState(true);
-                } else {
-                    showMessage('Access denied. You are not an admin.', true);
-                    await supabase.auth.signOut();
-                }
-            } else if (event === 'SIGNED_OUT') {
-                setAuthState(false);
-            }
-        });
-        
         // Listen for messages from iframe (logout or session requests)
         window.addEventListener('message', async (event) => {
-            // Only accept same-origin messages
             if (event.origin !== window.location.origin) return;
             
             if (event.data.action === 'logout') {
-                await supabase.auth.signOut();
+                try {
+                    const supabase = await getSupabase();
+                    await supabase.auth.signOut();
+                } catch (e) {}
                 setAuthState(false);
             }
             
-            // Handle session requests from child iframes
             if (event.data.type === 'RELIA_REQUEST_SUPABASE_SESSION') {
-                const { data: { session } } = await supabase.auth.getSession();
+                const session = getStoredSession();
                 if (session) {
                     event.source?.postMessage({
                         type: 'RELIA_SUPABASE_SESSION',
