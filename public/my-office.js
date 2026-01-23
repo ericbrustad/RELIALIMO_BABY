@@ -1829,11 +1829,14 @@ class MyOffice {
           .single();
 
         if (!error && org) {
+          console.log('📥 Company info from Supabase:', org);
           this.populateCompanyInfoForm(org);
           // Also cache in localStorage
           localStorage.setItem('companyInfo', JSON.stringify(org));
           console.log('✅ Company info loaded from Supabase');
           return;
+        } else if (error) {
+          console.warn('Supabase load error:', error.message);
         }
       }
     } catch (e) {
@@ -1845,6 +1848,7 @@ class MyOffice {
     if (cached) {
       try {
         const info = JSON.parse(cached);
+        console.log('📥 Company info from localStorage:', info);
         this.populateCompanyInfoForm(info);
         console.log('✅ Company info loaded from localStorage');
       } catch (e) {
@@ -1852,7 +1856,6 @@ class MyOffice {
       }
     }
   }
-
   populateCompanyInfoForm(info) {
     const fields = {
       'companyName': info.name || '',
@@ -2312,30 +2315,44 @@ class MyOffice {
         throw new Error('Supabase client unavailable or invalid');
       }
 
+      console.log('📤 Saving company info to Supabase:', info);
+
       const { data: existingRows, error: fetchError } = await supabase
         .from('organizations')
         .select('id')
         .limit(1);
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('Error fetching existing org:', fetchError);
+        throw fetchError;
+      }
 
       const existing = Array.isArray(existingRows) ? existingRows[0] : null;
+      console.log('📋 Existing organization:', existing);
 
       if (existing?.id) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('organizations')
           .update(info)
-          .eq('id', existing.id);
+          .eq('id', existing.id)
+          .select();
 
-        if (error) throw error;
-        console.log('✅ Company info updated in Supabase');
+        if (error) {
+          console.error('Update error:', error);
+          throw error;
+        }
+        console.log('✅ Company info updated in Supabase:', data);
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('organizations')
-          .insert([{ ...info, created_at: new Date().toISOString() }]);
+          .insert([{ ...info, created_at: new Date().toISOString() }])
+          .select();
 
-        if (error) throw error;
-        console.log('✅ Company info created in Supabase');
+        if (error) {
+          console.error('Insert error:', error);
+          throw error;
+        }
+        console.log('✅ Company info created in Supabase:', data);
       }
 
       alert('✅ Company information saved locally and synced to cloud.');
