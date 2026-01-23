@@ -2201,7 +2201,17 @@ if (deleteVehicleTypeBtn) {
   } else {
     console.warn('⚠️ deleteVehicleTypeById handler not available');
   }
-  hydrateVehicleOrgId();
+  // Call hydrate with fallback for module script timing
+  if (typeof window.hydrateVehicleOrgId === 'function') {
+    window.hydrateVehicleOrgId();
+  } else {
+    // Retry after module scripts load
+    setTimeout(() => {
+      if (typeof window.hydrateVehicleOrgId === 'function') {
+        window.hydrateVehicleOrgId();
+      }
+    }, 100);
+  }
 }
 </script>
 </div>
