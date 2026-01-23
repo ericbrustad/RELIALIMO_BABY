@@ -1012,11 +1012,11 @@ export async function saveBookingAgentToSupabase(payload) {
 }
 
 // Simple admin helpers (used by utilities)
-export async function deleteAllReservationsSupabase() { return await request('/reservations', { method: 'DELETE' }); }
-export async function deleteAllAccountsSupabase() { return await request('/accounts', { method: 'DELETE' }); }
-export async function deleteAllDriversSupabase() { return await request('/drivers', { method: 'DELETE' }); }
-export async function deleteAllVehiclesSupabase() { return await request('/vehicles', { method: 'DELETE' }); }
-export async function deleteAllRatesSupabase() { return await request('/rates', { method: 'DELETE' }); }
+export async function deleteAllReservationsSupabase() { return await request('/reservations?id=not.is.null', { method: 'DELETE' }); }
+export async function deleteAllAccountsSupabase() { return await request('/accounts?id=not.is.null', { method: 'DELETE' }); }
+export async function deleteAllDriversSupabase() { return await request('/drivers?id=not.is.null', { method: 'DELETE' }); }
+export async function deleteAllVehiclesSupabase() { return await request('/vehicles?id=not.is.null', { method: 'DELETE' }); }
+export async function deleteAllRatesSupabase() { return await request('/rates?id=not.is.null', { method: 'DELETE' }); }
 export async function removeDuplicateAffiliates() { /* no-op utility stub */ return true; }
 export async function removeDuplicateDrivers() { /* no-op utility stub */ return true; }
 
