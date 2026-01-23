@@ -43,7 +43,7 @@ export default function LandingPage() {
           <a href="https://driver.relialimo.com" className="btn btn-secondary">
             Driver Login
           </a>
-          <a href="https://admin.relialimo.com" className="btn btn-secondary">
+          <a href="https://admin.relialimo.com/index.html" className="btn btn-secondary">
             Admin Login
           </a>
         </div>
@@ -194,7 +194,7 @@ export default function LandingPage() {
               Manage reservations, dispatch drivers, configure fleet, 
               and oversee all company operations.
             </p>
-            <a href="https://admin.relialimo.com" className="portal-link">
+            <a href="https://admin.relialimo.com/index.html" className="portal-link">
               Admin Login
             </a>
           </div>
