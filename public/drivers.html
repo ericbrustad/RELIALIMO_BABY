@@ -744,13 +744,41 @@
         if (!confirm('Are you sure you want to delete this driver? This action cannot be undone.')) return;
         
         try {
-          await apiRequest(`/drivers?id=eq.${id}`, {
-            method: 'DELETE'
+          // First check if driver has any assigned reservations
+          const reservations = await apiRequest(`/reservations?assigned_driver_id=eq.${id}&select=id,confirmation_number`);
+          if (reservations && reservations.length > 0) {
+            const count = reservations.length;
+            const confirmNumbers = reservations.slice(0, 3).map(r => r.confirmation_number || r.id).join(', ');
+            const suffix = count > 3 ? ` and ${count - 3} more...` : '';
+            alert(`Cannot delete driver: ${count} reservation(s) still assigned.\n\nReservations: ${confirmNumbers}${suffix}\n\nPlease reassign or remove the driver from these reservations first.`);
+            return;
+          }
+          
+          const response = await fetch(`${supabaseUrl}/rest/v1/drivers?id=eq.${id}`, {
+            method: 'DELETE',
+            headers: {
+              'apikey': anonKey,
+              'Authorization': `Bearer ${localStorage.getItem('supabase_access_token') || anonKey}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal'
+            }
           });
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Delete failed:', response.status, errorText);
+            throw new Error(`Delete failed: ${response.status} ${errorText}`);
+          }
+          
+          console.log('✅ Driver deleted successfully');
           loadDrivers();
         } catch (err) {
           console.error('Failed to delete driver:', err);
-          alert('Failed to delete driver. They may have associated reservations.');
+          if (err.message.includes('foreign key') || err.message.includes('violates')) {
+            alert('Cannot delete driver: They have associated records.\nPlease remove all assignments first.');
+          } else {
+            alert('Failed to delete driver: ' + err.message);
+          }
         }
       };
       
