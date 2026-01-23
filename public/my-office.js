@@ -1048,6 +1048,9 @@ class MyOffice {
     // Company Logo Upload
     this.setupLogoUpload();
     
+    // Logo Bucket Browser (choose from database)
+    this.setupLogoBucketBrowser();
+    
     // Vehicle Type Image Upload
     this.setupVehicleTypeImageUpload();
 
@@ -1246,6 +1249,227 @@ class MyOffice {
         console.error('Error loading saved logo:', e);
       }
     }
+  }
+
+  // ===================================
+  // LOGO BUCKET BROWSER
+  // ===================================
+
+  setupLogoBucketBrowser() {
+    const chooseFromDbBtn = document.getElementById('logoChooseFromDbBtn');
+    const modal = document.getElementById('logoBucketModal');
+    const closeBtn = document.getElementById('closeLogoBucketModal');
+    const refreshBtn = document.getElementById('refreshLogoBucketBtn');
+    const folderSelect = document.getElementById('logoBucketFolderSelect');
+
+    if (!chooseFromDbBtn || !modal) {
+      console.log('Logo bucket browser elements not found');
+      return;
+    }
+
+    // Open modal
+    chooseFromDbBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      modal.style.display = 'flex';
+      this.loadLogoBucketImages();
+    });
+
+    // Close modal
+    closeBtn?.addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.style.display = 'none';
+    });
+
+    // Refresh button
+    refreshBtn?.addEventListener('click', () => this.loadLogoBucketImages());
+
+    // Folder change
+    folderSelect?.addEventListener('change', () => this.loadLogoBucketImages());
+  }
+
+  async loadLogoBucketImages() {
+    const grid = document.getElementById('logoBucketGrid');
+    const countEl = document.getElementById('logoBucketImageCount');
+    const refreshBtn = document.getElementById('refreshLogoBucketBtn');
+    const folderSelect = document.getElementById('logoBucketFolderSelect');
+    const selectedFolder = folderSelect?.value || '';
+
+    if (!grid) return;
+
+    // Show loading state
+    grid.innerHTML = `
+      <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #888;">
+        <div style="font-size: 36px; margin-bottom: 10px;">🔄</div>
+        <p style="margin: 0;">Loading images from bucket...</p>
+      </div>
+    `;
+
+    if (refreshBtn) {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = '⏳ Loading...';
+    }
+
+    try {
+      // Get Supabase credentials
+      const { getSupabaseCredentials } = await import('./supabase-config.js');
+      const { url: supabaseUrl, anonKey } = getSupabaseCredentials();
+
+      // Get auth token
+      let authToken = anonKey;
+      if (window.__reliaGetValidSession) {
+        const session = await window.__reliaGetValidSession();
+        if (session?.access_token) authToken = session.access_token;
+      } else if (localStorage.getItem('supabase_access_token')) {
+        authToken = localStorage.getItem('supabase_access_token');
+      }
+
+      const BUCKET_NAME = 'images';
+      let allFiles = [];
+
+      // If no specific folder selected, search multiple common logo folders
+      const foldersToSearch = selectedFolder ? [selectedFolder] : ['', 'logos', 'company', 'email-images'];
+
+      for (const prefix of foldersToSearch) {
+        try {
+          const listUrl = `${supabaseUrl}/storage/v1/object/list/${BUCKET_NAME}`;
+          const response = await fetch(listUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${authToken}`,
+              'apikey': anonKey,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              prefix: prefix,
+              limit: 100,
+              offset: 0,
+              sortBy: { column: 'name', order: 'asc' }
+            })
+          });
+
+          if (response.ok) {
+            const files = await response.json();
+            // Filter to only image files
+            const imageFiles = files.filter(f =>
+              !f.id?.includes('.emptyFolderPlaceholder') &&
+              f.name &&
+              /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(f.name)
+            ).map(f => ({
+              ...f,
+              folder: prefix,
+              publicUrl: `${supabaseUrl}/storage/v1/object/public/${BUCKET_NAME}/${prefix ? prefix + '/' : ''}${f.name}`
+            }));
+            allFiles = allFiles.concat(imageFiles);
+          }
+        } catch (e) {
+          console.warn(`Failed to list ${prefix || 'root'}:`, e);
+        }
+      }
+
+      // Remove duplicates by publicUrl
+      const uniqueFiles = [...new Map(allFiles.map(f => [f.publicUrl, f])).values()];
+
+      if (countEl) {
+        countEl.textContent = `${uniqueFiles.length} image${uniqueFiles.length !== 1 ? 's' : ''} found`;
+      }
+
+      if (uniqueFiles.length === 0) {
+        grid.innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #888;">
+            <div style="font-size: 36px; margin-bottom: 10px;">📭</div>
+            <p style="margin: 0 0 10px 0;">No images found in bucket</p>
+            <p style="margin: 0; font-size: 12px; color: #666;">Upload images using "Choose Local File" and "Upload" first</p>
+          </div>
+        `;
+      } else {
+        grid.innerHTML = uniqueFiles.map((file) => `
+          <div class="logo-bucket-item" data-url="${file.publicUrl}" data-name="${file.name}" style="
+            border: 2px solid #444;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #2a2a3e;
+          " onmouseover="this.style.borderColor='#4f46e5'; this.style.transform='scale(1.03)';" onmouseout="this.style.borderColor='#444'; this.style.transform='scale(1)';">
+            <div style="aspect-ratio: 1; overflow: hidden; background: #1e1e2e; display: flex; align-items: center; justify-content: center; padding: 8px;">
+              <img src="${file.publicUrl}" alt="${file.name}" style="max-width: 100%; max-height: 100%; object-fit: contain;" onerror="this.parentElement.innerHTML='<span style=font-size:24px;color:#666>❌</span>'">
+            </div>
+            <div style="padding: 8px; font-size: 11px; color: #aaa; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; text-align: center;" title="${file.folder ? file.folder + '/' : ''}${file.name}">
+              ${file.name.length > 15 ? file.name.substring(0, 12) + '...' : file.name}
+            </div>
+          </div>
+        `).join('');
+
+        // Add click handlers
+        grid.querySelectorAll('.logo-bucket-item').forEach(item => {
+          item.addEventListener('click', () => {
+            const url = item.dataset.url;
+            const name = item.dataset.name;
+            if (url) {
+              this.selectLogoFromBucket(url, name);
+            }
+          });
+        });
+      }
+
+    } catch (error) {
+      console.error('Error loading bucket images:', error);
+      grid.innerHTML = `
+        <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #ef4444;">
+          <div style="font-size: 36px; margin-bottom: 10px;">❌</div>
+          <p style="margin: 0 0 10px 0;">Failed to load images</p>
+          <p style="margin: 0; font-size: 12px; color: #888;">${error.message}</p>
+        </div>
+      `;
+    } finally {
+      if (refreshBtn) {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = '🔄 Refresh';
+      }
+    }
+  }
+
+  selectLogoFromBucket(url, name) {
+    const modal = document.getElementById('logoBucketModal');
+    const logoPreviewImg = document.getElementById('logoPreviewImg');
+    const logoFileName = document.getElementById('logoFileName');
+
+    // Update preview
+    if (logoPreviewImg) {
+      logoPreviewImg.src = url;
+    }
+
+    if (logoFileName) {
+      logoFileName.textContent = name || 'Database image';
+    }
+
+    // Save to localStorage
+    const logoData = {
+      name: name || 'database-logo',
+      type: 'image/png',
+      data: url,
+      source: 'supabase'
+    };
+    localStorage.setItem('companyLogo', JSON.stringify(logoData));
+
+    // Also update companyInfo
+    try {
+      const companyInfo = JSON.parse(localStorage.getItem('companyInfo') || '{}');
+      companyInfo.logo_url = url;
+      localStorage.setItem('companyInfo', JSON.stringify(companyInfo));
+    } catch (err) {
+      console.warn('Could not update companyInfo with logo:', err);
+    }
+
+    // Close modal
+    if (modal) {
+      modal.style.display = 'none';
+    }
+
+    alert('✅ Logo selected from database and saved!');
   }
 
   // ===================================
