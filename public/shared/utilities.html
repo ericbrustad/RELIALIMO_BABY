@@ -193,6 +193,10 @@
     <li style="margin-top:16px; margin-bottom:12px;"><strong style="color:#b71c1c;">Both Local + Supabase:</strong></li>
     <li><button id="deleteAllReservationsBothBtn" class="btn" style="background:#b71c1c; font-weight:bold;">🗑️ Delete ALL Reservations (Local + Supabase)</button></li>
     <li><button id="deleteAllAccountsBothBtn" class="btn" style="background:#b71c1c; font-weight:bold;">🗑️ Delete ALL Accounts (Local + Supabase)</button></li>
+    <li style="margin-top:16px; margin-bottom:12px;"><strong style="color:#ff6f00;">Auth/Session Cleanup:</strong></li>
+    <li><button id="clearAllAuthDataBtn" class="btn" style="background:#ff6f00;">🔐 Clear ALL Auth/Session Data</button>
+      <div style="font-size:11px; color:#666; margin-top:4px;">Clears customer sessions, driver sessions, Supabase tokens, onboarding state</div>
+    </li>
   </ul>
 
   <!-- =============== VIEW DATA =============== -->
@@ -263,6 +267,72 @@ console.log('=== UTILITIES MODULE LOADING ===');
 import { removeDuplicateAffiliates, removeDuplicateDrivers, setupAPI, getSupabaseClient, deleteAllReservationsSupabase, deleteAllAccountsSupabase, deleteAllDriversSupabase, deleteAllRatesSupabase, deleteAllVehiclesSupabase, resetConfirmationCounterToStart } from './api-service.js';
 import { resetAccountCounter } from './supabase-db.js';
 import * as driverFieldConfig from './driver-field-config.js';
+
+// ============================================
+// Clear ALL auth/session data (called when deleting accounts)
+// This ensures no stale login state remains
+// ============================================
+function clearAllAuthData() {
+  console.log('🔐 Clearing all auth/session data...');
+  
+  // Customer auth service keys
+  const customerAuthKeys = [
+    'customer_session',
+    'current_customer',
+    'customer_remember_me',
+    'customer_refresh_token',
+    'customer_last_activity',
+    'pending_verifications'
+  ];
+  customerAuthKeys.forEach(key => localStorage.removeItem(key));
+  
+  // Driver portal keys
+  localStorage.removeItem('driver_portal_id');
+  localStorage.removeItem('driver_session');
+  
+  // Admin/staff keys
+  localStorage.removeItem('admin_session');
+  
+  // Clear ALL Supabase auth tokens (sb-* keys)
+  const supabaseKeys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.startsWith('sb-') || key.includes('supabase'))) {
+      supabaseKeys.push(key);
+    }
+  }
+  supabaseKeys.forEach(key => {
+    console.log(`🔐 Removing Supabase key: ${key}`);
+    localStorage.removeItem(key);
+  });
+  
+  // Clear sessionStorage too
+  sessionStorage.clear();
+  
+  console.log('🔐 Auth data cleared:', {
+    customerAuthKeys: customerAuthKeys.length,
+    supabaseKeys: supabaseKeys.length
+  });
+}
+
+// Get stored Supabase session from localStorage (for admin API calls)
+function getStoredSupabaseSession() {
+  try {
+    const keys = Object.keys(localStorage).filter(k => k.startsWith('sb-') && k.includes('-auth-token'));
+    for (const key of keys) {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.access_token && parsed?.user) {
+          return parsed;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Could not read stored session:', e);
+  }
+  return null;
+}
 
 // Forced vehicle context (used by vehicle-related buttons); pull from env when present
 const VEHICLE_FORCE_ORG_ID = window.ENV?.FORCE_VEHICLE_ORG_ID || '54eb6ce7-ba97-4198-8566-6ac075828160';
@@ -748,6 +818,7 @@ if (deleteLocalVehiclesBtn) {
   });
 }
 
+
 // Helper function to clear localStorage caches after delete operations
 function clearLocalStorageCaches(type) {
   const cacheKeys = {
@@ -919,7 +990,7 @@ if (deleteAllReservationsBothBtn) {
 const deleteAllAccountsBothBtn = document.getElementById('deleteAllAccountsBothBtn');
 if (deleteAllAccountsBothBtn) {
   deleteAllAccountsBothBtn.onclick = async function() {
-    const confirmFirst = confirm('⚠️ WARNING: This will permanently delete ALL accounts from BOTH local storage AND Supabase database.\n\nThis includes all company accounts. This action CANNOT be undone.\n\nAre you sure you want to proceed?');
+    const confirmFirst = confirm('⚠️ WARNING: This will permanently delete ALL accounts from BOTH local storage AND Supabase database.\n\nThis includes all company accounts AND their Supabase Auth logins. This action CANNOT be undone.\n\nAre you sure you want to proceed?');
     if (!confirmFirst) return;
     
     const confirmSecond = prompt('Type DELETE to confirm removing all accounts:');
@@ -933,8 +1004,23 @@ if (deleteAllAccountsBothBtn) {
     
     let localDeleted = 0;
     let supabaseDeleted = false;
+    let authUsersDeleted = 0;
     
     try {
+      // 0. First get all account emails BEFORE deleting (to delete auth users)
+      await ensureSupabaseReady();
+      const supabase = getSupabaseClient();
+      let accountEmails = [];
+      try {
+        const { data: accounts } = await supabase.from('accounts').select('email');
+        if (accounts && accounts.length > 0) {
+          accountEmails = accounts.map(a => a.email).filter(e => e);
+          console.log(`📧 Found ${accountEmails.length} account emails to delete from auth`);
+        }
+      } catch (e) {
+        console.warn('Could not fetch account emails:', e);
+      }
+      
       // 1. Clear ALL local storage keys for accounts
       const keysToCheck = ['local_accounts', 'dev_accounts', 'relia_accounts', 'accounts'];
       keysToCheck.forEach(key => {
@@ -962,17 +1048,47 @@ if (deleteAllAccountsBothBtn) {
       }
       addressKeysToDelete.forEach(key => localStorage.removeItem(key));
       
+      // 2. Clear ALL customer auth/session data
+      clearAllAuthData();
+      
       console.log(`🗑️ Cleared ${localDeleted} accounts from all local storage`);
       
-      // 2. Delete from Supabase
-      await ensureSupabaseReady();
+      // 3. Delete from Supabase accounts table
       supabaseDeleted = await deleteAllAccountsSupabase();
       
-      // 3. Reset account counter
-      resetAccountCounter();
+      // 4. Delete auth users from Supabase Auth
+      if (accountEmails.length > 0) {
+        try {
+          // Get admin token from stored session
+          const storedSession = getStoredSupabaseSession();
+          if (storedSession?.access_token) {
+            const deleteAuthResp = await fetch('/api/delete-auth-users', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                emails: accountEmails,
+                adminToken: storedSession.access_token
+              })
+            });
+            
+            if (deleteAuthResp.ok) {
+              const result = await deleteAuthResp.json();
+              authUsersDeleted = result.deleted || 0;
+              console.log(`🔐 Deleted ${authUsersDeleted}/${accountEmails.length} auth users`);
+            } else {
+              console.warn('Failed to delete auth users:', await deleteAuthResp.text());
+            }
+          }
+        } catch (authErr) {
+          console.warn('Error deleting auth users:', authErr);
+        }
+      }
       
+      // 5. Reset account counter
+      resetAccountCounter();
+
       if (supabaseDeleted) {
-        alert(`✅ Successfully deleted ALL accounts!\n\n- Local storage: ${localDeleted} accounts cleared\n- Supabase: All accounts deleted\n- Account counter: Reset to 0\n\nAll company/account data has been removed.`);
+        alert(`✅ Successfully deleted ALL accounts!\n\n- Local storage: ${localDeleted} accounts cleared\n- Supabase accounts: All deleted\n- Supabase auth users: ${authUsersDeleted} deleted\n- Account counter: Reset to 0\n- Auth/session data: Cleared\n\nAll company/account data has been removed.`);
       } else {
         alert(`⚠️ Partial deletion:\n\n- Local storage: ${localDeleted} accounts cleared\n- Supabase: Failed to delete (check console)\n- Account counter: Reset to 0\n\nSome accounts may still exist in the database.`);
       }
@@ -983,6 +1099,19 @@ if (deleteAllAccountsBothBtn) {
     
     deleteAllAccountsBothBtn.disabled = false;
     deleteAllAccountsBothBtn.textContent = '🗑️ Delete ALL Accounts (Local + Supabase)';
+  };
+}
+
+// Clear All Auth Data button
+const clearAllAuthDataBtn = document.getElementById('clearAllAuthDataBtn');
+if (clearAllAuthDataBtn) {
+  clearAllAuthDataBtn.onclick = function() {
+    const confirm1 = confirm('⚠️ This will clear ALL authentication and session data:\n\n• Customer logins\n• Driver portal sessions\n• Supabase auth tokens\n• Onboarding state\n\nUsers will need to log in again. Continue?');
+    if (!confirm1) return;
+    
+    clearAllAuthData();
+    
+    alert('✅ All auth/session data cleared!\n\nRefresh the page to see effect.');
   };
 }
 

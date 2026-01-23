@@ -612,7 +612,7 @@
         
         // Check if onboarding is complete (has home address and airport set)
         const onboardingComplete = customer?.onboarding_complete || 
-                                   (customer?.home_address && customer?.home_airport);
+                                   ((customer?.home_address || customer?.address1) && customer?.home_airport);
         
         // Get the portal slug directly from the customer object returned by login
         let slug = customer?.portal_slug;
@@ -754,7 +754,7 @@
         const { firstName, lastName, email, phone, password } = pendingRegistration;
         const creds = getSupabaseCredentials();
         
-        // Create auth user
+        // Create auth user (skip Supabase's auto-confirmation email - we send our own)
         const authResponse = await fetch(`${creds.url}/auth/v1/signup`, {
           method: 'POST',
           headers: {
@@ -764,7 +764,8 @@
           body: JSON.stringify({ 
             email, 
             password,
-            data: { first_name: firstName, last_name: lastName }
+            data: { first_name: firstName, last_name: lastName },
+            options: { emailRedirectTo: null }  // Skip default confirmation email
           })
         });
 
