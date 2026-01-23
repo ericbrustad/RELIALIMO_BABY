@@ -437,7 +437,11 @@
             auth: {
                 autoRefreshToken: true,
                 persistSession: true,
-                detectSessionInUrl: true
+                detectSessionInUrl: true,
+                flowType: 'implicit',
+                // Disable lock to prevent AbortError in multi-tab/iframe scenarios
+                lock: false,
+                storageKey: 'sb-admin-auth-token'
             }
         });
         
@@ -527,6 +531,13 @@
                 }
             } catch (e) {
                 console.error('Init error:', e);
+                // If it's an AbortError, retry once after a short delay
+                if (e.name === 'AbortError' && !window._authRetried) {
+                    window._authRetried = true;
+                    console.log('Retrying auth after AbortError...');
+                    setTimeout(() => init(), 500);
+                    return;
+                }
                 hideSplash(true); // Show login on error
             }
         }
