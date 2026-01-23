@@ -1852,6 +1852,8 @@ class MyOffice {
   }
 
   populateCompanyInfoForm(info) {
+    console.log('📝 Populating company form with:', info);
+    
     const fields = {
       'companyName': info.name || '',
       'companyStreetAddress': info.street_address || info.address || '',
@@ -1871,9 +1873,16 @@ class MyOffice {
       'companyWebsite': info.website || ''
     };
 
+    console.log('📝 Field mappings:', fields);
+
     for (const [id, value] of Object.entries(fields)) {
       const el = document.getElementById(id);
-      if (el) el.value = value;
+      if (el) {
+        el.value = value;
+        console.log(`  ✓ Set ${id} = "${value}"`);
+      } else {
+        console.warn(`  ✗ Element not found: ${id}`);
+      }
     }
 
     // Persist geocode values into hidden fields for later saves
