@@ -2251,7 +2251,8 @@ class MyOffice {
       return;
     }
 
-    const info = {
+    // Full info object for localStorage (includes all fields)
+    const fullInfo = {
       name: document.getElementById('companyName')?.value?.trim() || '',
       street_address: document.getElementById('companyStreetAddress')?.value?.trim() || '',
       street_address_2: document.getElementById('companyStreetAddress2')?.value?.trim() || '',
@@ -2271,35 +2272,58 @@ class MyOffice {
       website: document.getElementById('companyWebsite')?.value?.trim() || '',
       latitude: parseFloat(document.getElementById('companyLatitude')?.value) || null,
       longitude: parseFloat(document.getElementById('companyLongitude')?.value) || null,
-      // Also set email to general_email for backwards compatibility
       email: document.getElementById('companyGeneralEmail')?.value?.trim() || '',
-      // Also set address to street_address for backwards compatibility
       address: document.getElementById('companyStreetAddress')?.value?.trim() || '',
-      // Include logo URL from preview or stored logo
       logo_url: this.getCompanyLogoUrl(),
       updated_at: new Date().toISOString()
     };
 
-    if (!info.name) {
+    // Supabase info - only include columns that exist in the database
+    const supabaseInfo = {
+      name: fullInfo.name,
+      street_address: fullInfo.street_address,
+      street_address_2: fullInfo.street_address_2,
+      city: fullInfo.city,
+      state: fullInfo.state,
+      postal_code: fullInfo.postal_code,
+      country: fullInfo.country,
+      ein: fullInfo.ein,
+      show_ein_on_docs: fullInfo.show_ein_on_docs,
+      phone: fullInfo.phone,
+      secondary_phone: fullInfo.secondary_phone,
+      fax: fullInfo.fax,
+      general_email: fullInfo.general_email,
+      reservation_email: fullInfo.reservation_email,
+      quote_email: fullInfo.quote_email,
+      billing_email: fullInfo.billing_email,
+      website: fullInfo.website,
+      latitude: fullInfo.latitude,
+      longitude: fullInfo.longitude,
+      email: fullInfo.email,
+      address: fullInfo.address,
+      updated_at: fullInfo.updated_at
+    };
+
+    if (!fullInfo.name) {
       alert('Company Name is required.');
       return;
     }
 
-    // Save to localStorage immediately
-    localStorage.setItem('companyInfo', JSON.stringify(info));
+    // Save to localStorage immediately (includes logo_url)
+    localStorage.setItem('companyInfo', JSON.stringify(fullInfo));
 
     // Also sync key fields to relia_company_settings for map region and other features
     try {
       const settingsRaw = localStorage.getItem('relia_company_settings') || '{}';
       const settings = JSON.parse(settingsRaw);
-      settings.companyName = info.name;
-      settings.companyPhone = info.phone;
-      settings.companyEmail = info.general_email || info.email;
-      settings.companyWebsite = info.website;
-      settings.companyAddress = info.street_address || info.address;
-      settings.companyCity = info.city;
-      settings.companyState = info.state;
-      settings.companyZip = info.postal_code;
+      settings.companyName = fullInfo.name;
+      settings.companyPhone = fullInfo.phone;
+      settings.companyEmail = fullInfo.general_email || fullInfo.email;
+      settings.companyWebsite = fullInfo.website;
+      settings.companyAddress = fullInfo.street_address || fullInfo.address;
+      settings.companyCity = fullInfo.city;
+      settings.companyState = fullInfo.state;
+      settings.companyZip = fullInfo.postal_code;
       settings.updatedAt = new Date().toISOString();
       localStorage.setItem('relia_company_settings', JSON.stringify(settings));
       console.log('✅ Company settings synced to relia_company_settings');
@@ -2315,7 +2339,7 @@ class MyOffice {
         throw new Error('Supabase client unavailable or invalid');
       }
 
-      console.log('📤 Saving company info to Supabase:', info);
+      console.log('📤 Saving company info to Supabase:', supabaseInfo);
 
       const { data: existingRows, error: fetchError } = await supabase
         .from('organizations')
@@ -2333,7 +2357,7 @@ class MyOffice {
       if (existing?.id) {
         const { data, error } = await supabase
           .from('organizations')
-          .update(info)
+          .update(supabaseInfo)
           .eq('id', existing.id)
           .select();
 
@@ -2345,7 +2369,7 @@ class MyOffice {
       } else {
         const { data, error } = await supabase
           .from('organizations')
-          .insert([{ ...info, created_at: new Date().toISOString() }])
+          .insert([{ ...supabaseInfo, created_at: new Date().toISOString() }])
           .select();
 
         if (error) {
@@ -2368,7 +2392,6 @@ class MyOffice {
       return;
     }
   }
-
   setupSystemUsers() {
     this.cacheUserInputs();
     this.renderUserList();
