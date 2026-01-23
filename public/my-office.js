@@ -1800,8 +1800,10 @@ class MyOffice {
   // ===================================
 
   setupCompanyInfoForm() {
+    console.log('🏢 setupCompanyInfoForm() called');
     // Load existing company info on page load
     this.loadCompanyInfo();
+    console.log('🏢 loadCompanyInfo() called (async)');
 
     // Wire address lookup/autofill
     this.setupCompanyAddressLookup();
@@ -1817,16 +1819,22 @@ class MyOffice {
   }
 
   async loadCompanyInfo() {
+    console.log('🔄 loadCompanyInfo() starting...');
     try {
       // First try to load from Supabase - import client directly
+      console.log('🔄 Importing supabase-client...');
       const { supabase } = await import('./supabase-client.js');
+      console.log('🔄 Supabase client imported:', !!supabase);
       
       if (supabase && typeof supabase.from === 'function') {
+        console.log('🔄 Fetching from organizations table...');
         const { data: org, error } = await supabase
           .from('organizations')
           .select('*')
           .limit(1)
           .single();
+
+        console.log('🔄 Supabase response - data:', org, 'error:', error);
 
         if (!error && org) {
           console.log('📥 Company info from Supabase:', org);
@@ -1840,11 +1848,13 @@ class MyOffice {
         }
       }
     } catch (e) {
-      console.warn('Could not load from Supabase, trying localStorage:', e.message);
+      console.warn('Could not load from Supabase, trying localStorage:', e.message, e);
     }
 
     // Fallback to localStorage
+    console.log('🔄 Trying localStorage fallback...');
     const cached = localStorage.getItem('companyInfo');
+    console.log('🔄 localStorage companyInfo:', cached ? 'exists' : 'null');
     if (cached) {
       try {
         const info = JSON.parse(cached);
@@ -1854,6 +1864,8 @@ class MyOffice {
       } catch (e) {
         console.error('Error parsing cached company info:', e);
       }
+    } else {
+      console.log('⚠️ No company info found in Supabase or localStorage');
     }
   }
   populateCompanyInfoForm(info) {
