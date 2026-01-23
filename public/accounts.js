@@ -455,6 +455,15 @@ class Accounts {
       if (passengerCheckEl) passengerCheckEl.checked = account.is_passenger || false;
       if (bookingCheckEl) bookingCheckEl.checked = account.is_booking_contact || false;
       
+      // Provider Type (for admin/driver accounts)
+      const providerTypeSectionEl = document.getElementById('providerTypeSection');
+      const providerTypeEl = document.getElementById('acctProviderType');
+      if (providerTypeEl) providerTypeEl.value = account.provider_type || '';
+      // Show provider type section if value is set
+      if (providerTypeSectionEl && account.provider_type) {
+        providerTypeSectionEl.style.display = 'block';
+      }
+      
       // Additional phone fields
       const officePhoneEl = document.getElementById('acctOfficePhone');
       const officePhoneExtEl = document.getElementById('acctOfficePhoneExt');
@@ -1555,13 +1564,18 @@ class Accounts {
       'acctRentalAgreement': '',
       'acctSettings': 'normal',
       'acctStatus': 'active',
-      'acctWebAccess': 'allow'
+      'acctWebAccess': 'allow',
+      'acctProviderType': ''
     };
     
     Object.entries(selectDefaults).forEach(([id, defaultVal]) => {
       const el = document.getElementById(id);
       if (el) el.value = defaultVal;
     });
+    
+    // Hide provider type section on new accounts
+    const providerTypeSectionEl = document.getElementById('providerTypeSection');
+    if (providerTypeSectionEl) providerTypeSectionEl.style.display = 'none';
 
     // Apply local region defaults after clearing
     this.applyLocalRegionDefaults();
@@ -1953,6 +1967,9 @@ class Accounts {
         // Email rules toggles
         email_rules_enabled: document.getElementById('emailRulesEnabled')?.checked ?? true,
         sms_rules_enabled: document.getElementById('smsRulesEnabled')?.checked ?? false,
+        
+        // Provider Type (for admin/driver accounts)
+        provider_type: document.getElementById('acctProviderType')?.value || null,
         
         type: 'individual',
         updated_at: new Date().toISOString()

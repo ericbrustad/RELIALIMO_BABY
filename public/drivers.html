@@ -460,11 +460,20 @@
               <input type="date" id="licenseExpiry" />
             </div>
           </div>
-          <div class="form-group">
-            <label>Vehicle Assignment</label>
-            <select id="vehicleAssignment">
-              <option value="">No Vehicle Assigned</option>
-            </select>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Provider Type *</label>
+              <select id="providerType" required>
+                <option value="in-house">In-House</option>
+                <option value="affiliate">Affiliate</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Vehicle Assignment</label>
+              <select id="vehicleAssignment">
+                <option value="">No Vehicle Assigned</option>
+              </select>
+            </div>
           </div>
           <div class="form-group">
             <label>Notes</label>
@@ -657,6 +666,7 @@
         document.getElementById('email').value = d.email || '';
         document.getElementById('licenseNumber').value = d.license_number || '';
         document.getElementById('licenseExpiry').value = d.license_expiry || '';
+        document.getElementById('providerType').value = d.provider_type || 'in-house';
         document.getElementById('vehicleAssignment').value = d.vehicle_id || '';
         document.getElementById('notes').value = d.notes || '';
         document.getElementById('isActive').checked = d.is_active !== false;
@@ -677,6 +687,7 @@
           email: document.getElementById('email').value.trim() || null,
           license_number: document.getElementById('licenseNumber').value.trim() || null,
           license_expiry: document.getElementById('licenseExpiry').value || null,
+          provider_type: document.getElementById('providerType').value || 'in-house',
           vehicle_id: document.getElementById('vehicleAssignment').value || null,
           notes: document.getElementById('notes').value.trim() || null,
           is_active: document.getElementById('isActive').checked,

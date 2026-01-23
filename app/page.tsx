@@ -43,7 +43,7 @@ export default function LandingPage() {
           <a href="https://driver.relialimo.com" className="btn btn-secondary">
             Driver Login
           </a>
-          <a href="https://admin.relialimo.com" className="btn btn-secondary">
+          <a href="https://admin.relialimo.com/index.html" className="btn btn-secondary">
             Admin Login
           </a>
         </div>
