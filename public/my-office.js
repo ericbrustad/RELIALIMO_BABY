@@ -2097,20 +2097,36 @@ class MyOffice {
       return;
     }
 
-    const [origGeo, destGeo] = await Promise.all([
-      this.mapboxService.geocodeAddress(origin),
-      this.mapboxService.geocodeAddress(destination)
-    ]);
+    // Use stored company coordinates for origin (from company info form)
+    const companyLat = parseFloat(document.getElementById('companyLatitude')?.value);
+    const companyLng = parseFloat(document.getElementById('companyLongitude')?.value);
+    
+    let origLat, origLng;
+    
+    if (companyLat && companyLng && !isNaN(companyLat) && !isNaN(companyLng)) {
+      // Use stored coordinates
+      origLat = companyLat;
+      origLng = companyLng;
+    } else {
+      // Fallback: geocode the origin address
+      const origGeo = await this.mapboxService.geocodeAddress(origin);
+      const origCoords = Array.isArray(origGeo) && origGeo[0]?.coordinates ? origGeo[0].coordinates : null;
+      if (!origCoords) {
+        mapImg.alt = 'Could not geocode origin address for map.';
+        return;
+      }
+      [origLng, origLat] = origCoords;
+    }
 
-    const origCoords = Array.isArray(origGeo) && origGeo[0]?.coordinates ? origGeo[0].coordinates : null;
+    // Geocode destination
+    const destGeo = await this.mapboxService.geocodeAddress(destination);
     const destCoords = Array.isArray(destGeo) && destGeo[0]?.coordinates ? destGeo[0].coordinates : null;
 
-    if (!origCoords || !destCoords) {
-      mapImg.alt = 'Could not geocode addresses for map.';
+    if (!destCoords) {
+      mapImg.alt = 'Could not geocode destination address for map.';
       return;
     }
 
-    const [origLng, origLat] = origCoords;
     const [destLng, destLat] = destCoords;
 
     // Build static map with two pins and a path
@@ -2123,7 +2139,21 @@ class MyOffice {
     const centerLng = (origLng + destLng) / 2;
     const centerLat = (origLat + destLat) / 2;
 
-    const url = `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/${markers.join(',')},${path}/${centerLng},${centerLat},9/480x320?access_token=${token}`;
+    // Calculate zoom based on distance between points
+    const latDiff = Math.abs(origLat - destLat);
+    const lngDiff = Math.abs(origLng - destLng);
+    const maxDiff = Math.max(latDiff, lngDiff);
+    
+    let zoom = 10;
+    if (maxDiff > 5) zoom = 5;
+    else if (maxDiff > 2) zoom = 7;
+    else if (maxDiff > 1) zoom = 8;
+    else if (maxDiff > 0.5) zoom = 9;
+    else if (maxDiff > 0.2) zoom = 10;
+    else if (maxDiff > 0.1) zoom = 11;
+    else zoom = 12;
+
+    const url = `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/${markers.join(',')},${path}/${centerLng},${centerLat},${zoom}/480x320?access_token=${token}`;
 
     mapImg.src = url;
     mapImg.alt = 'Route map preview';
