@@ -1232,6 +1232,7 @@ class MyOffice {
   loadLogoSettings() {
     // Moved to logo-management.html
   }
+
   loadSavedLogo() {
     // Legacy support - load from old format
     const savedLogo = localStorage.getItem('companyLogo');
@@ -1239,10 +1240,40 @@ class MyOffice {
       try {
         const logoData = JSON.parse(savedLogo);
         console.log('Legacy logo found:', logoData.name);
+        // Update preview if available
+        const logoPreviewImg = document.getElementById('logoPreviewImg');
+        if (logoPreviewImg && logoData.data) {
+          logoPreviewImg.src = logoData.data;
+        }
       } catch (e) {
         console.error('Error loading saved logo:', e);
       }
     }
+  }
+
+  getCompanyLogoUrl() {
+    // First check the preview image - it has the current logo
+    const logoPreviewImg = document.getElementById('logoPreviewImg');
+    if (logoPreviewImg && logoPreviewImg.src) {
+      const src = logoPreviewImg.src;
+      // Don't return the placeholder SVG
+      if (!src.includes('data:image/svg+xml') && src !== '') {
+        return src;
+      }
+    }
+    
+    // Fallback to stored logo
+    try {
+      const savedLogo = localStorage.getItem('companyLogo');
+      if (savedLogo) {
+        const logoData = JSON.parse(savedLogo);
+        return logoData.data || '';
+      }
+    } catch (e) {
+      console.warn('Could not get logo URL:', e);
+    }
+    
+    return '';
   }
 
   // ===================================
@@ -1856,6 +1887,31 @@ class MyOffice {
     if (showEinCheckbox) {
       showEinCheckbox.checked = info.show_ein_on_docs || false;
     }
+
+    // Load logo from info or localStorage
+    const logoPreviewImg = document.getElementById('logoPreviewImg');
+    const logoFileName = document.getElementById('logoFileName');
+    if (logoPreviewImg) {
+      // Try logo_url from info first, then fall back to stored companyLogo
+      if (info.logo_url && !info.logo_url.includes('data:image/svg+xml')) {
+        logoPreviewImg.src = info.logo_url;
+        if (logoFileName) logoFileName.textContent = 'Saved logo';
+      } else {
+        // Try to load from companyLogo localStorage
+        try {
+          const savedLogo = localStorage.getItem('companyLogo');
+          if (savedLogo) {
+            const logoData = JSON.parse(savedLogo);
+            if (logoData.data) {
+              logoPreviewImg.src = logoData.data;
+              if (logoFileName) logoFileName.textContent = logoData.name || 'Saved logo';
+            }
+          }
+        } catch (e) {
+          console.warn('Could not load saved logo:', e);
+        }
+      }
+    }
   }
 
   setupCompanyAddressLookup() {
@@ -2133,6 +2189,8 @@ class MyOffice {
       email: document.getElementById('companyGeneralEmail')?.value?.trim() || '',
       // Also set address to street_address for backwards compatibility
       address: document.getElementById('companyStreetAddress')?.value?.trim() || '',
+      // Include logo URL from preview or stored logo
+      logo_url: this.getCompanyLogoUrl(),
       updated_at: new Date().toISOString()
     };
 
@@ -2143,6 +2201,25 @@ class MyOffice {
 
     // Save to localStorage immediately
     localStorage.setItem('companyInfo', JSON.stringify(info));
+
+    // Also sync key fields to relia_company_settings for map region and other features
+    try {
+      const settingsRaw = localStorage.getItem('relia_company_settings') || '{}';
+      const settings = JSON.parse(settingsRaw);
+      settings.companyName = info.name;
+      settings.companyPhone = info.phone;
+      settings.companyEmail = info.general_email || info.email;
+      settings.companyWebsite = info.website;
+      settings.companyAddress = info.street_address || info.address;
+      settings.companyCity = info.city;
+      settings.companyState = info.state;
+      settings.companyZip = info.postal_code;
+      settings.updatedAt = new Date().toISOString();
+      localStorage.setItem('relia_company_settings', JSON.stringify(settings));
+      console.log('✅ Company settings synced to relia_company_settings');
+    } catch (e) {
+      console.warn('Could not sync to relia_company_settings:', e);
+    }
 
     // Try to save to Supabase
     try {
