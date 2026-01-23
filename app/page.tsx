@@ -1,195 +1,232 @@
 'use client';
 
 export default function LandingPage() {
-  // Supabase storage URL for logos
   const supabaseUrl = 'https://siumiadylwcrkaqsfwkj.supabase.co';
-  const mainLogoUrl = `${supabaseUrl}/storage/v1/object/public/images/relialimo-logo-main.png`;
-  
+  const mainLogoUrl = `${supabaseUrl}/storage/v1/object/public/images/reliabull_Trans.png`;
+
   return (
-    <>
+    <div className="portal-page">
       {/* Hero Section */}
-      <section className="hero">
-        <div className="logo-container">
+      <section className="portal-hero">
+        <div className="portal-logo-container">
           <img 
             src={mainLogoUrl} 
             alt="RELIALIMO" 
-            className="hero-logo"
+            className="portal-logo"
             onError={(e) => {
-              // Fallback to text if image fails to load
               e.currentTarget.style.display = 'none';
-              const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-              if (fallback) fallback.style.display = 'block';
             }}
           />
-          <div className="logo-fallback" style={{ display: 'none' }}>
-            <div className="logo-bull">🐂</div>
-            <h1 className="hero-title">RELIALIMO</h1>
-          </div>
+          <h1 className="portal-title">RELIALIMO™</h1>
+          <p className="portal-tagline">Professional Transportation Services</p>
         </div>
+      </section>
+
+      {/* Portal Navigation */}
+      <section className="portal-nav">
+        <h2 className="portal-nav-title">Select Your Portal</h2>
         
-        <p className="hero-subtitle">Professional Transportation</p>
-        <p className="hero-tagline">
-          Experience luxury, reliability, and unparalleled service for all your 
-          professional transportation needs.
-        </p>
-        
-        <div className="cta-buttons">
-          <a href="/book" className="btn btn-primary">
-            Book a Ride
+        <div className="portal-cards">
+          {/* Customer/Accounts Portal */}
+          <a href="https://account.relialimo.com" className="portal-card portal-card-accounts">
+            <div className="portal-card-icon">👤</div>
+            <h3 className="portal-card-title">Accounts</h3>
+            <p className="portal-card-desc">
+              Customer portal for booking rides, managing reservations, and viewing trip history.
+            </p>
+            <span className="portal-card-link">Sign In →</span>
           </a>
-          <a href="https://account.relialimo.com/auth" className="btn btn-secondary">
-            Account Login
+
+          {/* Drivers Portal */}
+          <a href="https://driver.relialimo.com" className="portal-card portal-card-drivers">
+            <div className="portal-card-icon">🚗</div>
+            <h3 className="portal-card-title">Drivers</h3>
+            <p className="portal-card-desc">
+              Driver portal for viewing assignments, accepting trips, and managing your schedule.
+            </p>
+            <span className="portal-card-link">Sign In →</span>
           </a>
-        </div>
-      </section>
 
-      {/* Features Section */}
-      <section className="features">
-        <h2 className="section-title">Why Choose RELIALIMO</h2>
-        <p className="section-subtitle">
-          Trusted by businesses and individuals for premium transportation services
-        </p>
-        
-        <div className="features-grid">
-          <div className="feature-card">
-            <div className="feature-icon">🚗</div>
-            <h3 className="feature-title">Luxury Fleet</h3>
-            <p className="feature-desc">
-              Premium vehicles meticulously maintained to ensure comfort and style 
-              for every journey, from sedans to SUVs and limousines.
+          {/* Admin Portal */}
+          <a href="https://admin.relialimo.com" className="portal-card portal-card-admin">
+            <div className="portal-card-icon">⚙️</div>
+            <h3 className="portal-card-title">Admin</h3>
+            <p className="portal-card-desc">
+              Staff portal for reservations, dispatch, fleet management, and company operations.
             </p>
-          </div>
-          
-          <div className="feature-card">
-            <div className="feature-icon">⏰</div>
-            <h3 className="feature-title">Always On Time</h3>
-            <p className="feature-desc">
-              Real-time flight tracking, GPS monitoring, and professional dispatching 
-              ensure punctual arrivals every single time.
-            </p>
-          </div>
-          
-          <div className="feature-card">
-            <div className="feature-icon">👔</div>
-            <h3 className="feature-title">Professional Chauffeurs</h3>
-            <p className="feature-desc">
-              Licensed, insured, and thoroughly vetted drivers committed to providing 
-              exceptional service and safe transportation.
-            </p>
-          </div>
-          
-          <div className="feature-card">
-            <div className="feature-icon">📱</div>
-            <h3 className="feature-title">Easy Booking</h3>
-            <p className="feature-desc">
-              Book instantly through our customer portal, receive real-time updates, 
-              and manage all your reservations in one place.
-            </p>
-          </div>
-          
-          <div className="feature-card">
-            <div className="feature-icon">🔒</div>
-            <h3 className="feature-title">Secure & Reliable</h3>
-            <p className="feature-desc">
-              Bank-level security for payments, comprehensive insurance coverage, 
-              and a track record of dependable service.
-            </p>
-          </div>
-          
-          <div className="feature-card">
-            <div className="feature-icon">💼</div>
-            <h3 className="feature-title">Corporate Accounts</h3>
-            <p className="feature-desc">
-              Streamlined billing, detailed reporting, and dedicated account management 
-              for businesses of all sizes.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Services Section */}
-      <section className="services">
-        <h2 className="section-title">Our Services</h2>
-        <p className="section-subtitle">
-          Comprehensive transportation solutions for every occasion
-        </p>
-        
-        <div className="services-grid">
-          <div className="service-card">
-            <h3 className="service-title">Airport Transfers</h3>
-            <p className="service-desc">
-              Door-to-door service with flight monitoring, meet & greet options, 
-              and assistance with luggage. Never miss a flight again.
-            </p>
-          </div>
-          
-          <div className="service-card">
-            <h3 className="service-title">Corporate Travel</h3>
-            <p className="service-desc">
-              Executive transportation for meetings, conferences, and client entertainment. 
-              Impress with professionalism and punctuality.
-            </p>
-          </div>
-          
-          <div className="service-card">
-            <h3 className="service-title">Special Events</h3>
-            <p className="service-desc">
-              Weddings, proms, galas, and celebrations. Make your special day 
-              memorable with elegant transportation.
-            </p>
-          </div>
-          
-          <div className="service-card">
-            <h3 className="service-title">Hourly Charters</h3>
-            <p className="service-desc">
-              Flexible hourly service for shopping trips, city tours, wine tastings, 
-              or any occasion requiring a personal chauffeur.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Portals Section */}
-      <section className="portals">
-        <h2 className="section-title">Access Your Portal</h2>
-        <p className="section-subtitle">
-          Dedicated portals for customers, drivers, and administrators
-        </p>
-        
-        <div className="portals-grid">
-          <div className="portal-card">
-            <div className="portal-icon">👤</div>
-            <h3 className="portal-title">Customer Portal</h3>
-            <p className="portal-desc">
-              Book rides, track your chauffeur in real-time, manage reservations, 
-              and view your trip history.
-            </p>
-            <a href="https://account.relialimo.com" className="portal-link">
-              Access Portal
-            </a>
-          </div>
-          
-          <div className="portal-card">
-            <div className="portal-icon">🚘</div>
-            <h3 className="portal-title">Driver Portal</h3>
-            <p className="portal-desc">
-              View assigned trips, update availability, manage your schedule, 
-              and communicate with dispatch.
-            </p>
-            <a href="https://driver.relialimo.com" className="portal-link">
-              Driver Login
-            </a>
-          </div>
+            <span className="portal-card-link">Sign In →</span>
+          </a>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="footer">
-        <p className="footer-text">
-          © {new Date().getFullYear()} RELIALIMO. All rights reserved. | 
-          <a href="https://admin.relialimo.com"> Admin Access</a>
-        </p>
+      <footer className="portal-footer">
+        <p>© {new Date().getFullYear()} RELIALIMO™ - All Rights Reserved</p>
       </footer>
-    </>
-  )
+
+      <style jsx>{`
+        .portal-page {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .portal-hero {
+          padding: 60px 20px 40px;
+          text-align: center;
+        }
+
+        .portal-logo-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .portal-logo {
+          width: 120px;
+          height: auto;
+          filter: drop-shadow(0 0 30px rgba(201, 162, 39, 0.5));
+          animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
+        }
+
+        .portal-title {
+          font-size: 2.5rem;
+          font-weight: 700;
+          color: #c9a227;
+          margin: 0;
+          letter-spacing: 4px;
+          text-shadow: 0 2px 20px rgba(201, 162, 39, 0.3);
+        }
+
+        .portal-tagline {
+          font-size: 1.1rem;
+          color: rgba(255, 255, 255, 0.7);
+          margin: 8px 0 0;
+          letter-spacing: 2px;
+        }
+
+        .portal-nav {
+          padding: 20px;
+          width: 100%;
+          max-width: 1000px;
+        }
+
+        .portal-nav-title {
+          text-align: center;
+          color: #fff;
+          font-size: 1.4rem;
+          font-weight: 500;
+          margin-bottom: 32px;
+          opacity: 0.9;
+        }
+
+        .portal-cards {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 24px;
+          padding: 0 20px;
+        }
+
+        .portal-card {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 16px;
+          padding: 32px 24px;
+          text-decoration: none;
+          color: #fff;
+          transition: all 0.3s ease;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+          backdrop-filter: blur(10px);
+        }
+
+        .portal-card:hover {
+          transform: translateY(-6px);
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+          border-color: rgba(201, 162, 39, 0.4);
+        }
+
+        .portal-card-accounts:hover {
+          background: rgba(76, 175, 80, 0.15);
+          border-color: rgba(76, 175, 80, 0.5);
+        }
+
+        .portal-card-drivers:hover {
+          background: rgba(33, 150, 243, 0.15);
+          border-color: rgba(33, 150, 243, 0.5);
+        }
+
+        .portal-card-admin:hover {
+          background: rgba(201, 162, 39, 0.15);
+          border-color: rgba(201, 162, 39, 0.5);
+        }
+
+        .portal-card-icon {
+          font-size: 3rem;
+          margin-bottom: 16px;
+        }
+
+        .portal-card-title {
+          font-size: 1.5rem;
+          font-weight: 600;
+          margin: 0 0 12px;
+          color: #c9a227;
+        }
+
+        .portal-card-desc {
+          font-size: 0.95rem;
+          color: rgba(255, 255, 255, 0.7);
+          line-height: 1.6;
+          margin: 0 0 20px;
+          flex-grow: 1;
+        }
+
+        .portal-card-link {
+          font-size: 0.9rem;
+          color: #c9a227;
+          font-weight: 500;
+          transition: color 0.2s;
+        }
+
+        .portal-card:hover .portal-card-link {
+          color: #f4d03f;
+        }
+
+        .portal-footer {
+          margin-top: auto;
+          padding: 40px 20px;
+          text-align: center;
+          color: rgba(255, 255, 255, 0.4);
+          font-size: 0.85rem;
+        }
+
+        @media (max-width: 600px) {
+          .portal-title {
+            font-size: 1.8rem;
+            letter-spacing: 2px;
+          }
+
+          .portal-cards {
+            grid-template-columns: 1fr;
+            padding: 0 10px;
+          }
+
+          .portal-card {
+            padding: 24px 20px;
+          }
+        }
+      `}</style>
+    </div>
+  );
 }
