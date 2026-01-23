@@ -1956,26 +1956,38 @@ class MyOffice {
 
     if (!originInput || !destinationInput || !runBtn) return;
 
-    // Prefill origin from company address if empty
-    const prefillOrigin = () => {
+    // Prefill origin from company address and keep it synced
+    const updateOriginFromCompanyAddress = () => {
       const assembled = this.buildCompanyAddressString();
-      if (assembled && !originInput.value) {
+      if (assembled) {
         originInput.value = assembled;
       }
     };
-    prefillOrigin();
+    updateOriginFromCompanyAddress();
+
+    // Make origin read-only - it's always the company address
+    originInput.setAttribute('readonly', 'true');
+    originInput.style.backgroundColor = '#f5f5f5';
+    originInput.title = 'Origin is set from company address above';
+
+    // Update origin when address fields change
+    const addressFields = ['companyStreetAddress', 'companyStreetAddress2', 'companyCity', 'companyState', 'companyZipCode'];
+    addressFields.forEach(fieldId => {
+      const field = document.getElementById(fieldId);
+      if (field) {
+        field.addEventListener('input', updateOriginFromCompanyAddress);
+      }
+    });
 
     runBtn.addEventListener('click', () => {
       this.runCompanyRouteLookup();
     });
 
-    [originInput, destinationInput].forEach(input => {
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          this.runCompanyRouteLookup();
-        }
-      });
+    destinationInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.runCompanyRouteLookup();
+      }
     });
 
     if (expandBtn && mapCard) {
@@ -2019,6 +2031,11 @@ class MyOffice {
     durationEl.textContent = '-';
 
     try {
+      // Check if Google Maps service is available
+      if (!this.googleMapsService) {
+        throw new Error('Google Maps service not initialized');
+      }
+
       const summary = await this.googleMapsService.getRouteSummary({ origin, destination });
       if (!summary) {
         statusEl.textContent = 'No route found.';
@@ -2032,10 +2049,19 @@ class MyOffice {
       // Render map with Mapbox (visual only) using the two addresses
       this.renderCompanyRouteMap(origin, destination).catch((err) => {
         console.warn('Map render failed:', err);
+        statusEl.textContent = 'Route loaded (map preview unavailable).';
       });
     } catch (err) {
       console.warn('Route lookup failed:', err);
-      statusEl.textContent = 'Route lookup failed.';
+      const errorMessage = err?.message || 'Unknown error';
+      
+      if (errorMessage.includes('Directions service not ready')) {
+        statusEl.textContent = 'Google Maps API loading... Please try again in a moment.';
+      } else if (errorMessage.includes('API key') || errorMessage.includes('billing')) {
+        statusEl.textContent = 'Google Maps API key issue. Check console for details.';
+      } else {
+        statusEl.textContent = 'Route lookup failed. Check console for details.';
+      }
     }
   }
 
