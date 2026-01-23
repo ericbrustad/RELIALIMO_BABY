@@ -8558,7 +8558,13 @@ Would you also like to delete this driver?`
     // Delete Driver button
     const deleteDriverBtn = document.getElementById('deleteDriverBtn');
     if (deleteDriverBtn) {
-      deleteDriverBtn.addEventListener('click', () => this.deleteDriver());
+      deleteDriverBtn.addEventListener('click', () => {
+        console.log('🗑️ Delete driver button clicked, currentDriver:', this.currentDriver);
+        this.deleteDriver();
+      });
+      console.log('✅ Delete driver button listener attached');
+    } else {
+      console.warn('⚠️ deleteDriverBtn not found in DOM');
     }
 
     // Add New Driver button
@@ -10972,10 +10978,13 @@ Would you also like to delete this driver?`
   }
 
   async deleteDriver() {
+    console.log('🗑️ deleteDriver() method called');
     if (!this.currentDriver?.id) {
+      console.log('⚠️ No currentDriver or currentDriver.id');
       alert('No driver selected');
       return;
     }
+    console.log('🗑️ Deleting driver:', this.currentDriver.id, this.currentDriver.first_name, this.currentDriver.last_name);
 
     if (!confirm(`Delete ${this.currentDriver.first_name} ${this.currentDriver.last_name}?`)) {
       return;
