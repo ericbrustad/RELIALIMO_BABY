@@ -1682,7 +1682,7 @@ async function bookTrip(includeReturn = false) {
     if (autoFarmEnabled) {
       // AUTO-FARM ON: Set to Farm-out Unassigned with automatic mode
       reservationData.driver_id = null;
-      reservationData.res_status = 'Farmout';
+      reservationData.status = 'pending'; // Valid DB status
       reservationData.farm_option = 'farm_out';
       reservationData.farmout_status = 'unassigned';
       reservationData.farmout_mode = 'automatic';
@@ -1703,15 +1703,13 @@ async function bookTrip(includeReturn = false) {
         reservationData.assigned_driver_name = `${availableDriver.first_name || ''} ${availableDriver.last_name || ''}`.trim();
         reservationData.driver_phone = availableDriver.phone || availableDriver.cell_phone;
         reservationData.driver_status = 'assigned'; // Directly assigned, not offered
-        reservationData.res_status = 'Confirmed';
-        reservationData.status = 'assigned';
+        reservationData.status = 'confirmed'; // Valid DB status for assigned trips
         reservationData.farmout_status = 'in_house_assigned'; // Key for driver portal to see trip
         console.log(`[CustomerPortal] ✅ Assigned default driver: ${reservationData.assigned_driver_name} (${availableDriver.id})`);
       } else {
         // No default driver available - leave unassigned In-House
         reservationData.assigned_driver_id = null;
-        reservationData.res_status = 'Unassigned';
-        reservationData.status = 'unassigned';
+        reservationData.status = 'pending'; // Valid DB status for unassigned trips
         reservationData.farmout_status = 'in_house_unassigned'; // In-House but no driver yet
         console.log('[CustomerPortal] No default driver available: Setting to In-House Unassigned');
       }
@@ -1807,10 +1805,6 @@ async function bookTrip(includeReturn = false) {
     // Set grand_total from total_price
     if (reservationData.total_price) {
       dbData.grand_total = reservationData.total_price;
-    }
-    // Map res_status to status
-    if (reservationData.res_status) {
-      dbData.status = reservationData.res_status;
     }
     
     // Create reservation with filtered data
@@ -2041,12 +2035,11 @@ function buildReservationData() {
     // Assignment: Set dynamically in bookTrip based on auto-farm toggle
     // These are defaults - will be overwritten in bookTrip()
     driver_id: null,
-    res_status: 'Unassigned',
     farm_option: 'in-house',
     farmout_mode: 'manual',
     
-    // Status
-    status: 'confirmed',
+    // Status - default to pending, will be set to confirmed if driver assigned
+    status: 'pending',
     
     // Source & tracking
     source: 'customer_portal',
