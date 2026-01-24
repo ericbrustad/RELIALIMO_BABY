@@ -1841,9 +1841,10 @@ function redirectToPortal() {
   // Try to get slug from CustomerAuth first, then state
   let slug = CustomerAuth.getPortalSlug() || state.customer?.portal_slug;
   
-  // Generate from name if not available
+  // Generate from name with random ID if not available
   if (!slug && state.customer?.first_name && state.customer?.last_name) {
-    slug = `${state.customer.first_name}_${state.customer.last_name}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    const randomId = Math.random().toString(36).substring(2, 10);
+    slug = `${state.customer.first_name}_${state.customer.last_name}_${randomId}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
   }
   
   // Validate slug

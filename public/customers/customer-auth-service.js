@@ -527,10 +527,11 @@ async function createAccountRecord(accessToken, email) {
     const firstName = userMetadata.first_name || '';
     const lastName = userMetadata.last_name || '';
     
-    // Generate portal slug from name
+    // Generate portal slug from name + random ID for uniqueness
     let portalSlug = '';
     if (firstName && lastName) {
-      portalSlug = `${firstName}_${lastName}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
+      const randomId = Math.random().toString(36).substring(2, 10);
+      portalSlug = `${firstName}_${lastName}_${randomId}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
     }
     
     console.log('[AuthService] Auto-creating account for:', email, { firstName, lastName });
@@ -657,17 +658,18 @@ export function getAccessToken() {
 export function getPortalSlug() {
   if (!authState.customer) return '';
   
-  // Use stored portal_slug if available
+  // Use stored portal_slug - should always exist for properly created accounts
   if (authState.customer.portal_slug) {
     return authState.customer.portal_slug;
   }
   
-  // Generate from name if both first and last name exist
+  // Fallback: Generate slug with random ID if name exists but no stored slug
   const firstName = (authState.customer.first_name || '').toLowerCase().trim();
   const lastName = (authState.customer.last_name || '').toLowerCase().trim();
   
   if (firstName && lastName) {
-    const slug = `${firstName}_${lastName}`.replace(/[^a-z0-9_]/g, '');
+    const randomId = Math.random().toString(36).substring(2, 10);
+    const slug = `${firstName}_${lastName}_${randomId}`.replace(/[^a-z0-9_]/g, '');
     // Validate slug is not empty or just underscores
     if (slug && slug !== '_' && slug.replace(/_/g, '') !== '') {
       return slug;
