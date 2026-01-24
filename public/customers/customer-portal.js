@@ -1653,7 +1653,7 @@ async function bookTrip(includeReturn = false) {
         reservationData.res_status = 'Confirmed';
         reservationData.status = 'assigned';
         reservationData.farm_status = null; // Clear farmout status for in-house
-        reservationData.farmout_status = null;
+        reservationData.farmout_status = 'in_house_assigned'; // Key for driver portal to see trip
         console.log(`[CustomerPortal] ✅ Assigned default driver: ${reservationData.assigned_driver_name} (${availableDriver.id})`);
       } else {
         // No default driver available - leave unassigned In-House
@@ -1661,6 +1661,7 @@ async function bookTrip(includeReturn = false) {
         reservationData.res_status = 'Unassigned';
         reservationData.status = 'unassigned';
         reservationData.farm_status = null;
+        reservationData.farmout_status = 'in_house_unassigned'; // In-House but no driver yet
         console.log('[CustomerPortal] No default driver available: Setting to In-House Unassigned');
       }
     }

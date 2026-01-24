@@ -258,6 +258,112 @@ function buildNotesField(payload) {
   return parts.join(' | ');
 }
 
+// ============================================
+// DEFAULT DRIVER & VEHICLE AUTO-ASSIGNMENT
+// ============================================
+
+/**
+ * Fetch the default driver (is_default_driver = true)
+ * Returns the first active default driver or null if none configured
+ */
+export async function getDefaultDriver() {
+  try {
+    const drivers = await request('/drivers?is_default_driver=eq.true&is_active=eq.true&select=id,first_name,last_name,phone,email&limit=1');
+    if (drivers && drivers.length > 0) {
+      const driver = drivers[0];
+      console.log('📋 Found default driver:', driver.first_name, driver.last_name);
+      return {
+        id: driver.id,
+        name: `${driver.first_name || ''} ${driver.last_name || ''}`.trim(),
+        firstName: driver.first_name,
+        lastName: driver.last_name,
+        phone: driver.phone,
+        email: driver.email
+      };
+    }
+    console.log('📋 No default driver configured');
+    return null;
+  } catch (err) {
+    console.error('📋 Error fetching default driver:', err);
+    return null;
+  }
+}
+
+/**
+ * Fetch the default vehicle type (from portal_settings or is_app_default = true)
+ * Returns the vehicle type name or null if none configured
+ */
+export async function getDefaultVehicleType() {
+  try {
+    // First try portal_settings
+    const settings = await request('/portal_settings?setting_key=eq.default_vehicle_type&select=setting_value&limit=1');
+    if (settings && settings.length > 0 && settings[0].setting_value) {
+      console.log('📋 Found default vehicle type from settings:', settings[0].setting_value);
+      return settings[0].setting_value;
+    }
+    
+    // Fallback to vehicle_types with is_app_default = true
+    const vehicleTypes = await request('/vehicle_types?is_app_default=eq.true&is_active=eq.true&select=name&limit=1');
+    if (vehicleTypes && vehicleTypes.length > 0) {
+      console.log('📋 Found default vehicle type from vehicle_types:', vehicleTypes[0].name);
+      return vehicleTypes[0].name;
+    }
+    
+    console.log('📋 No default vehicle type configured');
+    return null;
+  } catch (err) {
+    console.error('📋 Error fetching default vehicle type:', err);
+    return null;
+  }
+}
+
+/**
+ * Auto-apply default driver and vehicle to a reservation payload
+ * Only applies if:
+ * - farm_option is 'in-house' (or not set, defaults to in-house)
+ * - No driver is already assigned
+ * Returns the modified payload
+ */
+export async function applyDefaultDriverAndVehicle(payload) {
+  const details = payload.details || {};
+  const farmOption = details.farmOption || payload.farm_option || 'in-house';
+  
+  // Only auto-assign for in-house reservations
+  if (farmOption !== 'in-house') {
+    console.log('📋 Farm option is not in-house, skipping auto-assignment');
+    return payload;
+  }
+  
+  // Check if driver is already assigned
+  const hasDriver = details.driverId || payload.assigned_driver_id;
+  
+  if (!hasDriver) {
+    // Fetch and assign default driver
+    const defaultDriver = await getDefaultDriver();
+    if (defaultDriver) {
+      console.log('📋 Auto-assigning default driver:', defaultDriver.name);
+      if (!payload.details) payload.details = {};
+      payload.details.driverId = defaultDriver.id;
+      payload.details.driverName = defaultDriver.name;
+    }
+  }
+  
+  // Check if vehicle type is already set
+  const hasVehicleType = details.vehicleType || payload.vehicle_type;
+  
+  if (!hasVehicleType) {
+    // Fetch and assign default vehicle type
+    const defaultVehicleType = await getDefaultVehicleType();
+    if (defaultVehicleType) {
+      console.log('📋 Auto-assigning default vehicle type:', defaultVehicleType);
+      if (!payload.details) payload.details = {};
+      payload.details.vehicleType = defaultVehicleType;
+    }
+  }
+  
+  return payload;
+}
+
 // Transform rich form payload to flat database columns
 function transformReservationPayload(payload) {
   const result = {};
@@ -623,8 +729,11 @@ function transformReservationPayload(payload) {
 
 // Reservations
 export async function createReservation(payload) {
+  // Auto-apply default driver and vehicle type for in-house reservations
+  const enhancedPayload = await applyDefaultDriverAndVehicle(payload);
+  
   // Transform to database schema
-  const dbPayload = transformReservationPayload(payload);
+  const dbPayload = transformReservationPayload(enhancedPayload);
   const rows = await request('/reservations', { 
     method: 'POST', 
     headers: { Prefer: 'return=representation' },
