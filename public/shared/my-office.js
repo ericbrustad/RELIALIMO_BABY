@@ -1269,10 +1269,13 @@ class MyOffice {
     `;
     
     modal.innerHTML = `
-      <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto; color: #fff;">
+      <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; max-width: 900px; width: 90%; max-height: 85vh; overflow-y: auto; color: #fff;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
           <h3 style="margin: 0; font-size: 20px;">📁 Choose Image from Database</h3>
           <button id="dbImagePickerClose" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer;">&times;</button>
+        </div>
+        <div id="dbImagePickerBreadcrumb" style="margin-bottom: 16px; font-size: 14px; color: #c9a227;">
+          <span class="breadcrumb-item" data-path="" style="cursor: pointer;">📁 images</span>
         </div>
         <div id="dbImagePickerLoading" style="text-align: center; padding: 40px;">
           <div style="font-size: 32px;">⏳</div>
@@ -1281,7 +1284,7 @@ class MyOffice {
         <div id="dbImagePickerGrid" style="display: none; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px;"></div>
         <div id="dbImagePickerEmpty" style="display: none; text-align: center; padding: 40px; color: #999;">
           <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
-          <p>No images found in database.</p>
+          <p>No images found in this folder.</p>
           <p style="font-size: 14px;">Upload images via Logo Management or directly to Supabase Storage.</p>
         </div>
       </div>
@@ -1299,98 +1302,171 @@ class MyOffice {
       if (e.target === modal) modal.remove();
     });
     
-    // Load images from Supabase
-    try {
-      const supabaseUrl = window.ENV?.SUPABASE_URL || 'https://siumiadylwcrkaqsfwkj.supabase.co';
-      const supabaseKey = window.ENV?.SUPABASE_ANON_KEY || localStorage.getItem('supabase_anon_key');
-      
-      const response = await fetch(`${supabaseUrl}/storage/v1/object/list/images`, {
-        headers: {
-          'Authorization': `Bearer ${supabaseKey}`,
-          'apikey': supabaseKey
-        }
-      });
-      
+    const supabaseUrl = window.ENV?.SUPABASE_URL || 'https://siumiadylwcrkaqsfwkj.supabase.co';
+    const supabaseKey = window.ENV?.SUPABASE_ANON_KEY || localStorage.getItem('supabase_anon_key');
+    
+    // Function to load folder contents
+    const loadFolder = async (folderPath = '') => {
       const loadingEl = document.getElementById('dbImagePickerLoading');
       const gridEl = document.getElementById('dbImagePickerGrid');
       const emptyEl = document.getElementById('dbImagePickerEmpty');
+      const breadcrumbEl = document.getElementById('dbImagePickerBreadcrumb');
       
-      if (response.ok) {
-        const files = await response.json();
-        const imageFiles = files.filter(f => 
-          f.name && (f.name.endsWith('.jpg') || f.name.endsWith('.jpeg') || f.name.endsWith('.png') || f.name.endsWith('.webp') || f.name.endsWith('.gif'))
-        );
-        
-        loadingEl.style.display = 'none';
-        
-        if (imageFiles.length === 0) {
-          emptyEl.style.display = 'block';
-          return;
-        }
-        
-        gridEl.style.display = 'grid';
-        
-        imageFiles.forEach(file => {
-          const imageUrl = `${supabaseUrl}/storage/v1/object/public/images/${file.name}`;
-          const card = document.createElement('div');
-          card.style.cssText = `
-            background: #2a2a4a; border-radius: 8px; padding: 12px; cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s; text-align: center;
-          `;
-          card.innerHTML = `
-            <img src="${imageUrl}" alt="${file.name}" style="width: 100%; height: 100px; object-fit: contain; border-radius: 4px; margin-bottom: 8px;" />
-            <div style="font-size: 12px; word-break: break-word; color: #ccc;">${file.name}</div>
-          `;
-          
-          card.addEventListener('mouseenter', () => {
-            card.style.transform = 'scale(1.02)';
-            card.style.boxShadow = '0 4px 12px rgba(201, 162, 39, 0.3)';
-          });
-          card.addEventListener('mouseleave', () => {
-            card.style.transform = 'scale(1)';
-            card.style.boxShadow = 'none';
-          });
-          
-          card.addEventListener('click', () => {
-            // Set the image as company logo
-            const logoData = {
-              name: file.name,
-              type: 'image/png',
-              data: imageUrl,
-              source: 'database'
-            };
-            localStorage.setItem(targetKey, JSON.stringify(logoData));
-            
-            // Update preview
-            if (previewImg) {
-              previewImg.src = imageUrl;
-            }
-            if (fileNameEl) {
-              fileNameEl.textContent = file.name + ' (from DB)';
-            }
-            
-            // Also update companyInfo
-            try {
-              const companyInfo = JSON.parse(localStorage.getItem('companyInfo') || '{}');
-              companyInfo.logo_url = imageUrl;
-              localStorage.setItem('companyInfo', JSON.stringify(companyInfo));
-            } catch (err) {
-              console.warn('Could not update companyInfo with logo:', err);
-            }
-            
-            modal.remove();
-            alert('✅ Logo selected from database!');
-          });
-          
-          gridEl.appendChild(card);
+      loadingEl.style.display = 'block';
+      gridEl.style.display = 'none';
+      emptyEl.style.display = 'none';
+      gridEl.innerHTML = '';
+      
+      // Update breadcrumb
+      const pathParts = folderPath ? folderPath.split('/').filter(p => p) : [];
+      let breadcrumbHtml = '<span class="breadcrumb-item" data-path="" style="cursor: pointer; color: #c9a227;">📁 images</span>';
+      let currentPath = '';
+      pathParts.forEach((part, idx) => {
+        currentPath += (currentPath ? '/' : '') + part;
+        breadcrumbHtml += ` <span style="color: #666;">/</span> <span class="breadcrumb-item" data-path="${currentPath}" style="cursor: pointer; color: #c9a227;">📁 ${part}</span>`;
+      });
+      breadcrumbEl.innerHTML = breadcrumbHtml;
+      
+      // Add click handlers to breadcrumb items
+      breadcrumbEl.querySelectorAll('.breadcrumb-item').forEach(item => {
+        item.addEventListener('click', () => {
+          loadFolder(item.dataset.path);
         });
-      } else {
-        loadingEl.innerHTML = '<p style="color: #ff6b6b;">Failed to load images from database.</p>';
+      });
+      
+      try {
+        const listUrl = folderPath 
+          ? `${supabaseUrl}/storage/v1/object/list/images/${folderPath}`
+          : `${supabaseUrl}/storage/v1/object/list/images`;
+          
+        const response = await fetch(listUrl, {
+          headers: {
+            'Authorization': `Bearer ${supabaseKey}`,
+            'apikey': supabaseKey
+          }
+        });
+        
+        if (response.ok) {
+          const files = await response.json();
+          
+          loadingEl.style.display = 'none';
+          
+          if (!files || files.length === 0) {
+            emptyEl.style.display = 'block';
+            return;
+          }
+          
+          gridEl.style.display = 'grid';
+          
+          // Separate folders and images
+          const folders = files.filter(f => f.id === null && f.name);
+          const imageFiles = files.filter(f => 
+            f.id !== null && f.name && 
+            (f.name.endsWith('.jpg') || f.name.endsWith('.jpeg') || f.name.endsWith('.png') || f.name.endsWith('.webp') || f.name.endsWith('.gif') || f.name.endsWith('.svg'))
+          );
+          
+          // Show folders first
+          folders.forEach(folder => {
+            const card = document.createElement('div');
+            card.style.cssText = `
+              background: #2a2a4a; border-radius: 8px; padding: 16px; cursor: pointer;
+              transition: transform 0.2s, box-shadow 0.2s; text-align: center;
+            `;
+            card.innerHTML = `
+              <div style="font-size: 48px; margin-bottom: 8px;">📁</div>
+              <div style="font-size: 13px; word-break: break-word; color: #c9a227; font-weight: bold;">${folder.name}</div>
+            `;
+            
+            card.addEventListener('mouseenter', () => {
+              card.style.transform = 'scale(1.02)';
+              card.style.boxShadow = '0 4px 12px rgba(201, 162, 39, 0.3)';
+            });
+            card.addEventListener('mouseleave', () => {
+              card.style.transform = 'scale(1)';
+              card.style.boxShadow = 'none';
+            });
+            
+            card.addEventListener('click', () => {
+              const newPath = folderPath ? `${folderPath}/${folder.name}` : folder.name;
+              loadFolder(newPath);
+            });
+            
+            gridEl.appendChild(card);
+          });
+          
+          // Then show images
+          imageFiles.forEach(file => {
+            const imagePath = folderPath ? `${folderPath}/${file.name}` : file.name;
+            const imageUrl = `${supabaseUrl}/storage/v1/object/public/images/${imagePath}`;
+            const card = document.createElement('div');
+            card.style.cssText = `
+              background: #2a2a4a; border-radius: 8px; padding: 12px; cursor: pointer;
+              transition: transform 0.2s, box-shadow 0.2s; text-align: center;
+            `;
+            card.innerHTML = `
+              <img src="${imageUrl}" alt="${file.name}" style="width: 100%; height: 100px; object-fit: contain; border-radius: 4px; margin-bottom: 8px;" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Crect fill=%22%23333%22 width=%22100%22 height=%22100%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 fill=%22%23999%22 text-anchor=%22middle%22 dy=%22.3em%22%3E?%3C/text%3E%3C/svg%3E'" />
+              <div style="font-size: 11px; word-break: break-word; color: #ccc;">${file.name}</div>
+            `;
+            
+            card.addEventListener('mouseenter', () => {
+              card.style.transform = 'scale(1.02)';
+              card.style.boxShadow = '0 4px 12px rgba(201, 162, 39, 0.3)';
+            });
+            card.addEventListener('mouseleave', () => {
+              card.style.transform = 'scale(1)';
+              card.style.boxShadow = 'none';
+            });
+            
+            card.addEventListener('click', () => {
+              // Set the image as company logo
+              const logoData = {
+                name: file.name,
+                path: imagePath,
+                type: 'image/png',
+                data: imageUrl,
+                source: 'database'
+              };
+              localStorage.setItem(targetKey, JSON.stringify(logoData));
+              
+              // Update preview
+              if (previewImg) {
+                previewImg.src = imageUrl;
+              }
+              if (fileNameEl) {
+                fileNameEl.textContent = file.name + ' (from DB)';
+              }
+              
+              // Also update companyInfo
+              try {
+                const companyInfo = JSON.parse(localStorage.getItem('companyInfo') || '{}');
+                companyInfo.logo_url = imageUrl;
+                localStorage.setItem('companyInfo', JSON.stringify(companyInfo));
+              } catch (err) {
+                console.warn('Could not update companyInfo with logo:', err);
+              }
+              
+              modal.remove();
+              alert('✅ Logo selected from database!');
+            });
+            
+            gridEl.appendChild(card);
+          });
+          
+          if (folders.length === 0 && imageFiles.length === 0) {
+            emptyEl.style.display = 'block';
+            gridEl.style.display = 'none';
+          }
+        } else {
+          loadingEl.innerHTML = '<p style="color: #ff6b6b;">Failed to load images from database.</p>';
+        }
+      } catch (err) {
+        console.error('Error loading database images:', err);
+        document.getElementById('dbImagePickerLoading').innerHTML = '<p style="color: #ff6b6b;">Error loading images: ' + err.message + '</p>';
       }
-    } catch (err) {
-      console.error('Error loading database images:', err);
-      document.getElementById('dbImagePickerLoading').innerHTML = '<p style="color: #ff6b6b;">Error loading images: ' + err.message + '</p>';
-    }
+    };
+    
+    // Start loading root folder
+    loadFolder('');
   }
 
   // ===================================
