@@ -1630,12 +1630,14 @@ async function bookTrip(includeReturn = false) {
       reservationData.driver_id = null;
       reservationData.res_status = 'Farmout';
       reservationData.assignment_type = 'Farm-out';
+      reservationData.farm_option = 'farm-out';  // Used by dashboard filter
       reservationData.farm_status = 'unassigned';
       reservationData.farm_mode = 'automatic';
       console.log('[CustomerPortal] Auto-farm enabled: Setting to Farm-out Unassigned (automatic)');
     } else {
       // AUTO-FARM OFF: Set to In-House, try to assign default driver
       reservationData.assignment_type = 'In-House';
+      reservationData.farm_option = 'in-house';  // Used by dashboard filter
       reservationData.farm_status = null;
       reservationData.farm_mode = null;
       
