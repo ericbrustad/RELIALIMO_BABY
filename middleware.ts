@@ -38,8 +38,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Customer/Account subdomain: account.relialimo.com
-  if (host.startsWith('account.')) {
+  // Customer/Account subdomain: account.relialimo.com or accounts.relialimo.com
+  if (host.startsWith('account.') || host.startsWith('accounts.')) {
     if (pathname === '/' || pathname === '') {
       // Root of account subdomain shows login page
       return NextResponse.rewrite(new URL('/customers/auth.html', request.url))
@@ -135,7 +135,7 @@ export function middleware(request: NextRequest) {
     
     // /login or /auth route - redirect to account subdomain for auth
     if (pathname === '/login' || pathname === '/auth') {
-      return NextResponse.redirect(new URL('https://account.relialimo.com/auth', request.url))
+      return NextResponse.redirect(new URL('https://accounts.relialimo.com/auth', request.url))
     }
   }
 
