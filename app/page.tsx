@@ -176,8 +176,20 @@ export default function LandingPage() {
               View assigned trips, update availability, manage your schedule, 
               and communicate with dispatch.
             </p>
-            <a href="https://driver.relialimo.com" className="portal-link">
+            <a href="/driver-portal.html" className="portal-link">
               Driver Login
+            </a>
+          </div>
+          
+          <div className="portal-card">
+            <div className="portal-icon">⚙️</div>
+            <h3 className="portal-title">Admin Portal</h3>
+            <p className="portal-desc">
+              Manage reservations, dispatch drivers, configure settings, 
+              and oversee all operations.
+            </p>
+            <a href="/index.html" className="portal-link">
+              Admin Login
             </a>
           </div>
         </div>
@@ -186,8 +198,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="footer">
         <p className="footer-text">
-          © {new Date().getFullYear()} RELIALIMO. All rights reserved. | 
-          <a href="https://admin.relialimo.com"> Admin Access</a>
+          © {new Date().getFullYear()} RELIALIMO. All rights reserved.
         </p>
       </footer>
     </>
