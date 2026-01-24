@@ -1559,6 +1559,9 @@ async function completeOnboarding() {
       onboarding_completed_at: new Date().toISOString()
     };
     
+    console.log('[CustomerOnboarding] Saving data:', updateData);
+    console.log('[CustomerOnboarding] Selected airports:', state.selectedAirports);
+    
     // Save payment method reference (in production, use Stripe)
     if (!state.skipPayment) {
       const cardNumber = document.getElementById('cardNumber').value.replace(/\s/g, '');
@@ -1581,12 +1584,21 @@ async function completeOnboarding() {
       }
     );
     
+    const responseText = await response.text();
+    console.log('[CustomerOnboarding] Save response:', response.status, responseText);
+    
     if (response.ok) {
-      const updated = await response.json();
-      if (updated.length > 0) {
-        state.customer = { ...state.customer, ...updated[0] };
-        localStorage.setItem('current_customer', JSON.stringify(state.customer));
+      try {
+        const updated = JSON.parse(responseText);
+        if (updated.length > 0) {
+          state.customer = { ...state.customer, ...updated[0] };
+          localStorage.setItem('current_customer', JSON.stringify(state.customer));
+        }
+      } catch (e) {
+        console.log('[CustomerOnboarding] Response was not JSON:', responseText);
       }
+    } else {
+      console.error('[CustomerOnboarding] Save failed:', response.status, responseText);
     }
     
     // Show completion section
@@ -1629,9 +1641,13 @@ function showCompletionScreen() {
   document.getElementById('summaryEmail').textContent = state.customer?.email || '';
   document.getElementById('summaryPhone').textContent = state.cellPhoneFormatted || state.cellPhone || '';
   document.getElementById('summaryAddress').textContent = state.homeAddress || '-';
-  document.getElementById('summaryAirport').textContent = state.selectedAirport 
-    ? `${state.selectedAirport.code} - ${state.selectedAirport.name}`
+  
+  // Display selected airports (multi-select)
+  const airportDisplay = state.selectedAirports.length > 0
+    ? state.selectedAirports.map(a => a.code).join(', ')
     : 'No home airport selected';
+  document.getElementById('summaryAirport').textContent = airportDisplay;
+  
   document.getElementById('summaryPayment').textContent = state.skipPayment
     ? 'No payment method added'
     : `•••• ${document.getElementById('cardNumber').value.slice(-4)}`;
