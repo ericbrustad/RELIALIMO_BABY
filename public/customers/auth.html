@@ -252,6 +252,7 @@
   <script type="module">
     import { getSupabaseCredentials } from '/shared/supabase-config.js';
     import CustomerAuth from './customer-auth-service.js';
+    import { customerEmailVerification } from './customer-email-verification.js';
     
     // ========== VALIDATION FUNCTIONS ==========
     
@@ -538,8 +539,129 @@
           document.getElementById('loadingScreen').classList.remove('active');
           document.getElementById('authScreen').classList.add('active');
           
-          // Check for verified=true parameter (user just verified their email)
           const urlParams = new URLSearchParams(window.location.search);
+          
+          // Check for verify_token parameter (user clicked verification link in email)
+          const verifyToken = urlParams.get('verify_token');
+          const verifyEmail = urlParams.get('email');
+          
+          if (verifyToken && verifyEmail) {
+            // Verify the token using our custom service
+            const verifyResult = await customerEmailVerification.verifyToken(verifyToken, verifyEmail);
+            
+            if (verifyResult.success) {
+              // Email verified! Get pending registration data
+              const pending = JSON.parse(localStorage.getItem('pendingRegistration') || '{}');
+              const userData = verifyResult.userData || {};
+              
+              // Now create the Supabase auth user (we didn't create it before)
+              const creds = getSupabaseCredentials();
+              const password = pending.password || userData.password;
+              const firstName = pending.firstName || userData.firstName;
+              const lastName = pending.lastName || userData.lastName;
+              
+              if (password && verifyEmail) {
+                try {
+                  // Create auth user with auto-confirm (email already verified via our system)
+                  const authResponse = await fetch(`${creds.url}/auth/v1/signup`, {
+                    method: 'POST',
+                    headers: {
+                      'apikey': creds.anonKey,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      email: verifyEmail,
+                      password: password,
+                      data: {
+                        first_name: firstName,
+                        last_name: lastName,
+                        email_verified: true
+                      }
+                    })
+                  });
+                  
+                  const authData = await authResponse.json();
+                  
+                  if (authResponse.ok) {
+                    // Update pending registration with user ID
+                    pendingRegistration = { 
+                      ...pending,
+                      email: verifyEmail,
+                      firstName,
+                      lastName,
+                      userId: authData.user?.id,
+                      accessToken: authData.access_token,
+                      portalSlug: userData.portalSlug
+                    };
+                    localStorage.setItem('pendingRegistration', JSON.stringify(pendingRegistration));
+                    
+                    // Show phone collection form
+                    document.getElementById('loginForm').classList.remove('active');
+                    document.getElementById('phoneCollectionForm').classList.add('active');
+                    
+                    showToast('Email verified! Now add your phone number.', 'success');
+                    
+                    // Clear URL params
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    return;
+                  } else if (authData.msg?.includes('already registered')) {
+                    // User already exists - try to log them in
+                    const loginResponse = await fetch(`${creds.url}/auth/v1/token?grant_type=password`, {
+                      method: 'POST',
+                      headers: {
+                        'apikey': creds.anonKey,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({ email: verifyEmail, password })
+                    });
+                    
+                    const loginData = await loginResponse.json();
+                    
+                    if (loginResponse.ok && loginData.access_token) {
+                      pendingRegistration = { 
+                        ...pending,
+                        email: verifyEmail,
+                        firstName,
+                        lastName,
+                        userId: loginData.user?.id,
+                        accessToken: loginData.access_token,
+                        portalSlug: userData.portalSlug
+                      };
+                      localStorage.setItem('pendingRegistration', JSON.stringify(pendingRegistration));
+                      
+                      // Show phone collection form
+                      document.getElementById('loginForm').classList.remove('active');
+                      document.getElementById('phoneCollectionForm').classList.add('active');
+                      
+                      showToast('Email verified! Now add your phone number.', 'success');
+                      window.history.replaceState({}, document.title, window.location.pathname);
+                      return;
+                    }
+                  }
+                } catch (err) {
+                  console.error('Auth creation after verification failed:', err);
+                }
+              }
+              
+              // Fallback: Show success and let user log in
+              const loginMessage = document.getElementById('loginMessage');
+              loginMessage.textContent = '✅ Email verified! Please log in to continue.';
+              loginMessage.style.display = 'block';
+              loginMessage.style.background = 'rgba(34, 197, 94, 0.15)';
+              loginMessage.style.border = '1px solid rgba(34, 197, 94, 0.3)';
+              loginMessage.style.color = '#22c55e';
+              document.getElementById('loginEmail').value = verifyEmail;
+              localStorage.setItem('verified_email', verifyEmail);
+              window.history.replaceState({}, document.title, window.location.pathname);
+              return;
+            } else {
+              // Verification failed
+              showToast(verifyResult.error || 'Verification failed', 'error');
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+          }
+          
+          // Check for legacy verified=true parameter (user just verified their email)
           if (urlParams.get('verified') === 'true') {
             // Check if user has pending registration (needs to add phone)
             const pending = JSON.parse(localStorage.getItem('pendingRegistration') || '{}');
@@ -776,37 +898,21 @@
         // Store pending registration data (phone will be added later)
         pendingRegistration = { firstName, lastName, email, password };
         
-        const creds = getSupabaseCredentials();
+        // Send verification email via Resend (our custom email service)
+        const emailResult = await customerEmailVerification.sendVerificationEmail(
+          email,
+          firstName,
+          lastName,
+          { password } // Store password temporarily so we can create auth user after verification
+        );
         
-        // Create auth user with email confirmation required
-        const authResponse = await fetch(`${creds.url}/auth/v1/signup`, {
-          method: 'POST',
-          headers: {
-            'apikey': creds.anonKey,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            email: email,
-            password: password,
-            data: {
-              first_name: firstName,
-              last_name: lastName
-            },
-            options: {
-              emailRedirectTo: `${window.location.origin}/customers/auth.html?verified=true`
-            }
-          })
-        });
-        
-        const authData = await authResponse.json();
-        
-        if (!authResponse.ok) {
-          throw new Error(authData.error_description || authData.msg || authData.message || 'Registration failed');
+        if (!emailResult.success && !emailResult.emailFailed) {
+          throw new Error('Failed to send verification email');
         }
         
-        // Store user ID and email for later
-        pendingRegistration.userId = authData.user?.id;
-        pendingRegistration.accessToken = authData.access_token;
+        // Store pending registration with verification token
+        pendingRegistration.verificationToken = emailResult.token;
+        pendingRegistration.portalSlug = emailResult.portalSlug;
         
         // Save to localStorage so we can retrieve after email verification
         localStorage.setItem('pendingRegistration', JSON.stringify(pendingRegistration));
@@ -816,7 +922,13 @@
         document.getElementById('emailVerifyPendingForm').classList.add('active');
         document.getElementById('pendingEmailDisplay').textContent = email;
         
-        showToast('Verification email sent! Please check your inbox.', 'success');
+        if (emailResult.emailFailed) {
+          // For development - show the verification link
+          console.log('📧 Verification URL:', emailResult.verificationUrl);
+          showToast('Check console for verification link (email service unavailable)', 'warning');
+        } else {
+          showToast('Verification email sent! Please check your inbox.', 'success');
+        }
         
       } catch (err) {
         console.error('Registration error:', err);
@@ -847,28 +959,25 @@
       btn.textContent = 'Sending...';
       
       try {
-        const creds = getSupabaseCredentials();
-        const response = await fetch(`${creds.url}/auth/v1/resend`, {
-          method: 'POST',
-          headers: {
-            'apikey': creds.anonKey,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            type: 'signup',
-            email: pending.email,
-            options: {
-              emailRedirectTo: `${window.location.origin}/customers/auth.html?verified=true`
-            }
-          })
-        });
+        // Use our Resend-based email service
+        const result = await customerEmailVerification.resendVerificationEmail(pending.email);
         
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.message || 'Failed to resend');
+        if (!result.success && !result.emailFailed) {
+          throw new Error(result.error || 'Failed to resend');
         }
         
-        showToast('Verification email resent!', 'success');
+        // Update token in localStorage
+        if (result.token) {
+          pending.verificationToken = result.token;
+          localStorage.setItem('pendingRegistration', JSON.stringify(pending));
+        }
+        
+        if (result.emailFailed) {
+          console.log('📧 Verification URL:', result.verificationUrl);
+          showToast('Check console for verification link', 'warning');
+        } else {
+          showToast('Verification email resent!', 'success');
+        }
       } catch (err) {
         console.error('Resend error:', err);
         showToast(err.message || 'Failed to resend email', 'error');

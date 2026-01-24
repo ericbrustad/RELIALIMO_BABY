@@ -31,7 +31,6 @@ SELECT
   jsonb_array_length(COALESCE(a.preferred_airports, '[]'::jsonb)) as airport_count,
   jsonb_array_length(COALESCE(a.preferred_fbos, '[]'::jsonb)) as fbo_count
 FROM accounts a
-WHERE a.account_type = 'customer'
-  AND a.is_active = true;
+WHERE a.status = 'active';
 
 COMMENT ON VIEW customer_airport_preferences IS 'View showing customer airport and FBO preferences for booking optimization';
