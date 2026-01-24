@@ -2050,6 +2050,29 @@ class Accounts {
       
       const saved = result?.account || accountData;
       
+      // ========================================
+      // Save home address to customer_addresses for customer portal access
+      // ========================================
+      if (saved.id && (accountData.address_line1 || accountData.city)) {
+        try {
+          console.log('🏠 Saving home address to customer_addresses...');
+          await this.db?.saveCustomerAddressForAccount(saved.id, {
+            address_line1: accountData.address_line1,
+            address_line2: accountData.address_line2,
+            city: accountData.city,
+            state: accountData.state,
+            zip: accountData.zip,
+            label: 'Home',
+            address_type: 'home',
+            is_favorite: true
+          });
+          console.log('✅ Home address saved to customer_addresses');
+        } catch (addressErr) {
+          console.warn('⚠️ Failed to save home address to customer_addresses:', addressErr);
+          // Don't block account creation if address save fails
+        }
+      }
+      
       // Store the new UUID if we got one back from Supabase (for newly created accounts)
       if (saved.id && !existingUUID) {
         const accountUUIDEl = document.getElementById('accountUUID');

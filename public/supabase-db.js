@@ -23,7 +23,8 @@ import {
   saveAccountToSupabase,
   fetchAccounts,
   savePassengerToSupabase,
-  saveBookingAgentToSupabase
+  saveBookingAgentToSupabase,
+  saveCustomerAddress
 } from './api-service.js';
 
 // Get organization_id from ENV config
@@ -1305,6 +1306,7 @@ export default {
   deleteReservation,
   saveAccountAddress,
   getAccountAddresses,
+  saveCustomerAddressForAccount,
   searchAccounts,
   searchAccountsByCompany,
   getNextConfirmationNumber,
@@ -1315,3 +1317,52 @@ export default {
   resetAccountCounter,
   checkConnection
 };
+
+/**
+ * Save a customer address for an account to the customer_addresses table
+ * This is used to make the home address available in the customer portal
+ * @param {string} accountId - The account UUID
+ * @param {Object} addressData - Address data with full_address, label, address_type, etc.
+ * @returns {Promise<Object|null>} - Saved address or null
+ */
+export async function saveCustomerAddressForAccount(accountId, addressData) {
+  try {
+    await setupAPI();
+    
+    // Build full address from components if not provided
+    let fullAddress = addressData.full_address;
+    if (!fullAddress && addressData.address_line1) {
+      const parts = [
+        addressData.address_line1,
+        addressData.address_line2,
+        addressData.city,
+        addressData.state,
+        addressData.zip || addressData.zip_code
+      ].filter(Boolean);
+      fullAddress = parts.join(', ');
+    }
+    
+    if (!fullAddress || !fullAddress.trim()) {
+      console.log('⏭️ Skipping customer address save - no address data');
+      return null;
+    }
+    
+    const result = await saveCustomerAddress({
+      account_id: accountId,
+      full_address: fullAddress.trim(),
+      label: addressData.label || addressData.address_name || 'Home',
+      address_type: addressData.address_type || 'home',
+      latitude: addressData.latitude || null,
+      longitude: addressData.longitude || null,
+      is_favorite: addressData.is_favorite !== false // Default to true for home address
+    });
+    
+    if (result) {
+      console.log('✅ Customer address saved for account:', accountId, result);
+    }
+    return result;
+  } catch (err) {
+    console.error('❌ Failed to save customer address for account:', err);
+    return null;
+  }
+}
