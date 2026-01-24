@@ -193,6 +193,8 @@
     <li style="margin-top:16px; margin-bottom:12px;"><strong style="color:#b71c1c;">Both Local + Supabase:</strong></li>
     <li><button id="deleteAllReservationsBothBtn" class="btn" style="background:#b71c1c; font-weight:bold;">🗑️ Delete ALL Reservations (Local + Supabase)</button></li>
     <li><button id="deleteAllAccountsBothBtn" class="btn" style="background:#b71c1c; font-weight:bold;">🗑️ Delete ALL Accounts (Local + Supabase)</button></li>
+    <li style="margin-top:16px; margin-bottom:12px;"><strong style="color:#4a0000;">☢️ NUCLEAR OPTIONS:</strong></li>
+    <li><button id="nukeAllAccountDataBtn" class="btn btn-danger" style="background:#4a0000; font-weight:bold; border:2px solid #ff0000;">☢️ NUKE ALL ACCOUNT DATA (All Tables + Related Data)</button></li>
   </ul>
 
   <!-- =============== VIEW DATA =============== -->
@@ -984,6 +986,147 @@ if (deleteAllAccountsBothBtn) {
     
     deleteAllAccountsBothBtn.disabled = false;
     deleteAllAccountsBothBtn.textContent = '🗑️ Delete ALL Accounts (Local + Supabase)';
+  };
+}
+
+// =============== NUKE ALL ACCOUNT DATA ===============
+// Deletes from ALL account-related tables including related data
+const nukeAllAccountDataBtn = document.getElementById('nukeAllAccountDataBtn');
+if (nukeAllAccountDataBtn) {
+  nukeAllAccountDataBtn.onclick = async function() {
+    const confirmFirst = confirm(
+      '☢️ NUCLEAR DELETION WARNING ☢️\n\n' +
+      'This will PERMANENTLY delete ALL account-related data from:\n\n' +
+      '• accounts (main accounts table)\n' +
+      '• account_addresses\n' +
+      '• account_emails\n' +
+      '• account_booking_contacts\n' +
+      '• account_email_rules\n' +
+      '• passengers\n' +
+      '• customer_passengers\n' +
+      '• customer_addresses\n' +
+      '• customer_preferences\n' +
+      '• All local storage account caches\n\n' +
+      '⚠️ This action CANNOT be undone!\n\n' +
+      'Are you absolutely sure?'
+    );
+    if (!confirmFirst) return;
+    
+    const confirmSecond = prompt('Type NUKE to confirm complete account data destruction:');
+    if (confirmSecond !== 'NUKE') {
+      alert('Deletion cancelled. Type "NUKE" exactly to confirm.');
+      return;
+    }
+    
+    nukeAllAccountDataBtn.disabled = true;
+    nukeAllAccountDataBtn.textContent = '☢️ NUKING DATA...';
+    
+    const results = {
+      success: [],
+      failed: [],
+      localCleared: 0
+    };
+    
+    try {
+      await ensureSupabaseReady();
+      const client = getSupabaseClient();
+      
+      // List of tables to delete from (order matters due to foreign keys)
+      // Delete child tables first, then parent tables
+      const tablesToDelete = [
+        'account_email_rules',
+        'account_booking_contacts', 
+        'account_emails',
+        'account_addresses',
+        'customer_preferences',
+        'customer_addresses',
+        'customer_passengers',
+        'passengers',
+        'accounts'  // Parent table last
+      ];
+      
+      for (const table of tablesToDelete) {
+        try {
+          // Delete all rows where id is not null (effectively all rows)
+          const { error } = await client.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+          if (error) {
+            // Table might not exist - try alternate approach
+            if (error.code === '42P01') {
+              console.log(`⏭️ Table ${table} does not exist, skipping`);
+              results.success.push(`${table} (not exists)`);
+            } else {
+              throw error;
+            }
+          } else {
+            console.log(`✅ Deleted all from ${table}`);
+            results.success.push(table);
+          }
+        } catch (e) {
+          console.error(`❌ Failed to delete from ${table}:`, e);
+          results.failed.push(`${table}: ${e.message}`);
+        }
+      }
+      
+      // Clear all local storage account-related keys
+      const localKeysToDelete = [
+        'local_accounts', 'dev_accounts', 'relia_accounts', 'accounts',
+        'relia_account_draft', 'nextAccountNumber', 'accountsCache',
+        'passengers', 'local_passengers'
+      ];
+      
+      localKeysToDelete.forEach(key => {
+        try {
+          const val = localStorage.getItem(key);
+          if (val) {
+            localStorage.removeItem(key);
+            results.localCleared++;
+            console.log(`🗑️ Cleared localStorage: ${key}`);
+          }
+        } catch (e) {
+          console.warn(`⚠️ Failed to clear ${key}:`, e);
+        }
+      });
+      
+      // Clear any keys matching account patterns
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (
+          key.includes('account') || 
+          key.includes('Account') ||
+          key.includes('passenger') ||
+          key.includes('Passenger')
+        )) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key);
+        results.localCleared++;
+      });
+      
+      // Reset account counter
+      resetAccountCounter();
+      
+      // Show results
+      const successList = results.success.join(', ') || 'None';
+      const failedList = results.failed.join('\n') || 'None';
+      
+      alert(
+        `☢️ NUCLEAR DELETION COMPLETE ☢️\n\n` +
+        `✅ Successfully cleared tables:\n${successList}\n\n` +
+        `❌ Failed tables:\n${failedList}\n\n` +
+        `🗑️ Local storage keys cleared: ${results.localCleared}\n` +
+        `🔢 Account counter: Reset to 0`
+      );
+      
+    } catch (err) {
+      console.error('❌ Nuclear deletion error:', err);
+      alert(`❌ Error during nuclear deletion: ${err.message}`);
+    }
+    
+    nukeAllAccountDataBtn.disabled = false;
+    nukeAllAccountDataBtn.textContent = '☢️ NUKE ALL ACCOUNT DATA (All Tables + Related Data)';
   };
 }
 
