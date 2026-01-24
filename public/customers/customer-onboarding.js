@@ -118,18 +118,38 @@ async function init() {
   } else {
     // Check if user is already authenticated
     const isAuth = await checkAuth();
+    console.log('[CustomerOnboarding] Auth check result:', isAuth, 'Customer:', state.customer);
+    
     if (isAuth) {
       // Check if onboarding is complete
       if (state.customer?.onboarding_complete) {
-        // Redirect to portal
+        console.log('[CustomerOnboarding] Onboarding already complete, redirecting to portal');
         redirectToPortal();
       } else {
+        console.log('[CustomerOnboarding] Showing onboarding screen');
         // Show onboarding
         showScreen('onboardingScreen');
         await setupOnboarding();
       }
     } else {
+      // No auth - but allow onboarding if we have customer info from registration
+      const pendingCustomer = localStorage.getItem('current_customer');
+      console.log('[CustomerOnboarding] No auth, checking pending customer:', pendingCustomer);
+      
+      if (pendingCustomer) {
+        try {
+          state.customer = JSON.parse(pendingCustomer);
+          console.log('[CustomerOnboarding] Found pending customer, showing onboarding');
+          showScreen('onboardingScreen');
+          await setupOnboarding();
+          return;
+        } catch (e) {
+          console.error('[CustomerOnboarding] Error parsing pending customer:', e);
+        }
+      }
+      
       // Redirect to auth
+      console.log('[CustomerOnboarding] No customer found, redirecting to auth');
       window.location.href = 'auth.html';
     }
   }
