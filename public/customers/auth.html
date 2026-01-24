@@ -584,16 +584,57 @@
                     const session = {
                       access_token: authData.access_token,
                       refresh_token: authData.refresh_token,
+                      expires_at: authData.expires_at,
                       user: authData.user
                     };
                     localStorage.setItem('customer_session', JSON.stringify(session));
-                    localStorage.setItem('current_customer', JSON.stringify({
-                      id: authData.user?.id,
-                      email: verifyEmail,
+                    
+                    // CREATE ACCOUNT RECORD IN DATABASE
+                    const CUSTOMER_ORG_ID = 'c0000000-0000-0000-0000-000000000001';
+                    const portalSlug = `${firstName}_${lastName}_${Math.random().toString(36).substring(2, 10)}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
+                    
+                    const accountData = {
+                      organization_id: CUSTOMER_ORG_ID,
+                      user_id: authData.user?.id,
                       first_name: firstName,
                       last_name: lastName,
-                      portal_slug: userData.portalSlug
-                    }));
+                      email: verifyEmail.toLowerCase(),
+                      portal_slug: portalSlug,
+                      account_type: 'customer',
+                      status: 'active',
+                      email_verified: true,
+                      email_verified_at: new Date().toISOString(),
+                      onboarding_complete: false,
+                      created_at: new Date().toISOString()
+                    };
+                    
+                    const createResp = await fetch(`${creds.url}/rest/v1/accounts`, {
+                      method: 'POST',
+                      headers: {
+                        'apikey': creds.anonKey,
+                        'Authorization': `Bearer ${authData.access_token}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=representation'
+                      },
+                      body: JSON.stringify(accountData)
+                    });
+                    
+                    if (createResp.ok) {
+                      const newAccounts = await createResp.json();
+                      if (newAccounts?.length > 0) {
+                        localStorage.setItem('current_customer', JSON.stringify(newAccounts[0]));
+                        console.log('✅ Account created in database:', newAccounts[0]);
+                      }
+                    } else {
+                      console.error('Failed to create account:', await createResp.text());
+                      // Still save basic info to localStorage
+                      localStorage.setItem('current_customer', JSON.stringify({
+                        email: verifyEmail,
+                        first_name: firstName,
+                        last_name: lastName,
+                        portal_slug: portalSlug
+                      }));
+                    }
                     
                     // Clear pending registration
                     localStorage.removeItem('pendingRegistration');
@@ -620,16 +661,62 @@
                       const session = {
                         access_token: loginData.access_token,
                         refresh_token: loginData.refresh_token,
+                        expires_at: loginData.expires_at,
                         user: loginData.user
                       };
                       localStorage.setItem('customer_session', JSON.stringify(session));
-                      localStorage.setItem('current_customer', JSON.stringify({
-                        id: loginData.user?.id,
-                        email: verifyEmail,
-                        first_name: firstName,
-                        last_name: lastName,
-                        portal_slug: userData.portalSlug
-                      }));
+                      
+                      // Check if account exists in database, create if not
+                      const checkResp = await fetch(
+                        `${creds.url}/rest/v1/accounts?email=eq.${encodeURIComponent(verifyEmail.toLowerCase())}&select=*`,
+                        {
+                          headers: {
+                            'apikey': creds.anonKey,
+                            'Authorization': `Bearer ${loginData.access_token}`
+                          }
+                        }
+                      );
+                      
+                      if (checkResp.ok) {
+                        const existing = await checkResp.json();
+                        if (existing?.length > 0) {
+                          localStorage.setItem('current_customer', JSON.stringify(existing[0]));
+                        } else {
+                          // Create account record
+                          const CUSTOMER_ORG_ID = 'c0000000-0000-0000-0000-000000000001';
+                          const portalSlug = `${firstName}_${lastName}_${Math.random().toString(36).substring(2, 10)}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
+                          
+                          const createResp = await fetch(`${creds.url}/rest/v1/accounts`, {
+                            method: 'POST',
+                            headers: {
+                              'apikey': creds.anonKey,
+                              'Authorization': `Bearer ${loginData.access_token}`,
+                              'Content-Type': 'application/json',
+                              'Prefer': 'return=representation'
+                            },
+                            body: JSON.stringify({
+                              organization_id: CUSTOMER_ORG_ID,
+                              user_id: loginData.user?.id,
+                              first_name: firstName,
+                              last_name: lastName,
+                              email: verifyEmail.toLowerCase(),
+                              portal_slug: portalSlug,
+                              account_type: 'customer',
+                              status: 'active',
+                              email_verified: true,
+                              onboarding_complete: false,
+                              created_at: new Date().toISOString()
+                            })
+                          });
+                          
+                          if (createResp.ok) {
+                            const newAccounts = await createResp.json();
+                            if (newAccounts?.length > 0) {
+                              localStorage.setItem('current_customer', JSON.stringify(newAccounts[0]));
+                            }
+                          }
+                        }
+                      }
                       
                       // Clear pending registration
                       localStorage.removeItem('pendingRegistration');
