@@ -5906,6 +5906,7 @@ async function refreshTrips() {
     // Update UI
     renderTripLists();
     updateBadges();
+    updateInHouseStatusWidget();
     
     // Check for new offers and show overlay if applicable
     checkAndShowNewOfferOverlay();
@@ -6082,6 +6083,161 @@ function renderTripCard(trip, type) {
       ${footerButtons ? `<div class="trip-card-footer" onclick="event.stopPropagation();">${footerButtons}</div>` : ''}
     </div>
   `;
+}
+
+// ============================================
+// In-House Status Widget
+// ============================================
+let inHouseCountdownTimer = null;
+
+/**
+ * Update the In-House driver status widget
+ * Shows countdown to next trip and current driver status
+ */
+function updateInHouseStatusWidget() {
+  const widget = document.getElementById('inHouseStatusWidget');
+  if (!widget) return;
+  
+  // Check if driver has In-House trips (farm_mode = 'manual' or assignment_type = 'In-House')
+  const inHouseTrips = state.trips.upcoming.filter(trip => {
+    const farmMode = trip.farm_mode || trip.farmout_mode || '';
+    const assignmentType = trip.assignment_type || '';
+    return farmMode === 'manual' || assignmentType === 'In-House';
+  });
+  
+  // If no In-House trips, hide widget
+  if (inHouseTrips.length === 0) {
+    widget.style.display = 'none';
+    if (inHouseCountdownTimer) {
+      clearInterval(inHouseCountdownTimer);
+      inHouseCountdownTimer = null;
+    }
+    return;
+  }
+  
+  // Show widget
+  widget.style.display = 'block';
+  
+  // Get the next upcoming In-House trip
+  const nextTrip = inHouseTrips[0];
+  
+  // Update trip info
+  const confEl = document.getElementById('nextTripConf');
+  const timeEl = document.getElementById('nextTripTime');
+  if (confEl) confEl.textContent = `#${nextTrip.confirmation_number || nextTrip.id?.slice(0, 8)}`;
+  if (timeEl) {
+    const pickupTime = nextTrip.pickup_time || nextTrip.pu_time || 
+      (nextTrip.pickup_date_time ? new Date(nextTrip.pickup_date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--');
+    const pickupDate = nextTrip.pickup_date || nextTrip.pu_date ||
+      (nextTrip.pickup_date_time ? new Date(nextTrip.pickup_date_time).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '');
+    timeEl.textContent = `${pickupTime} - ${pickupDate}`;
+  }
+  
+  // Update driver status
+  const statusDot = document.getElementById('driverStatusDot');
+  const statusLabel = document.getElementById('driverStatusLabel');
+  
+  let driverStatus = 'Available';
+  let statusClass = '';
+  
+  if (state.trips.active) {
+    driverStatus = 'On Trip';
+    statusClass = 'on-trip';
+  } else if (inHouseTrips.length > 0) {
+    const nextPickup = new Date(nextTrip.pickup_date_time || `${nextTrip.pickup_date}T${nextTrip.pickup_time}`);
+    const now = new Date();
+    const minutesUntil = (nextPickup - now) / 60000;
+    
+    if (minutesUntil < 30) {
+      driverStatus = 'Trip Soon';
+      statusClass = 'busy';
+    } else {
+      driverStatus = 'Available';
+      statusClass = '';
+    }
+  }
+  
+  if (statusDot) statusDot.className = `status-dot ${statusClass}`;
+  if (statusLabel) statusLabel.textContent = driverStatus;
+  
+  // Start countdown timer
+  startInHouseCountdown(nextTrip);
+}
+
+/**
+ * Start/update the countdown timer for In-House widget
+ */
+function startInHouseCountdown(nextTrip) {
+  // Clear existing timer
+  if (inHouseCountdownTimer) {
+    clearInterval(inHouseCountdownTimer);
+  }
+  
+  const countdownEl = document.getElementById('countdownTime');
+  const countdownBar = document.getElementById('inHouseCountdownBar');
+  
+  if (!countdownEl) return;
+  
+  // Get pickup datetime
+  const pickupDateTime = new Date(nextTrip.pickup_date_time || `${nextTrip.pickup_date}T${nextTrip.pickup_time || '00:00'}`);
+  
+  // Calculate total countdown duration for percentage (12 hours before)
+  const totalDuration = 12 * 60 * 60 * 1000; // 12 hours in ms
+  
+  const updateCountdown = () => {
+    const now = new Date();
+    const timeUntil = pickupDateTime - now;
+    
+    if (timeUntil <= 0) {
+      // Trip time has arrived
+      countdownEl.textContent = 'NOW!';
+      countdownEl.className = 'countdown-time imminent';
+      if (countdownBar) {
+        countdownBar.style.width = '0%';
+        countdownBar.className = 'countdown-bar danger';
+      }
+      return;
+    }
+    
+    // Format countdown
+    const hours = Math.floor(timeUntil / (1000 * 60 * 60));
+    const minutes = Math.floor((timeUntil % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((timeUntil % (1000 * 60)) / 1000);
+    
+    let displayTime;
+    if (hours > 0) {
+      displayTime = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    } else {
+      displayTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+    
+    countdownEl.textContent = displayTime;
+    
+    // Update styling based on urgency
+    const minutesUntil = timeUntil / 60000;
+    if (minutesUntil < 15) {
+      countdownEl.className = 'countdown-time imminent';
+      if (countdownBar) countdownBar.className = 'countdown-bar danger';
+    } else if (minutesUntil < 60) {
+      countdownEl.className = 'countdown-time urgent';
+      if (countdownBar) countdownBar.className = 'countdown-bar warning';
+    } else {
+      countdownEl.className = 'countdown-time';
+      if (countdownBar) countdownBar.className = 'countdown-bar';
+    }
+    
+    // Update progress bar (percentage of 12 hours remaining)
+    if (countdownBar) {
+      const percentage = Math.min(100, Math.max(0, (timeUntil / totalDuration) * 100));
+      countdownBar.style.width = `${percentage}%`;
+    }
+  };
+  
+  // Initial update
+  updateCountdown();
+  
+  // Update every second
+  inHouseCountdownTimer = setInterval(updateCountdown, 1000);
 }
 
 /**

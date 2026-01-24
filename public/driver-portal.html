@@ -594,6 +594,30 @@
       <main class="tab-content">
         <!-- Driver View Tab (Map with Pinned Trips) -->
         <div id="driverviewTab" class="tab-panel active">
+          <!-- In-House Driver Status Widget -->
+          <div id="inHouseStatusWidget" class="in-house-status-widget" style="display: none;">
+            <div class="status-widget-header">
+              <div class="status-indicator">
+                <span class="status-dot" id="driverStatusDot"></span>
+                <span class="status-label" id="driverStatusLabel">Available</span>
+              </div>
+              <div class="widget-badge">🏠 IN-HOUSE</div>
+            </div>
+            <div class="next-trip-section">
+              <div class="next-trip-label">Next Trip In:</div>
+              <div class="next-trip-countdown" id="nextTripCountdown">
+                <span class="countdown-time" id="countdownTime">--:--:--</span>
+              </div>
+              <div class="next-trip-info" id="nextTripInfo">
+                <span class="trip-conf" id="nextTripConf">--</span>
+                <span class="trip-time" id="nextTripTime">--</span>
+              </div>
+            </div>
+            <div class="countdown-bar-container">
+              <div class="countdown-bar" id="inHouseCountdownBar"></div>
+            </div>
+          </div>
+
           <div class="driver-view-container">
             <div class="driver-view-map" id="driverViewMap">
               <!-- Map will be initialized here -->

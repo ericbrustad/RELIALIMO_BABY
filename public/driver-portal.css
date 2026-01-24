@@ -484,6 +484,144 @@ body {
 /* ============================================
    Driver View Tab
    ============================================ */
+
+/* In-House Driver Status Widget */
+.in-house-status-widget {
+  background: linear-gradient(135deg, var(--bg-card) 0%, rgba(79, 70, 229, 0.15) 100%);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  margin: var(--space-sm) var(--space-md);
+  box-shadow: 0 4px 20px rgba(79, 70, 229, 0.2);
+}
+
+.status-widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-md);
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.status-dot.busy {
+  background: var(--warning);
+}
+
+.status-dot.on-trip {
+  background: var(--info);
+  animation: none;
+}
+
+.status-dot.offline {
+  background: var(--text-muted);
+  animation: none;
+}
+
+.status-label {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.widget-badge {
+  background: rgba(79, 70, 229, 0.3);
+  color: var(--primary-light);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.next-trip-section {
+  text-align: center;
+  padding: var(--space-md) 0;
+}
+
+.next-trip-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-xs);
+}
+
+.next-trip-countdown {
+  margin-bottom: var(--space-sm);
+}
+
+.countdown-time {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 20px rgba(79, 70, 229, 0.5);
+}
+
+.countdown-time.urgent {
+  color: var(--warning);
+  text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
+}
+
+.countdown-time.imminent {
+  color: var(--danger);
+  text-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+  animation: urgentPulse 1s ease-in-out infinite;
+}
+
+@keyframes urgentPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.next-trip-info {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-lg);
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.trip-conf {
+  font-weight: 600;
+  color: var(--primary-light);
+}
+
+.countdown-bar-container {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: var(--space-md);
+}
+
+.countdown-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%);
+  border-radius: 2px;
+  transition: width 1s linear;
+  width: 100%;
+}
+
+.countdown-bar.warning {
+  background: linear-gradient(90deg, var(--warning) 0%, var(--warning-light) 100%);
+}
+
+.countdown-bar.danger {
+  background: linear-gradient(90deg, var(--danger) 0%, var(--danger-light) 100%);
+}
+
 .driver-view-container {
   display: flex;
   flex-direction: column;
