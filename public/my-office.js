@@ -2397,6 +2397,7 @@ class MyOffice {
       'service-types': 'service-types.html',
       'partner-settings': null,
       'system-mapping': 'system-mapping.html',
+      'portal-settings': 'portal-settings.html',
       'data-reduction': null,
       'electronic-fax': null,
       'sms-provider': 'sms-provider.html',
