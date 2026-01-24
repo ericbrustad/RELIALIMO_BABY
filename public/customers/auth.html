@@ -156,9 +156,6 @@
                 Click the link in your email to verify your account, then return here to complete registration.
               </p>
             </div>
-            <button type="button" id="checkEmailVerifiedBtn" class="auth-btn auth-btn-primary">
-              I've Verified My Email
-            </button>
             <div style="text-align: center; margin-top: 16px;">
               <button type="button" id="resendVerificationBtn" class="btn-link" style="color: #6366f1;">
                 Didn't receive email? Resend
@@ -583,26 +580,27 @@
                   const authData = await authResponse.json();
                   
                   if (authResponse.ok) {
-                    // Update pending registration with user ID
-                    pendingRegistration = { 
-                      ...pending,
-                      email: verifyEmail,
-                      firstName,
-                      lastName,
-                      userId: authData.user?.id,
-                      accessToken: authData.access_token,
-                      portalSlug: userData.portalSlug
+                    // Store session for the new user
+                    const session = {
+                      access_token: authData.access_token,
+                      refresh_token: authData.refresh_token,
+                      user: authData.user
                     };
-                    localStorage.setItem('pendingRegistration', JSON.stringify(pendingRegistration));
+                    localStorage.setItem('customer_session', JSON.stringify(session));
+                    localStorage.setItem('current_customer', JSON.stringify({
+                      id: authData.user?.id,
+                      email: verifyEmail,
+                      first_name: firstName,
+                      last_name: lastName,
+                      portal_slug: userData.portalSlug
+                    }));
                     
-                    // Show phone collection form
-                    document.getElementById('loginForm').classList.remove('active');
-                    document.getElementById('phoneCollectionForm').classList.add('active');
+                    // Clear pending registration
+                    localStorage.removeItem('pendingRegistration');
                     
-                    showToast('Email verified! Now add your phone number.', 'success');
-                    
-                    // Clear URL params
-                    window.history.replaceState({}, document.title, window.location.pathname);
+                    // Redirect to onboarding
+                    showToast('Email verified! Let\'s complete your profile.', 'success');
+                    window.location.href = '/customers/customer-onboarding.html';
                     return;
                   } else if (authData.msg?.includes('already registered')) {
                     // User already exists - try to log them in
@@ -618,23 +616,27 @@
                     const loginData = await loginResponse.json();
                     
                     if (loginResponse.ok && loginData.access_token) {
-                      pendingRegistration = { 
-                        ...pending,
-                        email: verifyEmail,
-                        firstName,
-                        lastName,
-                        userId: loginData.user?.id,
-                        accessToken: loginData.access_token,
-                        portalSlug: userData.portalSlug
+                      // Store session
+                      const session = {
+                        access_token: loginData.access_token,
+                        refresh_token: loginData.refresh_token,
+                        user: loginData.user
                       };
-                      localStorage.setItem('pendingRegistration', JSON.stringify(pendingRegistration));
+                      localStorage.setItem('customer_session', JSON.stringify(session));
+                      localStorage.setItem('current_customer', JSON.stringify({
+                        id: loginData.user?.id,
+                        email: verifyEmail,
+                        first_name: firstName,
+                        last_name: lastName,
+                        portal_slug: userData.portalSlug
+                      }));
                       
-                      // Show phone collection form
-                      document.getElementById('loginForm').classList.remove('active');
-                      document.getElementById('phoneCollectionForm').classList.add('active');
+                      // Clear pending registration
+                      localStorage.removeItem('pendingRegistration');
                       
-                      showToast('Email verified! Now add your phone number.', 'success');
-                      window.history.replaceState({}, document.title, window.location.pathname);
+                      // Redirect to onboarding
+                      showToast('Email verified! Let\'s complete your profile.', 'success');
+                      window.location.href = '/customers/customer-onboarding.html';
                       return;
                     }
                   }
@@ -984,66 +986,6 @@
       } finally {
         btn.disabled = false;
         btn.textContent = "Didn't receive email? Resend";
-      }
-    });
-    
-    // Check if email is verified button
-    document.getElementById('checkEmailVerifiedBtn')?.addEventListener('click', async () => {
-      const pending = JSON.parse(localStorage.getItem('pendingRegistration') || '{}');
-      if (!pending.email || !pending.password) {
-        showToast('No pending registration found. Please start over.', 'error');
-        document.getElementById('emailVerifyPendingForm').classList.remove('active');
-        document.getElementById('registerForm').classList.add('active');
-        return;
-      }
-      
-      const btn = document.getElementById('checkEmailVerifiedBtn');
-      btn.disabled = true;
-      btn.textContent = 'Checking...';
-      
-      try {
-        const creds = getSupabaseCredentials();
-        
-        // Try to log in - if email is verified, this will work
-        const loginResponse = await fetch(`${creds.url}/auth/v1/token?grant_type=password`, {
-          method: 'POST',
-          headers: {
-            'apikey': creds.anonKey,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            email: pending.email,
-            password: pending.password
-          })
-        });
-        
-        const loginData = await loginResponse.json();
-        
-        if (!loginResponse.ok) {
-          if (loginData.error_description?.includes('not confirmed') || loginData.msg?.includes('not confirmed')) {
-            showToast('Email not yet verified. Please check your inbox and click the verification link.', 'warning');
-            btn.disabled = false;
-            btn.textContent = "I've Verified My Email";
-            return;
-          }
-          throw new Error(loginData.error_description || loginData.msg || 'Verification check failed');
-        }
-        
-        // Email is verified! Store tokens and show phone collection form
-        pendingRegistration = { ...pending, accessToken: loginData.access_token, userId: loginData.user?.id };
-        localStorage.setItem('pendingRegistration', JSON.stringify(pendingRegistration));
-        
-        showToast('Email verified! Now add your phone number.', 'success');
-        
-        // Show phone collection form
-        document.getElementById('emailVerifyPendingForm').classList.remove('active');
-        document.getElementById('phoneCollectionForm').classList.add('active');
-        
-      } catch (err) {
-        console.error('Verification check error:', err);
-        showToast(err.message || 'Failed to verify. Please try again.', 'error');
-        btn.disabled = false;
-        btn.textContent = "I've Verified My Email";
       }
     });
     
