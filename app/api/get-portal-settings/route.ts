@@ -20,7 +20,7 @@ export async function GET() {
       auth: { persistSession: false }
     });
 
-    // Fetch specific public settings
+    // Fetch specific public settings from customer_booking_defaults table
     const publicSettingKeys = [
       'default_vehicle_type',
       'default_service_type',
@@ -30,7 +30,7 @@ export async function GET() {
     ];
 
     const { data: settings, error } = await supabase
-      .from('portal_settings')
+      .from('customer_booking_defaults')
       .select('setting_key, setting_value')
       .in('setting_key', publicSettingKeys);
 
