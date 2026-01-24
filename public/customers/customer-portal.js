@@ -1683,15 +1683,14 @@ async function bookTrip(includeReturn = false) {
       // AUTO-FARM ON: Set to Farm-out Unassigned with automatic mode
       reservationData.driver_id = null;
       reservationData.res_status = 'Farmout';
-      reservationData.assignment_type = 'Farm-out';
-      reservationData.farm_status = 'unassigned';
-      reservationData.farm_mode = 'automatic';
+      reservationData.farm_option = 'farm_out';
+      reservationData.farmout_status = 'unassigned';
+      reservationData.farmout_mode = 'automatic';
       console.log('[CustomerPortal] Auto-farm enabled: Setting to Farm-out Unassigned (automatic)');
     } else {
       // AUTO-FARM OFF: Set to In-House with manual mode
-      reservationData.assignment_type = 'In-House';
-      reservationData.farm_mode = 'manual';
       reservationData.farm_option = 'in-house';
+      reservationData.farmout_mode = 'manual';
       
       // Try to find an available default driver
       const pickupDateTime = reservationData.pickup_date_time;
@@ -1706,7 +1705,6 @@ async function bookTrip(includeReturn = false) {
         reservationData.driver_status = 'assigned'; // Directly assigned, not offered
         reservationData.res_status = 'Confirmed';
         reservationData.status = 'assigned';
-        reservationData.farm_status = null; // Clear farmout status for in-house
         reservationData.farmout_status = 'in_house_assigned'; // Key for driver portal to see trip
         console.log(`[CustomerPortal] ✅ Assigned default driver: ${reservationData.assigned_driver_name} (${availableDriver.id})`);
       } else {
@@ -1714,7 +1712,6 @@ async function bookTrip(includeReturn = false) {
         reservationData.assigned_driver_id = null;
         reservationData.res_status = 'Unassigned';
         reservationData.status = 'unassigned';
-        reservationData.farm_status = null;
         reservationData.farmout_status = 'in_house_unassigned'; // In-House but no driver yet
         console.log('[CustomerPortal] No default driver available: Setting to In-House Unassigned');
       }
