@@ -18,7 +18,8 @@ const state = {
   // Onboarding data
   homeAddress: null,
   homeCoordinates: null,
-  selectedAirport: null,
+  selectedAirports: [], // Changed to array for multi-select
+  selectedFBOs: [], // New: selected FBOs
   cellPhone: null,
   cellPhoneFormatted: null,
   paymentMethod: null,
@@ -29,6 +30,7 @@ const state = {
   map: null,
   addressAutocomplete: null,
   nearbyAirports: [],
+  nearbyFBOs: [], // New: nearby FBOs from API
   
   // OTP verification state
   otpCode: null,
@@ -37,34 +39,6 @@ const state = {
   otpResendTimer: null,
   phoneVerified: false
 };
-
-// Major US airports database for nearby lookup
-const MAJOR_AIRPORTS = [
-  { code: 'MSP', name: 'Minneapolis-St. Paul International Airport', city: 'Minneapolis', state: 'MN', lat: 44.8848, lng: -93.2223 },
-  { code: 'ORD', name: "O'Hare International Airport", city: 'Chicago', state: 'IL', lat: 41.9742, lng: -87.9073 },
-  { code: 'LAX', name: 'Los Angeles International Airport', city: 'Los Angeles', state: 'CA', lat: 33.9416, lng: -118.4085 },
-  { code: 'JFK', name: 'John F. Kennedy International Airport', city: 'New York', state: 'NY', lat: 40.6413, lng: -73.7781 },
-  { code: 'SFO', name: 'San Francisco International Airport', city: 'San Francisco', state: 'CA', lat: 37.6213, lng: -122.3790 },
-  { code: 'DFW', name: 'Dallas/Fort Worth International Airport', city: 'Dallas', state: 'TX', lat: 32.8998, lng: -97.0403 },
-  { code: 'DEN', name: 'Denver International Airport', city: 'Denver', state: 'CO', lat: 39.8561, lng: -104.6737 },
-  { code: 'SEA', name: 'Seattle-Tacoma International Airport', city: 'Seattle', state: 'WA', lat: 47.4502, lng: -122.3088 },
-  { code: 'ATL', name: 'Hartsfield-Jackson Atlanta International Airport', city: 'Atlanta', state: 'GA', lat: 33.6407, lng: -84.4277 },
-  { code: 'MIA', name: 'Miami International Airport', city: 'Miami', state: 'FL', lat: 25.7959, lng: -80.2870 },
-  { code: 'BOS', name: 'Boston Logan International Airport', city: 'Boston', state: 'MA', lat: 42.3656, lng: -71.0096 },
-  { code: 'PHX', name: 'Phoenix Sky Harbor International Airport', city: 'Phoenix', state: 'AZ', lat: 33.4373, lng: -112.0078 },
-  { code: 'LAS', name: 'Harry Reid International Airport', city: 'Las Vegas', state: 'NV', lat: 36.0840, lng: -115.1537 },
-  { code: 'MCO', name: 'Orlando International Airport', city: 'Orlando', state: 'FL', lat: 28.4312, lng: -81.3081 },
-  { code: 'EWR', name: 'Newark Liberty International Airport', city: 'Newark', state: 'NJ', lat: 40.6895, lng: -74.1745 },
-  { code: 'IAH', name: 'George Bush Intercontinental Airport', city: 'Houston', state: 'TX', lat: 29.9902, lng: -95.3368 },
-  { code: 'SAN', name: 'San Diego International Airport', city: 'San Diego', state: 'CA', lat: 32.7338, lng: -117.1933 },
-  { code: 'DTW', name: 'Detroit Metropolitan Wayne County Airport', city: 'Detroit', state: 'MI', lat: 42.2162, lng: -83.3554 },
-  { code: 'MSN', name: 'Dane County Regional Airport', city: 'Madison', state: 'WI', lat: 43.1399, lng: -89.3375 },
-  { code: 'MKE', name: 'General Mitchell International Airport', city: 'Milwaukee', state: 'WI', lat: 42.9472, lng: -87.8966 },
-  { code: 'RST', name: 'Rochester International Airport', city: 'Rochester', state: 'MN', lat: 43.9083, lng: -92.5000 },
-  { code: 'FAR', name: 'Hector International Airport', city: 'Fargo', state: 'ND', lat: 46.9207, lng: -96.8158 },
-  { code: 'DLH', name: 'Duluth International Airport', city: 'Duluth', state: 'MN', lat: 46.8420, lng: -92.1936 },
-  { code: 'STC', name: 'St. Cloud Regional Airport', city: 'St. Cloud', state: 'MN', lat: 45.5466, lng: -94.0597 }
-];
 
 // Mock drivers for demonstration with real vehicle images
 const MOCK_DRIVERS = [
@@ -533,6 +507,129 @@ function setupAddressAutocomplete() {
       document.getElementById('airportSuggestionSection').classList.add('hidden');
     }
   });
+  
+  // Setup "Use Current Location" button
+  setupCurrentLocationButton();
+}
+
+// ============================================
+// Use Current Location Feature
+// ============================================
+function setupCurrentLocationButton() {
+  const btn = document.getElementById('useCurrentLocationBtn');
+  const spinner = document.getElementById('locationLoadingSpinner');
+  const errorEl = document.getElementById('locationError');
+  
+  if (!btn) return;
+  
+  btn.addEventListener('click', async () => {
+    // Check if geolocation is supported
+    if (!navigator.geolocation) {
+      showLocationError('Geolocation is not supported by your browser');
+      return;
+    }
+    
+    // Show loading state
+    btn.disabled = true;
+    spinner.style.display = 'inline-block';
+    errorEl.style.display = 'none';
+    
+    try {
+      // Get current position
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        });
+      });
+      
+      const { latitude, longitude } = position.coords;
+      console.log('[CustomerOnboarding] Got location:', latitude, longitude);
+      
+      // Reverse geocode to get address
+      await reverseGeocodeLocation(latitude, longitude);
+      
+    } catch (error) {
+      console.error('[CustomerOnboarding] Geolocation error:', error);
+      let message = 'Unable to get your location. ';
+      
+      switch (error.code) {
+        case error.PERMISSION_DENIED:
+          message += 'Please allow location access in your browser settings.';
+          break;
+        case error.POSITION_UNAVAILABLE:
+          message += 'Location information is unavailable.';
+          break;
+        case error.TIMEOUT:
+          message += 'Location request timed out. Please try again.';
+          break;
+        default:
+          message += 'Please enter your address manually.';
+      }
+      
+      showLocationError(message);
+    } finally {
+      btn.disabled = false;
+      spinner.style.display = 'none';
+    }
+  });
+  
+  function showLocationError(message) {
+    errorEl.textContent = message;
+    errorEl.style.display = 'block';
+  }
+}
+
+async function reverseGeocodeLocation(lat, lng) {
+  // Wait for Google Maps if not ready
+  if (!window.google?.maps) {
+    showToast('Map service not ready. Please try again.', 'warning');
+    return;
+  }
+  
+  const geocoder = new google.maps.Geocoder();
+  const latlng = { lat, lng };
+  
+  try {
+    const response = await new Promise((resolve, reject) => {
+      geocoder.geocode({ location: latlng }, (results, status) => {
+        if (status === 'OK' && results[0]) {
+          resolve(results[0]);
+        } else {
+          reject(new Error('Geocoding failed: ' + status));
+        }
+      });
+    });
+    
+    // Update the address input
+    const input = document.getElementById('homeAddressInput');
+    input.value = response.formatted_address;
+    
+    // Parse address components
+    const addressData = parseAddressComponents(response);
+    state.homeAddress = response.formatted_address;
+    state.homeCoordinates = { lat, lng };
+    
+    // Fill parsed fields
+    document.getElementById('homeStreet').value = addressData.street || '';
+    document.getElementById('homeCity').value = addressData.city || '';
+    document.getElementById('homeState').value = addressData.state || '';
+    document.getElementById('homeZip').value = addressData.zip || '';
+    document.getElementById('parsedAddressFields').classList.remove('hidden');
+    
+    // Enable next button
+    document.getElementById('step1NextBtn').disabled = false;
+    
+    // Find nearby airports
+    findNearbyAirports(state.homeCoordinates);
+    
+    showToast('Location found! Please verify your address.', 'success');
+    
+  } catch (error) {
+    console.error('[CustomerOnboarding] Reverse geocoding error:', error);
+    showToast('Could not determine your address. Please enter it manually.', 'warning');
+  }
 }
 
 function parseAddressComponents(place) {
@@ -572,18 +669,79 @@ function parseAddressComponents(place) {
 }
 
 // ============================================
-// Nearby Airport Finder
+// Nearby Airport & FBO Finder (API-based)
 // ============================================
-function findNearbyAirports(coordinates) {
+async function findNearbyAirports(coordinates) {
   console.log('[CustomerOnboarding] Finding nearby airports for:', coordinates);
   
+  const section = document.getElementById('airportSuggestionSection');
+  const loadingEl = document.getElementById('airportSearchLoading');
+  const listEl = document.getElementById('nearbyAirportsList');
+  
+  // Show section with loading
+  section.classList.remove('hidden');
+  loadingEl.classList.remove('hidden');
+  listEl.innerHTML = '';
+  
+  try {
+    // Call the airport search API
+    const response = await fetch(`/api/search-nearby-airports?lat=${coordinates.lat}&lng=${coordinates.lng}&radius=100&includeFBOs=true`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to search airports');
+    }
+    
+    const data = await response.json();
+    
+    state.nearbyAirports = data.airports || [];
+    state.nearbyFBOs = data.fbos || [];
+    
+    console.log('[CustomerOnboarding] Found airports:', state.nearbyAirports.length, 'FBOs:', state.nearbyFBOs.length);
+    
+    // Display airports and FBOs
+    displayNearbyAirports();
+    displayNearbyFBOs();
+    
+  } catch (error) {
+    console.error('[CustomerOnboarding] Airport search error:', error);
+    
+    // Fallback to local calculation
+    state.nearbyAirports = findNearbyAirportsFallback(coordinates);
+    state.nearbyFBOs = [];
+    displayNearbyAirports();
+    
+  } finally {
+    loadingEl.classList.add('hidden');
+  }
+}
+
+// Fallback: Major US airports for when API is not available
+const MAJOR_AIRPORTS = [
+  { code: 'MSP', name: 'Minneapolis-St. Paul International Airport', city: 'Minneapolis', state: 'MN', latitude: 44.8848, longitude: -93.2223 },
+  { code: 'ORD', name: "O'Hare International Airport", city: 'Chicago', state: 'IL', latitude: 41.9742, longitude: -87.9073 },
+  { code: 'LAX', name: 'Los Angeles International Airport', city: 'Los Angeles', state: 'CA', latitude: 33.9416, longitude: -118.4085 },
+  { code: 'JFK', name: 'John F. Kennedy International Airport', city: 'New York', state: 'NY', latitude: 40.6413, longitude: -73.7781 },
+  { code: 'SFO', name: 'San Francisco International Airport', city: 'San Francisco', state: 'CA', latitude: 37.6213, longitude: -122.3790 },
+  { code: 'DFW', name: 'Dallas/Fort Worth International Airport', city: 'Dallas', state: 'TX', latitude: 32.8998, longitude: -97.0403 },
+  { code: 'DEN', name: 'Denver International Airport', city: 'Denver', state: 'CO', latitude: 39.8561, longitude: -104.6737 },
+  { code: 'SEA', name: 'Seattle-Tacoma International Airport', city: 'Seattle', state: 'WA', latitude: 47.4502, longitude: -122.3088 },
+  { code: 'ATL', name: 'Hartsfield-Jackson Atlanta International Airport', city: 'Atlanta', state: 'GA', latitude: 33.6407, longitude: -84.4277 },
+  { code: 'MIA', name: 'Miami International Airport', city: 'Miami', state: 'FL', latitude: 25.7959, longitude: -80.2870 },
+  { code: 'BOS', name: 'Boston Logan International Airport', city: 'Boston', state: 'MA', latitude: 42.3656, longitude: -71.0096 },
+  { code: 'DTW', name: 'Detroit Metropolitan Airport', city: 'Detroit', state: 'MI', latitude: 42.2162, longitude: -83.3554 },
+  { code: 'MKE', name: 'General Mitchell International Airport', city: 'Milwaukee', state: 'WI', latitude: 42.9472, longitude: -87.8966 },
+  { code: 'FCM', name: 'Flying Cloud Airport', city: 'Eden Prairie', state: 'MN', latitude: 44.8272, longitude: -93.4572 },
+  { code: 'STP', name: 'St. Paul Downtown Airport', city: 'St. Paul', state: 'MN', latitude: 44.9345, longitude: -93.0600 }
+];
+
+function findNearbyAirportsFallback(coordinates) {
   const MAX_DISTANCE_MILES = 100;
   const nearbyAirports = [];
   
   for (const airport of MAJOR_AIRPORTS) {
     const distance = calculateDistance(
       coordinates.lat, coordinates.lng,
-      airport.lat, airport.lng
+      airport.latitude, airport.longitude
     );
     
     if (distance <= MAX_DISTANCE_MILES) {
@@ -597,11 +755,7 @@ function findNearbyAirports(coordinates) {
   // Sort by distance
   nearbyAirports.sort((a, b) => a.distance - b.distance);
   
-  // Take top 5
-  state.nearbyAirports = nearbyAirports.slice(0, 5);
-  
-  // Display airports
-  displayNearbyAirports();
+  return nearbyAirports.slice(0, 10);
 }
 
 function calculateDistance(lat1, lng1, lat2, lng2) {
@@ -618,55 +772,199 @@ function calculateDistance(lat1, lng1, lat2, lng2) {
 }
 
 function displayNearbyAirports() {
-  const section = document.getElementById('airportSuggestionSection');
   const list = document.getElementById('nearbyAirportsList');
   
   if (state.nearbyAirports.length === 0) {
+    list.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No airports found nearby. You can add airports later in your account settings.</p>';
+    return;
+  }
+  
+  list.innerHTML = state.nearbyAirports.map(airport => {
+    const isSelected = state.selectedAirports.some(a => a.code === airport.code);
+    return `
+      <button type="button" class="airport-option ${isSelected ? 'selected' : ''}" data-code="${airport.code}" data-type="airport">
+        <div class="airport-checkbox">
+          <input type="checkbox" ${isSelected ? 'checked' : ''} readonly style="pointer-events: none;">
+        </div>
+        <div class="airport-code">${airport.code}</div>
+        <div class="airport-info">
+          <div class="airport-name">${airport.name}</div>
+          <div class="airport-distance">${airport.distance ? airport.distance.toFixed(1) + ' miles' : airport.city + ', ' + (airport.state || airport.country)}</div>
+        </div>
+      </button>
+    `;
+  }).join('');
+  
+  // Add click handlers for multi-select
+  list.querySelectorAll('.airport-option').forEach(btn => {
+    btn.addEventListener('click', () => toggleAirportSelection(btn.dataset.code, 'airport'));
+  });
+  
+  // Add some styling for selected state
+  addAirportSelectionStyles();
+}
+
+function displayNearbyFBOs() {
+  const section = document.getElementById('nearbyFBOsSection');
+  const list = document.getElementById('nearbyFBOsList');
+  
+  if (!state.nearbyFBOs || state.nearbyFBOs.length === 0) {
     section.classList.add('hidden');
     return;
   }
   
   section.classList.remove('hidden');
   
-  list.innerHTML = state.nearbyAirports.map(airport => `
-    <button type="button" class="airport-option" data-code="${airport.code}">
-      <div class="airport-code">${airport.code}</div>
-      <div class="airport-info">
-        <div class="airport-name">${airport.name}</div>
-        <div class="airport-distance">${airport.distance} miles away</div>
-      </div>
-      <div class="airport-select-icon">→</div>
-    </button>
-  `).join('');
+  list.innerHTML = state.nearbyFBOs.map(fbo => {
+    const isSelected = state.selectedFBOs.some(f => f.code === fbo.code || f.name === fbo.name);
+    return `
+      <button type="button" class="airport-option fbo-option ${isSelected ? 'selected' : ''}" data-code="${fbo.code || fbo.name}" data-type="fbo">
+        <div class="airport-checkbox">
+          <input type="checkbox" ${isSelected ? 'checked' : ''} readonly style="pointer-events: none;">
+        </div>
+        <div class="airport-code" style="background: #7c3aed;">🛩️</div>
+        <div class="airport-info">
+          <div class="airport-name">${fbo.name}</div>
+          <div class="airport-distance">${fbo.distance ? fbo.distance.toFixed(1) + ' miles' : fbo.city || 'Private Aviation'}</div>
+        </div>
+      </button>
+    `;
+  }).join('');
   
-  // Add click handlers
-  list.querySelectorAll('.airport-option').forEach(btn => {
-    btn.addEventListener('click', () => selectAirport(btn.dataset.code));
+  // Add click handlers for multi-select
+  list.querySelectorAll('.fbo-option').forEach(btn => {
+    btn.addEventListener('click', () => toggleAirportSelection(btn.dataset.code, 'fbo'));
   });
 }
 
-function selectAirport(code) {
-  const airport = state.nearbyAirports.find(a => a.code === code);
-  if (!airport) return;
+function toggleAirportSelection(code, type) {
+  if (type === 'airport') {
+    const airport = state.nearbyAirports.find(a => a.code === code);
+    if (!airport) return;
+    
+    const existingIndex = state.selectedAirports.findIndex(a => a.code === code);
+    
+    if (existingIndex >= 0) {
+      // Remove from selection
+      state.selectedAirports.splice(existingIndex, 1);
+    } else {
+      // Add to selection
+      state.selectedAirports.push(airport);
+    }
+  } else if (type === 'fbo') {
+    const fbo = state.nearbyFBOs.find(f => f.code === code || f.name === code);
+    if (!fbo) return;
+    
+    const existingIndex = state.selectedFBOs.findIndex(f => f.code === code || f.name === code);
+    
+    if (existingIndex >= 0) {
+      state.selectedFBOs.splice(existingIndex, 1);
+    } else {
+      state.selectedFBOs.push(fbo);
+    }
+  }
   
-  state.selectedAirport = airport;
+  // Re-render lists to update checkboxes
+  displayNearbyAirports();
+  displayNearbyFBOs();
   
-  // Update UI
-  document.getElementById('nearbyAirportsList').classList.add('hidden');
-  document.getElementById('airportSuggestionText')?.classList.add('hidden');
-  const display = document.getElementById('selectedAirportDisplay');
-  display.classList.remove('hidden');
-  document.getElementById('selectedAirportName').textContent = `${airport.code} - ${airport.name}`;
+  // Update selected display
+  updateSelectedAirportsDisplay();
+}
+
+function updateSelectedAirportsDisplay() {
+  const display = document.getElementById('selectedAirportsDisplay');
+  const list = document.getElementById('selectedAirportsList');
   
-  // Add change button handler
-  document.getElementById('changeAirportBtn').addEventListener('click', () => {
-    state.selectedAirport = null;
+  const allSelected = [...state.selectedAirports, ...state.selectedFBOs];
+  
+  if (allSelected.length === 0) {
     display.classList.add('hidden');
-    document.getElementById('nearbyAirportsList').classList.remove('hidden');
-    document.getElementById('airportSuggestionText')?.classList.remove('hidden');
-  });
+    return;
+  }
   
-  showToast(`Selected ${airport.code} as your home airport!`, 'success');
+  display.classList.remove('hidden');
+  
+  list.innerHTML = allSelected.map(item => `
+    <span class="selected-airport-chip" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(82, 183, 136, 0.2); border: 1px solid #52b788; border-radius: 20px; font-size: 13px; color: #fff;">
+      <span>${item.type === 'fbo' ? '🛩️' : '✈️'}</span>
+      <span>${item.code || item.name}</span>
+      <button type="button" class="remove-airport-chip" data-code="${item.code || item.name}" data-type="${item.type || 'airport'}" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 16px; padding: 0; margin-left: 4px;">×</button>
+    </span>
+  `).join('');
+  
+  // Add remove handlers
+  list.querySelectorAll('.remove-airport-chip').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleAirportSelection(btn.dataset.code, btn.dataset.type);
+    });
+  });
+}
+
+function addAirportSelectionStyles() {
+  // Add styles for selected airports if not already added
+  if (document.getElementById('airport-selection-styles')) return;
+  
+  const style = document.createElement('style');
+  style.id = 'airport-selection-styles';
+  style.textContent = `
+    .airport-option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 12px 16px;
+      background: #252542;
+      border: 1px solid #3a3a5e;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: left;
+      margin-bottom: 8px;
+    }
+    .airport-option:hover {
+      background: #2d2d4d;
+      border-color: #6366f1;
+    }
+    .airport-option.selected {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%);
+      border-color: #6366f1;
+    }
+    .airport-checkbox {
+      flex-shrink: 0;
+    }
+    .airport-checkbox input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #6366f1;
+    }
+    .airport-code {
+      flex-shrink: 0;
+      padding: 6px 10px;
+      background: #6366f1;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 12px;
+      color: #fff;
+    }
+    .airport-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .airport-name {
+      font-weight: 500;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .airport-distance {
+      font-size: 12px;
+      color: #888;
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 // ============================================
@@ -1229,15 +1527,34 @@ async function completeOnboarding() {
     console.log('[CustomerOnboarding] Using email:', customerEmail);
     
     // Prepare update data
+    // For backwards compatibility, use first selected airport as home_airport
+    const primaryAirport = state.selectedAirports[0] || null;
+    
     const updateData = {
       address1: document.getElementById('homeStreet').value || state.homeAddress,
       city: document.getElementById('homeCity').value,
       state: document.getElementById('homeState').value,
       zip_code: document.getElementById('homeZip').value,
       cell_phone: state.cellPhone,
-      home_airport: state.selectedAirport?.code || null,
-      home_airport_name: state.selectedAirport?.name || null,
+      home_airport: primaryAirport?.code || null,
+      home_airport_name: primaryAirport?.name || null,
       home_coordinates: state.homeCoordinates,
+      // Store all selected airports and FBOs as JSON
+      preferred_airports: state.selectedAirports.map(a => ({
+        code: a.code,
+        name: a.name,
+        city: a.city,
+        state: a.state,
+        latitude: a.latitude,
+        longitude: a.longitude
+      })),
+      preferred_fbos: state.selectedFBOs.map(f => ({
+        code: f.code,
+        name: f.name,
+        city: f.city,
+        latitude: f.latitude,
+        longitude: f.longitude
+      })),
       onboarding_complete: true,
       onboarding_completed_at: new Date().toISOString()
     };

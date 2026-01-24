@@ -83,7 +83,7 @@
             </div>
           </div>
 
-          <!-- Registration Form -->
+          <!-- Registration Form - Step 1: Email & Password -->
           <div id="registerForm" class="auth-form">
             <h2 class="auth-title">Create Account</h2>
             <div class="form-row" style="display: flex; gap: 12px;">
@@ -101,12 +101,6 @@
               <input type="email" id="regEmail" placeholder="your@email.com" autocomplete="email">
               <span id="emailError" class="field-error" style="color: #ef4444; font-size: 12px; display: none;"></span>
               <span id="emailValid" class="field-valid" style="color: #22c55e; font-size: 12px; display: none;">✓ Valid email format</span>
-            </div>
-            <div class="form-group">
-              <label for="regPhone">Phone Number*</label>
-              <input type="tel" id="regPhone" placeholder="(555) 123-4567" autocomplete="tel">
-              <span id="phoneError" class="field-error" style="color: #ef4444; font-size: 12px; display: none;"></span>
-              <span id="phoneValid" class="field-valid" style="color: #22c55e; font-size: 12px; display: none;">✓ Valid phone number</span>
             </div>
             <div class="form-group">
               <label for="regPassword">Password*</label>
@@ -147,6 +141,51 @@
               <span>Already have an account?</span>
               <button type="button" id="showLoginBtn" class="btn-link">Sign In</button>
             </div>
+          </div>
+
+          <!-- Email Verification Pending Screen -->
+          <div id="emailVerifyPendingForm" class="auth-form">
+            <h2 class="auth-title">Check Your Email</h2>
+            <div style="text-align: center; margin: 20px 0;">
+              <div style="font-size: 64px; margin-bottom: 16px;">📧</div>
+              <p style="color: #a0aec0; margin-bottom: 12px;">
+                We've sent a verification link to:
+              </p>
+              <p id="pendingEmailDisplay" style="color: #fff; font-weight: 600; font-size: 18px; margin-bottom: 20px;"></p>
+              <p style="color: #718096; font-size: 14px;">
+                Click the link in your email to verify your account, then return here to complete registration.
+              </p>
+            </div>
+            <button type="button" id="checkEmailVerifiedBtn" class="auth-btn auth-btn-primary">
+              I've Verified My Email
+            </button>
+            <div style="text-align: center; margin-top: 16px;">
+              <button type="button" id="resendVerificationBtn" class="btn-link" style="color: #6366f1;">
+                Didn't receive email? Resend
+              </button>
+            </div>
+            <div class="auth-switch" style="margin-top: 20px;">
+              <button type="button" id="backToRegisterBtn" class="btn-link" style="color: #a0aec0;">
+                ← Back to Registration
+              </button>
+            </div>
+          </div>
+
+          <!-- Phone Collection Form - Step 2: After Email Verified -->
+          <div id="phoneCollectionForm" class="auth-form">
+            <h2 class="auth-title">Add Your Phone Number</h2>
+            <p class="form-description" style="color: #a0aec0; margin-bottom: 20px;">
+              Almost done! Add your phone number to receive ride updates and notifications.
+            </p>
+            <div class="form-group">
+              <label for="regPhone">Phone Number*</label>
+              <input type="tel" id="regPhone" placeholder="(555) 123-4567" autocomplete="tel">
+              <span id="phoneError" class="field-error" style="color: #ef4444; font-size: 12px; display: none;"></span>
+              <span id="phoneValid" class="field-valid" style="color: #22c55e; font-size: 12px; display: none;">✓ Valid phone number</span>
+            </div>
+            <button type="button" id="sendPhoneOtpBtn" class="auth-btn auth-btn-primary">
+              Send Verification Code
+            </button>
           </div>
 
           <!-- Phone OTP Verification Form -->
@@ -502,7 +541,53 @@
           // Check for verified=true parameter (user just verified their email)
           const urlParams = new URLSearchParams(window.location.search);
           if (urlParams.get('verified') === 'true') {
-            // Show success message
+            // Check if user has pending registration (needs to add phone)
+            const pending = JSON.parse(localStorage.getItem('pendingRegistration') || '{}');
+            
+            if (pending.email && pending.firstName) {
+              // User verified email - now try to log them in and proceed to phone collection
+              const creds = getSupabaseCredentials();
+              
+              try {
+                const loginResponse = await fetch(`${creds.url}/auth/v1/token?grant_type=password`, {
+                  method: 'POST',
+                  headers: {
+                    'apikey': creds.anonKey,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    email: pending.email,
+                    password: pending.password
+                  })
+                });
+                
+                const loginData = await loginResponse.json();
+                
+                if (loginResponse.ok && loginData.access_token) {
+                  // Email verified! Update pending registration with token
+                  pendingRegistration = { 
+                    ...pending, 
+                    accessToken: loginData.access_token, 
+                    userId: loginData.user?.id 
+                  };
+                  localStorage.setItem('pendingRegistration', JSON.stringify(pendingRegistration));
+                  
+                  // Show phone collection form
+                  document.getElementById('loginForm').classList.remove('active');
+                  document.getElementById('phoneCollectionForm').classList.add('active');
+                  
+                  showToast('Email verified! Now add your phone number.', 'success');
+                  
+                  // Clear URL param
+                  window.history.replaceState({}, document.title, window.location.pathname);
+                  return;
+                }
+              } catch (err) {
+                console.error('Auto-login after verification failed:', err);
+              }
+            }
+            
+            // Fallback: Show success message on login form
             const loginMessage = document.getElementById('loginMessage');
             loginMessage.textContent = '✅ Email verified! Please log in to continue.';
             loginMessage.style.display = 'block';
@@ -511,7 +596,7 @@
             loginMessage.style.color = '#22c55e';
             
             // Prefill email if we have it
-            const verifiedEmail = localStorage.getItem('verified_email');
+            const verifiedEmail = localStorage.getItem('verified_email') || pending.email;
             if (verifiedEmail) {
               document.getElementById('loginEmail').value = verifiedEmail;
               localStorage.removeItem('verified_email');
@@ -653,16 +738,15 @@
       }
     });
 
-    // Registration handler - Step 1: Validate and send OTP
+    // Registration handler - Step 1: Validate and send email verification
     document.getElementById('registerBtn')?.addEventListener('click', async () => {
       const firstName = document.getElementById('regFirstName').value.trim();
       const lastName = document.getElementById('regLastName').value.trim();
       const email = document.getElementById('regEmail').value.trim();
-      const phone = document.getElementById('regPhone').value.trim();
       const password = document.getElementById('regPassword').value;
       const passwordConfirm = document.getElementById('regPasswordConfirm').value;
 
-      if (!firstName || !lastName || !email || !phone || !password) {
+      if (!firstName || !lastName || !email || !password) {
         showToast('Please fill in all required fields', 'error');
         return;
       }
@@ -671,13 +755,6 @@
       if (!isValidEmail(email)) {
         showToast('Please enter a valid email address', 'error');
         document.getElementById('regEmail').focus();
-        return;
-      }
-
-      // Validate phone format
-      if (!isValidPhone(phone)) {
-        showToast('Please enter a valid phone number', 'error');
-        document.getElementById('regPhone').focus();
         return;
       }
 
@@ -693,17 +770,203 @@
 
       const btn = document.getElementById('registerBtn');
       btn.disabled = true;
-      btn.textContent = 'Sending verification code...';
+      btn.textContent = 'Creating account...';
 
       try {
-        // Store pending registration data
-        pendingRegistration = { firstName, lastName, email, phone, password };
+        // Store pending registration data (phone will be added later)
+        pendingRegistration = { firstName, lastName, email, password };
+        
+        const creds = getSupabaseCredentials();
+        
+        // Create auth user with email confirmation required
+        const authResponse = await fetch(`${creds.url}/auth/v1/signup`, {
+          method: 'POST',
+          headers: {
+            'apikey': creds.anonKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: email,
+            password: password,
+            data: {
+              first_name: firstName,
+              last_name: lastName
+            },
+            options: {
+              emailRedirectTo: `${window.location.origin}/customers/auth.html?verified=true`
+            }
+          })
+        });
+        
+        const authData = await authResponse.json();
+        
+        if (!authResponse.ok) {
+          throw new Error(authData.error_description || authData.msg || authData.message || 'Registration failed');
+        }
+        
+        // Store user ID and email for later
+        pendingRegistration.userId = authData.user?.id;
+        pendingRegistration.accessToken = authData.access_token;
+        
+        // Save to localStorage so we can retrieve after email verification
+        localStorage.setItem('pendingRegistration', JSON.stringify(pendingRegistration));
+        
+        // Show email verification pending screen
+        document.getElementById('registerForm').classList.remove('active');
+        document.getElementById('emailVerifyPendingForm').classList.add('active');
+        document.getElementById('pendingEmailDisplay').textContent = email;
+        
+        showToast('Verification email sent! Please check your inbox.', 'success');
+        
+      } catch (err) {
+        console.error('Registration error:', err);
+        showToast(err.message || 'Registration failed. Please try again.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Create Account';
+      }
+    });
+    
+    // Back to register button
+    document.getElementById('backToRegisterBtn')?.addEventListener('click', () => {
+      document.getElementById('emailVerifyPendingForm').classList.remove('active');
+      document.getElementById('registerForm').classList.add('active');
+      document.getElementById('registerBtn').disabled = false;
+      document.getElementById('registerBtn').textContent = 'Create Account';
+    });
+    
+    // Resend verification email
+    document.getElementById('resendVerificationBtn')?.addEventListener('click', async () => {
+      const pending = JSON.parse(localStorage.getItem('pendingRegistration') || '{}');
+      if (!pending.email) {
+        showToast('No pending registration found', 'error');
+        return;
+      }
+      
+      const btn = document.getElementById('resendVerificationBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      
+      try {
+        const creds = getSupabaseCredentials();
+        const response = await fetch(`${creds.url}/auth/v1/resend`, {
+          method: 'POST',
+          headers: {
+            'apikey': creds.anonKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            type: 'signup',
+            email: pending.email,
+            options: {
+              emailRedirectTo: `${window.location.origin}/customers/auth.html?verified=true`
+            }
+          })
+        });
+        
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.message || 'Failed to resend');
+        }
+        
+        showToast('Verification email resent!', 'success');
+      } catch (err) {
+        console.error('Resend error:', err);
+        showToast(err.message || 'Failed to resend email', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Didn't receive email? Resend";
+      }
+    });
+    
+    // Check if email is verified button
+    document.getElementById('checkEmailVerifiedBtn')?.addEventListener('click', async () => {
+      const pending = JSON.parse(localStorage.getItem('pendingRegistration') || '{}');
+      if (!pending.email || !pending.password) {
+        showToast('No pending registration found. Please start over.', 'error');
+        document.getElementById('emailVerifyPendingForm').classList.remove('active');
+        document.getElementById('registerForm').classList.add('active');
+        return;
+      }
+      
+      const btn = document.getElementById('checkEmailVerifiedBtn');
+      btn.disabled = true;
+      btn.textContent = 'Checking...';
+      
+      try {
+        const creds = getSupabaseCredentials();
+        
+        // Try to log in - if email is verified, this will work
+        const loginResponse = await fetch(`${creds.url}/auth/v1/token?grant_type=password`, {
+          method: 'POST',
+          headers: {
+            'apikey': creds.anonKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: pending.email,
+            password: pending.password
+          })
+        });
+        
+        const loginData = await loginResponse.json();
+        
+        if (!loginResponse.ok) {
+          if (loginData.error_description?.includes('not confirmed') || loginData.msg?.includes('not confirmed')) {
+            showToast('Email not yet verified. Please check your inbox and click the verification link.', 'warning');
+            btn.disabled = false;
+            btn.textContent = "I've Verified My Email";
+            return;
+          }
+          throw new Error(loginData.error_description || loginData.msg || 'Verification check failed');
+        }
+        
+        // Email is verified! Store tokens and show phone collection form
+        pendingRegistration = { ...pending, accessToken: loginData.access_token, userId: loginData.user?.id };
+        localStorage.setItem('pendingRegistration', JSON.stringify(pendingRegistration));
+        
+        showToast('Email verified! Now add your phone number.', 'success');
+        
+        // Show phone collection form
+        document.getElementById('emailVerifyPendingForm').classList.remove('active');
+        document.getElementById('phoneCollectionForm').classList.add('active');
+        
+      } catch (err) {
+        console.error('Verification check error:', err);
+        showToast(err.message || 'Failed to verify. Please try again.', 'error');
+        btn.disabled = false;
+        btn.textContent = "I've Verified My Email";
+      }
+    });
+    
+    // Phone collection - send OTP
+    document.getElementById('sendPhoneOtpBtn')?.addEventListener('click', async () => {
+      const phone = document.getElementById('regPhone').value.trim();
+      
+      if (!phone) {
+        showToast('Please enter your phone number', 'error');
+        return;
+      }
+      
+      if (!isValidPhone(phone)) {
+        showToast('Please enter a valid phone number', 'error');
+        document.getElementById('regPhone').focus();
+        return;
+      }
+      
+      const btn = document.getElementById('sendPhoneOtpBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending verification code...';
+      
+      try {
+        // Store phone in pending registration
+        pendingRegistration.phone = phone;
+        localStorage.setItem('pendingRegistration', JSON.stringify(pendingRegistration));
         
         // Send OTP to phone
         await sendOTP(phone);
         
         // Show phone verification form
-        document.getElementById('registerForm').classList.remove('active');
+        document.getElementById('phoneCollectionForm').classList.remove('active');
         document.getElementById('phoneVerifyForm').classList.add('active');
         document.getElementById('otpPhoneDisplay').textContent = formatPhoneDisplay(phone);
         
@@ -718,11 +981,11 @@
         console.error('Failed to send OTP:', err);
         showToast('Failed to send verification code. Please try again.', 'error');
         btn.disabled = false;
-        btn.textContent = 'Create Account';
+        btn.textContent = 'Send Verification Code';
       }
     });
     
-    // OTP Verification handler - Step 2: Verify and complete registration
+    // OTP Verification handler - Step 3: Verify phone and complete registration
     document.getElementById('verifyOtpBtn')?.addEventListener('click', async () => {
       const enteredCode = getOTPFromInputs();
       const errorEl = document.getElementById('otpError');
@@ -747,32 +1010,17 @@
       
       const btn = document.getElementById('verifyOtpBtn');
       btn.disabled = true;
-      btn.textContent = 'Verifying...';
+      btn.textContent = 'Completing registration...';
       
       try {
         // Phone verified! Now complete registration
-        const { firstName, lastName, email, phone, password } = pendingRegistration;
-        const creds = getSupabaseCredentials();
-        
-        // Create auth user
-        const authResponse = await fetch(`${creds.url}/auth/v1/signup`, {
-          method: 'POST',
-          headers: {
-            'apikey': creds.anonKey,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ 
-            email, 
-            password,
-            data: { first_name: firstName, last_name: lastName }
-          })
-        });
-
-        const authData = await authResponse.json();
-
-        if (!authResponse.ok) {
-          throw new Error(authData.error_description || authData.msg || 'Registration failed');
+        // Get pending data from localStorage if not in memory
+        if (!pendingRegistration || !pendingRegistration.firstName) {
+          pendingRegistration = JSON.parse(localStorage.getItem('pendingRegistration') || '{}');
         }
+        
+        const { firstName, lastName, email, phone, accessToken, userId } = pendingRegistration;
+        const creds = getSupabaseCredentials();
 
         // Create customer record in accounts table
         // Use Customer organization for all customer portal registrations
@@ -780,7 +1028,7 @@
         
         const customerData = {
           organization_id: CUSTOMER_ORG_ID,
-          user_id: authData.user?.id || null,  // Link to auth.users
+          user_id: userId || null,  // Link to auth.users
           first_name: firstName,
           last_name: lastName,
           email: email.toLowerCase(),
@@ -790,7 +1038,7 @@
           created_at: new Date().toISOString()
         };
 
-        const token = authData.access_token || creds.anonKey;
+        const token = accessToken || creds.anonKey;
         const createResp = await fetch(`${creds.url}/rest/v1/accounts`, {
           method: 'POST',
           headers: {
@@ -814,26 +1062,26 @@
           console.error('Failed to create account record:', await createResp.text());
         }
 
-        // Send verification email
-        btn.textContent = 'Sending verification email...';
-        await sendVerificationEmail(email, firstName, lastName, phone, portalSlug, creds);
-
         // Store session if available
-        if (authData.access_token) {
-          localStorage.setItem('customer_session', JSON.stringify(authData));
+        if (accessToken) {
+          localStorage.setItem('customer_session', JSON.stringify({
+            access_token: accessToken,
+            user: { id: userId, email }
+          }));
         }
         
-        // Clear pending registration
+        // Clear pending registration from localStorage
+        localStorage.removeItem('pendingRegistration');
         pendingRegistration = null;
         otpCode = null;
         
         // Show success message
-        showToast('Account created! Please verify your email.', 'success');
+        showToast('Account created successfully! Welcome to ReliaLimo.', 'success');
         
-        // Show verification pending UI
-        document.getElementById('phoneVerifyForm').classList.remove('active');
-        document.getElementById('registerForm').classList.add('active');
-        showVerificationPendingUI(email, firstName);
+        // Redirect to onboarding
+        setTimeout(() => {
+          window.location.href = '/onboarding';
+        }, 1000);
 
       } catch (err) {
         console.error('Registration error:', err);
@@ -867,11 +1115,11 @@
     
     // Change phone number handler
     document.getElementById('changePhoneBtn')?.addEventListener('click', () => {
-      // Go back to registration form
+      // Go back to phone collection form
       document.getElementById('phoneVerifyForm').classList.remove('active');
-      document.getElementById('registerForm').classList.add('active');
-      document.getElementById('registerBtn').disabled = false;
-      document.getElementById('registerBtn').textContent = 'Create Account';
+      document.getElementById('phoneCollectionForm').classList.add('active');
+      document.getElementById('sendPhoneOtpBtn').disabled = false;
+      document.getElementById('sendPhoneOtpBtn').textContent = 'Send Verification Code';
       
       // Clear OTP state
       if (otpCountdownInterval) clearInterval(otpCountdownInterval);

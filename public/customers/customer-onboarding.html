@@ -140,6 +140,37 @@
                 <div id="addressSuggestions" class="address-suggestions"></div>
               </div>
               
+              <!-- Use Current Location Button -->
+              <button type="button" id="useCurrentLocationBtn" class="use-location-btn" style="display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 12px 16px; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; width: 100%;">
+                <span style="font-size: 18px;">📍</span>
+                <span>Use My Current Location</span>
+                <span id="locationLoadingSpinner" style="display: none; margin-left: auto;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;">
+                    <circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"/>
+                  </svg>
+                </span>
+              </button>
+              <p id="locationError" style="color: #ef4444; font-size: 13px; margin-top: 8px; display: none;"></p>
+              
+              <style>
+                @keyframes spin {
+                  from { transform: rotate(0deg); }
+                  to { transform: rotate(360deg); }
+                }
+                .use-location-btn:hover {
+                  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+                  transform: translateY(-1px);
+                  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+                }
+                .use-location-btn:active {
+                  transform: translateY(0);
+                }
+                .use-location-btn:disabled {
+                  opacity: 0.7;
+                  cursor: not-allowed;
+                }
+              </style>
+              
               <!-- Parsed address fields (hidden but stored) -->
               <div id="parsedAddressFields" class="parsed-address hidden">
                 <div class="form-row">
@@ -165,22 +196,45 @@
               </div>
             </div>
 
-            <!-- Airport Suggestions -->
+            <!-- Airport & FBO Selection Section -->
             <div id="airportSuggestionSection" class="airport-suggestion-section hidden">
               <div class="suggestion-header">
                 <span class="suggestion-icon">✈️</span>
-                <h3>Nearby Airports Found!</h3>
+                <h3>Nearby Airports & FBOs</h3>
               </div>
-              <p class="suggestion-text" id="airportSuggestionText">Would you like to use one of these airports for your home airport transportation needs?</p>
+              <p class="suggestion-text" id="airportSuggestionText">Select the airports you use most frequently. You can select multiple.</p>
               
-              <div id="nearbyAirportsList" class="nearby-airports-list">
+              <!-- Loading indicator -->
+              <div id="airportSearchLoading" class="hidden" style="text-align: center; padding: 20px;">
+                <div class="loading-spinner" style="width: 32px; height: 32px; margin: 0 auto 12px;"></div>
+                <p style="color: #888;">Searching for nearby airports...</p>
+              </div>
+              
+              <!-- Airports List (multi-select) -->
+              <div id="nearbyAirportsList" class="nearby-airports-list" style="max-height: 300px; overflow-y: auto;">
                 <!-- Airports will be populated here -->
               </div>
               
-              <div class="selected-airport-display hidden" id="selectedAirportDisplay">
-                <div class="selected-label">✅ Selected Home Airport:</div>
-                <div class="selected-airport" id="selectedAirportName"></div>
-                <button type="button" class="btn-link" id="changeAirportBtn">Change</button>
+              <!-- FBOs List (multi-select) -->
+              <div id="nearbyFBOsSection" class="hidden" style="margin-top: 16px;">
+                <div class="suggestion-header" style="margin-bottom: 8px;">
+                  <span class="suggestion-icon">🛩️</span>
+                  <h4 style="margin: 0; font-size: 14px;">Private Aviation (FBOs)</h4>
+                </div>
+                <div id="nearbyFBOsList" class="nearby-airports-list" style="max-height: 200px; overflow-y: auto;">
+                  <!-- FBOs will be populated here -->
+                </div>
+              </div>
+              
+              <!-- Selected Airports Display -->
+              <div id="selectedAirportsDisplay" class="hidden" style="margin-top: 16px; padding: 12px; background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%); border-radius: 8px; border: 1px solid #40916c;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                  <span style="color: #52b788;">✅</span>
+                  <span style="color: #52b788; font-weight: 600;">Selected Airports:</span>
+                </div>
+                <div id="selectedAirportsList" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                  <!-- Selected airport chips will appear here -->
+                </div>
               </div>
             </div>
 

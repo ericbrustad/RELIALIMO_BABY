@@ -654,12 +654,40 @@ async function loadAirports() {
     ];
   }
   
-  // Populate airport dropdowns
+  // Get customer's preferred airports (from onboarding)
+  const preferredAirports = state.customer?.preferred_airports || [];
+  const preferredCodes = preferredAirports.map(a => a.code);
+  
+  // Populate airport dropdowns with preferred airports first
   ['pickupAirport', 'dropoffAirport'].forEach(id => {
     const select = document.getElementById(id);
     if (select) {
-      select.innerHTML = '<option value="">Select Airport</option>' +
-        state.airports.map(a => `<option value="${a.code}" data-address="${a.address || ''}">${a.name}</option>`).join('');
+      let html = '<option value="">Select Airport</option>';
+      
+      // Add preferred airports section if customer has any
+      if (preferredAirports.length > 0) {
+        html += '<optgroup label="⭐ Your Preferred Airports">';
+        preferredAirports.forEach(pa => {
+          // Find the full airport data or use what we have
+          const fullAirport = state.airports.find(a => a.code === pa.code) || pa;
+          html += `<option value="${pa.code}" data-address="${fullAirport.address || ''}">${fullAirport.name || pa.name}</option>`;
+        });
+        html += '</optgroup>';
+        html += '<optgroup label="All Airports">';
+      }
+      
+      // Add all airports (excluding preferred to avoid duplicates)
+      state.airports.forEach(a => {
+        if (!preferredCodes.includes(a.code)) {
+          html += `<option value="${a.code}" data-address="${a.address || ''}">${a.name}</option>`;
+        }
+      });
+      
+      if (preferredAirports.length > 0) {
+        html += '</optgroup>';
+      }
+      
+      select.innerHTML = html;
     }
   });
   
