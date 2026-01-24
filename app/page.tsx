@@ -7,14 +7,6 @@ export default function LandingPage() {
   
   return (
     <>
-      {/* Top Navigation */}
-      <nav className="top-nav">
-        <div className="nav-links">
-          <a href="/driver-portal.html" className="nav-link">🚘 Driver</a>
-          <a href="/index.html" className="nav-link">⚙️ Admin</a>
-        </div>
-      </nav>
-
       {/* Hero Section */}
       <section className="hero">
         <div className="logo-container">
@@ -47,6 +39,15 @@ export default function LandingPage() {
           </a>
           <a href="https://account.relialimo.com/auth" className="btn btn-secondary">
             Account Login
+          </a>
+        </div>
+        
+        <div className="portal-buttons">
+          <a href="/driver-portal.html" className="btn btn-outline">
+            🚘 Driver
+          </a>
+          <a href="/index.html" className="btn btn-outline">
+            ⚙️ Admin
           </a>
         </div>
       </section>
