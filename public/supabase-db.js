@@ -555,7 +555,20 @@ export async function deleteAccount(accountId) {
     const client = getSupabaseClient();
     if (!client) throw new Error('No Supabase client');
 
-    // Delete by id first
+    // First, get the account to find user_id and email
+    let accountToDelete = null;
+    const { data: accountData } = await client
+      .from('accounts')
+      .select('id, user_id, email')
+      .or(`id.eq.${accountId},account_number.eq.${accountId}`)
+      .single();
+    
+    if (accountData) {
+      accountToDelete = accountData;
+      console.log('🗑️ Found account to delete:', accountToDelete);
+    }
+
+    // Delete the account record
     let deleted = false;
     const { data: dataById, error: errorById } = await client
       .from('accounts')
@@ -577,6 +590,32 @@ export async function deleteAccount(accountId) {
       if (!errorByNum && dataByNum && dataByNum.length > 0) {
         deleted = true;
         console.log('🗑️ Deleted account by account_number:', dataByNum);
+      }
+    }
+
+    // NOW DELETE THE AUTH USER if account had a user_id
+    if (accountToDelete?.user_id || accountToDelete?.email) {
+      console.log('🗑️ Attempting to delete auth user...');
+      try {
+        const response = await fetch('/api/delete-auth-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            userId: accountToDelete.user_id,
+            email: accountToDelete.email 
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log('🗑️ Auth user deleted:', result);
+        } else {
+          const errorText = await response.text();
+          console.warn('⚠️ Failed to delete auth user:', errorText);
+        }
+      } catch (authErr) {
+        console.warn('⚠️ Auth user deletion failed:', authErr);
+        // Don't fail the whole operation if auth deletion fails
       }
     }
 
