@@ -66,7 +66,6 @@ const portalSettings = {
 // ============================================
 const bookingDefaults = {
   assignmentType: 'unassigned',       // Driver assignment: unassigned, in-house, farm-out
-  affiliate: 'in-house',              // Default affiliate
   vehicleType: 'Black SUV',           // Default vehicle type
   serviceType: 'Point to Point',      // Default service type
   confirmationPrefix: '',             // Prefix for confirmation numbers
@@ -1631,14 +1630,12 @@ async function bookTrip(includeReturn = false) {
       reservationData.driver_id = null;
       reservationData.res_status = 'Farmout';
       reservationData.assignment_type = 'Farm-out';
-      reservationData.affiliate = null;
       reservationData.farm_status = 'unassigned';
       reservationData.farm_mode = 'automatic';
       console.log('[CustomerPortal] Auto-farm enabled: Setting to Farm-out Unassigned (automatic)');
     } else {
       // AUTO-FARM OFF: Set to In-House, try to assign default driver
       reservationData.assignment_type = 'In-House';
-      reservationData.affiliate = 'in-house';
       reservationData.farm_status = null;
       reservationData.farm_mode = null;
       
@@ -1927,7 +1924,6 @@ function buildReservationData() {
     driver_id: null,
     res_status: 'Unassigned',
     assignment_type: 'In-House',
-    affiliate: 'in-house',
     
     // Status
     status: 'confirmed',
