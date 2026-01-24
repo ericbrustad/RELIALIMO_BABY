@@ -1551,10 +1551,11 @@ async function completeOnboarding() {
     const primaryAirport = state.selectedAirports[0] || null;
     
     const updateData = {
-      address1: document.getElementById('homeStreet').value || state.homeAddress,
+      // Use correct column names: address_line1, city, state, zip
+      address_line1: document.getElementById('homeStreet').value || state.homeAddress,
       city: document.getElementById('homeCity').value,
       state: document.getElementById('homeState').value,
-      zip_code: document.getElementById('homeZip').value,
+      zip: document.getElementById('homeZip').value,
       cell_phone: state.cellPhone,
       home_airport: primaryAirport?.code || null,
       home_airport_name: primaryAirport?.name || null,
@@ -1697,7 +1698,7 @@ function initializeDriversMap() {
   }
   
   try {
-    const token = window.ENV?.MAPBOX_TOKEN || 'pk.eyJ1IjoicmVsaWFsaW1vIiwiYSI6ImNtNnd2cHU5ODBkMXYycXB1cWR2a3JjNm4ifQ.uGT0gP5I2InS-5LMGJPkrA';
+    const token = window.ENV?.MAPBOX_TOKEN || 'pk.eyJ1IjoiZXJpeGNvYWNoIiwiYSI6ImNtaDdocXI0NDB1dW4yaW9tZWFka3NocHAifQ.h1czc1VBwbBJQbdJTU5HHA';
     mapboxgl.accessToken = token;
     console.log('[CustomerOnboarding] Initializing map with token:', token.substring(0, 20) + '...');
     

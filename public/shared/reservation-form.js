@@ -8189,8 +8189,10 @@ class ReservationForm {
         // Store account's preferred airports and home address for quick selection
         this.accountPreferredAirports = account.preferred_airports || [];
         this.accountPreferredFBOs = account.preferred_fbos || [];
-        this.accountHomeAddress = account.address1 ? 
-          `${account.address1}${account.city ? ', ' + account.city : ''}${account.state ? ', ' + account.state : ''}${account.zip_code ? ' ' + account.zip_code : ''}` : null;
+        // Check both address_line1 and address1 for compatibility
+        const homeStreet = account.address_line1 || account.address1;
+        this.accountHomeAddress = homeStreet ? 
+          `${homeStreet}${account.city ? ', ' + account.city : ''}${account.state ? ', ' + account.state : ''}${account.zip || account.zip_code ? ' ' + (account.zip || account.zip_code) : ''}` : null;
         this.accountHomeCoordinates = account.home_coordinates;
         this.accountHomeAirport = account.home_airport;
         
