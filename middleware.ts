@@ -95,16 +95,17 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // Admin subdomain: admin.relialimo.com - serve admin.html (login gate)
+  // Admin subdomain: admin.relialimo.com - serve index.html (main admin shell)
+  // Authentication is handled by auth-guard.js module which redirects to auth.html when needed
   if (host.startsWith('admin.')) {
-    // All entry points go through admin.html login gate
+    // All entry points go to index.html - the main admin shell
     if (pathname === '/' || pathname === '' || pathname === '/index.html') {
-      // Serve admin.html which handles auth check and shows login or app
-      return NextResponse.rewrite(new URL('/admin.html', request.url))
+      // Serve index.html - auth-guard.js handles authentication
+      return NextResponse.rewrite(new URL('/index.html', request.url))
     }
-    // Block direct access to auth.html on admin subdomain
+    // Allow auth.html for login flow
     if (pathname === '/auth.html') {
-      return NextResponse.rewrite(new URL('/admin.html', request.url))
+      return NextResponse.next()
     }
     // Admin files are at the root of public, no rewrite needed
   }
