@@ -161,11 +161,26 @@
             </div>
             
             <div class="form-group">
+              <label>Default Driver</label>
+              <select id="defaultDriver" class="form-input">
+                <option value="">-- No Default Driver --</option>
+                <!-- Drivers loaded dynamically -->
+              </select>
+              <p class="form-hint">Auto-assign this driver to new in-house bookings</p>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
               <label>Default Affiliate</label>
               <select id="defaultAffiliate" class="form-input">
                 <option value="in-house">In-House</option>
                 <!-- Additional affiliates loaded dynamically -->
               </select>
+            </div>
+            
+            <div class="form-group">
+              <!-- Spacer for alignment -->
             </div>
           </div>
           
@@ -576,9 +591,44 @@
           });
         }
 
+        // Load drivers for default driver dropdown
+        const driversResp = await fetch(`${creds.url}/rest/v1/drivers?is_active=eq.true&select=id,first_name,last_name,is_default_driver&order=first_name.asc`, {
+          headers: { 'apikey': creds.anonKey }
+        });
+        
+        if (driversResp.ok) {
+          const drivers = await driversResp.json();
+          populateDefaultDriverDropdown(drivers);
+        }
+
       } catch (err) {
         console.error('Failed to load settings:', err);
         showToast('Failed to load settings', 'error');
+      }
+    }
+
+    // Populate the default driver dropdown
+    function populateDefaultDriverDropdown(drivers) {
+      const select = document.getElementById('defaultDriver');
+      if (!select) return;
+      
+      select.innerHTML = '<option value="">-- No Default Driver --</option>';
+      
+      let currentDefaultId = null;
+      drivers.forEach(d => {
+        const name = `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'Unknown';
+        const option = document.createElement('option');
+        option.value = d.id;
+        option.textContent = name;
+        if (d.is_default_driver) {
+          currentDefaultId = d.id;
+        }
+        select.appendChild(option);
+      });
+      
+      // Pre-select the current default driver
+      if (currentDefaultId) {
+        select.value = currentDefaultId;
       }
     }
 
@@ -1003,6 +1053,74 @@
             },
             body: JSON.stringify(setting)
           });
+        }
+
+        // Sync vehicle_types.is_app_default with selected default vehicle type
+        const selectedVehicleType = document.getElementById('defaultVehicleType').value;
+        if (selectedVehicleType) {
+          try {
+            // First, clear all is_app_default flags
+            await fetch(`${creds.url}/rest/v1/vehicle_types?is_app_default=eq.true`, {
+              method: 'PATCH',
+              headers: {
+                'apikey': creds.anonKey,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ is_app_default: false })
+            });
+            
+            // Then set is_app_default for the selected vehicle type
+            await fetch(`${creds.url}/rest/v1/vehicle_types?name=eq.${encodeURIComponent(selectedVehicleType)}`, {
+              method: 'PATCH',
+              headers: {
+                'apikey': creds.anonKey,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ is_app_default: true })
+            });
+            
+            console.log('[PortalSettings] Synced vehicle_types.is_app_default to:', selectedVehicleType);
+            
+            // Notify other windows/tabs
+            window.postMessage({ type: 'defaultVehicleChanged', vehicle: selectedVehicleType }, '*');
+          } catch (syncErr) {
+            console.warn('[PortalSettings] Could not sync vehicle_types.is_app_default:', syncErr);
+          }
+        }
+
+        // Sync drivers.is_default_driver with selected default driver
+        const selectedDriverId = document.getElementById('defaultDriver')?.value;
+        if (selectedDriverId) {
+          try {
+            // First, clear all is_default_driver flags
+            await fetch(`${creds.url}/rest/v1/drivers?is_default_driver=eq.true`, {
+              method: 'PATCH',
+              headers: {
+                'apikey': creds.anonKey,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ is_default_driver: false })
+            });
+            
+            // Then set is_default_driver for the selected driver (unless "none")
+            if (selectedDriverId !== '' && selectedDriverId !== 'none') {
+              await fetch(`${creds.url}/rest/v1/drivers?id=eq.${encodeURIComponent(selectedDriverId)}`, {
+                method: 'PATCH',
+                headers: {
+                  'apikey': creds.anonKey,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ is_default_driver: true })
+              });
+              
+              console.log('[PortalSettings] Synced drivers.is_default_driver to driver ID:', selectedDriverId);
+            }
+            
+            // Notify other windows/tabs
+            window.postMessage({ type: 'defaultDriverChanged', driverId: selectedDriverId }, '*');
+          } catch (syncErr) {
+            console.warn('[PortalSettings] Could not sync drivers.is_default_driver:', syncErr);
+          }
         }
 
         // Save geofence settings
