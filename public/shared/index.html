@@ -50,6 +50,131 @@
         --sidebar-width: 170px;
       }
 
+      /* ========== SPLASH SCREEN ========== */
+      #splashScreen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        transition: opacity 0.6s ease, visibility 0.6s ease;
+      }
+      #splashScreen.fade-out {
+        opacity: 0;
+        visibility: hidden;
+      }
+      .splash-logo-container {
+        position: relative;
+        width: 200px;
+        height: 200px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .splash-logo {
+        width: 160px;
+        height: auto;
+        position: relative;
+        z-index: 2;
+        animation: logoFloat 3s ease-in-out infinite;
+        filter: drop-shadow(0 0 30px rgba(201, 162, 39, 0.5));
+      }
+      @keyframes logoFloat {
+        0%, 100% { transform: translateY(0) scale(1); }
+        50% { transform: translateY(-10px) scale(1.02); }
+      }
+      .splash-ring {
+        position: absolute;
+        border-radius: 50%;
+        border: 3px solid transparent;
+        animation: ringPulse 2s ease-out infinite;
+      }
+      .splash-ring:nth-child(1) {
+        width: 180px;
+        height: 180px;
+        border-image: linear-gradient(135deg, #c9a227, #d4af37, #f4d03f) 1;
+        animation-delay: 0s;
+      }
+      .splash-ring:nth-child(2) {
+        width: 220px;
+        height: 220px;
+        border-image: linear-gradient(135deg, #667eea, #764ba2) 1;
+        animation-delay: 0.5s;
+      }
+      .splash-ring:nth-child(3) {
+        width: 260px;
+        height: 260px;
+        border-image: linear-gradient(135deg, #c9a227, #667eea) 1;
+        animation-delay: 1s;
+      }
+      @keyframes ringPulse {
+        0% { transform: scale(0.8); opacity: 1; }
+        100% { transform: scale(1.4); opacity: 0; }
+      }
+      .splash-gradient-orb {
+        position: absolute;
+        width: 300px;
+        height: 300px;
+        border-radius: 50%;
+        background: conic-gradient(from 0deg, #c9a227, #d4af37, #667eea, #764ba2, #c9a227);
+        filter: blur(60px);
+        opacity: 0.4;
+        animation: orbRotate 4s linear infinite;
+      }
+      @keyframes orbRotate {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      .splash-text {
+        margin-top: 40px;
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        background: linear-gradient(90deg, #c9a227, #d4af37, #f4d03f, #d4af37, #c9a227);
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: shimmer 2s linear infinite;
+      }
+      @keyframes shimmer {
+        to { background-position: 200% center; }
+      }
+      .splash-dots {
+        display: flex;
+        gap: 8px;
+        margin-top: 20px;
+      }
+      .splash-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #c9a227;
+        animation: dotBounce 1.4s ease-in-out infinite;
+      }
+      .splash-dot:nth-child(1) { animation-delay: 0s; }
+      .splash-dot:nth-child(2) { animation-delay: 0.2s; }
+      .splash-dot:nth-child(3) { animation-delay: 0.4s; }
+      @keyframes dotBounce {
+        0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+        40% { transform: scale(1); opacity: 1; }
+      }
+      /* Hide main app until auth confirmed */
+      #app {
+        opacity: 0;
+        transition: opacity 0.4s ease;
+      }
+      #app.authenticated {
+        opacity: 1;
+      }
+
       /* System Status Indicators */
       .system-status-bar {
         display: flex;
@@ -478,9 +603,55 @@
       }
 
       document.addEventListener('DOMContentLoaded', initLayoutToggle);
+      
+      // ========== SPLASH SCREEN CONTROL ==========
+      // Listen for auth-ready event from auth-guard.js to hide splash and show app
+      window.addEventListener('auth-ready', function(e) {
+        console.log('[Splash] Auth confirmed, hiding splash screen');
+        const splash = document.getElementById('splashScreen');
+        const app = document.getElementById('app');
+        if (splash) {
+          splash.classList.add('fade-out');
+          // Remove from DOM after transition
+          setTimeout(() => splash.remove(), 600);
+        }
+        if (app) {
+          app.classList.add('authenticated');
+        }
+      });
+      
+      // Fallback: If no auth event after 5 seconds, hide splash anyway
+      // This handles cases where auth-guard might not be loaded
+      setTimeout(function() {
+        const splash = document.getElementById('splashScreen');
+        if (splash && !splash.classList.contains('fade-out')) {
+          console.log('[Splash] Timeout fallback, hiding splash');
+          splash.classList.add('fade-out');
+          setTimeout(() => splash.remove(), 600);
+          const app = document.getElementById('app');
+          if (app) app.classList.add('authenticated');
+        }
+      }, 5000);
     </script>
   </head>
   <body>
+    <!-- Splash Screen - Shows during auth check -->
+    <div id="splashScreen">
+      <div class="splash-gradient-orb"></div>
+      <div class="splash-logo-container">
+        <div class="splash-ring"></div>
+        <div class="splash-ring"></div>
+        <div class="splash-ring"></div>
+        <img src="https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/reliabull_Trans.png" alt="ReliaLimo" class="splash-logo">
+      </div>
+      <div class="splash-text">Admin Portal</div>
+      <div class="splash-dots">
+        <div class="splash-dot"></div>
+        <div class="splash-dot"></div>
+        <div class="splash-dot"></div>
+      </div>
+    </div>
+
     <!-- Legacy layout toggle hidden - now in user menu pill -->
     <div class="layout-toggle" aria-label="Header layout selector" style="display:none;">
       <button id="layoutVertical">Vertical</button>

@@ -281,12 +281,20 @@ const handleAuth = async () => {
 
   if (!session && !isAuthPage) {
     console.log('AuthGuard: No session, redirecting to login.');
+    // Dispatch event before redirect so splash can stay during navigation
+    try {
+      window.dispatchEvent(new CustomEvent('auth-redirect', { detail: { target: 'login' } }));
+    } catch (_) {}
     window.location.replace('/auth.html');
   } else if (session && isAuthPage) {
     console.log('AuthGuard: Session found on auth page, redirecting to app.');
     window.location.replace('/');
-  } else {
-    console.log('AuthGuard: Auth check passed.');
+  } else if (session) {
+    console.log('AuthGuard: Auth check passed, user authenticated.');
+    // Dispatch auth-ready event so index.html can hide splash and show app
+    try {
+      window.dispatchEvent(new CustomEvent('auth-ready', { detail: { session } }));
+    } catch (_) {}
   }
 };
 
