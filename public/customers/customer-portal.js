@@ -172,6 +172,12 @@ async function init() {
     
     console.log('[CustomerPortal] Synced customer from auth service:', state.customer);
     
+    // If customer data is incomplete, fetch fresh from database
+    if (!state.customer?.first_name && state.customer?.email) {
+      console.log('[CustomerPortal] Customer data incomplete, fetching from database...');
+      await fetchFreshCustomerData();
+    }
+    
     // Check if onboarding is complete - if not, redirect to onboarding
     if (state.customer && !state.customer.onboarding_complete) {
       console.log('[CustomerPortal] Onboarding not complete, redirecting to onboarding...');
@@ -302,6 +308,46 @@ async function fetchCustomerInfo() {
     }
   } catch (err) {
     console.error('[CustomerPortal] Failed to fetch customer info:', err);
+  }
+}
+
+async function fetchFreshCustomerData() {
+  try {
+    const creds = getSupabaseCredentials();
+    const email = state.customer?.email || state.session?.user?.email;
+    
+    if (!email) {
+      console.warn('[CustomerPortal] No email available to fetch customer data');
+      return;
+    }
+    
+    console.log('[CustomerPortal] Fetching fresh customer data for:', email);
+    
+    const response = await fetch(
+      `${creds.url}/rest/v1/accounts?email=eq.${encodeURIComponent(email.toLowerCase())}&select=*`,
+      {
+        headers: {
+          'apikey': creds.anonKey,
+          'Authorization': `Bearer ${state.session?.access_token || creds.anonKey}`
+        }
+      }
+    );
+    
+    if (response.ok) {
+      const customers = await response.json();
+      if (customers?.length > 0) {
+        state.customer = customers[0];
+        localStorage.setItem('current_customer', JSON.stringify(state.customer));
+        console.log('[CustomerPortal] Fresh customer data loaded:', {
+          first_name: state.customer.first_name,
+          last_name: state.customer.last_name,
+          email: state.customer.email,
+          phone: state.customer.phone || state.customer.cell_phone
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[CustomerPortal] Failed to fetch fresh customer data:', err);
   }
 }
 

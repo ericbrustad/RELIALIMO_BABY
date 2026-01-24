@@ -462,6 +462,26 @@ async function fetchCustomerInfo(accessToken, email) {
       console.log('[AuthService] Found customers:', customers?.length, customers);
       if (customers?.length > 0) {
         authState.customer = customers[0];
+        
+        // Fallback: If first_name/last_name empty but portal_slug exists, extract from slug
+        if (!authState.customer.first_name && authState.customer.portal_slug) {
+          const slugParts = authState.customer.portal_slug.split('_');
+          if (slugParts.length >= 2) {
+            // Capitalize first letter
+            authState.customer.first_name = slugParts[0].charAt(0).toUpperCase() + slugParts[0].slice(1);
+            authState.customer.last_name = slugParts[1].charAt(0).toUpperCase() + slugParts[1].slice(1);
+            console.log('[AuthService] Extracted names from portal_slug:', authState.customer.first_name, authState.customer.last_name);
+          }
+        }
+        
+        // Fallback: Try to get names from session user metadata
+        if (!authState.customer.first_name && authState.session?.user?.user_metadata) {
+          const meta = authState.session.user.user_metadata;
+          if (meta.first_name) authState.customer.first_name = meta.first_name;
+          if (meta.last_name) authState.customer.last_name = meta.last_name;
+          console.log('[AuthService] Got names from user_metadata:', authState.customer.first_name, authState.customer.last_name);
+        }
+        
         console.log('[AuthService] Customer loaded:', {
           id: authState.customer.id,
           email: authState.customer.email,
