@@ -4298,14 +4298,42 @@ async function sendOtpToEmail(email) {
       console.log('[DriverPortal] Email OTP sent to:', email);
       showToast('Verification code sent to your email!', 'success');
     } else {
-      // Email wasn't sent but we logged to console
-      showToast(`Code: ${code} (Check console - email not configured)`, 'info');
+      // Email wasn't sent - show code prominently
+      console.warn('[DriverPortal] Email not sent, showing code to user');
+      showFallbackCode(code, 'Email not configured');
     }
   } catch (err) {
     console.warn('[DriverPortal] Email send failed:', err);
-    // Show the code directly for testing purposes
-    showToast(`Code: ${code} (Email service unavailable)`, 'info');
+    // Show the code prominently when email fails
+    showFallbackCode(code, err.message || 'Email service unavailable');
   }
+}
+
+/**
+ * Show fallback code prominently when email fails
+ */
+function showFallbackCode(code, reason) {
+  // Show persistent toast with the code
+  showToast(`Your code: ${code}`, 'warning', 30000); // 30 second toast
+  
+  // Also show in the OTP section if visible
+  const otpSection = document.getElementById('emailOtpSection');
+  if (otpSection) {
+    let fallbackDiv = document.getElementById('emailFallbackCode');
+    if (!fallbackDiv) {
+      fallbackDiv = document.createElement('div');
+      fallbackDiv.id = 'emailFallbackCode';
+      fallbackDiv.style.cssText = 'background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 12px; margin: 10px 0; text-align: center;';
+      otpSection.insertBefore(fallbackDiv, otpSection.firstChild);
+    }
+    fallbackDiv.innerHTML = `
+      <div style="color: #92400e; font-size: 12px; margin-bottom: 4px;">⚠️ ${reason}</div>
+      <div style="font-size: 24px; font-weight: bold; letter-spacing: 4px; color: #1f2937;">${code}</div>
+      <div style="color: #6b7280; font-size: 11px; margin-top: 4px;">Enter this code below</div>
+    `;
+  }
+  
+  console.log('[DriverPortal] ⚠️ FALLBACK CODE DISPLAYED:', code);
 }
 
 async function sendOTPEmail(to, code) {
@@ -4314,17 +4342,8 @@ async function sendOTPEmail(to, code) {
   const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
   
   const fromName = settings.fromName || 'RELIALIMO';
-  const fromEmail = settings.fromEmail || 'noreply@relialimo.com';
   
-  // Check for Resend API key in env.js or settings
-  const resendApiKey = window.ENV?.RESEND_API_KEY || settings.resendApiKey;
-  
-  console.log('[DriverPortal] Email settings found:', { 
-    fromName, 
-    fromEmail, 
-    hasResendKey: !!resendApiKey,
-    hasSmtp: !!settings.smtpHost 
-  });
+  console.log('[DriverPortal] Sending email via Resend API (server-side)');
   
   // Build the email HTML
   const emailHtml = `
@@ -4339,7 +4358,7 @@ async function sendOTPEmail(to, code) {
     </div>
   `;
   
-  // Method 1: Try server-side API endpoint first (works with Vercel/server deployments)
+  // Use server-side API endpoint (Resend) - this is the only reliable method
   try {
     const apiResponse = await fetch('/api/email-send', {
       method: 'POST',
@@ -4355,97 +4374,27 @@ async function sendOTPEmail(to, code) {
     
     if (apiResponse.ok) {
       const result = await apiResponse.json();
-      console.log('[DriverPortal] Email sent via API:', result);
+      console.log('[DriverPortal] ✅ Email sent via Resend API:', result);
       return true;
     } else {
       const error = await apiResponse.json();
-      console.warn('[DriverPortal] API email failed:', error);
+      console.error('[DriverPortal] ❌ Resend API failed:', error);
+      throw new Error(error.error || 'Failed to send email');
     }
   } catch (apiError) {
-    console.warn('[DriverPortal] API endpoint not available:', apiError.message);
-  }
-  
-  // Method 2: Try Supabase Edge Function for email
-  try {
-    const supabaseUrl = window.ENV?.SUPABASE_URL;
-    const supabaseKey = window.ENV?.SUPABASE_ANON_KEY;
+    console.error('[DriverPortal] ❌ Email send error:', apiError.message);
     
-    if (supabaseUrl && supabaseKey) {
-      const edgeResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          to: to,
-          subject: `Your ${fromName} Verification Code`,
-          html: emailHtml,
-          from: `${fromName} <${fromEmail}>`
-        })
-      });
-      
-      if (edgeResponse.ok) {
-        const result = await edgeResponse.json();
-        console.log('[DriverPortal] Email sent via Supabase Edge Function:', result);
-        return true;
-      } else {
-        const error = await edgeResponse.text();
-        console.warn('[DriverPortal] Supabase Edge Function failed:', error);
-      }
-    }
-  } catch (edgeError) {
-    console.warn('[DriverPortal] Supabase Edge Function not available:', edgeError.message);
+    // Fallback: Log to console for development/debugging
+    console.log('[DriverPortal] ========== EMAIL OTP (Console Fallback) ==========');
+    console.log('[DriverPortal] TO:', to);
+    console.log('[DriverPortal] SUBJECT:', `Your ${fromName} Verification Code`);
+    console.log('[DriverPortal] CODE:', code);
+    console.log('[DriverPortal] ====================================================');
+    console.log('[DriverPortal] Email failed. Ensure RESEND_API_KEY is set in Vercel.');
+    console.log('[DriverPortal] ====================================================');
+    
+    throw apiError; // Re-throw so caller knows email failed
   }
-  
-  // Method 3: Direct Resend API call (works locally if RESEND_API_KEY is set in env.js)
-  if (resendApiKey) {
-    try {
-      console.log('[DriverPortal] Trying direct Resend API call...');
-      const resendResponse = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: `${fromName} <${fromEmail}>`,
-          to: [to],
-          subject: `Your ${fromName} Verification Code`,
-          html: emailHtml
-        })
-      });
-      
-      if (resendResponse.ok) {
-        const result = await resendResponse.json();
-        console.log('[DriverPortal] Email sent via direct Resend API:', result);
-        return true;
-      } else {
-        const error = await resendResponse.json();
-        console.warn('[DriverPortal] Direct Resend API failed:', error);
-        // CORS error is expected from browser - need server-side
-        if (error.message?.includes('CORS') || error.statusCode === 0) {
-          console.warn('[DriverPortal] CORS blocked - Resend API requires server-side calls');
-        }
-      }
-    } catch (resendError) {
-      console.warn('[DriverPortal] Direct Resend call failed (likely CORS):', resendError.message);
-    }
-  }
-  
-  // Fallback: Log to console (for development)
-  console.log('[DriverPortal] ========== EMAIL OTP (Console Fallback) ==========');
-  console.log('[DriverPortal] TO:', to);
-  console.log('[DriverPortal] FROM:', `${fromName} <${fromEmail}>`);
-  console.log('[DriverPortal] SUBJECT:', `Your ${fromName} Verification Code`);
-  console.log('[DriverPortal] CODE:', code);
-  console.log('[DriverPortal] ====================================================');
-  console.log('[DriverPortal] To enable real emails:');
-  console.log('[DriverPortal]   Option A: Deploy to Vercel with RESEND_API_KEY env var');
-  console.log('[DriverPortal]   Option B: Deploy Supabase Edge Function send-email');
-  console.log('[DriverPortal] ====================================================');
-  
-  return false; // Email not actually sent
 }
 
 function startEmailOtpResendTimer() {
@@ -7109,13 +7058,13 @@ window.closeModal = closeModal;
 // ============================================
 // Toast Notifications
 // ============================================
-function showToast(message, type = 'info') {
+function showToast(message, type = 'info', duration = 3500) {
   elements.toast.textContent = message;
   elements.toast.className = `toast ${type} show`;
   
   setTimeout(() => {
     elements.toast.classList.remove('show');
-  }, 3500);
+  }, duration);
 }
 
 // ============================================
