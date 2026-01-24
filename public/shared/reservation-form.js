@@ -8186,6 +8186,24 @@ class ReservationForm {
           console.log('📞 [ReservationForm] Populated booking agent from account (is_booking_contact)');
         }
         
+        // Store account's preferred airports and home address for quick selection
+        this.accountPreferredAirports = account.preferred_airports || [];
+        this.accountPreferredFBOs = account.preferred_fbos || [];
+        this.accountHomeAddress = account.address1 ? 
+          `${account.address1}${account.city ? ', ' + account.city : ''}${account.state ? ', ' + account.state : ''}${account.zip_code ? ' ' + account.zip_code : ''}` : null;
+        this.accountHomeCoordinates = account.home_coordinates;
+        this.accountHomeAirport = account.home_airport;
+        
+        if (this.accountPreferredAirports.length > 0) {
+          console.log('✈️ [ReservationForm] Account preferred airports:', this.accountPreferredAirports.map(a => a.code).join(', '));
+          this.populatePreferredAirportsQuickSelect();
+        }
+        
+        if (this.accountHomeAddress) {
+          console.log('🏠 [ReservationForm] Account home address:', this.accountHomeAddress);
+          this.addHomeAddressQuickSelect();
+        }
+        
         // Load saved passengers and addresses for this account
         await this.loadSavedPassengersAndAddresses(accountId);
         
@@ -8275,6 +8293,91 @@ class ReservationForm {
       this.savedAddresses.map(a => a.label || a.full_address?.substring(0, 30)));
   }
   
+  /**
+   * Populate preferred airports quick select buttons for account owner
+   */
+  populatePreferredAirportsQuickSelect() {
+    if (!this.accountPreferredAirports?.length) return;
+    
+    // Find the stops container to add quick selects near address inputs
+    const stopsContainer = document.getElementById('stopsContainer');
+    if (!stopsContainer) return;
+    
+    // Add quick select to each stop's address input
+    const stopAddressInputs = stopsContainer.querySelectorAll('.stop-address-input, input[name*="address"]');
+    
+    stopAddressInputs.forEach((input, index) => {
+      const wrapper = input.closest('.stop-address-wrapper') || input.parentElement;
+      if (!wrapper) return;
+      
+      // Check if quick select already exists
+      if (wrapper.querySelector('.preferred-airports-quick')) return;
+      
+      const quickSelectHtml = `
+        <div class="preferred-airports-quick" style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;">
+          <span style="font-size: 11px; color: #888; margin-right: 4px;">Quick:</span>
+          ${this.accountPreferredAirports.map(a => `
+            <button type="button" class="quick-airport-btn" data-code="${a.code}" data-name="${a.name}" 
+                    style="font-size: 11px; padding: 2px 8px; background: rgba(99, 102, 241, 0.2); 
+                           border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 4px; 
+                           color: #6366f1; cursor: pointer;"
+                    title="${a.name}">
+              ✈️ ${a.code}
+            </button>
+          `).join('')}
+          ${this.accountHomeAddress ? `
+            <button type="button" class="quick-home-btn" 
+                    style="font-size: 11px; padding: 2px 8px; background: rgba(34, 197, 94, 0.2); 
+                           border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 4px; 
+                           color: #22c55e; cursor: pointer;"
+                    title="${this.accountHomeAddress}">
+              🏠 Home
+            </button>
+          ` : ''}
+        </div>
+      `;
+      
+      wrapper.insertAdjacentHTML('beforeend', quickSelectHtml);
+      
+      // Add click handlers
+      wrapper.querySelectorAll('.quick-airport-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const airport = this.accountPreferredAirports.find(a => a.code === btn.dataset.code);
+          if (airport && input) {
+            input.value = `${airport.name} (${airport.code})`;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            console.log('✈️ [ReservationForm] Quick-selected airport:', airport.code);
+          }
+        });
+      });
+      
+      const homeBtn = wrapper.querySelector('.quick-home-btn');
+      if (homeBtn) {
+        homeBtn.addEventListener('click', () => {
+          if (input && this.accountHomeAddress) {
+            input.value = this.accountHomeAddress;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            console.log('🏠 [ReservationForm] Quick-selected home address');
+          }
+        });
+      }
+    });
+    
+    console.log('✈️ [ReservationForm] Added preferred airports quick select buttons');
+  }
+  
+  /**
+   * Add home address quick select button to address inputs
+   */
+  addHomeAddressQuickSelect() {
+    // This is handled by populatePreferredAirportsQuickSelect if preferred airports exist
+    // Only need separate handling if no preferred airports but has home address
+    if (this.accountPreferredAirports?.length > 0) return;
+    if (!this.accountHomeAddress) return;
+    
+    console.log('🏠 [ReservationForm] Home address available for quick select');
+  }
+
   /**
    * Parse passenger phone/email from special_instructions field
    * Format: "Passenger: Name, Phone: xxx, Email: xxx, ..."
