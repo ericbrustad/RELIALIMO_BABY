@@ -25,9 +25,16 @@
       window.googleMapsReady = true;
       if (window.onGoogleMapsReady) window.onGoogleMapsReady();
     };
-  </script>
-  <script async defer 
-    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAZhGX8NWGZd4p9OADvlqOgM6eZDwhQQh8&libraries=places&callback=initGoogleMaps">
+    
+    // Load Google Maps with API key from env
+    (function() {
+      const apiKey = window.ENV?.GOOGLE_MAPS_API_KEY || 'AIzaSyAZhGX8NWGZd4p9OADvlqOgM6eZDwhQQh8';
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMaps`;
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    })();
   </script>
   
   <!-- Mapbox for map display -->
