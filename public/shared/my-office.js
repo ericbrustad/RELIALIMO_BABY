@@ -1076,11 +1076,21 @@ class MyOffice {
     if (logoChooseBtn && logoFileInput) {
       logoChooseBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        console.log('🖼️ Choose File clicked');
+        console.log('🖼️ Choose Local File clicked');
         logoFileInput.click();
       });
     } else {
       console.warn('⚠️ Logo choose button or file input not found');
+    }
+
+    // Choose from Database button opens database image picker
+    const logoChooseDbBtn = document.getElementById('logoChooseDbBtn');
+    if (logoChooseDbBtn) {
+      logoChooseDbBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        console.log('🖼️ Choose from Database clicked');
+        await this.openDatabaseImagePicker('companyLogo', logoPreviewImg, logoFileName);
+      });
     }
 
     // When file is selected, show filename and preview
@@ -1239,6 +1249,147 @@ class MyOffice {
       } catch (e) {
         console.error('Error loading saved logo:', e);
       }
+    }
+  }
+
+  // ===================================
+  // DATABASE IMAGE PICKER
+  // ===================================
+  
+  async openDatabaseImagePicker(targetKey, previewImg, fileNameEl) {
+    console.log('🖼️ Opening database image picker for:', targetKey);
+    
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.id = 'dbImagePickerModal';
+    modal.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7); z-index: 10000; display: flex;
+      align-items: center; justify-content: center;
+    `;
+    
+    modal.innerHTML = `
+      <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto; color: #fff;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h3 style="margin: 0; font-size: 20px;">📁 Choose Image from Database</h3>
+          <button id="dbImagePickerClose" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer;">&times;</button>
+        </div>
+        <div id="dbImagePickerLoading" style="text-align: center; padding: 40px;">
+          <div style="font-size: 32px;">⏳</div>
+          <p>Loading images from Supabase storage...</p>
+        </div>
+        <div id="dbImagePickerGrid" style="display: none; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px;"></div>
+        <div id="dbImagePickerEmpty" style="display: none; text-align: center; padding: 40px; color: #999;">
+          <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+          <p>No images found in database.</p>
+          <p style="font-size: 14px;">Upload images via Logo Management or directly to Supabase Storage.</p>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Close button handler
+    document.getElementById('dbImagePickerClose').addEventListener('click', () => {
+      modal.remove();
+    });
+    
+    // Click outside to close
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
+    });
+    
+    // Load images from Supabase
+    try {
+      const supabaseUrl = window.ENV?.SUPABASE_URL || 'https://siumiadylwcrkaqsfwkj.supabase.co';
+      const supabaseKey = window.ENV?.SUPABASE_ANON_KEY || localStorage.getItem('supabase_anon_key');
+      
+      const response = await fetch(`${supabaseUrl}/storage/v1/object/list/images`, {
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': supabaseKey
+        }
+      });
+      
+      const loadingEl = document.getElementById('dbImagePickerLoading');
+      const gridEl = document.getElementById('dbImagePickerGrid');
+      const emptyEl = document.getElementById('dbImagePickerEmpty');
+      
+      if (response.ok) {
+        const files = await response.json();
+        const imageFiles = files.filter(f => 
+          f.name && (f.name.endsWith('.jpg') || f.name.endsWith('.jpeg') || f.name.endsWith('.png') || f.name.endsWith('.webp') || f.name.endsWith('.gif'))
+        );
+        
+        loadingEl.style.display = 'none';
+        
+        if (imageFiles.length === 0) {
+          emptyEl.style.display = 'block';
+          return;
+        }
+        
+        gridEl.style.display = 'grid';
+        
+        imageFiles.forEach(file => {
+          const imageUrl = `${supabaseUrl}/storage/v1/object/public/images/${file.name}`;
+          const card = document.createElement('div');
+          card.style.cssText = `
+            background: #2a2a4a; border-radius: 8px; padding: 12px; cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s; text-align: center;
+          `;
+          card.innerHTML = `
+            <img src="${imageUrl}" alt="${file.name}" style="width: 100%; height: 100px; object-fit: contain; border-radius: 4px; margin-bottom: 8px;" />
+            <div style="font-size: 12px; word-break: break-word; color: #ccc;">${file.name}</div>
+          `;
+          
+          card.addEventListener('mouseenter', () => {
+            card.style.transform = 'scale(1.02)';
+            card.style.boxShadow = '0 4px 12px rgba(201, 162, 39, 0.3)';
+          });
+          card.addEventListener('mouseleave', () => {
+            card.style.transform = 'scale(1)';
+            card.style.boxShadow = 'none';
+          });
+          
+          card.addEventListener('click', () => {
+            // Set the image as company logo
+            const logoData = {
+              name: file.name,
+              type: 'image/png',
+              data: imageUrl,
+              source: 'database'
+            };
+            localStorage.setItem(targetKey, JSON.stringify(logoData));
+            
+            // Update preview
+            if (previewImg) {
+              previewImg.src = imageUrl;
+            }
+            if (fileNameEl) {
+              fileNameEl.textContent = file.name + ' (from DB)';
+            }
+            
+            // Also update companyInfo
+            try {
+              const companyInfo = JSON.parse(localStorage.getItem('companyInfo') || '{}');
+              companyInfo.logo_url = imageUrl;
+              localStorage.setItem('companyInfo', JSON.stringify(companyInfo));
+            } catch (err) {
+              console.warn('Could not update companyInfo with logo:', err);
+            }
+            
+            modal.remove();
+            alert('✅ Logo selected from database!');
+          });
+          
+          gridEl.appendChild(card);
+        });
+      } else {
+        loadingEl.innerHTML = '<p style="color: #ff6b6b;">Failed to load images from database.</p>';
+      }
+    } catch (err) {
+      console.error('Error loading database images:', err);
+      document.getElementById('dbImagePickerLoading').innerHTML = '<p style="color: #ff6b6b;">Error loading images: ' + err.message + '</p>';
     }
   }
 
