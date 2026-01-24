@@ -582,16 +582,14 @@ async function loadVehicleTypes() {
     const creds = getSupabaseCredentials();
     
     // First, check if a default vehicle type is set in portal_settings
+    // Use API endpoint to bypass RLS restrictions
     let lockedVehicleType = null;
     try {
-      const settingsResponse = await fetch(
-        `${creds.url}/rest/v1/portal_settings?setting_key=eq.default_vehicle_type&select=setting_value`,
-        { headers: { 'apikey': creds.anonKey } }
-      );
+      const settingsResponse = await fetch('/api/get-portal-settings');
       if (settingsResponse.ok) {
-        const settings = await settingsResponse.json();
-        if (settings && settings.length > 0 && settings[0].setting_value) {
-          lockedVehicleType = settings[0].setting_value;
+        const settingsData = await settingsResponse.json();
+        if (settingsData.success && settingsData.settings?.default_vehicle_type) {
+          lockedVehicleType = settingsData.settings.default_vehicle_type;
           console.log('[CustomerPortal] Default vehicle type from settings:', lockedVehicleType);
         }
       }
