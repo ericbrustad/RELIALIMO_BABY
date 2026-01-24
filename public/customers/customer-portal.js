@@ -455,14 +455,18 @@ function applyPortalSettings() {
     if (portalSettings.logo) img.src = portalSettings.logo;
   });
   
-  // Update titles
-  document.getElementById('headerTitle').textContent = portalSettings.headerTitle || 'RELIALIMO';
-  document.getElementById('thankYouCompany').textContent = portalSettings.thankYouMessage || 'RELIALIMO thanks you';
+  // Update titles (null checks for elements that may not exist on all pages)
+  const headerTitle = document.getElementById('headerTitle');
+  const thankYouCompany = document.getElementById('thankYouCompany');
+  if (headerTitle) headerTitle.textContent = portalSettings.headerTitle || 'RELIALIMO';
+  if (thankYouCompany) thankYouCompany.textContent = portalSettings.thankYouMessage || 'RELIALIMO thanks you';
   
   // Update welcome message
   if (state.customer) {
-    document.getElementById('welcomeGreeting').textContent = portalSettings.welcomeMessage || 'Welcome to Professional';
-    document.getElementById('welcomeName').textContent = `${state.customer.first_name || ''} ${state.customer.last_name || ''}`.trim();
+    const welcomeGreeting = document.getElementById('welcomeGreeting');
+    const welcomeName = document.getElementById('welcomeName');
+    if (welcomeGreeting) welcomeGreeting.textContent = portalSettings.welcomeMessage || 'Welcome to Professional';
+    if (welcomeName) welcomeName.textContent = `${state.customer.first_name || ''} ${state.customer.last_name || ''}`.trim();
   }
   
   // Update primary color
