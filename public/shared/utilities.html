@@ -1200,8 +1200,36 @@ if (nukeAllAccountDataBtn) {
             results.success.push(`${table} (not exists)`);
           } else {
             console.error(`❌ Failed to delete from ${table}:`, e);
-          results.failed.push(`${table}: ${e.message}`);
+            results.failed.push(`${table}: ${e.message}`);
+          }
         }
+      }
+      
+      // Try to delete auth users via API endpoint (requires service_role key on backend)
+      let authUsersDeleted = 0;
+      try {
+        console.log('🔐 Attempting to delete auth users...');
+        
+        const deleteAuthResponse = await fetch('/api/delete-all-auth-users', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
+        
+        if (deleteAuthResponse.ok) {
+          const authResult = await deleteAuthResponse.json();
+          authUsersDeleted = authResult.deleted || 0;
+          console.log(`✅ Deleted ${authUsersDeleted} auth users`);
+          results.success.push(`auth.users (${authUsersDeleted} deleted)`);
+        } else {
+          const errText = await deleteAuthResponse.text();
+          throw new Error(errText);
+        }
+      } catch (authErr) {
+        console.warn('⚠️ Could not delete auth users:', authErr.message);
+        results.failed.push(`auth.users: ${authErr.message} (delete manually in Supabase Dashboard)`);
       }
       
       // Clear all local storage account-related keys
