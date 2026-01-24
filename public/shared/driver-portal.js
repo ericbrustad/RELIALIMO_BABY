@@ -109,7 +109,7 @@ async function fetchVehicleTypesFromAPI() {
     if (apiService?.fetchVehicleTypes) {
       console.log('[DriverPortal] Using api-service to fetch vehicle types...');
       try {
-        const types = await apiService.fetchVehicleTypes({ includeInactive: true }); // Include all, we'll filter ourselves
+        const types = await apiService.fetchVehicleTypes({ includeInactive: false }); // Only active vehicles
         console.log('[DriverPortal] Vehicle types from api-service:', types);
         
         // If we got results, return them
@@ -5238,16 +5238,26 @@ async function loadVehicleTypes() {
       return status === 'ACTIVE' || status === '' || !t.status;
     });
     
-    const inactiveTypes = (types || []).filter(t => {
-      const status = (t.status || '').toString().toUpperCase();
-      return status === 'INACTIVE';
-    });
-    
     state.vehicleTypes = activeTypes;
-    state.inactiveVehicleTypes = inactiveTypes;
     
     console.log('[DriverPortal] Active types:', activeTypes.length);
-    console.log('[DriverPortal] Inactive types:', inactiveTypes.length);
+    
+    // Check for default vehicle type from portal_settings
+    let defaultVehicleType = null;
+    try {
+      if (apiService?.getDefaultVehicleType) {
+        defaultVehicleType = await apiService.getDefaultVehicleType();
+      } else {
+        // Fallback: check for is_app_default in active types
+        const defaultType = activeTypes.find(t => t.is_app_default === true);
+        if (defaultType) {
+          defaultVehicleType = defaultType.name;
+        }
+      }
+      console.log('[DriverPortal] Default vehicle type:', defaultVehicleType);
+    } catch (err) {
+      console.warn('[DriverPortal] Could not fetch default vehicle type:', err);
+    }
     
     // Populate vehicle type dropdown
     const select = document.getElementById('regVehicleType');
@@ -5255,40 +5265,50 @@ async function loadVehicleTypes() {
     
     if (select) {
       // Clear all existing options
-      select.innerHTML = '<option value="">Select type...</option>';
+      select.innerHTML = '';
       
-      // Add active types first
-      if (activeTypes.length > 0) {
-        const activeGroup = document.createElement('optgroup');
-        activeGroup.label = 'Active Vehicle Types';
+      // If default vehicle type is set, only show that type (pre-selected)
+      if (defaultVehicleType) {
+        const matchingType = activeTypes.find(t => 
+          (t.name || t.type_name || '').toLowerCase() === defaultVehicleType.toLowerCase()
+        );
+        
+        if (matchingType) {
+          // Only show the default type, pre-selected
+          const opt = document.createElement('option');
+          opt.value = matchingType.id;
+          opt.textContent = matchingType.name || matchingType.type_name || 'Unknown';
+          opt.selected = true;
+          select.appendChild(opt);
+          select.disabled = true; // Lock to default type
+          console.log('[DriverPortal] Default vehicle type locked to:', matchingType.name);
+        } else {
+          // Default type not found in active types, show all
+          console.warn('[DriverPortal] Default vehicle type not found in active types, showing all');
+          select.innerHTML = '<option value="">Select type...</option>';
+          activeTypes.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name || t.type_name || 'Unknown';
+            select.appendChild(opt);
+          });
+        }
+      } else {
+        // No default set - show all active types
+        select.innerHTML = '<option value="">Select type...</option>';
         activeTypes.forEach(t => {
           const opt = document.createElement('option');
           opt.value = t.id;
           opt.textContent = t.name || t.type_name || 'Unknown';
-          activeGroup.appendChild(opt);
+          select.appendChild(opt);
         });
-        select.appendChild(activeGroup);
+        
+        // Add "Other" option only when no default is locked
+        const otherOpt = document.createElement('option');
+        otherOpt.value = '__other__';
+        otherOpt.textContent = '➕ Other (enter custom type)';
+        select.appendChild(otherOpt);
       }
-      
-      // Add inactive types in a separate group
-      if (inactiveTypes.length > 0) {
-        const inactiveGroup = document.createElement('optgroup');
-        inactiveGroup.label = 'Inactive (will be activated)';
-        inactiveTypes.forEach(t => {
-          const opt = document.createElement('option');
-          opt.value = t.id;
-          opt.textContent = `${t.name || t.type_name || 'Unknown'} (inactive)`;
-          opt.dataset.inactive = 'true';
-          inactiveGroup.appendChild(opt);
-        });
-        select.appendChild(inactiveGroup);
-      }
-      
-      // Add "Other" option at the end
-      const otherOpt = document.createElement('option');
-      otherOpt.value = '__other__';
-      otherOpt.textContent = '➕ Other (enter custom type)';
-      select.appendChild(otherOpt);
       
       console.log('[DriverPortal] Vehicle type dropdown populated with', select.options.length, 'options');
       
