@@ -819,7 +819,7 @@ export async function fetchVehicleTypesTable(opts = {}) {
   // Direct table query (requires authenticated session/privileges)
   const includeInactive = !!opts.includeInactive;
   let q = `/vehicle_types?select=*&order=name.asc`;
-  if (!includeInactive) q += `&status=eq.ACTIVE`;
+  if (!includeInactive) q += `&is_active=eq.true`;
   if (opts.limit) q += `&limit=${opts.limit}`;
   if (opts.offset) q += `&offset=${opts.offset}`;
   return await request(q);
@@ -830,7 +830,7 @@ export async function fetchVehicleTypes(opts = {}) {
   return await fetchVehicleTypesTable(opts);
 }
 
-export async function listActiveVehicleTypes({ limit, offset } = {}) { let q = `/vehicle_types?select=*&status=eq.ACTIVE&order=name.asc`; if (limit) q += `&limit=${limit}`; if (offset) q += `&offset=${offset}`; return await request(q); }
+export async function listActiveVehicleTypes({ limit, offset } = {}) { let q = `/vehicle_types?select=*&is_active=eq.true&order=name.asc`; if (limit) q += `&limit=${limit}`; if (offset) q += `&offset=${offset}`; return await request(q); }
 // Client-side writes are proxied to server endpoints to avoid exposing service_role keys
 
 async function getUserAccessToken() {

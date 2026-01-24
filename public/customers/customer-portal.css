@@ -1079,6 +1079,25 @@ body {
   background: var(--bg-card-hover);
 }
 
+.vehicle-type-option.locked {
+  cursor: default;
+  border-color: var(--primary);
+  background: linear-gradient(135deg, var(--bg-card-hover), var(--bg-card));
+}
+
+.vehicle-type-option.locked:hover {
+  border-color: var(--primary);
+}
+
+.vehicle-type-locked-notice {
+  text-align: center;
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-sm);
+  font-size: 0.85rem;
+  color: var(--success);
+  font-weight: 500;
+}
+
 .vehicle-icon {
   font-size: 2rem;
 }

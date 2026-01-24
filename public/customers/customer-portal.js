@@ -580,6 +580,25 @@ function savePreferences() {
 async function loadVehicleTypes() {
   try {
     const creds = getSupabaseCredentials();
+    
+    // First, check if a default vehicle type is set in portal_settings
+    let lockedVehicleType = null;
+    try {
+      const settingsResponse = await fetch(
+        `${creds.url}/rest/v1/portal_settings?setting_key=eq.default_vehicle_type&select=setting_value`,
+        { headers: { 'apikey': creds.anonKey } }
+      );
+      if (settingsResponse.ok) {
+        const settings = await settingsResponse.json();
+        if (settings && settings.length > 0 && settings[0].setting_value) {
+          lockedVehicleType = settings[0].setting_value;
+          console.log('[CustomerPortal] Default vehicle type from settings:', lockedVehicleType);
+        }
+      }
+    } catch (err) {
+      console.warn('[CustomerPortal] Could not fetch default vehicle type setting:', err);
+    }
+    
     // Load vehicle types that are active and shown in app
     const response = await fetch(
       `${creds.url}/rest/v1/vehicle_types?is_active=eq.true&select=*&order=sort_order.asc`,
@@ -593,13 +612,34 @@ async function loadVehicleTypes() {
     if (response.ok) {
       const allTypes = await response.json();
       // Filter to only show types with show_in_app = true (or if not set, show all)
-      state.vehicleTypes = allTypes.filter(t => t.show_in_app !== false);
+      let filteredTypes = allTypes.filter(t => t.show_in_app !== false);
       
-      // Find and set the default app vehicle type
-      const defaultType = state.vehicleTypes.find(t => t.is_app_default === true);
-      if (defaultType) {
-        state.selectedVehicleType = defaultType.id;
-        console.log('[CustomerPortal] Default app vehicle type:', defaultType.name);
+      // If a default vehicle type is set, lock to only that type
+      if (lockedVehicleType) {
+        const matchingType = filteredTypes.find(t => 
+          t.name === lockedVehicleType || 
+          t.id === lockedVehicleType ||
+          t.name?.toLowerCase() === lockedVehicleType?.toLowerCase()
+        );
+        if (matchingType) {
+          state.vehicleTypes = [matchingType];
+          state.selectedVehicleType = matchingType.id;
+          state.vehicleTypeLocked = true; // Flag to indicate selection is locked
+          console.log('[CustomerPortal] Vehicle type locked to:', matchingType.name);
+        } else {
+          // Fallback to all types if the configured default isn't found
+          console.warn('[CustomerPortal] Configured default vehicle type not found:', lockedVehicleType);
+          state.vehicleTypes = filteredTypes;
+        }
+      } else {
+        state.vehicleTypes = filteredTypes;
+        
+        // Find and set the default app vehicle type
+        const defaultType = state.vehicleTypes.find(t => t.is_app_default === true);
+        if (defaultType) {
+          state.selectedVehicleType = defaultType.id;
+          console.log('[CustomerPortal] Default app vehicle type:', defaultType.name);
+        }
       }
       
       renderVehicleTypes();
@@ -624,9 +664,9 @@ function renderVehicleTypes(filterByCapacity = null) {
   // Get current passenger count
   const passengerCount = filterByCapacity || parseInt(document.getElementById('passengerCount')?.value || '1');
   
-  // Filter vehicles by passenger capacity if count > 7
+  // Filter vehicles by passenger capacity if count > 7 (but only if not locked to a single type)
   let displayTypes = state.vehicleTypes;
-  if (passengerCount > 7) {
+  if (passengerCount > 7 && !state.vehicleTypeLocked) {
     // Show only vehicles that can accommodate 8+ passengers
     displayTypes = state.vehicleTypes.filter(t => (t.passenger_capacity || 4) >= passengerCount);
     
@@ -640,14 +680,20 @@ function renderVehicleTypes(filterByCapacity = null) {
     showToast(`Showing vehicles that accommodate ${passengerCount}+ passengers`, 'info');
   }
   
-  container.innerHTML = displayTypes.map(type => {
+  // If locked to a single type, show a header indicating this
+  const lockedHeader = state.vehicleTypeLocked && displayTypes.length === 1
+    ? `<div class="vehicle-type-locked-notice">✓ Your vehicle type</div>`
+    : '';
+  
+  container.innerHTML = lockedHeader + displayTypes.map(type => {
     const capacityText = type.passenger_capacity ? 
       `Up to ${type.passenger_capacity} passengers` : 
       (type.capacity || '');
     const rateInfo = type.base_rate ? `From $${type.base_rate}` : '';
+    const isSelected = state.selectedVehicleType === type.id || displayTypes.length === 1;
     
     return `
-      <div class="vehicle-type-option ${state.selectedVehicleType === type.id ? 'selected' : ''}" 
+      <div class="vehicle-type-option ${isSelected ? 'selected' : ''} ${state.vehicleTypeLocked ? 'locked' : ''}" 
            data-type="${type.id}"
            data-capacity="${type.passenger_capacity || 4}"
            data-base-rate="${type.base_rate || 0}"
@@ -661,16 +707,18 @@ function renderVehicleTypes(filterByCapacity = null) {
     `;
   }).join('');
   
-  // Add click handlers
-  container.querySelectorAll('.vehicle-type-option').forEach(option => {
-    option.addEventListener('click', () => {
-      container.querySelectorAll('.vehicle-type-option').forEach(o => o.classList.remove('selected'));
-      option.classList.add('selected');
-      state.selectedVehicleType = option.dataset.type;
-      // Recalculate price when vehicle type changes
-      calculatePrice();
+  // Add click handlers only if not locked
+  if (!state.vehicleTypeLocked) {
+    container.querySelectorAll('.vehicle-type-option').forEach(option => {
+      option.addEventListener('click', () => {
+        container.querySelectorAll('.vehicle-type-option').forEach(o => o.classList.remove('selected'));
+        option.classList.add('selected');
+        state.selectedVehicleType = option.dataset.type;
+        // Recalculate price when vehicle type changes
+        calculatePrice();
+      });
     });
-  });
+  }
   
   // Select default app type or first by default
   if (displayTypes.length > 0 && !state.selectedVehicleType) {
