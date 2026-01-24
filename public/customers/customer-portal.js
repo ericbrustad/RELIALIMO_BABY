@@ -1756,7 +1756,7 @@ async function bookTrip(includeReturn = false) {
       passengerSelect === 'self' ? 'self' : 'other'
     );
     
-    // Valid reservation columns in the database
+    // Valid reservation columns in the database (exact match from api-service.js)
     const VALID_COLUMNS = new Set([
       'id', 'organization_id', 'confirmation_number', 'status', 'account_id',
       'passenger_name', 'passenger_count', 'vehicle_type', 'trip_type', 'service_type',
@@ -1768,7 +1768,7 @@ async function bookTrip(includeReturn = false) {
       'farm_option', 'farmout_status', 'farmout_mode', 'farmout_notes', 'farmout_attempts', 'farmout_declined_drivers',
       'current_offer_driver_id', 'current_offer_sent_at', 'current_offer_expires_at',
       'notes', 'special_instructions', 'timezone', 'form_snapshot',
-      'created_at', 'updated_at', 'created_by', 'updated_by', 'booked_by_user_id', 'res_status'
+      'created_at', 'updated_at', 'created_by', 'updated_by', 'booked_by_user_id'
     ]);
     
     // Filter to valid columns only, store extras in form_snapshot
@@ -1807,6 +1807,10 @@ async function bookTrip(includeReturn = false) {
     // Set grand_total from total_price
     if (reservationData.total_price) {
       dbData.grand_total = reservationData.total_price;
+    }
+    // Map res_status to status
+    if (reservationData.res_status) {
+      dbData.status = reservationData.res_status;
     }
     
     // Create reservation with filtered data
