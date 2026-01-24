@@ -487,16 +487,53 @@
 
   <script type="module">
     import { getSupabaseCredentials } from './shared/supabase-config.js';
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     
     const state = {
       airports: [],
       vehicleTypes: [],
       settings: {},
       editingAirportId: null,
-      editingVehicleTypeId: null
+      editingVehicleTypeId: null,
+      accessToken: null
     };
 
     const creds = getSupabaseCredentials();
+    
+    // Create Supabase client for auth
+    const supabase = createClient(creds.url, creds.anonKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true
+      }
+    });
+    
+    // Get current session for authenticated requests
+    async function getAccessToken() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          state.accessToken = session.access_token;
+          return session.access_token;
+        }
+      } catch (err) {
+        console.warn('[PortalSettings] Could not get access token:', err);
+      }
+      return null;
+    }
+    
+    // Helper for authenticated requests
+    function getAuthHeaders() {
+      const headers = {
+        'apikey': creds.anonKey,
+        'Content-Type': 'application/json'
+      };
+      if (state.accessToken) {
+        headers['Authorization'] = `Bearer ${state.accessToken}`;
+      }
+      return headers;
+    }
 
     // Tab switching
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -528,6 +565,9 @@
     // Load settings
     async function loadSettings() {
       try {
+        // Get auth token for authenticated requests
+        await getAccessToken();
+        
         // Load portal settings
         const settingsResp = await fetch(`${creds.url}/rest/v1/portal_settings?select=*`, {
           headers: { 'apikey': creds.anonKey }
@@ -1064,20 +1104,14 @@
             // First, clear all is_app_default flags
             await fetch(`${creds.url}/rest/v1/vehicle_types?is_app_default=eq.true`, {
               method: 'PATCH',
-              headers: {
-                'apikey': creds.anonKey,
-                'Content-Type': 'application/json'
-              },
+              headers: getAuthHeaders(),
               body: JSON.stringify({ is_app_default: false })
             });
             
             // Then set is_app_default for the selected vehicle type
             await fetch(`${creds.url}/rest/v1/vehicle_types?name=eq.${encodeURIComponent(selectedVehicleType)}`, {
               method: 'PATCH',
-              headers: {
-                'apikey': creds.anonKey,
-                'Content-Type': 'application/json'
-              },
+              headers: getAuthHeaders(),
               body: JSON.stringify({ is_app_default: true })
             });
             
@@ -1097,10 +1131,7 @@
             // First, clear all is_default_driver flags
             await fetch(`${creds.url}/rest/v1/drivers?is_default_driver=eq.true`, {
               method: 'PATCH',
-              headers: {
-                'apikey': creds.anonKey,
-                'Content-Type': 'application/json'
-              },
+              headers: getAuthHeaders(),
               body: JSON.stringify({ is_default_driver: false })
             });
             
@@ -1108,10 +1139,7 @@
             if (selectedDriverId !== '' && selectedDriverId !== 'none') {
               await fetch(`${creds.url}/rest/v1/drivers?id=eq.${encodeURIComponent(selectedDriverId)}`, {
                 method: 'PATCH',
-                headers: {
-                  'apikey': creds.anonKey,
-                  'Content-Type': 'application/json'
-                },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({ is_default_driver: true })
               });
               
