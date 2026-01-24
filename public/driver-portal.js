@@ -5775,7 +5775,7 @@ async function refreshTrips() {
     myTrips.forEach(trip => {
       const tripDate = new Date(trip.pickup_date_time || trip.pickup_datetime || trip.pickup_date);
       const driverStatus = trip.driver_status || 'assigned';
-      const farmoutStatus = trip.farmout_status;
+      const farmoutStatus = trip.farmout_status || '';
       
       console.log('[DriverPortal] Categorizing trip:', trip.confirmation_number, 
         'farmoutStatus:', farmoutStatus, 'driverStatus:', driverStatus, 'tripDate:', tripDate);
@@ -5790,8 +5790,9 @@ async function refreshTrips() {
         state.trips.offered.push(trip);
         console.log('[DriverPortal] -> OFFERED');
       }
-      // Upcoming (assigned and in the future) - including farmout assigned
-      else if (driverStatus === 'assigned' || driverStatus === 'available' || farmoutStatus === 'assigned') {
+      // Upcoming (assigned and in the future) - including farmout assigned AND in-house assigned
+      else if (driverStatus === 'assigned' || driverStatus === 'available' || 
+               farmoutStatus === 'assigned' || farmoutStatus === 'in_house_assigned') {
         if (tripDate > now || isSameDay(tripDate, now)) {
           state.trips.upcoming.push(trip);
           console.log('[DriverPortal] -> UPCOMING');

@@ -42,6 +42,8 @@ const FARMOUT_STATUS_LABELS = {
   completed: 'FC',
   in_house: 'IH',
   inhouse: 'IH',
+  in_house_assigned: 'IHA',
+  in_house_unassigned: 'IHU',
   offered_to_affiliate: 'OTA',
   affiliate_assigned: 'AA',
   affiliate_driver_assigned: 'ADA',

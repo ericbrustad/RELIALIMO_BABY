@@ -555,6 +555,20 @@ function transformReservationPayload(payload) {
     if (d.driverId) result.assigned_driver_id = d.driverId;
     if (d.driverName) result.assigned_driver_name = d.driverName;
     
+    // AUTO-ASSIGN: When a driver is selected with in-house option, set driver_status = 'assigned'
+    // This makes the trip appear in the driver's app as "upcoming" (ready to work, no offer to accept)
+    // Also set farmout_status = 'in_house_assigned' for proper display in farmout grid
+    if (d.driverId && (d.farmOption === 'in-house' || result.farm_option === 'in-house' || !result.farmout_mode)) {
+      result.driver_status = 'assigned';
+      result.farmout_status = 'in_house_assigned';
+      result.status = 'assigned'; // Update main status too
+      console.log('📋 In-house driver assigned: setting driver_status=assigned, farmout_status=in_house_assigned');
+    } else if (!d.driverId && (d.farmOption === 'in-house' || result.farm_option === 'in-house')) {
+      // In-house but no driver assigned
+      result.farmout_status = 'in_house_unassigned';
+      console.log('📋 In-house unassigned: setting farmout_status=in_house_unassigned');
+    }
+    
     // Fleet vehicle ID - store in fleet_vehicle_id column
     if (d.fleetVehicleId) result.fleet_vehicle_id = d.fleetVehicleId;
     

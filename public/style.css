@@ -447,6 +447,16 @@ textarea {
   color: #90a4ae;
 }
 
+.status-badge.in_house_assigned {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.status-badge.in_house_unassigned {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
 .card-body {
   display: flex;
   flex-direction: column;

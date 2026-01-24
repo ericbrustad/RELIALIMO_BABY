@@ -1637,6 +1637,7 @@ async function bookTrip(includeReturn = false) {
       // AUTO-FARM OFF: Set to In-House with manual mode
       reservationData.assignment_type = 'In-House';
       reservationData.farm_mode = 'manual';
+      reservationData.farm_option = 'in-house';
       
       // Try to find an available default driver
       const pickupDateTime = reservationData.pickup_date_time;
@@ -1644,17 +1645,22 @@ async function bookTrip(includeReturn = false) {
       
       if (availableDriver) {
         // Assign the default driver - shows as In-House Assigned in farmout grid
-        reservationData.driver_id = availableDriver.id;
-        reservationData.driver_name = `${availableDriver.first_name || ''} ${availableDriver.last_name || ''}`.trim();
+        // Use assigned_driver_id for driver portal compatibility
+        reservationData.assigned_driver_id = availableDriver.id;
+        reservationData.assigned_driver_name = `${availableDriver.first_name || ''} ${availableDriver.last_name || ''}`.trim();
         reservationData.driver_phone = availableDriver.phone || availableDriver.cell_phone;
+        reservationData.driver_status = 'assigned'; // Directly assigned, not offered
         reservationData.res_status = 'Confirmed';
-        reservationData.farm_status = 'assigned';
-        console.log(`[CustomerPortal] Assigned default driver: ${reservationData.driver_name}`);
+        reservationData.status = 'assigned';
+        reservationData.farm_status = null; // Clear farmout status for in-house
+        reservationData.farmout_status = null;
+        console.log(`[CustomerPortal] ✅ Assigned default driver: ${reservationData.assigned_driver_name} (${availableDriver.id})`);
       } else {
         // No default driver available - leave unassigned In-House
-        reservationData.driver_id = null;
+        reservationData.assigned_driver_id = null;
         reservationData.res_status = 'Unassigned';
-        reservationData.farm_status = 'unassigned';
+        reservationData.status = 'unassigned';
+        reservationData.farm_status = null;
         console.log('[CustomerPortal] No default driver available: Setting to In-House Unassigned');
       }
     }
@@ -1675,8 +1681,10 @@ async function bookTrip(includeReturn = false) {
       pickup_address: reservationData.pickup_address,
       dropoff_address: reservationData.dropoff_address,
       assignment_type: reservationData.assignment_type,
-      driver_id: reservationData.driver_id,
-      driver_name: reservationData.driver_name
+      assigned_driver_id: reservationData.assigned_driver_id,
+      assigned_driver_name: reservationData.assigned_driver_name,
+      driver_status: reservationData.driver_status,
+      farm_option: reservationData.farm_option
     });
     
     // Save passenger to customer_passengers table for future use
