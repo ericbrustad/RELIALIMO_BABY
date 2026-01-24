@@ -1683,68 +1683,90 @@ function showCompletionScreen() {
 // Drivers Map
 // ============================================
 function initializeDriversMap() {
-  if (!window.mapboxgl) {
-    console.warn('Mapbox not available');
+  const mapContainer = document.getElementById('driversMap');
+  
+  if (!mapContainer) {
+    console.warn('[CustomerOnboarding] Map container #driversMap not found');
     return;
   }
   
-  mapboxgl.accessToken = window.ENV?.MAPBOX_TOKEN || 'pk.eyJ1IjoicmVsaWFsaW1vIiwiYSI6ImNtNnd2cHU5ODBkMXYycXB1cWR2a3JjNm4ifQ.uGT0gP5I2InS-5LMGJPkrA';
+  if (!window.mapboxgl) {
+    console.warn('[CustomerOnboarding] Mapbox GL JS not loaded');
+    mapContainer.innerHTML = '<p style="padding: 40px; text-align: center; color: #888;">Map unavailable</p>';
+    return;
+  }
   
-  const center = state.homeCoordinates || { lng: -93.2650, lat: 44.9778 }; // Default to Minneapolis
-  
-  state.map = new mapboxgl.Map({
-    container: 'driversMap',
-    style: 'mapbox://styles/mapbox/dark-v11',
-    center: [center.lng, center.lat],
-    zoom: 11,
-    attributionControl: true
-  });
-  
-  state.map.on('load', () => {
-    // Add user location marker
-    const homeMarker = document.createElement('div');
-    homeMarker.className = 'home-marker';
-    homeMarker.innerHTML = '🏠';
-    homeMarker.style.fontSize = '28px';
-    homeMarker.style.cursor = 'pointer';
+  try {
+    const token = window.ENV?.MAPBOX_TOKEN || 'pk.eyJ1IjoicmVsaWFsaW1vIiwiYSI6ImNtNnd2cHU5ODBkMXYycXB1cWR2a3JjNm4ifQ.uGT0gP5I2InS-5LMGJPkrA';
+    mapboxgl.accessToken = token;
+    console.log('[CustomerOnboarding] Initializing map with token:', token.substring(0, 20) + '...');
     
-    new mapboxgl.Marker({ element: homeMarker })
-      .setLngLat([center.lng, center.lat])
-      .addTo(state.map);
+    const center = state.homeCoordinates || { lng: -93.2650, lat: 44.9778 }; // Default to Minneapolis
+    console.log('[CustomerOnboarding] Map center:', center);
     
-    // Add mock driver markers with car icons
-    MOCK_DRIVERS.forEach((driver, index) => {
-      const offset = 0.015 + (index * 0.008);
-      const angle = (index * 72 + 15) * Math.PI / 180; // Spread around the center
-      
-      const driverLng = center.lng + offset * Math.cos(angle);
-      const driverLat = center.lat + offset * Math.sin(angle);
-      
-      const driverMarker = document.createElement('div');
-      driverMarker.className = 'driver-marker';
-      driverMarker.innerHTML = `
-        <div class="car-icon" style="
-          width: 32px;
-          height: 32px;
-          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border: 2px solid white;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-          cursor: pointer;
-        ">
-          <span style="font-size: 16px;">🚗</span>
-        </div>
-      `;
-      driverMarker.title = `${driver.name} - ${driver.vehicle}`;
-      
-      new mapboxgl.Marker({ element: driverMarker })
-        .setLngLat([driverLng, driverLat])
-        .addTo(state.map);
+    state.map = new mapboxgl.Map({
+      container: 'driversMap',
+      style: 'mapbox://styles/mapbox/dark-v11',
+      center: [center.lng, center.lat],
+      zoom: 11,
+      attributionControl: true
     });
-  });
+    
+    state.map.on('error', (e) => {
+      console.error('[CustomerOnboarding] Mapbox error:', e);
+    });
+    
+    state.map.on('load', () => {
+      console.log('[CustomerOnboarding] Map loaded successfully');
+      
+      // Add user location marker
+      const homeMarker = document.createElement('div');
+      homeMarker.className = 'home-marker';
+      homeMarker.innerHTML = '🏠';
+      homeMarker.style.fontSize = '28px';
+      homeMarker.style.cursor = 'pointer';
+      
+      new mapboxgl.Marker({ element: homeMarker })
+        .setLngLat([center.lng, center.lat])
+        .addTo(state.map);
+      
+      // Add mock driver markers with car icons
+      MOCK_DRIVERS.forEach((driver, index) => {
+        const offset = 0.015 + (index * 0.008);
+        const angle = (index * 72 + 15) * Math.PI / 180;
+        
+        const driverLng = center.lng + offset * Math.cos(angle);
+        const driverLat = center.lat + offset * Math.sin(angle);
+        
+        const driverMarker = document.createElement('div');
+        driverMarker.className = 'driver-marker';
+        driverMarker.innerHTML = `
+          <div class="car-icon" style="
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            cursor: pointer;
+          ">
+            <span style="font-size: 16px;">🚗</span>
+          </div>
+        `;
+        driverMarker.title = `${driver.name} - ${driver.vehicle}`;
+        
+        new mapboxgl.Marker({ element: driverMarker })
+          .setLngLat([driverLng, driverLat])
+          .addTo(state.map);
+      });
+    });
+  } catch (err) {
+    console.error('[CustomerOnboarding] Map initialization error:', err);
+    mapContainer.innerHTML = '<p style="padding: 40px; text-align: center; color: #888;">Map unavailable</p>';
+  }
 }
 
 function displayNearbyDrivers() {
