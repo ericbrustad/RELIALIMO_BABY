@@ -620,18 +620,15 @@
         }
       });
       
-      // Fallback: If no auth event after 5 seconds, hide splash anyway
-      // This handles cases where auth-guard might not be loaded
+      // Fallback: If no auth event after 8 seconds, redirect to login
+      // This prevents content from being visible if auth-guard fails
       setTimeout(function() {
         const splash = document.getElementById('splashScreen');
         if (splash && !splash.classList.contains('fade-out')) {
-          console.log('[Splash] Timeout fallback, hiding splash');
-          splash.classList.add('fade-out');
-          setTimeout(() => splash.remove(), 600);
-          const app = document.getElementById('app');
-          if (app) app.classList.add('authenticated');
+          console.log('[Splash] Auth timeout - redirecting to login');
+          window.location.replace('/auth.html');
         }
-      }, 5000);
+      }, 8000);
     </script>
   </head>
   <body>
