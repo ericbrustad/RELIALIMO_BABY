@@ -1732,11 +1732,12 @@ async function bookTrip(includeReturn = false) {
       account_id: reservationData.account_id,
       pickup_address: reservationData.pickup_address,
       dropoff_address: reservationData.dropoff_address,
-      assignment_type: reservationData.assignment_type,
+      farm_option: reservationData.farm_option,
+      farmout_mode: reservationData.farmout_mode,
       assigned_driver_id: reservationData.assigned_driver_id,
       assigned_driver_name: reservationData.assigned_driver_name,
       driver_status: reservationData.driver_status,
-      farm_option: reservationData.farm_option
+      farmout_status: reservationData.farmout_status
     });
     
     // Save passenger to customer_passengers table for future use
@@ -1984,7 +1985,8 @@ function buildReservationData() {
     // These are defaults - will be overwritten in bookTrip()
     driver_id: null,
     res_status: 'Unassigned',
-    assignment_type: 'In-House',
+    farm_option: 'in-house',
+    farmout_mode: 'manual',
     
     // Status
     status: 'confirmed',
