@@ -25,6 +25,37 @@ body {
   overflow-x: hidden;
 }
 
+/* Top Navigation */
+.top-nav {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 1rem 1.5rem;
+}
+
+.nav-links {
+  display: flex;
+  gap: 1rem;
+}
+
+.nav-link {
+  color: var(--gray-400);
+  text-decoration: none;
+  font-size: 0.85rem;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.nav-link:hover {
+  color: var(--gold);
+  background: rgba(201, 162, 39, 0.1);
+  border-color: var(--gold);
+}
+
 h1, h2, h3, h4 {
   font-family: 'Playfair Display', Georgia, serif;
   font-weight: 600;
