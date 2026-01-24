@@ -1630,32 +1630,31 @@ async function bookTrip(includeReturn = false) {
       reservationData.driver_id = null;
       reservationData.res_status = 'Farmout';
       reservationData.assignment_type = 'Farm-out';
-      reservationData.farm_option = 'farm-out';  // Used by dashboard filter
       reservationData.farm_status = 'unassigned';
       reservationData.farm_mode = 'automatic';
       console.log('[CustomerPortal] Auto-farm enabled: Setting to Farm-out Unassigned (automatic)');
     } else {
-      // AUTO-FARM OFF: Set to In-House, try to assign default driver
+      // AUTO-FARM OFF: Set to In-House with manual mode
       reservationData.assignment_type = 'In-House';
-      reservationData.farm_option = 'in-house';  // Used by dashboard filter
-      reservationData.farm_status = null;
-      reservationData.farm_mode = null;
+      reservationData.farm_mode = 'manual';
       
       // Try to find an available default driver
       const pickupDateTime = reservationData.pickup_date_time;
       const availableDriver = await findAvailableDefaultDriver(pickupDateTime);
       
       if (availableDriver) {
-        // Assign the default driver
+        // Assign the default driver - shows as In-House Assigned in farmout grid
         reservationData.driver_id = availableDriver.id;
         reservationData.driver_name = `${availableDriver.first_name || ''} ${availableDriver.last_name || ''}`.trim();
         reservationData.driver_phone = availableDriver.phone || availableDriver.cell_phone;
         reservationData.res_status = 'Confirmed';
+        reservationData.farm_status = 'assigned';
         console.log(`[CustomerPortal] Assigned default driver: ${reservationData.driver_name}`);
       } else {
         // No default driver available - leave unassigned In-House
         reservationData.driver_id = null;
         reservationData.res_status = 'Unassigned';
+        reservationData.farm_status = 'unassigned';
         console.log('[CustomerPortal] No default driver available: Setting to In-House Unassigned');
       }
     }
