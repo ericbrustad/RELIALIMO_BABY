@@ -1756,7 +1756,60 @@ async function bookTrip(includeReturn = false) {
       passengerSelect === 'self' ? 'self' : 'other'
     );
     
-    // Create reservation
+    // Valid reservation columns in the database
+    const VALID_COLUMNS = new Set([
+      'id', 'organization_id', 'confirmation_number', 'status', 'account_id',
+      'passenger_name', 'passenger_count', 'vehicle_type', 'trip_type', 'service_type',
+      'pickup_datetime', 'pickup_address', 'pickup_city', 'pickup_state', 'pickup_zip', 'pickup_lat', 'pickup_lon',
+      'dropoff_datetime', 'dropoff_address', 'dropoff_city', 'dropoff_state', 'dropoff_zip', 'dropoff_lat', 'dropoff_lon',
+      'pu_address', 'do_address',
+      'assigned_driver_id', 'assigned_driver_name', 'driver_status', 'fleet_vehicle_id',
+      'grand_total', 'rate_type', 'rate_amount', 'payment_type', 'currency',
+      'farm_option', 'farmout_status', 'farmout_mode', 'farmout_notes', 'farmout_attempts', 'farmout_declined_drivers',
+      'current_offer_driver_id', 'current_offer_sent_at', 'current_offer_expires_at',
+      'notes', 'special_instructions', 'timezone', 'form_snapshot',
+      'created_at', 'updated_at', 'created_by', 'updated_by', 'booked_by_user_id', 'res_status'
+    ]);
+    
+    // Filter to valid columns only, store extras in form_snapshot
+    const dbData = {};
+    const extraData = {};
+    
+    for (const [key, value] of Object.entries(reservationData)) {
+      if (VALID_COLUMNS.has(key) && value !== undefined && value !== null) {
+        dbData[key] = value;
+      } else if (value !== undefined && value !== null) {
+        extraData[key] = value;
+      }
+    }
+    
+    // Build form_snapshot with extra data
+    dbData.form_snapshot = {
+      ...extraData,
+      source: 'customer_portal',
+      booked_at: new Date().toISOString()
+    };
+    
+    // Map some fields to valid column names
+    if (reservationData.pickup_date_time) {
+      dbData.pickup_datetime = reservationData.pickup_date_time;
+    }
+    if (reservationData.pickup_address) {
+      dbData.pu_address = reservationData.pickup_address;
+    }
+    if (reservationData.dropoff_address) {
+      dbData.do_address = reservationData.dropoff_address;
+    }
+    // Build passenger_name from first/last
+    if (reservationData.passenger_first_name || reservationData.passenger_last_name) {
+      dbData.passenger_name = `${reservationData.passenger_first_name || ''} ${reservationData.passenger_last_name || ''}`.trim();
+    }
+    // Set grand_total from total_price
+    if (reservationData.total_price) {
+      dbData.grand_total = reservationData.total_price;
+    }
+    
+    // Create reservation with filtered data
     const creds = getSupabaseCredentials();
     const response = await fetch(`${creds.url}/rest/v1/reservations`, {
       method: 'POST',
@@ -1766,7 +1819,7 @@ async function bookTrip(includeReturn = false) {
         'Content-Type': 'application/json',
         'Prefer': 'return=representation'
       },
-      body: JSON.stringify(reservationData)
+      body: JSON.stringify(dbData)
     });
     
     if (response.ok) {
