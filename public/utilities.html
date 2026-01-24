@@ -1029,7 +1029,34 @@ if (nukeAllAccountDataBtn) {
     
     try {
       await ensureSupabaseReady();
-      const client = getSupabaseClient();
+      
+      // Get Supabase credentials for direct REST calls
+      const supabaseUrl = window.ENV?.SUPABASE_URL || localStorage.getItem('supabase_url');
+      const supabaseKey = window.ENV?.SUPABASE_ANON_KEY || localStorage.getItem('supabase_anon_key');
+      const accessToken = localStorage.getItem('supabase_access_token') || supabaseKey;
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Supabase credentials not found');
+      }
+      
+      // Helper function to delete all from a table using REST API
+      async function deleteFromTable(tableName) {
+        const url = `${supabaseUrl}/rest/v1/${tableName}?id=not.is.null`;
+        const response = await fetch(url, {
+          method: 'DELETE',
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          }
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`${response.status}: ${errorText}`);
+        }
+        return true;
+      }
       
       // List of tables to delete from (order matters due to foreign keys)
       // Delete child tables first, then parent tables
@@ -1047,23 +1074,18 @@ if (nukeAllAccountDataBtn) {
       
       for (const table of tablesToDelete) {
         try {
-          // Delete all rows where id is not null (effectively all rows)
-          const { error } = await client.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
-          if (error) {
-            // Table might not exist - try alternate approach
-            if (error.code === '42P01') {
-              console.log(`⏭️ Table ${table} does not exist, skipping`);
-              results.success.push(`${table} (not exists)`);
-            } else {
-              throw error;
-            }
-          } else {
-            console.log(`✅ Deleted all from ${table}`);
-            results.success.push(table);
-          }
+          await deleteFromTable(table);
+          console.log(`✅ Deleted all from ${table}`);
+          results.success.push(table);
         } catch (e) {
-          console.error(`❌ Failed to delete from ${table}:`, e);
-          results.failed.push(`${table}: ${e.message}`);
+          // Check if table doesn't exist (404 or specific error)
+          if (e.message.includes('404') || e.message.includes('does not exist') || e.message.includes('42P01')) {
+            console.log(`⏭️ Table ${table} does not exist, skipping`);
+            results.success.push(`${table} (not exists)`);
+          } else {
+            console.error(`❌ Failed to delete from ${table}:`, e);
+            results.failed.push(`${table}: ${e.message}`);
+          }
         }
       }
       
