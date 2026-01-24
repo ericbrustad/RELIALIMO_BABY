@@ -122,13 +122,14 @@ export async function initAuth() {
       }
     }
     
-    // Load customer info
+    // Load customer info - always fetch fresh from DB to ensure complete data
     const customerStr = localStorage.getItem(STORAGE_KEYS.CUSTOMER);
     if (customerStr) {
+      // Use cached data initially for quick UI display
       authState.customer = JSON.parse(customerStr);
-    } else {
-      await fetchCustomerInfo();
     }
+    // Always fetch fresh data from DB to ensure we have complete info
+    await fetchCustomerInfo();
     
     authState.isAuthenticated = true;
     
