@@ -1335,15 +1335,21 @@ class MyOffice {
       });
       
       try {
-        const listUrl = folderPath 
-          ? `${supabaseUrl}/storage/v1/object/list/images/${folderPath}`
-          : `${supabaseUrl}/storage/v1/object/list/images`;
+        // Supabase Storage list API requires POST with prefix in body
+        const listUrl = `${supabaseUrl}/storage/v1/object/list/images`;
           
         const response = await fetch(listUrl, {
+          method: 'POST',
           headers: {
             'Authorization': `Bearer ${supabaseKey}`,
-            'apikey': supabaseKey
-          }
+            'apikey': supabaseKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            prefix: folderPath || '',
+            limit: 100,
+            offset: 0
+          })
         });
         
         if (response.ok) {
