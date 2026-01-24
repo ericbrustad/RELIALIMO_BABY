@@ -195,6 +195,7 @@
     <li><button id="deleteAllAccountsBothBtn" class="btn" style="background:#b71c1c; font-weight:bold;">🗑️ Delete ALL Accounts (Local + Supabase)</button></li>
     <li style="margin-top:16px; margin-bottom:12px;"><strong style="color:#4a0000;">☢️ NUCLEAR OPTIONS:</strong></li>
     <li><button id="nukeAllAccountDataBtn" class="btn btn-danger" style="background:#4a0000; font-weight:bold; border:2px solid #ff0000;">☢️ NUKE ALL ACCOUNT DATA (All Tables + Related Data)</button></li>
+    <li><button id="nukeAllDriverDataBtn" class="btn btn-danger" style="background:#4a0000; font-weight:bold; border:2px solid #ff0000;">☢️ NUKE ALL DRIVERS & FLEET VEHICLES (All Driver Tables)</button></li>
   </ul>
 
   <!-- =============== VIEW DATA =============== -->
@@ -1149,6 +1150,161 @@ if (nukeAllAccountDataBtn) {
     
     nukeAllAccountDataBtn.disabled = false;
     nukeAllAccountDataBtn.textContent = '☢️ NUKE ALL ACCOUNT DATA (All Tables + Related Data)';
+  };
+}
+
+// =============== NUKE ALL DRIVER & FLEET DATA ===============
+// Deletes from ALL driver-related tables including fleet vehicles
+const nukeAllDriverDataBtn = document.getElementById('nukeAllDriverDataBtn');
+if (nukeAllDriverDataBtn) {
+  nukeAllDriverDataBtn.onclick = async function() {
+    const confirmFirst = confirm(
+      '☢️ NUCLEAR DELETION WARNING ☢️\n\n' +
+      'This will PERMANENTLY delete ALL driver-related data from:\n\n' +
+      '• drivers (main drivers table)\n' +
+      '• driver_vehicles (driver-vehicle assignments)\n' +
+      '• driver_availability\n' +
+      '• driver_documents\n' +
+      '• driver_ratings\n' +
+      '• fleet_vehicles\n' +
+      '• All local storage driver/vehicle caches\n\n' +
+      '⚠️ This action CANNOT be undone!\n\n' +
+      'Are you absolutely sure?'
+    );
+    if (!confirmFirst) return;
+    
+    const confirmSecond = prompt('Type NUKE to confirm complete driver data destruction:');
+    if (confirmSecond !== 'NUKE') {
+      alert('Deletion cancelled. Type "NUKE" exactly to confirm.');
+      return;
+    }
+    
+    nukeAllDriverDataBtn.disabled = true;
+    nukeAllDriverDataBtn.textContent = '☢️ NUKING DRIVER DATA...';
+    
+    const results = {
+      success: [],
+      failed: [],
+      localCleared: 0
+    };
+    
+    try {
+      await ensureSupabaseReady();
+      
+      // Get Supabase credentials for direct REST calls
+      const supabaseUrl = window.ENV?.SUPABASE_URL || localStorage.getItem('supabase_url');
+      const supabaseKey = window.ENV?.SUPABASE_ANON_KEY || localStorage.getItem('supabase_anon_key');
+      const accessToken = localStorage.getItem('supabase_access_token') || supabaseKey;
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Supabase credentials not found');
+      }
+      
+      // Helper function to delete all from a table using REST API
+      async function deleteFromTable(tableName) {
+        const url = `${supabaseUrl}/rest/v1/${tableName}?id=not.is.null`;
+        const response = await fetch(url, {
+          method: 'DELETE',
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          }
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`${response.status}: ${errorText}`);
+        }
+        return true;
+      }
+      
+      // List of driver-related tables to delete from
+      // Delete child/junction tables first, then parent tables
+      const tablesToDelete = [
+        'driver_vehicles',
+        'driver_availability',
+        'driver_documents',
+        'driver_ratings',
+        'fleet_vehicles',
+        'drivers'  // Parent table last
+      ];
+      
+      for (const table of tablesToDelete) {
+        try {
+          await deleteFromTable(table);
+          console.log(`✅ Deleted all from ${table}`);
+          results.success.push(table);
+        } catch (e) {
+          // Check if table doesn't exist (404 or specific error)
+          if (e.message.includes('404') || e.message.includes('does not exist') || e.message.includes('42P01')) {
+            console.log(`⏭️ Table ${table} does not exist, skipping`);
+            results.success.push(`${table} (not exists)`);
+          } else {
+            console.error(`❌ Failed to delete from ${table}:`, e);
+            results.failed.push(`${table}: ${e.message}`);
+          }
+        }
+      }
+      
+      // Clear all local storage driver-related keys
+      const localKeysToDelete = [
+        'local_drivers', 'dev_drivers', 'relia_drivers', 'drivers',
+        'driverDirectory', 'driver_directory', 'fleetVehicles', 'fleet_vehicles',
+        'local_vehicles', 'vehicles', 'driver_availability'
+      ];
+      
+      localKeysToDelete.forEach(key => {
+        try {
+          const val = localStorage.getItem(key);
+          if (val) {
+            localStorage.removeItem(key);
+            results.localCleared++;
+            console.log(`🗑️ Cleared localStorage: ${key}`);
+          }
+        } catch (e) {
+          console.warn(`⚠️ Failed to clear ${key}:`, e);
+        }
+      });
+      
+      // Clear any keys matching driver/vehicle patterns
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (
+          key.includes('driver') || 
+          key.includes('Driver') ||
+          key.includes('fleet') ||
+          key.includes('Fleet') ||
+          key.includes('vehicle') ||
+          key.includes('Vehicle')
+        )) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key);
+        results.localCleared++;
+      });
+      
+      // Show results
+      const successList = results.success.join(', ') || 'None';
+      const failedList = results.failed.join('\n') || 'None';
+      
+      alert(
+        `☢️ NUCLEAR DRIVER DELETION COMPLETE ☢️\n\n` +
+        `✅ Successfully cleared tables:\n${successList}\n\n` +
+        `❌ Failed tables:\n${failedList}\n\n` +
+        `🗑️ Local storage keys cleared: ${results.localCleared}`
+      );
+      
+    } catch (err) {
+      console.error('❌ Nuclear driver deletion error:', err);
+      alert(`❌ Error during nuclear deletion: ${err.message}`);
+    }
+    
+    nukeAllDriverDataBtn.disabled = false;
+    nukeAllDriverDataBtn.textContent = '☢️ NUKE ALL DRIVERS & FLEET VEHICLES (All Driver Tables)';
   };
 }
 
