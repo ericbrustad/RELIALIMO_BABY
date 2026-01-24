@@ -172,6 +172,13 @@ async function init() {
     
     console.log('[CustomerPortal] Synced customer from auth service:', state.customer);
     
+    // Check if onboarding is complete - if not, redirect to onboarding
+    if (state.customer && !state.customer.onboarding_complete) {
+      console.log('[CustomerPortal] Onboarding not complete, redirecting to onboarding...');
+      window.location.href = '/onboarding';
+      return;
+    }
+    
     // Inject user menu styles and initialize user menu
     injectUserMenuStyles();
     initUserMenu('userMenuContainer');

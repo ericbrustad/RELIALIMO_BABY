@@ -334,6 +334,11 @@ async function setupOnboarding() {
   // Hide loading, show onboarding
   document.getElementById('loadingScreen').classList.remove('active');
   
+  // Ensure we have full customer data from database
+  if (state.customer?.email) {
+    await loadFullCustomerData(state.customer.email);
+  }
+  
   // Populate account owner info
   updateOwnerInfo();
   
@@ -351,6 +356,38 @@ async function setupOnboarding() {
   
   // Show first step
   showStep(1);
+}
+
+// ============================================
+// Load Full Customer Data from Database
+// ============================================
+async function loadFullCustomerData(email) {
+  try {
+    const creds = getSupabaseCredentials();
+    console.log('[CustomerOnboarding] Loading full customer data for:', email);
+    
+    const response = await fetch(
+      `${creds.url}/rest/v1/accounts?email=eq.${encodeURIComponent(email.toLowerCase())}&select=*`,
+      {
+        headers: {
+          'apikey': creds.anonKey,
+          'Authorization': state.session?.access_token ? `Bearer ${state.session.access_token}` : `Bearer ${creds.anonKey}`
+        }
+      }
+    );
+    
+    if (response.ok) {
+      const customers = await response.json();
+      if (customers?.length > 0) {
+        // Merge with existing state to preserve any locally set values
+        state.customer = { ...state.customer, ...customers[0] };
+        localStorage.setItem('current_customer', JSON.stringify(state.customer));
+        console.log('[CustomerOnboarding] Full customer data loaded:', state.customer);
+      }
+    }
+  } catch (err) {
+    console.error('[CustomerOnboarding] Error loading customer data:', err);
+  }
 }
 
 // ============================================
