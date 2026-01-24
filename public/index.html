@@ -1212,6 +1212,64 @@
         location.reload();
       };
       
+      // Load environment settings from API and sync to localStorage
+      async function loadEnvSettingsToLocalStorage() {
+        try {
+          const response = await fetch('/api/get-env-settings');
+          if (!response.ok) {
+            console.warn('[EnvSettings] API not available');
+            return false;
+          }
+          const data = await response.json();
+          if (!data.success) return false;
+          
+          // Sync SMS/Twilio settings to localStorage
+          if (data.twilio?.isConfigured) {
+            const providers = JSON.parse(localStorage.getItem('smsProviders') || '[]');
+            const existingIdx = providers.findIndex(p => p.name === 'Twilio' || p.provider === 'twilio');
+            const twilioProvider = {
+              name: 'Twilio',
+              provider: 'twilio',
+              accountSid: data.twilio.accountSid,
+              authToken: data.twilio.authToken,
+              apiKeySid: data.twilio.apiKeySid || '',
+              apiKeySecret: data.twilio.apiKeySecret || '',
+              messagingServiceSid: data.twilio.messagingServiceSid,
+              fromNumber: data.twilio.fromNumber,
+              isDefault: true
+            };
+            if (existingIdx >= 0) {
+              providers[existingIdx] = { ...providers[existingIdx], ...twilioProvider };
+            } else {
+              providers.unshift(twilioProvider);
+            }
+            localStorage.setItem('smsProviders', JSON.stringify(providers));
+            console.log('[EnvSettings] SMS/Twilio synced to localStorage');
+          }
+          
+          // Sync Email settings to localStorage
+          if (data.email?.isConfigured) {
+            const emailSettings = JSON.parse(localStorage.getItem('emailSettings') || '{}');
+            emailSettings.smtpHost = data.email.smtpHost || emailSettings.smtpHost || '';
+            emailSettings.smtpPort = parseInt(data.email.smtpPort) || emailSettings.smtpPort || 465;
+            emailSettings.smtpUser = data.email.smtpUser || emailSettings.smtpUser || '';
+            emailSettings.smtpPass = data.email.smtpPass || emailSettings.smtpPass || '';
+            emailSettings.fromEmail = data.email.fromEmail || emailSettings.fromEmail || '';
+            emailSettings.fromName = data.email.fromName || emailSettings.fromName || 'RELIALIMO';
+            emailSettings.resendApiKey = data.email.resendApiKey || emailSettings.resendApiKey || '';
+            emailSettings.provider = data.email.provider || 'resend';
+            localStorage.setItem('emailSettings', JSON.stringify(emailSettings));
+            localStorage.setItem('emailSettingsConfig', JSON.stringify(emailSettings));
+            console.log('[EnvSettings] Email synced to localStorage');
+          }
+          
+          return true;
+        } catch (e) {
+          console.warn('[EnvSettings] Failed to load:', e);
+          return false;
+        }
+      }
+      
       // System Status Checker - SMS & Email Configuration
       const SystemStatusChecker = {
         checkSMSConfig() {
@@ -1295,10 +1353,11 @@
         },
         
         init() {
-          setTimeout(() => {
+          // First load env settings from API, then check config
+          loadEnvSettingsToLocalStorage().then(() => {
             this.checkSMSConfig();
             this.checkEmailConfig();
-          }, 500);
+          });
           
           // Re-check periodically (every 30 seconds)
           setInterval(() => {
