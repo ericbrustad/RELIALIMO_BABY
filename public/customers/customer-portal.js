@@ -374,7 +374,15 @@ async function loadPortalSettings() {
     if (response.ok) {
       const settings = await response.json();
       if (settings?.length > 0) {
-        Object.assign(portalSettings, settings[0]);
+        const dbSettings = settings[0];
+        // Map snake_case DB columns to camelCase properties
+        portalSettings.logo = dbSettings.logo || dbSettings.logo_url || portalSettings.logo;
+        portalSettings.headerTitle = dbSettings.header_title || dbSettings.headerTitle || portalSettings.headerTitle;
+        portalSettings.welcomeMessage = dbSettings.welcome_message || dbSettings.welcomeMessage || portalSettings.welcomeMessage;
+        portalSettings.thankYouMessage = dbSettings.thank_you_message || dbSettings.thankYouMessage || portalSettings.thankYouMessage;
+        portalSettings.primaryColor = dbSettings.primary_color || dbSettings.primaryColor || portalSettings.primaryColor;
+        portalSettings.googleReviewUrl = dbSettings.google_review_url || dbSettings.googleReviewUrl || portalSettings.googleReviewUrl;
+        portalSettings.geofenceRadius = dbSettings.geofence_radius_meters || dbSettings.geofenceRadius || portalSettings.geofenceRadius;
       }
     }
     

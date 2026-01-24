@@ -1040,6 +1040,9 @@ async function init() {
     // Load ENV settings for SMS/Email
     await loadEnvSettingsToLocalStorage();
     
+    // Load portal branding settings from database
+    await loadDriverPortalSettings();
+    
     // Load modules first
     console.log('[DriverPortal] Loading modules...');
     await loadModules();
@@ -1733,6 +1736,57 @@ function getDriverSettings() {
     return JSON.parse(localStorage.getItem('driver_portal_settings') || '{}');
   } catch (e) {
     return { sound_alerts: true };
+  }
+}
+
+// Load driver portal branding settings from database
+async function loadDriverPortalSettings() {
+  try {
+    const supabaseUrl = window.ENV?.SUPABASE_URL || '';
+    const supabaseKey = window.ENV?.SUPABASE_ANON_KEY || '';
+    
+    if (!supabaseUrl || !supabaseKey) return;
+    
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/portal_settings?portal_type=eq.driver&select=*`,
+      {
+        headers: { 'apikey': supabaseKey }
+      }
+    );
+    
+    if (response.ok) {
+      const settings = await response.json();
+      if (settings?.length > 0) {
+        const dbSettings = settings[0];
+        
+        // Apply header title
+        const headerTitle = dbSettings.header_title || dbSettings.headerTitle;
+        if (headerTitle) {
+          document.querySelectorAll('.portal-header h1, .header-title').forEach(el => {
+            el.textContent = headerTitle;
+          });
+        }
+        
+        // Apply logo
+        const logo = dbSettings.logo || dbSettings.logo_url;
+        if (logo) {
+          document.querySelectorAll('#splashLogo, .splash-logo, .header-logo, .favicon-logo').forEach(img => {
+            img.src = logo;
+          });
+        }
+        
+        // Apply primary color
+        const primaryColor = dbSettings.primary_color || dbSettings.primaryColor;
+        if (primaryColor) {
+          document.documentElement.style.setProperty('--primary', primaryColor);
+          document.documentElement.style.setProperty('--primary-color', primaryColor);
+        }
+        
+        console.log('[DriverPortal] Portal settings loaded from database');
+      }
+    }
+  } catch (err) {
+    console.warn('[DriverPortal] Failed to load portal settings:', err);
   }
 }
 
