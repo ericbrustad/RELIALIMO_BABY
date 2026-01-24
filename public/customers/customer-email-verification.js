@@ -33,7 +33,7 @@ class CustomerEmailVerificationService {
    * @returns {string} Full verification URL
    */
   generateVerificationUrl(email, firstName, lastName, token) {
-    const baseUrl = 'https://accounts.relialimo.com';
+    const baseUrl = 'https://account.relialimo.com';
     // Redirect to auth page with verification token
     return `${baseUrl}/customers/auth.html?verify_token=${token}&email=${encodeURIComponent(email)}`;
   }
@@ -250,7 +250,7 @@ class CustomerEmailVerificationService {
                   <td style="padding: 20px 40px 30px; border-top: 1px solid rgba(255,255,255,0.1);">
                     <p style="color: #718096; font-size: 12px; margin: 0; text-align: center;">
                       Your portal URL after verification:<br>
-                      <strong style="color: #a0aec0;">https://accounts.relialimo.com/${portalSlug}</strong>
+                      <strong style="color: #a0aec0;">https://account.relialimo.com/${portalSlug}</strong>
                     </p>
                   </td>
                 </tr>
