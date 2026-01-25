@@ -869,7 +869,8 @@ async function verifyFlight() {
   
   const verifyBtn = document.getElementById('verifyFlightBtn');
   verifyBtn.disabled = true;
-  verifyBtn.textContent = 'Verifying...';
+  verifyBtn.innerHTML = '<span class="spinner-sm"></span>';
+  verifyBtn.classList.remove('verified', 'error');
   
   const verificationDiv = document.getElementById('flightVerification');
   
@@ -892,6 +893,8 @@ async function verifyFlight() {
       const infoEl = verificationDiv.querySelector('.flight-info');
       
       if (data.valid) {
+        verifyBtn.innerHTML = '✓';
+        verifyBtn.classList.add('verified');
         statusEl.className = 'verification-status verified';
         statusEl.innerHTML = '<span class="status-icon">✅</span><span class="status-text">Flight Verified</span>';
         infoEl.innerHTML = `
@@ -906,6 +909,8 @@ async function verifyFlight() {
           document.getElementById('flightArrivalTime').value = data.arrival_time;
         }
       } else {
+        verifyBtn.innerHTML = '✗';
+        verifyBtn.classList.add('error');
         statusEl.className = 'verification-status error';
         statusEl.innerHTML = '<span class="status-icon">⚠️</span><span class="status-text">Flight Not Found</span>';
         infoEl.innerHTML = `<p>Could not verify flight. Please check the flight number.</p>`;
@@ -915,6 +920,8 @@ async function verifyFlight() {
     }
   } catch (err) {
     console.error('[CustomerPortal] Flight verification error:', err);
+    verifyBtn.innerHTML = '!';
+    verifyBtn.classList.add('error');
     verificationDiv.classList.remove('hidden');
     verificationDiv.querySelector('.verification-status').className = 'verification-status';
     verificationDiv.querySelector('.verification-status').innerHTML = 
@@ -923,7 +930,6 @@ async function verifyFlight() {
       '<p>Flight verification service unavailable. Please verify details manually.</p>';
   } finally {
     verifyBtn.disabled = false;
-    verifyBtn.textContent = '✈️ Verify Flight';
   }
 }
 

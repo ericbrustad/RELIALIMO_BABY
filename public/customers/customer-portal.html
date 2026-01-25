@@ -222,7 +222,12 @@
                   </div>
                   <div class="form-group" style="flex: 1;">
                     <label class="form-label">Flight Number*</label>
-                    <input type="text" id="flightNumber" class="form-input" placeholder="e.g., 1234">
+                    <div class="input-with-button">
+                      <input type="text" id="flightNumber" class="form-input" placeholder="e.g., 1234">
+                      <button type="button" id="verifyFlightBtn" class="btn-verify" title="Verify Flight">
+                        ✓
+                      </button>
+                    </div>
                     <p class="form-hint" id="flightNumberHint">Enter flight number without airline code</p>
                   </div>
                 </div>
@@ -240,9 +245,6 @@
                   </div>
                   <div class="flight-info"></div>
                 </div>
-                <button type="button" id="verifyFlightBtn" class="btn btn-sm btn-secondary">
-                  ✈️ Verify Flight
-                </button>
               </div>
             </div>
 
