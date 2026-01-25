@@ -7944,11 +7944,11 @@ let fullscreenCountdownTimer = null;
 function setupCollapsibleHeader() {
   const expandBtn = document.getElementById('expandHeaderBtn');
   
-  // Profile button opens the slide menu
+  // Profile button opens the sidebar menu
   expandBtn?.addEventListener('click', () => {
-    const slideMenu = document.getElementById('slideMenu');
-    if (slideMenu) {
-      slideMenu.classList.add('open');
+    const menuSidebar = document.getElementById('menuSidebar');
+    if (menuSidebar) {
+      menuSidebar.classList.add('open');
     }
   });
   
