@@ -6533,12 +6533,15 @@ function renderActiveTripCard(trip) {
   const passengerName = trip.passenger_name || trip.passenger_first_name || 'Passenger';
   const passengerPhone = trip.passenger_phone || trip.passenger_cell || '';
   
-  // Parse pickup date/time for display
-  const pickupDateTime = new Date(trip.pickup_date_time || trip.pickup_date);
-  const pickupDay = pickupDateTime.toLocaleDateString('en-US', { weekday: 'short' });
-  const pickupDate = pickupDateTime.getDate();
-  const pickupMonth = pickupDateTime.toLocaleDateString('en-US', { month: 'short' });
-  const pickupTime = pickupDateTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  // Parse pickup date/time for display with validation
+  const rawDateTime = trip.pickup_date_time || trip.pickup_date || trip.pickup_datetime;
+  const pickupDateTime = rawDateTime ? new Date(rawDateTime) : null;
+  const isValidDate = pickupDateTime && !isNaN(pickupDateTime.getTime());
+  
+  const pickupDay = isValidDate ? pickupDateTime.toLocaleDateString('en-US', { weekday: 'short' }) : '--';
+  const pickupDate = isValidDate ? pickupDateTime.getDate() : '--';
+  const pickupMonth = isValidDate ? pickupDateTime.toLocaleDateString('en-US', { month: 'short' }) : '--';
+  const pickupTime = isValidDate ? pickupDateTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '--:--';
   
   // Calculate elapsed time
   const elapsed = state.timerStartTime ? formatElapsedTime(Date.now() - state.timerStartTime) : '00:00';
@@ -6643,8 +6646,12 @@ function renderActiveTripCard(trip) {
           const btnClass = nextStatus === 'done' ? 'btn-success btn-large' : 'btn-primary';
           const btnLabel = getStatusActionLabel(nextStatus);
           return `
-            <button class="btn ${btnClass}" onclick="updateTripStatus('${trip.id}', '${nextStatus}')">
-              ${meta.emoji} ${btnLabel}
+            <button class="btn ${btnClass} status-action-btn" 
+                    data-status="${nextStatus}" 
+                    data-trip-id="${trip.id}"
+                    onclick="handleStatusButtonClick(this, '${trip.id}', '${nextStatus}')">
+              <span class="btn-content">${meta.emoji} ${btnLabel}</span>
+              <span class="btn-loading">⏳ Processing...</span>
             </button>
           `;
         }).join('')}
@@ -6868,6 +6875,31 @@ window.startTrip = async function(tripId) {
   }
 };
 
+// Handle status button click with loading state
+window.handleStatusButtonClick = async function(button, tripId, newStatus) {
+  // Prevent double-clicks
+  if (button.classList.contains('loading')) return;
+  
+  // Add loading state
+  button.classList.add('loading');
+  button.disabled = true;
+  
+  // Disable all other status buttons
+  document.querySelectorAll('.status-action-btn').forEach(btn => {
+    btn.disabled = true;
+  });
+  
+  try {
+    await updateTripStatus(tripId, newStatus);
+  } catch (err) {
+    // Re-enable buttons on error
+    button.classList.remove('loading');
+    document.querySelectorAll('.status-action-btn').forEach(btn => {
+      btn.disabled = false;
+    });
+  }
+};
+
 window.updateTripStatus = async function(tripId, newStatus) {
   try {
     await updateReservationStatus(tripId, { driver_status: newStatus });
@@ -6919,7 +6951,15 @@ window.updateTripStatus = async function(tripId, newStatus) {
     await refreshTrips();
   } catch (err) {
     console.error('[DriverPortal] Update status error:', err);
-    showToast('Failed to update status', 'error');
+    showToast('Failed to update status. Please try again.', 'error');
+    
+    // Reset all button states
+    document.querySelectorAll('.status-action-btn').forEach(btn => {
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    });
+    
+    throw err; // Re-throw for handleStatusButtonClick
   }
 };
 

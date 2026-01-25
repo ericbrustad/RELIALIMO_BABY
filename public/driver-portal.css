@@ -1675,6 +1675,39 @@ body {
 .active-trip-actions .btn {
   font-size: 1.1rem;
   padding: 18px;
+  position: relative;
+}
+
+/* Status button loading states */
+.status-action-btn .btn-loading {
+  display: none;
+}
+
+.status-action-btn.loading .btn-content {
+  display: none;
+}
+
+.status-action-btn.loading .btn-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  animation: pulse-loading 1s ease-in-out infinite;
+}
+
+.status-action-btn.loading {
+  opacity: 0.8;
+  cursor: wait;
+  pointer-events: none;
+}
+
+.status-action-btn:disabled:not(.loading) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes pulse-loading {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 /* ============================================
