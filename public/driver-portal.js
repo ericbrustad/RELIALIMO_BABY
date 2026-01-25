@@ -5932,9 +5932,35 @@ async function refreshTrips() {
       }
     });
     
-    // Sort by date
-    state.trips.offered.sort((a, b) => new Date(a.pickup_date_time) - new Date(b.pickup_date_time));
-    state.trips.upcoming.sort((a, b) => new Date(a.pickup_date_time) - new Date(b.pickup_date_time));
+    // Sort by date chronologically (handle all date field variations)
+    const getTripDateTime = (trip) => {
+      // Try various date/time field combinations
+      if (trip.pickup_date_time) {
+        return new Date(trip.pickup_date_time);
+      }
+      if (trip.pickup_datetime) {
+        return new Date(trip.pickup_datetime);
+      }
+      if (trip.pu_date && trip.pu_time) {
+        return new Date(`${trip.pu_date}T${trip.pu_time}`);
+      }
+      if (trip.pickup_date && trip.pickup_time) {
+        return new Date(`${trip.pickup_date}T${trip.pickup_time}`);
+      }
+      if (trip.pu_date) {
+        return new Date(trip.pu_date);
+      }
+      if (trip.pickup_date) {
+        return new Date(trip.pickup_date);
+      }
+      return new Date(0); // Fallback to epoch if no date
+    };
+    
+    state.trips.offered.sort((a, b) => getTripDateTime(a) - getTripDateTime(b));
+    state.trips.upcoming.sort((a, b) => getTripDateTime(a) - getTripDateTime(b));
+    
+    console.log('[DriverPortal] Trips sorted chronologically. Upcoming order:', 
+      state.trips.upcoming.map(t => `${t.confirmation_number || t.id}: ${getTripDateTime(t).toISOString()}`).join(', '));
     
     // Check for new offers and show overlay for the first one
     checkAndShowNewOfferOverlay();
