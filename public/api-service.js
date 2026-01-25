@@ -444,6 +444,7 @@ function transformReservationPayload(payload) {
   if (payload.assignedDriverId) result.assigned_driver_id = payload.assignedDriverId;
   if (payload.assignedDriverName) result.assigned_driver_name = payload.assignedDriverName;
   if (payload.driverStatus) result.driver_status = payload.driverStatus;
+  if (payload.fleetVehicleId) result.fleet_vehicle_id = payload.fleetVehicleId;
   if (payload.grandTotal) result.grand_total = payload.grandTotal;
   if (payload.rateType) result.rate_type = payload.rateType;
   if (payload.rateAmount) result.rate_amount = payload.rateAmount;
@@ -678,7 +679,10 @@ function transformReservationPayload(payload) {
     }
     
     // Fleet vehicle ID - store in fleet_vehicle_id column
-    if (d.fleetVehicleId) result.fleet_vehicle_id = d.fleetVehicleId;
+    // Check both camelCase and snake_case versions
+    if (d.fleetVehicleId || d.fleet_vehicle_id) {
+      result.fleet_vehicle_id = d.fleetVehicleId || d.fleet_vehicle_id;
+    }
     
     // Service type - store in both service_type and trip_type for compatibility
     if (d.serviceType) {
