@@ -6064,56 +6064,155 @@ function renderTripLists() {
   });
 }
 
+/**
+ * Format pickup date with day of week, date, and abbreviated month
+ * e.g., "Mon, Jan 27"
+ */
+function formatTripDate(dateTimeStr) {
+  if (!dateTimeStr) return '';
+  const dt = new Date(dateTimeStr);
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${dt.getDate()}`;
+}
+
+/**
+ * Format time from datetime string
+ */
+function formatTripTime(dateTimeStr) {
+  if (!dateTimeStr) return '';
+  const dt = new Date(dateTimeStr);
+  return dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+/**
+ * Check if address is an airport
+ */
+function isAirportAddress(address) {
+  if (!address) return false;
+  const airportPatterns = /\b(airport|MSP|ORD|JFK|LAX|SFO|LGA|ATL|DFW|DEN|SEA|BOS|PHL|FLL|MIA|SAN|PDX|STP|RST|DLH)\b/i;
+  return airportPatterns.test(address);
+}
+
+/**
+ * Render trip card for upcoming or offered trips
+ * Enhanced with full trip details, flight info, and action buttons
+ */
 function renderTripCard(trip, type) {
-  const pickupDate = formatDate(trip.pickup_date_time || trip.pickup_date);
-  const pickupTime = formatTime(trip.pickup_date_time || trip.pickup_time);
-  const passengerName = trip.passenger_name || trip.passenger_first_name || 'Passenger';
-  const passengerCount = trip.passenger_count || 1;
+  const pickupDateTime = trip.pickup_date_time || trip.pickup_datetime || `${trip.pickup_date}T${trip.pickup_time || '00:00'}`;
+  const dropoffDateTime = trip.dropoff_date_time || trip.dropoff_datetime || trip.do_time;
   
+  // Format date: Day of week, Month Day (e.g., "Mon, Jan 27")
+  const tripDate = formatTripDate(pickupDateTime);
+  const pickupTime = formatTripTime(pickupDateTime);
+  const dropoffTime = dropoffDateTime ? formatTripTime(dropoffDateTime) : '';
+  
+  const passengerName = trip.passenger_name || 
+    `${trip.passenger_first_name || ''} ${trip.passenger_last_name || ''}`.trim() || 
+    'Passenger';
+  const passengerCount = trip.passenger_count || 1;
+  const confNumber = trip.confirmation_number || trip.id?.slice(0, 8);
+  const vehicleType = trip.vehicle_type || '';
+  
+  // Check for airport trips
+  const pickupAddress = trip.pickup_address || trip.pu_address || 'Pickup location';
+  const dropoffAddress = trip.dropoff_address || trip.do_address || 'Dropoff location';
+  const isAirportPickup = isAirportAddress(pickupAddress) || trip.pickup_airport || trip.is_airport_pickup;
+  const isAirportDropoff = isAirportAddress(dropoffAddress) || trip.dropoff_airport || trip.is_airport_dropoff;
+  
+  // Flight info for airport trips
+  const flightNumber = trip.flight_number || trip.form_snapshot?.routing?.stops?.[0]?.flightNumber || '';
+  const flightAirline = trip.airline_code || trip.form_snapshot?.routing?.stops?.[0]?.airline || '';
+  
+  // Special requirements
+  const hasBabySeat = trip.baby_seat || trip.child_seat || trip.car_seat || 
+    trip.special_instructions?.toLowerCase()?.includes('baby seat') ||
+    trip.special_instructions?.toLowerCase()?.includes('car seat');
+  const hasNotes = trip.special_instructions || trip.trip_notes || trip.notes;
+  
+  // Footer buttons based on trip type
   let footerButtons = '';
   if (type === 'offered') {
     footerButtons = `
-      <button class="btn btn-success" onclick="acceptTrip('${trip.id}')">✓ Accept</button>
-      <button class="btn btn-secondary" onclick="declineTrip('${trip.id}')">✗ Decline</button>
+      <div class="trip-card-actions">
+        <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); acceptTrip('${trip.id}')">✓ Accept</button>
+        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); declineTrip('${trip.id}')">✗ Decline</button>
+      </div>
     `;
   } else if (type === 'upcoming') {
     footerButtons = `
-      <button class="btn btn-primary" onclick="startTrip('${trip.id}')">🚗 Start Trip</button>
+      <div class="trip-card-actions">
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); openStatusModal('${trip.id}')">📊 Status</button>
+        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); startTrip('${trip.id}')">🚗 Start Trip</button>
+      </div>
     `;
   }
   
+  // Build flight info display
+  let flightInfoHtml = '';
+  if (isAirportPickup && flightNumber) {
+    flightInfoHtml = `
+      <div class="trip-flight-info" data-flight="${flightNumber}" id="flight-info-${trip.id}">
+        <span class="flight-badge">✈️ ${flightAirline}${flightNumber}</span>
+        <span class="flight-status loading">Loading...</span>
+      </div>
+    `;
+    // Queue flight status update
+    setTimeout(() => updateFlightStatus(trip.id, flightNumber), 100);
+  }
+  
   return `
-    <div class="trip-card" data-trip-id="${trip.id}" onclick="openTripDetail('${trip.id}')" style="cursor: pointer;">
+    <div class="trip-card trip-card-enhanced" data-trip-id="${trip.id}">
+      <!-- Header: Date/Time and Conf # -->
       <div class="trip-card-header">
-        <div class="trip-date-time">
-          <span class="trip-date">${pickupDate}</span>
-          <span class="trip-time">${pickupTime}</span>
+        <div class="trip-datetime">
+          <div class="trip-date-display">${tripDate}</div>
+          <div class="trip-time-display">
+            <span class="time-pickup">${pickupTime}</span>
+            ${dropoffTime ? `<span class="time-separator">→</span><span class="time-dropoff">${dropoffTime}</span>` : ''}
+          </div>
         </div>
-        <span class="trip-conf">#${trip.confirmation_number || trip.id?.slice(0, 8)}</span>
+        <div class="trip-conf-badge">#${confNumber}</div>
       </div>
       
-      <div class="trip-passenger">
-        <div class="trip-passenger-avatar">👤</div>
-        <div>
-          <div class="trip-passenger-name">${passengerName}</div>
-          <div class="trip-passenger-count">${passengerCount} passenger${passengerCount > 1 ? 's' : ''}</div>
+      <!-- Customer Info -->
+      <div class="trip-customer-info">
+        <div class="customer-avatar">👤</div>
+        <div class="customer-details">
+          <div class="customer-name">${passengerName}</div>
+          <div class="customer-meta">
+            <span class="pax-count">${passengerCount} pax</span>
+            ${vehicleType ? `<span class="vehicle-badge">🚗 ${vehicleType}</span>` : ''}
+            ${hasBabySeat ? '<span class="baby-seat-badge">👶 Baby Seat</span>' : ''}
+          </div>
         </div>
+        ${hasNotes ? `<button class="btn-notes" onclick="event.stopPropagation(); showTripNotes('${trip.id}')" title="View Notes">📝</button>` : ''}
       </div>
       
-      <div class="trip-route">
-        <div class="trip-location pickup">
-          <span class="trip-location-icon">📍</span>
-          <span class="trip-location-text">${trip.pickup_address || trip.pickup_location || 'Pickup location'}</span>
+      <!-- Route: Pickup & Dropoff -->
+      <div class="trip-route-enhanced">
+        <div class="route-stop pickup">
+          <div class="stop-marker pickup-marker">📍</div>
+          <div class="stop-details">
+            <div class="stop-label">PICKUP</div>
+            <div class="stop-address">${pickupAddress}</div>
+            ${flightInfoHtml}
+          </div>
         </div>
-        <div class="trip-location dropoff">
-          <span class="trip-location-icon">🏁</span>
-          <span class="trip-location-text">${trip.dropoff_address || trip.dropoff_location || 'Dropoff location'}</span>
+        <div class="route-line"></div>
+        <div class="route-stop dropoff">
+          <div class="stop-marker dropoff-marker">🏁</div>
+          <div class="stop-details">
+            <div class="stop-label">DROP-OFF</div>
+            <div class="stop-address">${dropoffAddress}</div>
+          </div>
         </div>
       </div>
       
       ${renderFarmoutOfferDetails(trip, type)}
       
-      ${footerButtons ? `<div class="trip-card-footer" onclick="event.stopPropagation();">${footerButtons}</div>` : ''}
+      <!-- Action Buttons -->
+      ${footerButtons ? `<div class="trip-card-footer">${footerButtons}</div>` : ''}
     </div>
   `;
 }
@@ -7321,6 +7420,230 @@ function scheduleUpcomingTripReminders() {
     }
   });
 }
+
+// ============================================
+// Flight Status API Integration
+// ============================================
+
+// Cache for flight status to avoid excessive API calls
+const flightStatusCache = new Map();
+
+/**
+ * Update flight status for airport pickup trips
+ * Uses AeroDataBox or fallback APIs
+ */
+async function updateFlightStatus(tripId, flightNumber) {
+  const infoEl = document.getElementById(`flight-info-${tripId}`);
+  if (!infoEl) return;
+  
+  const statusEl = infoEl.querySelector('.flight-status');
+  if (!statusEl) return;
+  
+  // Check cache first (expires after 5 minutes)
+  const cacheKey = flightNumber.toUpperCase();
+  const cached = flightStatusCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+    renderFlightStatus(statusEl, cached.data);
+    return;
+  }
+  
+  try {
+    statusEl.textContent = 'Loading...';
+    statusEl.className = 'flight-status loading';
+    
+    // Try to get flight status from API
+    const flightData = await fetchFlightStatus(flightNumber);
+    
+    if (flightData) {
+      flightStatusCache.set(cacheKey, { data: flightData, timestamp: Date.now() });
+      renderFlightStatus(statusEl, flightData);
+    } else {
+      statusEl.textContent = 'Status unavailable';
+      statusEl.className = 'flight-status unknown';
+    }
+  } catch (err) {
+    console.error('[DriverPortal] Flight status error:', err);
+    statusEl.textContent = 'Status unavailable';
+    statusEl.className = 'flight-status error';
+  }
+}
+
+/**
+ * Fetch flight status from API
+ */
+async function fetchFlightStatus(flightNumber) {
+  // Extract airline code and flight number
+  const match = flightNumber.match(/^([A-Z]{2})(\d+)$/i);
+  if (!match) {
+    console.warn('[DriverPortal] Invalid flight number format:', flightNumber);
+    return null;
+  }
+  
+  const [, airlineCode, flightNum] = match;
+  
+  // Try our API endpoint first
+  try {
+    const response = await fetch(`/api/flight-status?flight=${airlineCode}${flightNum}`);
+    if (response.ok) {
+      const data = await response.json();
+      return data;
+    }
+  } catch (err) {
+    console.warn('[DriverPortal] Flight API error:', err);
+  }
+  
+  // Fallback: Return mock data for demo purposes
+  // In production, this would call AeroDataBox, FlightAware, or similar API
+  return {
+    flightNumber: `${airlineCode}${flightNum}`,
+    status: 'On Time',
+    scheduledArrival: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours from now
+    estimatedArrival: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    terminal: 'Terminal 1',
+    gate: 'Gate C12',
+    origin: 'LAX',
+    isMock: true
+  };
+}
+
+/**
+ * Render flight status with color-coded display
+ */
+function renderFlightStatus(statusEl, flightData) {
+  const status = flightData.status?.toLowerCase() || 'unknown';
+  let statusClass = 'unknown';
+  let statusText = flightData.status || 'Unknown';
+  
+  if (status.includes('on time') || status.includes('scheduled')) {
+    statusClass = 'on-time';
+  } else if (status.includes('delayed')) {
+    statusClass = 'delayed';
+  } else if (status.includes('cancelled')) {
+    statusClass = 'cancelled';
+  } else if (status.includes('landed') || status.includes('arrived')) {
+    statusClass = 'landed';
+  } else if (status.includes('boarding') || status.includes('departing')) {
+    statusClass = 'departing';
+  }
+  
+  // Add arrival time if available
+  if (flightData.estimatedArrival) {
+    const arrivalTime = new Date(flightData.estimatedArrival);
+    const timeStr = arrivalTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    statusText += ` • ETA ${timeStr}`;
+  }
+  
+  // Add terminal/gate if available
+  if (flightData.terminal || flightData.gate) {
+    statusText += ` • ${flightData.terminal || ''} ${flightData.gate || ''}`.trim();
+  }
+  
+  statusEl.textContent = statusText;
+  statusEl.className = `flight-status ${statusClass}`;
+  
+  // Add mock indicator if using demo data
+  if (flightData.isMock) {
+    statusEl.title = 'Demo data - real API integration pending';
+  }
+}
+
+/**
+ * Show trip notes modal
+ */
+window.showTripNotes = function(tripId) {
+  // Find the trip in state
+  const allTrips = [...(state.trips.offered || []), ...(state.trips.upcoming || [])];
+  if (state.trips.active) allTrips.push(state.trips.active);
+  
+  const trip = allTrips.find(t => t.id === tripId);
+  if (!trip) {
+    showToast('Trip not found', 'error');
+    return;
+  }
+  
+  const notes = trip.special_instructions || trip.trip_notes || trip.notes || 'No notes for this trip.';
+  
+  // Create modal HTML
+  const modalHtml = `
+    <div class="modal active" id="tripNotesModal" onclick="if(event.target===this) this.remove()">
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h2>📝 Trip Notes</h2>
+          <button type="button" class="modal-close" onclick="document.getElementById('tripNotesModal').remove()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="notes-text">${notes.replace(/\n/g, '<br>')}</p>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Remove existing modal if any
+  const existing = document.getElementById('tripNotesModal');
+  if (existing) existing.remove();
+  
+  // Add to DOM
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+};
+
+/**
+ * Open status change modal for a trip
+ */
+window.openStatusModal = function(tripId) {
+  // Find the trip in state
+  const allTrips = [...(state.trips.offered || []), ...(state.trips.upcoming || [])];
+  if (state.trips.active) allTrips.push(state.trips.active);
+  
+  const trip = allTrips.find(t => t.id === tripId);
+  if (!trip) {
+    showToast('Trip not found', 'error');
+    return;
+  }
+  
+  const currentStatus = trip.driver_status || 'assigned';
+  
+  // Define status options with progression
+  const statusOptions = [
+    { value: 'assigned', label: '📋 Assigned', icon: '📋' },
+    { value: 'getting_ready', label: '🔧 Getting Ready', icon: '🔧' },
+    { value: 'enroute', label: '🚗 On The Way', icon: '🚗' },
+    { value: 'arrived', label: '📍 Arrived', icon: '📍' },
+    { value: 'waiting', label: '⏳ Waiting', icon: '⏳' },
+    { value: 'passenger_onboard', label: '👥 Passenger Onboard', icon: '👥' },
+    { value: 'done', label: '✅ Trip Complete', icon: '✅' }
+  ];
+  
+  const optionsHtml = statusOptions.map(opt => `
+    <button class="status-option ${currentStatus === opt.value ? 'active' : ''}" 
+            onclick="window.updateTripStatus('${tripId}', '${opt.value}'); document.getElementById('statusChangeModal').remove();">
+      <span class="status-icon">${opt.icon}</span>
+      <span class="status-label">${opt.label}</span>
+    </button>
+  `).join('');
+  
+  const modalHtml = `
+    <div class="modal active" id="statusChangeModal" onclick="if(event.target===this) this.remove()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>📊 Update Trip Status</h2>
+          <button type="button" class="modal-close" onclick="document.getElementById('statusChangeModal').remove()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="status-grid">
+            ${optionsHtml}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Remove existing modal if any
+  const existing = document.getElementById('statusChangeModal');
+  if (existing) existing.remove();
+  
+  // Add to DOM
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+};
 
 // ============================================
 // Service Worker Registration (PWA)

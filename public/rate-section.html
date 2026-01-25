@@ -99,6 +99,22 @@
           </div>
         </div>
 
+        <!-- Airport Fee (MAC/Baggage Handling) -->
+        <div class="rate-row" id="airportFeeRow" style="display: none;">
+          <div class="rate-cell">Airport Fee (MAC/Baggage)</div>
+          <div class="rate-cell">
+            <input type="number" id="airportQty" class="rate-input" value="0" min="0" max="1" step="1" readonly>
+          </div>
+          <div class="rate-cell currency-cell">
+            <span class="currency-symbol">$</span>
+            <input type="number" id="airportRate" class="rate-input currency-input" data-rate-field="airport" value="15" min="0" step="0.01">
+          </div>
+          <div class="rate-cell currency-cell">
+            <span class="currency-symbol">$</span>
+            <input type="number" id="airportTotal" class="rate-input currency-input" value="0.00" readonly>
+          </div>
+        </div>
+
         <!-- Subtotal Row -->
         <div class="rate-row subtotal-row">
           <div class="rate-cell" colspan="3"><strong>Subtotal</strong></div>

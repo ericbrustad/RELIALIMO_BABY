@@ -10,7 +10,8 @@ class RateSection {
       hour: { qty: 0, rate: 0, total: 0 },
       hourTrip: { qty: 0, rate: 0, total: 0 }, // Per Hour (per trip) - uses PU to DO time
       pass: { qty: 0, rate: 0, total: 0 },
-      mile: { qty: 0, rate: 0, total: 0 }
+      mile: { qty: 0, rate: 0, total: 0 },
+      airport: { qty: 0, rate: 15, total: 0 } // MAC/Baggage handling fee - $15 for airport trips
     };
     this.additionalRates = []; // From Rate Management (fixed, percentage, multiplier)
     this.vehicleRates = null;
@@ -108,6 +109,16 @@ class RateSection {
         break;
       case 'setRouteData':
         this.setRouteData(message.data);
+        break;
+      case 'setAirportFee':
+        // Set airport fee for airport trips (MAC/Baggage handling)
+        if (message.data) {
+          const qty = message.data.qty !== undefined ? message.data.qty : (message.data.isAirportTrip ? 1 : 0);
+          const rate = message.data.rate !== undefined ? message.data.rate : 15;
+          this.setInputValue('airportQty', qty);
+          this.setInputValue('airportRate', rate);
+          this.calculateAll();
+        }
         break;
       case 'setTieredDistanceTotal':
         // Tiered distance formula total goes directly into flat rate
@@ -495,7 +506,7 @@ class RateSection {
 
   calculateAll() {
     // Calculate each row: qty × rate = total
-    const rows = ['flat', 'hour', 'hourTrip', 'pass', 'mile'];
+    const rows = ['flat', 'hour', 'hourTrip', 'pass', 'mile', 'airport'];
 
     rows.forEach(row => {
       const qty = this.getInputValue(`${row}Qty`);
@@ -509,9 +520,15 @@ class RateSection {
         totalInput.value = total.toFixed(2);
       }
     });
+    
+    // Show/hide airport fee row based on qty
+    const airportRow = document.getElementById('airportFeeRow');
+    if (airportRow) {
+      airportRow.style.display = this.rates.airport?.qty > 0 ? '' : 'none';
+    }
 
     // Calculate subtotal from base rates
-    this.subtotal = rows.reduce((sum, row) => sum + this.rates[row].total, 0);
+    this.subtotal = rows.reduce((sum, row) => sum + (this.rates[row]?.total || 0), 0);
     
     // Update subtotal display
     const subtotalEl = document.getElementById('subtotal');

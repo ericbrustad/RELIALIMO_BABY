@@ -1905,7 +1905,19 @@ async function bookTrip(includeReturn = false) {
         fleetVehicleId: reservationData.fleet_vehicle_id || null,
         grandTotal: reservationData.total_price || 0,
         rateAmount: reservationData.rate_amount || 0,
-        rateType: reservationData.rate_type || ''
+        rateType: reservationData.rate_type || '',
+        airportFee: reservationData.airport_fee || 0  // MAC/Baggage handling fee
+      },
+      
+      // Costs section - rate breakdown for reservation form
+      costs: {
+        flat: { qty: 1, rate: reservationData.base_rate || 0 },
+        mile: { qty: reservationData.distance_miles || 0, rate: reservationData.rate_per_mile || 0 },
+        hour: { qty: reservationData.hourly_duration || 0, rate: reservationData.hourly_rate || 0 },
+        airport: { qty: reservationData.airport_fee > 0 ? 1 : 0, rate: reservationData.airport_fee || 0 },  // MAC fee
+        gratuity: 0,
+        fuel: 0,
+        discount: 0
       },
       
       // Store extra data that doesn't fit the structure
@@ -2135,6 +2147,12 @@ function buildReservationData() {
   
   // Calculate total price from route info and vehicle type
   let totalPrice = state.estimatedPrice || 0;
+  
+  // MAC Airport Fee ($15 for any airport trip - pickup or dropoff)
+  const MAC_AIRPORT_FEE = 15.00;
+  const isAirportTrip = isPickupFromAirport || isDropoffToAirport;
+  const airportFee = isAirportTrip ? MAC_AIRPORT_FEE : 0;
+  
   if (!totalPrice && state.routeInfo && selectedVehicleTypeData) {
     // Calculate if not already done
     const distanceMiles = state.routeInfo.distanceMiles || 0;
@@ -2148,6 +2166,11 @@ function buildReservationData() {
       totalPrice = baseRate + (distanceMiles * perMileRate);
       totalPrice = Math.max(totalPrice, minimumFare);
     }
+    // Add MAC airport fee to total price
+    totalPrice += airportFee;
+  } else if (totalPrice && isAirportTrip) {
+    // If we have an estimated price but haven't added airport fee
+    totalPrice += airportFee;
   }
   
   // Get pickup airport code if airport pickup
@@ -2209,6 +2232,9 @@ function buildReservationData() {
     total_price: totalPrice,
     base_rate: selectedVehicleTypeData?.base_rate || null,
     rate_per_mile: selectedVehicleTypeData?.per_mile_rate || selectedVehicleTypeData?.rate_per_mile || null,
+    
+    // MAC Airport Fee - $15 for airport pickups/dropoffs (baggage handling)
+    airport_fee: airportFee,
     
     // Rate fields for reservation form display
     rate_amount: state.tripType === 'hourly' 
