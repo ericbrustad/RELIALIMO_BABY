@@ -539,20 +539,80 @@ async function loadSavedPassengers() {
 async function loadSavedAddresses() {
   try {
     const creds = getSupabaseCredentials();
-    // Query using account_id (billing account) and filter visible/non-deleted addresses
-    const response = await fetch(
-      `${creds.url}/rest/v1/customer_addresses?account_id=eq.${state.customer?.id}&is_deleted=eq.false&is_visible=eq.true&select=*&order=is_favorite.desc,usage_count.desc`,
-      {
-        headers: {
-          'apikey': creds.anonKey,
-          'Authorization': `Bearer ${state.session?.access_token}`
-        }
-      }
+    const accountId = state.customer?.id;
+    
+    if (!accountId) {
+      console.warn('[CustomerPortal] No account ID for loading addresses');
+      return;
+    }
+    
+    // Try to load from both tables - customer_addresses (newer) and account_addresses (legacy)
+    const headers = {
+      'apikey': creds.anonKey,
+      'Authorization': `Bearer ${state.session?.access_token}`
+    };
+    
+    // First try customer_addresses table
+    const customerAddressesResp = await fetch(
+      `${creds.url}/rest/v1/customer_addresses?account_id=eq.${accountId}&is_deleted=eq.false&is_visible=eq.true&select=*&order=is_favorite.desc,usage_count.desc`,
+      { headers }
     );
     
-    if (response.ok) {
-      state.savedAddresses = await response.json();
+    let addresses = [];
+    if (customerAddressesResp.ok) {
+      const customerAddresses = await customerAddressesResp.json();
+      addresses = customerAddresses.map(a => ({
+        ...a,
+        source: 'customer_addresses'
+      }));
     }
+    
+    // Also check account_addresses table for addresses saved from admin portal
+    const accountAddressesResp = await fetch(
+      `${creds.url}/rest/v1/account_addresses?account_id=eq.${accountId}&select=*&order=last_used_at.desc`,
+      { headers }
+    );
+    
+    if (accountAddressesResp.ok) {
+      const accountAddresses = await accountAddressesResp.json();
+      
+      // Merge account_addresses, avoiding duplicates based on address_line1
+      for (const addr of accountAddresses) {
+        const isDuplicate = addresses.some(a => 
+          a.full_address?.toLowerCase()?.includes(addr.address_line1?.toLowerCase()) ||
+          a.address_line1?.toLowerCase() === addr.address_line1?.toLowerCase()
+        );
+        
+        if (!isDuplicate) {
+          // Convert account_addresses format to customer_addresses format
+          const fullAddr = [
+            addr.address_line1,
+            addr.address_line2,
+            addr.city,
+            addr.state,
+            addr.zip_code
+          ].filter(Boolean).join(', ');
+          
+          addresses.push({
+            id: addr.id,
+            account_id: addr.account_id,
+            full_address: fullAddr,
+            label: addr.address_name || addr.address_type || 'Saved Address',
+            address_type: addr.address_type || 'other',
+            address_line1: addr.address_line1,
+            city: addr.city,
+            state: addr.state,
+            zip_code: addr.zip_code,
+            is_favorite: addr.address_type === 'home' || addr.address_type === 'primary',
+            source: 'account_addresses'
+          });
+        }
+      }
+    }
+    
+    state.savedAddresses = addresses;
+    console.log('[CustomerPortal] Loaded', addresses.length, 'saved addresses');
+    
   } catch (err) {
     console.error('[CustomerPortal] Failed to load addresses:', err);
   }

@@ -1270,6 +1270,23 @@ class Accounts {
       alert('Failed to save address.');
       return;
     }
+    
+    // Also save to customer_addresses table for customer portal access
+    try {
+      await this.db?.saveCustomerAddressForAccount(accountId, {
+        address_line1: addressData.address_line1,
+        address_line2: addressData.address_line2,
+        city: addressData.city,
+        state: addressData.state,
+        zip_code: addressData.zip_code,
+        label: addressData.address_name || addressData.address_type,
+        address_type: addressData.address_type,
+        is_favorite: addressData.address_type === 'home' || addressData.address_type === 'primary'
+      });
+      console.log('✅ Address also saved to customer_addresses for portal access');
+    } catch (portalErr) {
+      console.warn('⚠️ Could not sync address to customer_addresses:', portalErr);
+    }
 
     // Clear the input fields after successful save
     ['primaryAddress', 'addressApt', 'addressCity', 'addressState', 'addressZip', 'addressName'].forEach(id => {
