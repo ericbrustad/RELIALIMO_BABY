@@ -3,13 +3,45 @@
 -- Run this in Supabase SQL Editor
 -- ============================================
 
--- Enable realtime for core tables
-ALTER PUBLICATION supabase_realtime ADD TABLE reservations;
-ALTER PUBLICATION supabase_realtime ADD TABLE drivers;
-ALTER PUBLICATION supabase_realtime ADD TABLE accounts;
-ALTER PUBLICATION supabase_realtime ADD TABLE vehicle_types;
-ALTER PUBLICATION supabase_realtime ADD TABLE portal_settings;
-ALTER PUBLICATION supabase_realtime ADD TABLE customer_booking_defaults;
+-- Enable realtime for core tables (safe - ignores if already enabled)
+DO $$
+BEGIN
+  -- reservations
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'reservations') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE reservations;
+    RAISE NOTICE 'Added reservations to realtime';
+  END IF;
+  
+  -- drivers
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'drivers') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE drivers;
+    RAISE NOTICE 'Added drivers to realtime';
+  END IF;
+  
+  -- accounts
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'accounts') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE accounts;
+    RAISE NOTICE 'Added accounts to realtime';
+  END IF;
+  
+  -- vehicle_types
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'vehicle_types') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE vehicle_types;
+    RAISE NOTICE 'Added vehicle_types to realtime';
+  END IF;
+  
+  -- portal_settings
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'portal_settings') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE portal_settings;
+    RAISE NOTICE 'Added portal_settings to realtime';
+  END IF;
+  
+  -- customer_booking_defaults
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'customer_booking_defaults') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE customer_booking_defaults;
+    RAISE NOTICE 'Added customer_booking_defaults to realtime';
+  END IF;
+END $$;
 
 -- ============================================
 -- VERIFICATION
