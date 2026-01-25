@@ -17,6 +17,9 @@
   <link rel="stylesheet" href="driver-portal.css">
   <link rel="stylesheet" href="phone-input.css">
   <script src="phone-input.js"></script>
+  <!-- Mapbox GL JS -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
   <!-- Load ENV first so window.ENV is available -->
   <script src="env.js"></script>
 </head>
@@ -534,64 +537,111 @@
 
     <!-- Main Dashboard Screen -->
     <div id="dashboardScreen" class="screen">
-      <!-- Fullscreen Countdown Overlay (shows on load if next trip exists) -->
-      <div id="fullscreenCountdown" class="fullscreen-countdown-overlay">
-        <button type="button" id="dismissCountdownBtn" class="dismiss-countdown-btn" aria-label="Minimize">&times;</button>
-        <div class="fullscreen-countdown-content">
-          <div class="countdown-icon">🚗</div>
-          <div class="countdown-label">Next Trip In</div>
-          <div class="countdown-timer-large" id="fullscreenCountdownTimer">--:--:--</div>
-          <div class="countdown-trip-info" id="fullscreenTripInfo">
-            <span class="trip-conf" id="fullscreenTripConf">--</span>
-            <span class="trip-time" id="fullscreenTripTime">--</span>
-          </div>
-          <div class="countdown-progress-bar">
-            <div class="countdown-progress" id="fullscreenCountdownBar"></div>
-          </div>
+      <!-- Fullscreen Background Map -->
+      <div id="fullscreenBgMap" class="fullscreen-bg-map">
+        <div id="bgMapContainer"></div>
+      </div>
+
+      <!-- Compact Header Bar (shown when timer minimized) -->
+      <div id="compactHeaderBar" class="compact-header-bar">
+        <div class="compact-header-left">
+          <label class="online-toggle-compact">
+            <input type="checkbox" id="onlineToggleCompact" checked>
+            <span class="toggle-slider-compact"></span>
+          </label>
+          <span id="headerMinimizedTimer" class="header-timer-mini" style="display:none;">
+            <span class="timer-icon">⏱️</span>
+            <span id="headerTimerValue">--:--</span>
+          </span>
+        </div>
+        <div class="compact-header-right">
+          <span id="headerDateTime" class="header-datetime">
+            <span id="headerTime">--:--</span>
+            <span id="headerDate">---</span>
+          </span>
         </div>
       </div>
 
-      <!-- Collapsed Header Bar (always visible) -->
-      <div class="collapsed-header-bar" id="collapsedHeaderBar">
-        <!-- Online Toggle (left side) -->
-        <label class="online-toggle-mini">
+      <!-- Expandable Countdown Timer Window -->
+      <div id="countdownTimerWindow" class="countdown-timer-window">
+        <div class="timer-window-header">
+          <span class="timer-window-title">⏱️ Next Trip Countdown</span>
+          <button type="button" id="minimizeTimerBtn" class="timer-minimize-btn" title="Minimize">×</button>
+        </div>
+        <div class="timer-window-body">
+          <div class="timer-large-display" id="timerLargeDisplay">--:--:--</div>
+          <div class="timer-trip-info">
+            <span class="timer-conf" id="timerTripConf">Conf# ---</span>
+            <span class="timer-datetime" id="timerTripDateTime">--</span>
+          </div>
+          <div class="timer-actual-datetime">
+            <div class="actual-time" id="actualTime">--:--:-- AM</div>
+            <div class="actual-date" id="actualDate">January 1, 2026</div>
+          </div>
+        </div>
+        <div class="timer-progress-bar">
+          <div class="timer-progress" id="timerProgress"></div>
+        </div>
+      </div>
+
+      <!-- Online/Offline Toggle Bar (Legacy - hidden when compact header shown) -->
+      <div class="online-toggle-bar" id="legacyToggleBar" style="display:none;">
+        <label class="online-toggle">
           <input type="checkbox" id="onlineToggle" checked>
-          <span class="toggle-slider-mini"></span>
+          <span class="toggle-slider"></span>
+          <span class="toggle-label" id="onlineLabel">ONLINE</span>
         </label>
-        
-        <!-- Current Time -->
-        <div class="header-current-time" id="headerCurrentTime">12:00 PM</div>
-        
-        <!-- Mini Timer (shown when countdown minimized) -->
-        <div class="mini-timer-container" id="miniTimerContainer" style="display: none;">
-          <span class="mini-timer-icon">⏱️</span>
-          <span class="mini-timer" id="miniCountdownTimer">--:--:--</span>
-        </div>
-        
-        <!-- Profile Button (right side, opens menu) -->
-        <button type="button" id="expandHeaderBtn" class="profile-expand-btn" aria-label="Open Menu">
-          <div class="driver-avatar-small" id="driverAvatarSmall">JD</div>
-        </button>
       </div>
-
-      <!-- Fullscreen Map (always visible behind everything) -->
-      <div id="fullscreenMapContainer" class="fullscreen-map-container">
-        <div id="driverViewMap" class="fullscreen-map">
-          <!-- Map will be initialized here -->
-          <div class="map-placeholder">
-            <div class="map-loading">
-              <span>🗺️</span>
-              <p>Loading map...</p>
-            </div>
+      
+      <!-- Top Header -->
+      <header class="dashboard-header">
+        <div class="header-left">
+          <div class="driver-avatar" id="driverAvatar">JD</div>
+          <div class="driver-info">
+            <span class="driver-name" id="driverName">John Doe</span>
+            <span class="driver-status" id="driverStatusBadge">
+              <span class="status-dot available"></span>
+              Available
+            </span>
           </div>
         </div>
-      </div>
+        <button type="button" id="menuBtn" class="btn-icon" aria-label="Menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+      </header>
 
-      <!-- Tab Content (overlays on map) -->
-      <main class="tab-content-overlay">
+      <!-- Tab Navigation -->
+      <nav class="tab-nav">
+        <button class="tab active" data-tab="driverview">
+          <span class="tab-icon">🗺️</span>
+          <span class="tab-label">Driver View</span>
+        </button>
+        <button class="tab" data-tab="offered">
+          <span class="tab-icon">📨</span>
+          <span class="tab-label">Offered</span>
+          <span class="tab-badge" id="offeredBadge">0</span>
+        </button>
+        <button class="tab" data-tab="upcoming">
+          <span class="tab-icon">📅</span>
+          <span class="tab-label">Upcoming</span>
+          <span class="tab-badge" id="upcomingBadge">0</span>
+        </button>
+        <button class="tab" data-tab="active">
+          <span class="tab-icon">🚗</span>
+          <span class="tab-label">Active</span>
+          <span class="tab-badge" id="activeBadge">0</span>
+        </button>
+      </nav>
+
+      <!-- Tab Content -->
+      <main class="tab-content">
         <!-- Driver View Tab (Map with Pinned Trips) -->
         <div id="driverviewTab" class="tab-panel active">
-          <!-- In-House Driver Status Widget (hidden - replaced by fullscreen countdown) -->
+          <!-- In-House Driver Status Widget -->
           <div id="inHouseStatusWidget" class="in-house-status-widget" style="display: none;">
             <div class="status-widget-header">
               <div class="status-indicator">
@@ -615,19 +665,26 @@
             </div>
           </div>
 
-          <!-- Pinned trips panel (slide-up from bottom) -->
-          <div class="pinned-trips-panel" id="pinnedTripsPanel">
-            <div class="pinned-trips-handle" id="pinnedTripsHandle">
-              <div class="handle-bar"></div>
+          <div class="driver-view-container">
+            <div class="driver-view-map" id="driverViewMap">
+              <!-- Map will be initialized here -->
+              <div class="map-placeholder">
+                <div class="map-loading">
+                  <span>🗺️</span>
+                  <p>Loading map...</p>
+                </div>
+              </div>
             </div>
-            <div class="pinned-trips-header">
-              <h3>📌 Assigned Trips</h3>
-            </div>
-            <div class="pinned-trips-list" id="pinnedTripsList">
-              <!-- Pinned trips will be populated here -->
-              <div class="empty-state" id="pinnedTripsEmpty">
-                <div class="empty-icon">📍</div>
-                <p>No assigned trips yet</p>
+            <div class="driver-view-trips" id="driverViewTrips">
+              <div class="pinned-trips-header">
+                <h3>📌 Assigned Trips</h3>
+              </div>
+              <div class="pinned-trips-list" id="pinnedTripsList">
+                <!-- Pinned trips will be populated here -->
+                <div class="empty-state" id="pinnedTripsEmpty">
+                  <div class="empty-icon">📍</div>
+                  <p>No assigned trips yet</p>
+                </div>
               </div>
             </div>
           </div>
@@ -1478,6 +1535,49 @@
           </div>
         </div>
         
+        <!-- Display Settings Section -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <span class="settings-icon">📱</span>
+            <h3>Display Settings</h3>
+          </div>
+          
+          <div class="settings-card">
+            <div class="settings-toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">Show Countdown Timer</span>
+                <small>Display countdown to next trip on Driver View</small>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="showCountdownTimer" checked>
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+            
+            <div class="settings-toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">Show Date/Time in Header</span>
+                <small>Display current date and time in header bar</small>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="showHeaderDateTime" checked>
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+            
+            <div class="settings-toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">Fullscreen Map Mode</span>
+                <small>Show map as fullscreen background</small>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="fullscreenMapMode" checked>
+                <span class="toggle-slider-sm"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+        
         <!-- Privacy & Security Section -->
         <div class="settings-section">
           <div class="settings-section-header">
@@ -1749,6 +1849,19 @@
       }
     });
   </script>
+
+  <!-- Navigation Overlay for Turn-by-Turn -->
+  <div id="navigationOverlay" class="navigation-overlay">
+    <div class="nav-header">
+      <h3>🧭 Navigation</h3>
+      <button type="button" class="nav-close-btn" onclick="closeEmbeddedNavigation()">×</button>
+    </div>
+    <div class="nav-map-container" id="navMapContainer">
+      <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #888;">
+        Select a destination to start navigation
+      </div>
+    </div>
+  </div>
 
   <script src="sms-service.js"></script>
   <script type="module" src="driver-portal.js"></script>

@@ -1864,12 +1864,31 @@ function setupSplashChecklist() {
 // ============================================
 let driverViewMap = null;
 let driverLocationMarker = null;
-let currentDriverLocation = null;
 
-// Google Maps API Key
-const GOOGLE_MAPS_API_KEY = 'AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartNGg';
+// Mapbox access token (same as MapboxService.js)
+const MAPBOX_ACCESS_TOKEN = 'pk.eyJ1IjoiZXJpeGNvYWNoIiwiYSI6ImNtaDdocXI0NDB1dW4yaW9tZWFka3NocHAifQ.h1czc1VBwbBJQbdJTU5HHA';
 
-// Initialize map using Google Maps Embed (reliable, no billing issues)
+// Wait for Mapbox GL JS to load
+function waitForMapbox(timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    if (window.mapboxgl) {
+      resolve(window.mapboxgl);
+      return;
+    }
+    
+    const startTime = Date.now();
+    const checkInterval = setInterval(() => {
+      if (window.mapboxgl) {
+        clearInterval(checkInterval);
+        resolve(window.mapboxgl);
+      } else if (Date.now() - startTime > timeout) {
+        clearInterval(checkInterval);
+        reject(new Error('Mapbox GL JS did not load in time'));
+      }
+    }, 100);
+  });
+}
+
 async function initDriverViewMap() {
   const mapContainer = document.getElementById('driverViewMap');
   if (!mapContainer) {
@@ -1877,111 +1896,90 @@ async function initDriverViewMap() {
     return;
   }
   
-  // If already initialized, skip
+  // If map already initialized, just resize
   if (driverViewMap) {
-    console.log('[DriverPortal] Map already initialized');
+    console.log('[DriverPortal] Map already initialized, resizing');
+    driverViewMap.resize();
     return;
   }
   
   try {
+    // Wait for Mapbox to be available
+    console.log('[DriverPortal] Waiting for Mapbox GL JS...');
+    await waitForMapbox();
+    console.log('[DriverPortal] Mapbox GL JS loaded');
+    
+    mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
+    
     // Get driver's current location
     const position = await getCurrentPosition().catch(err => {
       console.warn('[DriverPortal] Could not get location:', err.message);
       return null;
     });
+    const center = position 
+      ? [position.coords.longitude, position.coords.latitude]
+      : [-95.3698, 29.7604]; // Default to Houston [lng, lat]
     
-    let lat = 29.7604; // Default Houston
-    let lng = -95.3698;
+    console.log('[DriverPortal] Initializing map at', center);
     
+    // Clear placeholder
+    const placeholder = mapContainer.querySelector('.map-placeholder');
+    if (placeholder) placeholder.style.display = 'none';
+    
+    driverViewMap = new mapboxgl.Map({
+      container: mapContainer,
+      style: 'mapbox://styles/mapbox/streets-v12',
+      center: center,
+      zoom: 12
+    });
+    
+    // Add navigation controls
+    driverViewMap.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    
+    // Add driver's location marker
     if (position) {
-      lat = position.coords.latitude;
-      lng = position.coords.longitude;
-      currentDriverLocation = { lat, lng };
+      // Create a custom marker element
+      const markerEl = document.createElement('div');
+      markerEl.className = 'driver-location-marker';
+      markerEl.innerHTML = `
+        <div style="
+          width: 24px;
+          height: 24px;
+          background: #4f46e5;
+          border: 3px solid #fff;
+          border-radius: 50%;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+        "></div>
+      `;
+      
+      driverLocationMarker = new mapboxgl.Marker(markerEl)
+        .setLngLat(center)
+        .addTo(driverViewMap);
     }
     
-    console.log('[DriverPortal] Initializing map at', lat, lng);
+    // Add geolocate control
+    const geolocate = new mapboxgl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true },
+      trackUserLocation: true,
+      showUserHeading: true
+    });
+    driverViewMap.addControl(geolocate, 'top-right');
     
-    // Clear placeholder and insert Google Maps iframe
-    mapContainer.innerHTML = `
-      <iframe 
-        id="driverMapIframe"
-        src="https://www.google.com/maps/embed/v1/view?key=${GOOGLE_MAPS_API_KEY}&center=${lat},${lng}&zoom=14&maptype=roadmap"
-        style="width: 100%; height: 100%; border: none;"
-        allowfullscreen
-        loading="lazy"
-        referrerpolicy="no-referrer-when-downgrade">
-      </iframe>
-      <div class="map-overlay-controls">
-        <button type="button" id="recenterMapBtn" class="map-control-btn" onclick="recenterMap()">
-          📍 My Location
-        </button>
-      </div>
-    `;
-    
-    driverViewMap = true;
-    console.log('[DriverPortal] Google Maps embed initialized');
-    
-    // Start watching location for updates
-    startLocationTracking();
-    
+    console.log('[DriverPortal] Driver view Mapbox map initialized');
   } catch (err) {
-    console.error('[DriverPortal] Map initialization error:', err);
-    mapContainer.innerHTML = `
-      <div class="map-loading" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
-        <span style="font-size: 48px;">⚠️</span>
-        <p style="color: white; margin-top: 12px;">Map failed to load</p>
-        <button type="button" class="btn btn-primary" onclick="initDriverViewMap()" style="margin-top: 12px;">
-          🔄 Retry
-        </button>
-      </div>
-    `;
-  }
-}
-
-// Recenter map on current location
-window.recenterMap = async function() {
-  try {
-    const position = await getCurrentPosition();
-    const lat = position.coords.latitude;
-    const lng = position.coords.longitude;
-    currentDriverLocation = { lat, lng };
-    
-    const iframe = document.getElementById('driverMapIframe');
-    if (iframe) {
-      iframe.src = `https://www.google.com/maps/embed/v1/view?key=${GOOGLE_MAPS_API_KEY}&center=${lat},${lng}&zoom=15&maptype=roadmap`;
+    console.error('[DriverPortal] Mapbox map initialization error:', err);
+    // Show error in placeholder
+    const placeholder = mapContainer.querySelector('.map-placeholder');
+    if (placeholder) {
+      placeholder.innerHTML = `
+        <div class="map-loading">
+          <span>⚠️</span>
+          <p>Map failed to load: ${err.message}</p>
+        </div>
+      `;
+      placeholder.style.display = 'flex';
     }
-    
-    showToast('📍 Map centered on your location', 'success');
-  } catch (err) {
-    showToast('Could not get your location', 'error');
   }
-};
-
-// Show directions on the embedded map
-function showDirectionsOnMap(destination, origin = null) {
-  const iframe = document.getElementById('driverMapIframe');
-  if (!iframe) return;
-  
-  const originStr = origin || (currentDriverLocation ? `${currentDriverLocation.lat},${currentDriverLocation.lng}` : 'current+location');
-  const destEncoded = encodeURIComponent(destination);
-  
-  iframe.src = `https://www.google.com/maps/embed/v1/directions?key=${GOOGLE_MAPS_API_KEY}&origin=${originStr}&destination=${destEncoded}&mode=driving`;
-}
-
-// Start location tracking in background
-function startLocationTracking() {
-  if (!navigator.geolocation) return;
-  
-  navigator.geolocation.watchPosition(
-    (position) => {
-      currentDriverLocation = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude
-      };
-    },
-    (err) => console.warn('[DriverPortal] Location tracking error:', err.message),
-    { enableHighAccuracy: true, maximumAge: 30000 }
-  );
 }
 
 function getCurrentPosition() {
@@ -2240,15 +2238,6 @@ function setupEventListeners() {
   
   // FAB
   elements.fabRefresh?.addEventListener('click', refreshTrips);
-  
-  // Collapsible Header Controls
-  setupCollapsibleHeader();
-  
-  // Fullscreen Countdown Controls
-  setupFullscreenCountdown();
-  
-  // Pinned Trips Panel drag handle
-  setupPinnedTripsPanel();
   
   // Password show/hide toggles
   document.querySelectorAll('.btn-show-password').forEach(btn => {
@@ -2671,9 +2660,9 @@ async function showProfileScreen() {
   
   // Populate contact info (read-only)
   const fullName = `${driver.first_name || ''} ${driver.last_name || ''}`.trim();
-  if (elements.profileFullName) elements.profileFullName.textContent = fullName || '--';
-  if (elements.profileEmail) elements.profileEmail.textContent = driver.email || '--';
-  if (elements.profilePhone) elements.profilePhone.textContent = formatPhone(driver.cell_phone || driver.phone) || '--';
+  elements.profileFullName.textContent = fullName || '--';
+  elements.profileEmail.textContent = driver.email || '--';
+  elements.profilePhone.textContent = formatPhone(driver.cell_phone || driver.phone) || '--';
   
   // Populate portal URL
   const portalUrl = getDriverPortalUrl(driver);
@@ -2684,22 +2673,20 @@ async function showProfileScreen() {
   
   // Load profile photo
   if (driver.profile_photo_url) {
-    if (elements.profilePhoto) {
-      elements.profilePhoto.src = driver.profile_photo_url;
-      elements.profilePhoto.style.display = 'block';
-    }
-    if (elements.profilePhotoPlaceholder) elements.profilePhotoPlaceholder.style.display = 'none';
+    elements.profilePhoto.src = driver.profile_photo_url;
+    elements.profilePhoto.style.display = 'block';
+    elements.profilePhotoPlaceholder.style.display = 'none';
   } else {
-    if (elements.profilePhoto) elements.profilePhoto.style.display = 'none';
-    if (elements.profilePhotoPlaceholder) elements.profilePhotoPlaceholder.style.display = 'flex';
+    elements.profilePhoto.style.display = 'none';
+    elements.profilePhotoPlaceholder.style.display = 'flex';
   }
   
   // Populate bio
-  if (elements.profileBio) elements.profileBio.value = driver.bio || '';
+  elements.profileBio.value = driver.bio || '';
   updateBioCharCount();
   
   // Populate years of experience
-  if (elements.profileYearsExp) elements.profileYearsExp.value = driver.years_experience || '';
+  elements.profileYearsExp.value = driver.years_experience || '';
   
   // Populate service areas
   if (document.getElementById('profileServiceAreas')) {
@@ -2849,10 +2836,8 @@ async function saveProfile() {
     return;
   }
   
-  if (elements.saveProfileMainBtn) {
-    elements.saveProfileMainBtn.disabled = true;
-    elements.saveProfileMainBtn.textContent = 'Saving...';
-  }
+  elements.saveProfileMainBtn.disabled = true;
+  elements.saveProfileMainBtn.textContent = 'Saving...';
   
   try {
     const profileData = {
@@ -2878,10 +2863,8 @@ async function saveProfile() {
     console.error('[DriverPortal] Save profile error:', err);
     showToast('Failed to save profile', 'error');
   } finally {
-    if (elements.saveProfileMainBtn) {
-      elements.saveProfileMainBtn.disabled = false;
-      elements.saveProfileMainBtn.textContent = '💾 Save Profile';
-    }
+    elements.saveProfileMainBtn.disabled = false;
+    elements.saveProfileMainBtn.textContent = '💾 Save Profile';
   }
 }
 
@@ -3094,10 +3077,8 @@ async function saveSettings() {
     return;
   }
   
-  if (elements.saveSettingsBtn) {
-    elements.saveSettingsBtn.disabled = true;
-    elements.saveSettingsBtn.textContent = 'Saving...';
-  }
+  elements.saveSettingsBtn.disabled = true;
+  elements.saveSettingsBtn.textContent = 'Saving...';
   
   try {
     // Collect all settings
@@ -3167,10 +3148,8 @@ async function saveSettings() {
     console.error('[DriverPortal] Save settings error:', err);
     showToast('Failed to save settings', 'error');
   } finally {
-    if (elements.saveSettingsBtn) {
-      elements.saveSettingsBtn.disabled = false;
-      elements.saveSettingsBtn.textContent = '💾 Save Settings';
-    }
+    elements.saveSettingsBtn.disabled = false;
+    elements.saveSettingsBtn.textContent = '💾 Save Settings';
   }
 }
 
@@ -3525,10 +3504,8 @@ async function handleLogin() {
     return;
   }
   
-  if (elements.loginBtn) {
-    elements.loginBtn.disabled = true;
-    elements.loginBtn.textContent = 'Signing in...';
-  }
+  elements.loginBtn.disabled = true;
+  elements.loginBtn.textContent = 'Signing in...';
   
   try {
     // Find driver by email
@@ -3557,10 +3534,8 @@ async function handleLogin() {
     console.error('[DriverPortal] Login error:', err);
     showToast(err.message || 'Login failed', 'error');
   } finally {
-    if (elements.loginBtn) {
-      elements.loginBtn.disabled = false;
-      elements.loginBtn.textContent = 'Sign In';
-    }
+    elements.loginBtn.disabled = false;
+    elements.loginBtn.textContent = 'Sign In';
   }
 }
 
@@ -3599,10 +3574,8 @@ async function handleDeleteAccount() {
     return;
   }
   
-  if (elements.confirmDeleteBtn) {
-    elements.confirmDeleteBtn.disabled = true;
-    elements.confirmDeleteBtn.textContent = 'Deleting...';
-  }
+  elements.confirmDeleteBtn.disabled = true;
+  elements.confirmDeleteBtn.textContent = 'Deleting...';
   
   try {
     const client = getSupabase();
@@ -3649,10 +3622,8 @@ async function handleDeleteAccount() {
     console.error('[DriverPortal] Delete account error:', err);
     showToast(err.message || 'Failed to delete account', 'error');
   } finally {
-    if (elements.confirmDeleteBtn) {
-      elements.confirmDeleteBtn.disabled = false;
-      elements.confirmDeleteBtn.textContent = '🗑️ Delete My Account';
-    }
+    elements.confirmDeleteBtn.disabled = false;
+    elements.confirmDeleteBtn.textContent = '🗑️ Delete My Account';
   }
 }
 
@@ -4162,7 +4133,7 @@ function startOtpResendTimer() {
     clearInterval(state.otpResendTimer);
   }
   
-  if (elements.resendOtpBtn) elements.resendOtpBtn.disabled = true;
+  elements.resendOtpBtn.disabled = true;
   
   state.otpResendTimer = setInterval(() => {
     seconds--;
@@ -4173,7 +4144,7 @@ function startOtpResendTimer() {
     
     if (seconds <= 0) {
       clearInterval(state.otpResendTimer);
-      if (elements.resendOtpBtn) elements.resendOtpBtn.disabled = false;
+      elements.resendOtpBtn.disabled = false;
     }
   }, 1000);
 }
@@ -4186,10 +4157,8 @@ async function handleResendOtp() {
     return;
   }
   
-  if (elements.resendOtpBtn) {
-    elements.resendOtpBtn.disabled = true;
-    elements.resendOtpBtn.textContent = 'Sending...';
-  }
+  elements.resendOtpBtn.disabled = true;
+  elements.resendOtpBtn.textContent = 'Sending...';
   
   try {
     await sendOtpToPhone(phone);
@@ -4200,7 +4169,7 @@ async function handleResendOtp() {
   } catch (err) {
     showToast('Failed to resend code', 'error');
   } finally {
-    if (elements.resendOtpBtn) elements.resendOtpBtn.textContent = 'Resend Code';
+    elements.resendOtpBtn.textContent = 'Resend Code';
   }
 }
 
@@ -4239,10 +4208,8 @@ async function handleVerifyOtp() {
   state.phoneVerified = true;
   setOtpStatus('✓ Phone verified!', 'success');
   
-  if (elements.verifyOtpBtn) {
-    elements.verifyOtpBtn.disabled = true;
-    elements.verifyOtpBtn.textContent = 'Verified! Continuing...';
-  }
+  elements.verifyOtpBtn.disabled = true;
+  elements.verifyOtpBtn.textContent = 'Verified! Continuing...';
   
   // Clear timer
   if (state.otpResendTimer) {
@@ -4252,10 +4219,8 @@ async function handleVerifyOtp() {
   // Wait a moment then continue
   setTimeout(() => {
     goToRegStep(3);
-    if (elements.verifyOtpBtn) {
-      elements.verifyOtpBtn.disabled = false;
-      elements.verifyOtpBtn.textContent = 'Verify & Continue →';
-    }
+    elements.verifyOtpBtn.disabled = false;
+    elements.verifyOtpBtn.textContent = 'Verify & Continue →';
   }, 1000);
 }
 
@@ -5299,9 +5264,6 @@ async function loadDashboard() {
   updateDriverUI();
   await loadVehicleTypes();
   await refreshTrips();
-  
-  // Initialize map immediately
-  initDriverViewMap();
 }
 
 function updateDriverUI() {
@@ -5313,37 +5275,23 @@ function updateDriverUI() {
   const status = driver.driver_status || 'available';
   const statusMeta = STATUS_META[status] || STATUS_META.available;
   
-  // Header (may not exist if panel was removed)
-  if (elements.driverName) {
-    elements.driverName.textContent = fullName;
-  }
-  if (elements.driverStatusBadge) {
-    elements.driverStatusBadge.innerHTML = `
-      <span class="status-dot ${statusMeta.color}"></span>
-      ${statusMeta.label}
-    `;
-  }
+  // Header
+  elements.driverName.textContent = fullName;
+  elements.driverStatusBadge.innerHTML = `
+    <span class="status-dot ${statusMeta.color}"></span>
+    ${statusMeta.label}
+  `;
   
   // Sidebar
-  if (elements.sidebarName) {
-    elements.sidebarName.textContent = fullName;
-  }
-  if (elements.sidebarEmail) {
-    elements.sidebarEmail.textContent = driver.email || '';
-  }
+  elements.sidebarName.textContent = fullName;
+  elements.sidebarEmail.textContent = driver.email || '';
   
   // Update avatars with photo or initials
   if (driver.profile_photo_url) {
     updateDriverAvatar(driver.profile_photo_url);
   } else {
-    if (elements.driverAvatar) {
-      elements.driverAvatar.textContent = initials;
-    }
-    if (elements.sidebarAvatar) {
-      elements.sidebarAvatar.textContent = initials;
-    }
-    // Also sync the small avatar in collapsed header
-    syncAvatarInitials(initials);
+    elements.driverAvatar.textContent = initials;
+    elements.sidebarAvatar.textContent = initials;
   }
   
   // Online/Offline Toggle - sync with driver status
@@ -5862,9 +5810,7 @@ async function fetchDriverTripsWithServiceRole(driverId) {
 async function refreshTrips() {
   if (!state.driverId) return;
   
-  if (elements.fabRefresh) {
-    elements.fabRefresh.style.animation = 'spin 1s linear infinite';
-  }
+  elements.fabRefresh.style.animation = 'spin 1s linear infinite';
   
   try {
     // Fetch trips assigned to this driver using service role key (bypasses RLS)
@@ -5888,8 +5834,8 @@ async function refreshTrips() {
       console.log('[DriverPortal] Categorizing trip:', trip.confirmation_number, 
         'farmoutStatus:', farmoutStatus, 'driverStatus:', driverStatus, 'tripDate:', tripDate);
       
-      // Active trip (in progress) - including getting_ready and enroute
-      if (['getting_ready', 'enroute', 'arrived', 'passenger_onboard'].includes(driverStatus)) {
+      // Active trip (in progress)
+      if (['enroute', 'arrived', 'passenger_onboard'].includes(driverStatus)) {
         state.trips.active = trip;
         console.log('[DriverPortal] -> ACTIVE');
       }
@@ -6028,9 +5974,7 @@ async function refreshTrips() {
     console.error('[DriverPortal] Failed to refresh trips:', err);
     showToast('Failed to load trips', 'error');
   } finally {
-    if (elements.fabRefresh) {
-      elements.fabRefresh.style.animation = '';
-    }
+    elements.fabRefresh.style.animation = '';
   }
 }
 
@@ -6310,30 +6254,26 @@ let inHouseCountdownTimer = null;
  */
 function updateInHouseStatusWidget() {
   const widget = document.getElementById('inHouseStatusWidget');
+  if (!widget) return;
   
   // Get all upcoming trips for this driver (not just In-House)
   const upcomingTrips = state.trips.upcoming || [];
   
-  // If no upcoming trips, hide widget and fullscreen countdown
+  // If no upcoming trips, hide widget
   if (upcomingTrips.length === 0) {
-    if (widget) widget.style.display = 'none';
+    widget.style.display = 'none';
     if (inHouseCountdownTimer) {
       clearInterval(inHouseCountdownTimer);
       inHouseCountdownTimer = null;
     }
-    // Also update fullscreen countdown
-    updateFullscreenCountdown(null);
     return;
   }
   
-  // Show widget if exists
-  if (widget) widget.style.display = 'block';
+  // Show widget
+  widget.style.display = 'block';
   
   // Get the next upcoming trip (first in sorted list)
   const nextTrip = upcomingTrips[0];
-  
-  // Update fullscreen countdown with next trip
-  updateFullscreenCountdown(nextTrip);
   
   // Update trip info
   const confEl = document.getElementById('nextTripConf');
@@ -6443,6 +6383,15 @@ function startInHouseCountdown(nextTrip) {
   // Calculate total countdown duration for percentage (12 hours before)
   const totalDuration = 12 * 60 * 60 * 1000; // 12 hours in ms
   
+  // Get trip info for timer window
+  const confNumber = nextTrip.confirmation_number || nextTrip.id?.slice(0, 8) || '---';
+  const tripDateTimeStr = pickupDateTime.toLocaleString('en-US', { 
+    month: 'short', 
+    day: 'numeric', 
+    hour: 'numeric', 
+    minute: '2-digit' 
+  });
+  
   const updateCountdown = () => {
     const now = new Date();
     const timeUntil = pickupDateTime - now;
@@ -6454,6 +6403,10 @@ function startInHouseCountdown(nextTrip) {
       if (countdownBar) {
         countdownBar.style.width = '0%';
         countdownBar.className = 'countdown-bar danger';
+      }
+      // Also update timer window
+      if (typeof updateTimerWindowCountdown === 'function') {
+        updateTimerWindowCountdown('NOW!', { confNumber, dateTime: tripDateTimeStr }, 0, 'imminent');
       }
       return;
     }
@@ -6474,21 +6427,30 @@ function startInHouseCountdown(nextTrip) {
     
     // Update styling based on urgency
     const minutesUntil = timeUntil / 60000;
+    let urgency = '';
     if (minutesUntil < 15) {
       countdownEl.className = 'countdown-time imminent';
       if (countdownBar) countdownBar.className = 'countdown-bar danger';
+      urgency = 'imminent';
     } else if (minutesUntil < 60) {
       countdownEl.className = 'countdown-time urgent';
       if (countdownBar) countdownBar.className = 'countdown-bar warning';
+      urgency = 'urgent';
     } else {
       countdownEl.className = 'countdown-time';
       if (countdownBar) countdownBar.className = 'countdown-bar';
+      urgency = '';
     }
     
     // Update progress bar (percentage of 12 hours remaining)
+    const percentage = Math.min(100, Math.max(0, (timeUntil / totalDuration) * 100));
     if (countdownBar) {
-      const percentage = Math.min(100, Math.max(0, (timeUntil / totalDuration) * 100));
       countdownBar.style.width = `${percentage}%`;
+    }
+    
+    // Also update timer window
+    if (typeof updateTimerWindowCountdown === 'function') {
+      updateTimerWindowCountdown(displayTime, { confNumber, dateTime: tripDateTimeStr }, percentage, urgency);
     }
   };
   
@@ -6571,20 +6533,8 @@ function renderActiveTripCard(trip) {
   const passengerName = trip.passenger_name || trip.passenger_first_name || 'Passenger';
   const passengerPhone = trip.passenger_phone || trip.passenger_cell || '';
   
-  // Parse pickup date/time for display with fallback
-  let pickupDateTime = new Date(trip.pickup_date_time || trip.pickup_datetime || trip.pickup_date);
-  
-  // Handle pu_date + pu_time format as fallback
-  if (isNaN(pickupDateTime.getTime()) && trip.pu_date) {
-    const timeStr = trip.pu_time || '12:00';
-    pickupDateTime = new Date(`${trip.pu_date}T${timeStr}`);
-  }
-  
-  // If still invalid, use current time as fallback
-  if (isNaN(pickupDateTime.getTime())) {
-    pickupDateTime = new Date();
-  }
-  
+  // Parse pickup date/time for display
+  const pickupDateTime = new Date(trip.pickup_date_time || trip.pickup_date);
   const pickupDay = pickupDateTime.toLocaleDateString('en-US', { weekday: 'short' });
   const pickupDate = pickupDateTime.getDate();
   const pickupMonth = pickupDateTime.toLocaleDateString('en-US', { month: 'short' });
@@ -6681,11 +6631,6 @@ function renderActiveTripCard(trip) {
         </div>
       </div>
       
-      <!-- Embedded Directions Map -->
-      <div id="embeddedDirectionsMap" class="embedded-directions-container">
-        <!-- Directions map will be inserted here when trip starts -->
-      </div>
-      
       <!-- Map Toggle Button (for mobile) -->
       <button type="button" id="toggleMapBtn" class="btn btn-outline btn-map-toggle" onclick="toggleMapVisibility()">
         🗺️ ${state.mapVisible ? 'Hide Map' : 'Show Map'}
@@ -6725,15 +6670,6 @@ function renderActiveTripCard(trip) {
   if (!state.activeTimer) {
     state.timerStartTime = Date.now();
     startTripTimer();
-  }
-  
-  // Show embedded directions based on current status
-  const destinationAddress = status === 'passenger_onboard' 
-    ? (trip.dropoff_address || trip.dropoff_location)
-    : (trip.pickup_address || trip.pickup_location);
-  
-  if (destinationAddress) {
-    showEmbeddedDirectionsMap(destinationAddress);
   }
 }
 
@@ -6912,36 +6848,20 @@ function clearPendingOffer(tripId, driverId) {
 
 window.startTrip = async function(tripId) {
   try {
-    // Find the trip to get pickup address for navigation
-    const trip = [...state.trips.upcoming, ...state.trips.offered].find(t => t.id === tripId);
-    const pickupAddress = trip?.pickup_address || trip?.pickup_location || '';
-    
     // Play trip start sound
     playNotificationSound('trip_start');
     
-    // Announce "On the way" via speech synthesis
-    speakAnnouncement('On the way to pickup');
+    // Start with "getting_ready" status instead of immediately enroute
+    await updateReservationStatus(tripId, { driver_status: 'getting_ready' });
     
-    // Set status to enroute immediately so trip shows as active
-    await updateReservationStatus(tripId, { driver_status: 'enroute' });
-    
-    // Send passenger notification
-    await sendPassengerNotification(tripId, 'on_the_way');
-    
-    showToast('🚗 On the way! Navigation ready.', 'success');
+    showToast('Trip started! Update status as you go.', 'success');
     switchTab('active');
     await refreshTrips();
     
-    // Show directions on main map
-    if (pickupAddress) {
-      showDirectionsOnMap(pickupAddress);
-      
-      // Also open external navigation for turn-by-turn
-      setTimeout(() => {
-        openNavigationInBackground(pickupAddress);
-      }, 500);
+    // Check map preference on first navigation
+    if (!state.preferredMapApp) {
+      checkMapPreference();
     }
-    
   } catch (err) {
     console.error('[DriverPortal] Start trip error:', err);
     showToast('Failed to start trip', 'error');
@@ -6963,40 +6883,18 @@ window.updateTripStatus = async function(tripId, newStatus) {
       showToast('⏳ Waiting for passenger...', 'info');
     } else if (newStatus === 'passenger_onboard') {
       showToast('🚗 Customer in car! Drive safe.', 'success');
-      
-      // Show directions to dropoff
-      const trip = state.trips.active;
-      const dropoffAddress = trip?.dropoff_address || trip?.dropoff_location || '';
-      if (dropoffAddress) {
-        showDirectionsOnMap(dropoffAddress);
-        speakAnnouncement('Navigating to dropoff');
-        
-        // Open external navigation for turn-by-turn
-        setTimeout(() => {
-          openNavigationInBackground(dropoffAddress);
-        }, 500);
-      }
     } else if (newStatus === 'done') {
       // When driver marks as Done, show the post-trip incidentals modal
-      console.log('[DriverPortal] Opening post-trip modal for trip:', tripId);
       playNotificationSound('trip_complete');
       stopTripTimer();
+      openModal('postTripModal');
+      elements.postTripModal.dataset.tripId = tripId;
       
-      // Find modal element directly in case elements cache is stale
-      const postTripModal = document.getElementById('postTripModal');
-      if (postTripModal) {
-        postTripModal.dataset.tripId = tripId;
-        openModal('postTripModal');
-        
-        // Pre-fill base fare
-        const trip = state.trips.active;
-        if (trip) {
-          state.activeTripBaseFare = parseFloat(trip.driver_pay) || parseFloat(trip.base_fare) || 0;
-          updateTripTotals();
-        }
-      } else {
-        console.error('[DriverPortal] postTripModal not found!');
-        showToast('Error opening trip completion form', 'error');
+      // Pre-fill base fare
+      const trip = state.trips.active;
+      if (trip) {
+        state.activeTripBaseFare = parseFloat(trip.driver_pay) || parseFloat(trip.base_fare) || 0;
+        updateTripTotals();
       }
       return; // Don't refresh yet, wait for post-trip form
     } else if (newStatus === 'completed') {
@@ -7187,107 +7085,6 @@ window.openNavigation = function(address, usePickup = false) {
   console.log(`[DriverPortal] Opening navigation with ${state.preferredMapApp}:`, navigationUrl);
   window.open(navigationUrl, '_blank');
 };
-
-/**
- * Open navigation in background without leaving the page
- * This triggers CarPlay/Android Auto while keeping the driver on this page
- */
-window.openNavigationInBackground = function(address) {
-  if (!address) return;
-  
-  // Check if user has a preference, otherwise use Google Maps
-  const mapApp = state.preferredMapApp || 'google';
-  const encoded = encodeURIComponent(address);
-  const userAgent = navigator.userAgent.toLowerCase();
-  const isIOS = /iphone|ipad|ipod/.test(userAgent);
-  const isAndroid = /android/.test(userAgent);
-  
-  let navigationUrl = '';
-  
-  switch (mapApp) {
-    case 'google':
-      if (isAndroid) {
-        // Intent URL for Android - opens in background
-        navigationUrl = `intent://navigation/q=${encoded}#Intent;scheme=google.navigation;package=com.google.android.apps.maps;end`;
-      } else {
-        // Use comgooglemaps for iOS - triggers CarPlay
-        navigationUrl = `comgooglemaps://?daddr=${encoded}&directionsmode=driving`;
-      }
-      break;
-      
-    case 'apple':
-      // Apple Maps - triggers CarPlay on iOS
-      navigationUrl = `maps://?daddr=${encoded}&dirflg=d`;
-      break;
-      
-    case 'waze':
-      // Waze - works with CarPlay
-      navigationUrl = `waze://?q=${encoded}&navigate=yes`;
-      break;
-      
-    default:
-      navigationUrl = `comgooglemaps://?daddr=${encoded}&directionsmode=driving`;
-  }
-  
-  console.log(`[DriverPortal] Opening background navigation:`, navigationUrl);
-  
-  // Create hidden iframe to trigger the app without leaving page
-  const iframe = document.createElement('iframe');
-  iframe.style.display = 'none';
-  iframe.src = navigationUrl;
-  document.body.appendChild(iframe);
-  
-  // Fallback: after 1 second, try window.location if iframe didn't work
-  setTimeout(() => {
-    iframe.remove();
-    // If we're still on this page, the deep link might have worked via CarPlay
-    // If not, the user can tap the navigate button manually
-  }, 1500);
-  
-  // Also show the embedded map with directions
-  showEmbeddedDirectionsMap(address);
-};
-
-/**
- * Speak an announcement using text-to-speech
- */
-function speakAnnouncement(text) {
-  if ('speechSynthesis' in window) {
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel();
-    
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-    utterance.lang = 'en-US';
-    
-    window.speechSynthesis.speak(utterance);
-    console.log('[DriverPortal] Speaking:', text);
-  }
-}
-
-/**
- * Show embedded Google Maps with directions on the active trip card
- */
-function showEmbeddedDirectionsMap(destination) {
-  const mapContainer = document.getElementById('embeddedDirectionsMap');
-  if (!mapContainer) return;
-  
-  const encoded = encodeURIComponent(destination);
-  
-  // Create embedded directions iframe
-  mapContainer.innerHTML = `
-    <iframe
-      class="embedded-directions-iframe"
-      src="https://www.google.com/maps/embed/v1/directions?key=AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartNGg&destination=${encoded}&mode=driving"
-      allowfullscreen
-      loading="lazy"
-      referrerpolicy="no-referrer-when-downgrade">
-    </iframe>
-  `;
-  mapContainer.style.display = 'block';
-}
 
 // Toggle map visibility for small screens
 window.toggleMapVisibility = function() {
@@ -7594,8 +7391,8 @@ function getStatusActionLabel(status) {
     case 'arrived': return 'Arrived';
     case 'waiting': return 'Waiting';
     case 'passenger_onboard': return 'Customer in Car';
-    case 'done': return 'Complete Trip';
-    case 'completed': return 'Submit & Finish';
+    case 'done': return 'Done';
+    case 'completed': return 'Complete Trip';
     default: return STATUS_META[status]?.label || status;
   }
 }
@@ -7938,244 +7735,446 @@ window.openStatusModal = function(tripId) {
 };
 
 // ============================================
-// Collapsible Header & Fullscreen Countdown
+// Countdown Timer Window & Display Settings
 // ============================================
 
-let isHeaderExpanded = false;
-let isCountdownMinimized = false;
-let fullscreenCountdownTimer = null;
+let timerWindowState = {
+  minimized: false,
+  countdownEnabled: true,
+  headerDateTimeEnabled: true,
+  fullscreenMapEnabled: true,
+  timerInterval: null,
+  clockInterval: null
+};
 
 /**
- * Setup collapsible header event listeners
+ * Initialize countdown timer window and display settings
  */
-function setupCollapsibleHeader() {
-  const expandBtn = document.getElementById('expandHeaderBtn');
+function initTimerWindowSystem() {
+  // Load settings from localStorage
+  loadDisplaySettings();
   
-  // Profile button opens the sidebar menu
-  expandBtn?.addEventListener('click', () => {
-    const menuSidebar = document.getElementById('menuSidebar');
-    const sidebarOverlay = document.getElementById('sidebarOverlay');
-    if (menuSidebar) {
-      menuSidebar.classList.add('active');
-    }
-    if (sidebarOverlay) {
-      sidebarOverlay.classList.add('active');
-    }
-  });
+  // Setup minimize button
+  const minimizeBtn = document.getElementById('minimizeTimerBtn');
+  if (minimizeBtn) {
+    minimizeBtn.addEventListener('click', () => minimizeTimerWindow());
+  }
   
-  // Start updating the current time
-  updateHeaderClock();
-  setInterval(updateHeaderClock, 1000);
-}
-
-/**
- * Update the current time in the header
- */
-function updateHeaderClock() {
-  const clockEl = document.getElementById('headerCurrentTime');
-  if (clockEl) {
-    const now = new Date();
-    clockEl.textContent = now.toLocaleString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
+  // Setup header mini timer click to expand
+  const headerTimerMini = document.getElementById('headerMinimizedTimer');
+  if (headerTimerMini) {
+    headerTimerMini.addEventListener('click', () => expandTimerWindow());
+  }
+  
+  // Sync online toggles
+  const compactToggle = document.getElementById('onlineToggleCompact');
+  const mainToggle = document.getElementById('onlineToggle');
+  
+  if (compactToggle && mainToggle) {
+    compactToggle.addEventListener('change', (e) => {
+      mainToggle.checked = e.target.checked;
+      handleOnlineToggle.call({ checked: e.target.checked });
     });
-  }
-}
-
-/**
- * Setup fullscreen countdown controls
- */
-function setupFullscreenCountdown() {
-  const dismissBtn = document.getElementById('dismissCountdownBtn');
-  const overlay = document.getElementById('fullscreenCountdown');
-  const miniContainer = document.getElementById('miniTimerContainer');
-  
-  // Initially hide the overlay until we have a next trip
-  overlay?.classList.add('hidden');
-  
-  // Dismiss countdown (minimize)
-  dismissBtn?.addEventListener('click', () => {
-    overlay?.classList.add('hidden');
-    if (miniContainer) miniContainer.style.display = 'flex';
-    isCountdownMinimized = true;
-  });
-  
-  // Click on mini timer to expand again
-  miniContainer?.addEventListener('click', () => {
-    overlay?.classList.remove('hidden');
-    if (miniContainer) miniContainer.style.display = 'none';
-    isCountdownMinimized = false;
-  });
-}
-
-/**
- * Setup pinned trips panel drag behavior
- */
-function setupPinnedTripsPanel() {
-  const panel = document.getElementById('pinnedTripsPanel');
-  const handle = document.getElementById('pinnedTripsHandle');
-  
-  if (!panel || !handle) return;
-  
-  let startY = 0;
-  let isMinimized = false;
-  
-  // Toggle on handle click
-  handle.addEventListener('click', () => {
-    isMinimized = !isMinimized;
-    panel.classList.toggle('minimized', isMinimized);
-  });
-}
-
-/**
- * Update both fullscreen and mini countdown timers
- */
-function updateFullscreenCountdown(nextTrip) {
-  const overlay = document.getElementById('fullscreenCountdown');
-  const fullscreenTimer = document.getElementById('fullscreenCountdownTimer');
-  const fullscreenBar = document.getElementById('fullscreenCountdownBar');
-  const fullscreenConf = document.getElementById('fullscreenTripConf');
-  const fullscreenTime = document.getElementById('fullscreenTripTime');
-  const miniTimer = document.getElementById('miniCountdownTimer');
-  const miniContainer = document.getElementById('miniTimerContainer');
-  
-  if (!nextTrip) {
-    // No next trip - hide overlay and mini timer
-    overlay?.classList.add('hidden');
-    if (miniContainer) miniContainer.style.display = 'none';
-    if (fullscreenCountdownTimer) {
-      clearInterval(fullscreenCountdownTimer);
-      fullscreenCountdownTimer = null;
-    }
-    return;
-  }
-  
-  // Get pickup datetime
-  let pickupDateTime;
-  if (nextTrip.pickup_date_time) {
-    pickupDateTime = new Date(nextTrip.pickup_date_time);
-  } else if (nextTrip.pickup_datetime) {
-    pickupDateTime = new Date(nextTrip.pickup_datetime);
-  } else if (nextTrip.pickup_date && nextTrip.pickup_time) {
-    pickupDateTime = new Date(`${nextTrip.pickup_date}T${nextTrip.pickup_time}`);
-  } else if (nextTrip.pu_date && nextTrip.pu_time) {
-    pickupDateTime = new Date(`${nextTrip.pu_date}T${nextTrip.pu_time}`);
-  } else {
-    overlay?.classList.add('hidden');
-    if (miniContainer) miniContainer.style.display = 'none';
-    return;
-  }
-  
-  if (isNaN(pickupDateTime.getTime())) {
-    overlay?.classList.add('hidden');
-    if (miniContainer) miniContainer.style.display = 'none';
-    return;
-  }
-  
-  // Show overlay if not minimized
-  if (!isCountdownMinimized) {
-    overlay?.classList.remove('hidden');
-  } else {
-    if (miniContainer) miniContainer.style.display = 'flex';
-  }
-  
-  // Set trip info
-  const confNum = nextTrip.confirmation_number || nextTrip.id || '--';
-  if (fullscreenConf) fullscreenConf.textContent = `Conf #${confNum}`;
-  if (fullscreenTime) {
-    fullscreenTime.textContent = pickupDateTime.toLocaleString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit'
+    
+    mainToggle.addEventListener('change', (e) => {
+      compactToggle.checked = e.target.checked;
     });
-  }
-  
-  // Clear existing timer
-  if (fullscreenCountdownTimer) {
-    clearInterval(fullscreenCountdownTimer);
-  }
-  
-  const totalDuration = 12 * 60 * 60 * 1000; // 12 hours
-  
-  const updateTimer = () => {
-    const now = new Date();
-    const timeUntil = pickupDateTime - now;
     
-    if (timeUntil <= 0) {
-      if (fullscreenTimer) {
-        fullscreenTimer.textContent = 'NOW!';
-        fullscreenTimer.className = 'countdown-timer-large imminent';
-      }
-      if (miniTimer) {
-        miniTimer.textContent = 'NOW!';
-        miniTimer.className = 'mini-timer imminent';
-      }
-      if (fullscreenBar) {
-        fullscreenBar.style.width = '0%';
-        fullscreenBar.className = 'countdown-progress danger';
-      }
-      return;
+    // Initial sync
+    compactToggle.checked = mainToggle.checked;
+  }
+  
+  // Start clock updates
+  startClockUpdates();
+  
+  // Apply initial display settings
+  applyDisplaySettings();
+  
+  // Show timer window on start if enabled
+  if (timerWindowState.countdownEnabled) {
+    showTimerWindow();
+  }
+}
+
+/**
+ * Load display settings from localStorage
+ */
+function loadDisplaySettings() {
+  const saved = localStorage.getItem('driver_display_settings');
+  if (saved) {
+    try {
+      const settings = JSON.parse(saved);
+      timerWindowState.countdownEnabled = settings.countdownEnabled !== false;
+      timerWindowState.headerDateTimeEnabled = settings.headerDateTimeEnabled !== false;
+      timerWindowState.fullscreenMapEnabled = settings.fullscreenMapEnabled !== false;
+      timerWindowState.minimized = settings.minimized || false;
+    } catch (e) {
+      console.warn('[DriverPortal] Failed to parse display settings:', e);
     }
-    
-    const hours = Math.floor(timeUntil / (1000 * 60 * 60));
-    const minutes = Math.floor((timeUntil % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((timeUntil % (1000 * 60)) / 1000);
-    
-    // Format display times - always show seconds in both
-    let fullDisplay, miniDisplay;
-    if (hours > 0) {
-      fullDisplay = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-      miniDisplay = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+  
+  // Sync settings UI
+  const countdownToggle = document.getElementById('showCountdownTimer');
+  const dateTimeToggle = document.getElementById('showHeaderDateTime');
+  const fullscreenToggle = document.getElementById('fullscreenMapMode');
+  
+  if (countdownToggle) countdownToggle.checked = timerWindowState.countdownEnabled;
+  if (dateTimeToggle) dateTimeToggle.checked = timerWindowState.headerDateTimeEnabled;
+  if (fullscreenToggle) fullscreenToggle.checked = timerWindowState.fullscreenMapEnabled;
+  
+  // Listen for settings changes
+  countdownToggle?.addEventListener('change', (e) => {
+    timerWindowState.countdownEnabled = e.target.checked;
+    saveDisplaySettings();
+    applyDisplaySettings();
+  });
+  
+  dateTimeToggle?.addEventListener('change', (e) => {
+    timerWindowState.headerDateTimeEnabled = e.target.checked;
+    saveDisplaySettings();
+    applyDisplaySettings();
+  });
+  
+  fullscreenToggle?.addEventListener('change', (e) => {
+    timerWindowState.fullscreenMapEnabled = e.target.checked;
+    saveDisplaySettings();
+    applyDisplaySettings();
+  });
+}
+
+/**
+ * Save display settings to localStorage
+ */
+function saveDisplaySettings() {
+  localStorage.setItem('driver_display_settings', JSON.stringify({
+    countdownEnabled: timerWindowState.countdownEnabled,
+    headerDateTimeEnabled: timerWindowState.headerDateTimeEnabled,
+    fullscreenMapEnabled: timerWindowState.fullscreenMapEnabled,
+    minimized: timerWindowState.minimized
+  }));
+}
+
+/**
+ * Apply display settings to UI
+ */
+function applyDisplaySettings() {
+  const timerWindow = document.getElementById('countdownTimerWindow');
+  const headerTimer = document.getElementById('headerMinimizedTimer');
+  const headerDateTime = document.getElementById('headerDateTime');
+  const bgMap = document.getElementById('fullscreenBgMap');
+  
+  // Countdown timer visibility
+  if (!timerWindowState.countdownEnabled) {
+    if (timerWindow) timerWindow.style.display = 'none';
+    if (headerTimer) headerTimer.style.display = 'none';
+  } else {
+    if (timerWindowState.minimized) {
+      if (timerWindow) timerWindow.style.display = 'none';
+      if (headerTimer) headerTimer.style.display = 'flex';
     } else {
-      fullDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-      miniDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      if (timerWindow) timerWindow.style.display = 'block';
+      if (headerTimer) headerTimer.style.display = 'none';
+    }
+  }
+  
+  // Header date/time visibility
+  if (headerDateTime) {
+    headerDateTime.style.display = timerWindowState.headerDateTimeEnabled ? 'flex' : 'none';
+  }
+  
+  // Fullscreen map
+  if (bgMap) {
+    bgMap.classList.toggle('active', timerWindowState.fullscreenMapEnabled);
+    if (timerWindowState.fullscreenMapEnabled) {
+      initFullscreenBackgroundMap();
+    }
+  }
+}
+
+/**
+ * Minimize timer window to header bar
+ */
+function minimizeTimerWindow() {
+  timerWindowState.minimized = true;
+  saveDisplaySettings();
+  
+  const timerWindow = document.getElementById('countdownTimerWindow');
+  const headerTimer = document.getElementById('headerMinimizedTimer');
+  
+  if (timerWindow) {
+    timerWindow.classList.add('minimized');
+    timerWindow.style.display = 'none';
+  }
+  
+  if (headerTimer) {
+    headerTimer.style.display = 'flex';
+  }
+}
+
+/**
+ * Expand timer window from header
+ */
+function expandTimerWindow() {
+  timerWindowState.minimized = false;
+  saveDisplaySettings();
+  
+  const timerWindow = document.getElementById('countdownTimerWindow');
+  const headerTimer = document.getElementById('headerMinimizedTimer');
+  
+  if (timerWindow) {
+    timerWindow.classList.remove('minimized');
+    timerWindow.style.display = 'block';
+  }
+  
+  if (headerTimer) {
+    headerTimer.style.display = 'none';
+  }
+}
+
+/**
+ * Show timer window
+ */
+function showTimerWindow() {
+  if (timerWindowState.minimized) {
+    const headerTimer = document.getElementById('headerMinimizedTimer');
+    if (headerTimer) headerTimer.style.display = 'flex';
+  } else {
+    const timerWindow = document.getElementById('countdownTimerWindow');
+    if (timerWindow) timerWindow.style.display = 'block';
+  }
+}
+
+/**
+ * Start real-time clock updates
+ */
+function startClockUpdates() {
+  const updateClock = () => {
+    const now = new Date();
+    
+    // Update actual time display in timer window
+    const actualTime = document.getElementById('actualTime');
+    const actualDate = document.getElementById('actualDate');
+    if (actualTime) {
+      actualTime.textContent = now.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit', 
+        second: '2-digit',
+        hour12: true 
+      });
+    }
+    if (actualDate) {
+      actualDate.textContent = now.toLocaleDateString('en-US', { 
+        weekday: 'long',
+        month: 'long', 
+        day: 'numeric', 
+        year: 'numeric' 
+      });
     }
     
-    if (fullscreenTimer) fullscreenTimer.textContent = fullDisplay;
-    if (miniTimer) miniTimer.textContent = miniDisplay;
-    
-    // Update styling based on urgency
-    const minutesUntil = timeUntil / 60000;
-    let urgencyClass = '';
-    let barClass = 'countdown-progress';
-    
-    if (minutesUntil < 15) {
-      urgencyClass = 'imminent';
-      barClass = 'countdown-progress danger';
-    } else if (minutesUntil < 60) {
-      urgencyClass = 'urgent';
-      barClass = 'countdown-progress warning';
+    // Update header time/date
+    const headerTime = document.getElementById('headerTime');
+    const headerDate = document.getElementById('headerDate');
+    if (headerTime) {
+      headerTime.textContent = now.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      });
     }
-    
-    if (fullscreenTimer) fullscreenTimer.className = `countdown-timer-large ${urgencyClass}`;
-    if (miniTimer) miniTimer.className = `mini-timer ${urgencyClass}`;
-    
-    // Update progress bar
-    if (fullscreenBar) {
-      const percentage = Math.min(100, Math.max(0, (timeUntil / totalDuration) * 100));
-      fullscreenBar.style.width = `${percentage}%`;
-      fullscreenBar.className = barClass;
+    if (headerDate) {
+      headerDate.textContent = now.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric'
+      });
     }
   };
   
-  updateTimer();
-  fullscreenCountdownTimer = setInterval(updateTimer, 1000);
+  // Initial update
+  updateClock();
+  
+  // Update every second
+  if (timerWindowState.clockInterval) {
+    clearInterval(timerWindowState.clockInterval);
+  }
+  timerWindowState.clockInterval = setInterval(updateClock, 1000);
 }
 
 /**
- * Sync avatar initials between main and small avatars
+ * Update the timer window countdown (called from startInHouseCountdown)
  */
-function syncAvatarInitials(initials) {
-  const mainAvatar = document.getElementById('driverAvatar');
-  const smallAvatar = document.getElementById('driverAvatarSmall');
+function updateTimerWindowCountdown(countdown, tripInfo, progress, urgency) {
+  const timerDisplay = document.getElementById('timerLargeDisplay');
+  const timerConf = document.getElementById('timerTripConf');
+  const timerDateTime = document.getElementById('timerTripDateTime');
+  const timerProgress = document.getElementById('timerProgress');
+  const headerTimerValue = document.getElementById('headerTimerValue');
   
-  if (mainAvatar) mainAvatar.textContent = initials;
-  if (smallAvatar) smallAvatar.textContent = initials;
+  if (timerDisplay) {
+    timerDisplay.textContent = countdown;
+    timerDisplay.className = `timer-large-display ${urgency}`;
+  }
+  
+  if (timerConf && tripInfo.confNumber) {
+    timerConf.textContent = `Conf# ${tripInfo.confNumber}`;
+  }
+  
+  if (timerDateTime && tripInfo.dateTime) {
+    timerDateTime.textContent = tripInfo.dateTime;
+  }
+  
+  if (timerProgress) {
+    timerProgress.style.width = `${progress}%`;
+    timerProgress.className = `timer-progress ${urgency}`;
+  }
+  
+  // Update header mini timer
+  if (headerTimerValue) {
+    headerTimerValue.textContent = countdown;
+    headerTimerValue.className = urgency;
+  }
 }
+
+// ============================================
+// Fullscreen Background Map with Navigation
+// ============================================
+
+let bgMapInstance = null;
+
+/**
+ * Initialize fullscreen background map
+ */
+function initFullscreenBackgroundMap() {
+  const container = document.getElementById('bgMapContainer');
+  if (!container || bgMapInstance) return;
+  
+  // Use Leaflet with OpenStreetMap for reliability
+  try {
+    // Load Leaflet if not already loaded
+    if (typeof L === 'undefined') {
+      console.log('[DriverPortal] Loading Leaflet for background map...');
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+      
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = () => {
+        createBackgroundMap(container);
+      };
+      document.head.appendChild(script);
+    } else {
+      createBackgroundMap(container);
+    }
+  } catch (e) {
+    console.error('[DriverPortal] Failed to init background map:', e);
+  }
+}
+
+function createBackgroundMap(container) {
+  try {
+    // Get driver's location or default to Minneapolis
+    const defaultCenter = [44.9778, -93.2650];
+    
+    bgMapInstance = L.map(container, {
+      center: defaultCenter,
+      zoom: 12,
+      zoomControl: false,
+      attributionControl: false,
+      dragging: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      touchZoom: false
+    });
+    
+    // Use a dark tile layer
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19
+    }).addTo(bgMapInstance);
+    
+    // Try to get current position
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          bgMapInstance.setView([pos.coords.latitude, pos.coords.longitude], 13);
+        },
+        () => {},
+        { enableHighAccuracy: false, timeout: 5000 }
+      );
+    }
+    
+    console.log('[DriverPortal] Background map initialized');
+  } catch (e) {
+    console.error('[DriverPortal] Background map error:', e);
+  }
+}
+
+/**
+ * Start turn-by-turn navigation (embedded)
+ */
+function startEmbeddedNavigation(destination) {
+  // Create navigation overlay
+  let overlay = document.getElementById('navigationOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'navigationOverlay';
+    overlay.className = 'navigation-overlay';
+    overlay.innerHTML = `
+      <div class="nav-header">
+        <h3>🧭 Navigation</h3>
+        <button type="button" class="nav-close-btn" onclick="closeEmbeddedNavigation()">×</button>
+      </div>
+      <div class="nav-map-container" id="navMapContainer">
+        <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #888;">
+          Loading navigation...
+        </div>
+      </div>
+      <div class="nav-directions-panel" id="navDirectionsPanel"></div>
+    `;
+    document.body.appendChild(overlay);
+  }
+  
+  overlay.classList.add('active');
+  
+  // Use Google Maps Embed for directions
+  const destEncoded = encodeURIComponent(destination);
+  const mapContainer = document.getElementById('navMapContainer');
+  
+  // Get current location and create directions embed
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const origin = `${pos.coords.latitude},${pos.coords.longitude}`;
+        const embedUrl = `https://www.google.com/maps/embed/v1/directions?key=AIzaSyBHLGQGz0yjLvJpL7lFLzwNOLyIkVXgcDo&origin=${origin}&destination=${destEncoded}&mode=driving`;
+        
+        mapContainer.innerHTML = `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" allowfullscreen loading="lazy"></iframe>`;
+      },
+      () => {
+        // Fallback - just show destination
+        const embedUrl = `https://www.google.com/maps/embed/v1/place?key=AIzaSyBHLGQGz0yjLvJpL7lFLzwNOLyIkVXgcDo&q=${destEncoded}`;
+        mapContainer.innerHTML = `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" allowfullscreen loading="lazy"></iframe>`;
+      }
+    );
+  }
+}
+
+function closeEmbeddedNavigation() {
+  const overlay = document.getElementById('navigationOverlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+  }
+}
+
+// Make functions global
+window.closeEmbeddedNavigation = closeEmbeddedNavigation;
+window.startEmbeddedNavigation = startEmbeddedNavigation;
+
+// Initialize timer system when dashboard loads
+const originalLoadDashboard = loadDashboard;
+loadDashboard = async function() {
+  await originalLoadDashboard.call(this);
+  initTimerWindowSystem();
+};
 
 // ============================================
 // Service Worker Registration (PWA)
