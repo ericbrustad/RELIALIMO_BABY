@@ -6355,99 +6355,39 @@ function renderTripCard(trip, type) {
 let inHouseCountdownTimer = null;
 
 /**
- * Update the In-House driver status widget
+ * Update the countdown timer window with next trip info
  * Shows countdown to next trip and current driver status
  */
 function updateInHouseStatusWidget() {
-  const widget = document.getElementById('inHouseStatusWidget');
-  if (!widget) return;
-  
-  // Get all upcoming trips for this driver (not just In-House)
+  // Get all upcoming trips for this driver
   const upcomingTrips = state.trips.upcoming || [];
   
-  // If no upcoming trips, hide widget
+  // If no upcoming trips, clear timer
   if (upcomingTrips.length === 0) {
-    widget.style.display = 'none';
     if (inHouseCountdownTimer) {
       clearInterval(inHouseCountdownTimer);
       inHouseCountdownTimer = null;
     }
+    // Update timer window to show no trips
+    const timerDisplay = document.getElementById('timerLargeDisplay');
+    const timerConf = document.getElementById('timerTripConf');
+    const timerDateTime = document.getElementById('timerTripDateTime');
+    
+    if (timerDisplay) timerDisplay.textContent = '--:--:--';
+    if (timerConf) timerConf.textContent = 'No upcoming trips';
+    if (timerDateTime) timerDateTime.textContent = '';
     return;
   }
-  
-  // Show widget
-  widget.style.display = 'block';
   
   // Get the next upcoming trip (first in sorted list)
   const nextTrip = upcomingTrips[0];
   
-  // Update trip info
-  const confEl = document.getElementById('nextTripConf');
-  const timeEl = document.getElementById('nextTripTime');
-  if (confEl) confEl.textContent = `#${nextTrip.confirmation_number || nextTrip.id?.slice(0, 8) || '---'}`;
-  if (timeEl) {
-    // Try multiple date/time fields
-    let pickupTime = '--:--';
-    let pickupDate = '';
-    
-    if (nextTrip.pickup_date_time || nextTrip.pickup_datetime) {
-      const dt = new Date(nextTrip.pickup_date_time || nextTrip.pickup_datetime);
-      if (!isNaN(dt.getTime())) {
-        pickupTime = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        pickupDate = dt.toLocaleDateString([], { month: 'short', day: 'numeric' });
-      }
-    } else {
-      pickupTime = nextTrip.pickup_time || nextTrip.pu_time || '--:--';
-      pickupDate = nextTrip.pickup_date || nextTrip.pu_date || '';
-    }
-    
-    timeEl.textContent = `${pickupTime} - ${pickupDate}`;
-  }
-  
-  // Update driver status
-  const statusDot = document.getElementById('driverStatusDot');
-  const statusLabel = document.getElementById('driverStatusLabel');
-  
-  let driverStatus = 'Available';
-  let statusClass = '';
-  
-  if (state.trips.active) {
-    driverStatus = 'On Trip';
-    statusClass = 'on-trip';
-  } else if (upcomingTrips.length > 0) {
-    // Calculate minutes until next trip
-    let nextPickup;
-    if (nextTrip.pickup_date_time || nextTrip.pickup_datetime) {
-      nextPickup = new Date(nextTrip.pickup_date_time || nextTrip.pickup_datetime);
-    } else if (nextTrip.pickup_date && nextTrip.pickup_time) {
-      nextPickup = new Date(`${nextTrip.pickup_date}T${nextTrip.pickup_time}`);
-    } else if (nextTrip.pu_date && nextTrip.pu_time) {
-      nextPickup = new Date(`${nextTrip.pu_date}T${nextTrip.pu_time}`);
-    }
-    
-    if (nextPickup && !isNaN(nextPickup.getTime())) {
-      const now = new Date();
-      const minutesUntil = (nextPickup - now) / 60000;
-      
-      if (minutesUntil < 30) {
-        driverStatus = 'Trip Soon';
-        statusClass = 'busy';
-      } else {
-        driverStatus = 'Available';
-        statusClass = '';
-      }
-    }
-  }
-  
-  if (statusDot) statusDot.className = `status-dot ${statusClass}`;
-  if (statusLabel) statusLabel.textContent = driverStatus;
-  
-  // Start countdown timer
+  // Start countdown timer for the timer window
   startInHouseCountdown(nextTrip);
 }
 
 /**
- * Start/update the countdown timer for In-House widget
+ * Start/update the countdown timer for Timer Window
  */
 function startInHouseCountdown(nextTrip) {
   // Clear existing timer
@@ -6455,10 +6395,13 @@ function startInHouseCountdown(nextTrip) {
     clearInterval(inHouseCountdownTimer);
   }
   
-  const countdownEl = document.getElementById('countdownTime');
-  const countdownBar = document.getElementById('inHouseCountdownBar');
+  const timerDisplay = document.getElementById('timerLargeDisplay');
+  const timerConf = document.getElementById('timerTripConf');
+  const timerDateTime = document.getElementById('timerTripDateTime');
+  const timerProgress = document.getElementById('timerProgress');
+  const headerTimerValue = document.getElementById('headerTimerValue');
   
-  if (!countdownEl) return;
+  if (!timerDisplay) return;
   
   // Get pickup datetime - handle various formats
   let pickupDateTime;
@@ -6472,16 +6415,18 @@ function startInHouseCountdown(nextTrip) {
     pickupDateTime = new Date(`${nextTrip.pu_date}T${nextTrip.pu_time}`);
   } else {
     // No valid datetime found - show placeholder
-    countdownEl.textContent = '--:--:--';
-    countdownEl.className = 'countdown-time';
+    timerDisplay.textContent = '--:--:--';
+    timerDisplay.className = 'timer-large-display';
+    if (timerConf) timerConf.textContent = 'Time not set';
     console.warn('[DriverPortal] No valid pickup time for countdown:', nextTrip);
     return;
   }
   
   // Validate the date is valid
   if (isNaN(pickupDateTime.getTime())) {
-    countdownEl.textContent = '--:--:--';
-    countdownEl.className = 'countdown-time';
+    timerDisplay.textContent = '--:--:--';
+    timerDisplay.className = 'timer-large-display';
+    if (timerConf) timerConf.textContent = 'Invalid time';
     console.warn('[DriverPortal] Invalid pickup datetime for countdown:', nextTrip);
     return;
   }
@@ -6492,11 +6437,16 @@ function startInHouseCountdown(nextTrip) {
   // Get trip info for timer window
   const confNumber = nextTrip.confirmation_number || nextTrip.id?.slice(0, 8) || '---';
   const tripDateTimeStr = pickupDateTime.toLocaleString('en-US', { 
+    weekday: 'short',
     month: 'short', 
     day: 'numeric', 
     hour: 'numeric', 
     minute: '2-digit' 
   });
+  
+  // Update static info immediately
+  if (timerConf) timerConf.textContent = `Conf# ${confNumber}`;
+  if (timerDateTime) timerDateTime.textContent = tripDateTimeStr;
   
   const updateCountdown = () => {
     const now = new Date();
@@ -6504,15 +6454,15 @@ function startInHouseCountdown(nextTrip) {
     
     if (timeUntil <= 0) {
       // Trip time has arrived
-      countdownEl.textContent = 'NOW!';
-      countdownEl.className = 'countdown-time imminent';
-      if (countdownBar) {
-        countdownBar.style.width = '0%';
-        countdownBar.className = 'countdown-bar danger';
+      timerDisplay.textContent = 'NOW!';
+      timerDisplay.className = 'timer-large-display imminent';
+      if (timerProgress) {
+        timerProgress.style.width = '0%';
+        timerProgress.className = 'timer-progress imminent';
       }
-      // Also update timer window
-      if (typeof updateTimerWindowCountdown === 'function') {
-        updateTimerWindowCountdown('NOW!', { confNumber, dateTime: tripDateTimeStr }, 0, 'imminent');
+      if (headerTimerValue) {
+        headerTimerValue.textContent = 'NOW!';
+        headerTimerValue.className = 'imminent';
       }
       return;
     }
@@ -6529,34 +6479,35 @@ function startInHouseCountdown(nextTrip) {
       displayTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
     
-    countdownEl.textContent = displayTime;
+    timerDisplay.textContent = displayTime;
     
     // Update styling based on urgency
     const minutesUntil = timeUntil / 60000;
     let urgency = '';
     if (minutesUntil < 15) {
-      countdownEl.className = 'countdown-time imminent';
-      if (countdownBar) countdownBar.className = 'countdown-bar danger';
+      timerDisplay.className = 'timer-large-display imminent';
+      if (timerProgress) timerProgress.className = 'timer-progress imminent';
       urgency = 'imminent';
     } else if (minutesUntil < 60) {
-      countdownEl.className = 'countdown-time urgent';
-      if (countdownBar) countdownBar.className = 'countdown-bar warning';
+      timerDisplay.className = 'timer-large-display urgent';
+      if (timerProgress) timerProgress.className = 'timer-progress urgent';
       urgency = 'urgent';
     } else {
-      countdownEl.className = 'countdown-time';
-      if (countdownBar) countdownBar.className = 'countdown-bar';
+      timerDisplay.className = 'timer-large-display';
+      if (timerProgress) timerProgress.className = 'timer-progress';
       urgency = '';
     }
     
     // Update progress bar (percentage of 12 hours remaining)
     const percentage = Math.min(100, Math.max(0, (timeUntil / totalDuration) * 100));
-    if (countdownBar) {
-      countdownBar.style.width = `${percentage}%`;
+    if (timerProgress) {
+      timerProgress.style.width = `${percentage}%`;
     }
     
-    // Also update timer window
-    if (typeof updateTimerWindowCountdown === 'function') {
-      updateTimerWindowCountdown(displayTime, { confNumber, dateTime: tripDateTimeStr }, percentage, urgency);
+    // Update header mini timer
+    if (headerTimerValue) {
+      headerTimerValue.textContent = displayTime;
+      headerTimerValue.className = urgency;
     }
   };
   
