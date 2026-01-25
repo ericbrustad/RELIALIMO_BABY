@@ -2239,6 +2239,15 @@ function setupEventListeners() {
   // FAB
   elements.fabRefresh?.addEventListener('click', refreshTrips);
   
+  // Collapsible Header Controls
+  setupCollapsibleHeader();
+  
+  // Fullscreen Countdown Controls
+  setupFullscreenCountdown();
+  
+  // Pinned Trips Panel drag handle
+  setupPinnedTripsPanel();
+  
   // Password show/hide toggles
   document.querySelectorAll('.btn-show-password').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -5292,6 +5301,8 @@ function updateDriverUI() {
   } else {
     elements.driverAvatar.textContent = initials;
     elements.sidebarAvatar.textContent = initials;
+    // Also sync the small avatar in collapsed header
+    syncAvatarInitials(initials);
   }
   
   // Online/Offline Toggle - sync with driver status
@@ -6254,26 +6265,30 @@ let inHouseCountdownTimer = null;
  */
 function updateInHouseStatusWidget() {
   const widget = document.getElementById('inHouseStatusWidget');
-  if (!widget) return;
   
   // Get all upcoming trips for this driver (not just In-House)
   const upcomingTrips = state.trips.upcoming || [];
   
-  // If no upcoming trips, hide widget
+  // If no upcoming trips, hide widget and fullscreen countdown
   if (upcomingTrips.length === 0) {
-    widget.style.display = 'none';
+    if (widget) widget.style.display = 'none';
     if (inHouseCountdownTimer) {
       clearInterval(inHouseCountdownTimer);
       inHouseCountdownTimer = null;
     }
+    // Also update fullscreen countdown
+    updateFullscreenCountdown(null);
     return;
   }
   
-  // Show widget
-  widget.style.display = 'block';
+  // Show widget if exists
+  if (widget) widget.style.display = 'block';
   
   // Get the next upcoming trip (first in sorted list)
   const nextTrip = upcomingTrips[0];
+  
+  // Update fullscreen countdown with next trip
+  updateFullscreenCountdown(nextTrip);
   
   // Update trip info
   const confEl = document.getElementById('nextTripConf');
@@ -7711,6 +7726,262 @@ window.openStatusModal = function(tripId) {
   // Add to DOM
   document.body.insertAdjacentHTML('beforeend', modalHtml);
 };
+
+// ============================================
+// Collapsible Header & Fullscreen Countdown
+// ============================================
+
+let isHeaderExpanded = false;
+let isCountdownMinimized = false;
+let fullscreenCountdownTimer = null;
+
+/**
+ * Setup collapsible header event listeners
+ */
+function setupCollapsibleHeader() {
+  const expandBtn = document.getElementById('expandHeaderBtn');
+  const collapseBtn = document.getElementById('collapseHeaderBtn');
+  const panel = document.getElementById('expandableHeaderPanel');
+  
+  // Create backdrop element
+  let backdrop = document.querySelector('.panel-backdrop');
+  if (!backdrop) {
+    backdrop = document.createElement('div');
+    backdrop.className = 'panel-backdrop';
+    document.body.appendChild(backdrop);
+  }
+  
+  // Expand header panel
+  expandBtn?.addEventListener('click', () => {
+    panel?.classList.add('open');
+    backdrop?.classList.add('show');
+    isHeaderExpanded = true;
+  });
+  
+  // Collapse header panel
+  collapseBtn?.addEventListener('click', () => {
+    panel?.classList.remove('open');
+    backdrop?.classList.remove('show');
+    isHeaderExpanded = false;
+  });
+  
+  // Close on backdrop click
+  backdrop?.addEventListener('click', () => {
+    panel?.classList.remove('open');
+    backdrop?.classList.remove('show');
+    isHeaderExpanded = false;
+  });
+  
+  // Tab panel buttons
+  document.querySelectorAll('.tab-panel-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      switchTab(tab);
+      
+      // Update active state in panel
+      document.querySelectorAll('.tab-panel-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      // Close panel after selection
+      panel?.classList.remove('open');
+      backdrop?.classList.remove('show');
+      isHeaderExpanded = false;
+    });
+  });
+}
+
+/**
+ * Setup fullscreen countdown controls
+ */
+function setupFullscreenCountdown() {
+  const dismissBtn = document.getElementById('dismissCountdownBtn');
+  const overlay = document.getElementById('fullscreenCountdown');
+  const miniContainer = document.getElementById('miniTimerContainer');
+  
+  // Initially hide the overlay until we have a next trip
+  overlay?.classList.add('hidden');
+  
+  // Dismiss countdown (minimize)
+  dismissBtn?.addEventListener('click', () => {
+    overlay?.classList.add('hidden');
+    if (miniContainer) miniContainer.style.display = 'flex';
+    isCountdownMinimized = true;
+  });
+  
+  // Click on mini timer to expand again
+  miniContainer?.addEventListener('click', () => {
+    overlay?.classList.remove('hidden');
+    if (miniContainer) miniContainer.style.display = 'none';
+    isCountdownMinimized = false;
+  });
+}
+
+/**
+ * Setup pinned trips panel drag behavior
+ */
+function setupPinnedTripsPanel() {
+  const panel = document.getElementById('pinnedTripsPanel');
+  const handle = document.getElementById('pinnedTripsHandle');
+  
+  if (!panel || !handle) return;
+  
+  let startY = 0;
+  let isMinimized = false;
+  
+  // Toggle on handle click
+  handle.addEventListener('click', () => {
+    isMinimized = !isMinimized;
+    panel.classList.toggle('minimized', isMinimized);
+  });
+}
+
+/**
+ * Update both fullscreen and mini countdown timers
+ */
+function updateFullscreenCountdown(nextTrip) {
+  const overlay = document.getElementById('fullscreenCountdown');
+  const fullscreenTimer = document.getElementById('fullscreenCountdownTimer');
+  const fullscreenBar = document.getElementById('fullscreenCountdownBar');
+  const fullscreenConf = document.getElementById('fullscreenTripConf');
+  const fullscreenTime = document.getElementById('fullscreenTripTime');
+  const miniTimer = document.getElementById('miniCountdownTimer');
+  const miniContainer = document.getElementById('miniTimerContainer');
+  
+  if (!nextTrip) {
+    // No next trip - hide overlay and mini timer
+    overlay?.classList.add('hidden');
+    if (miniContainer) miniContainer.style.display = 'none';
+    if (fullscreenCountdownTimer) {
+      clearInterval(fullscreenCountdownTimer);
+      fullscreenCountdownTimer = null;
+    }
+    return;
+  }
+  
+  // Get pickup datetime
+  let pickupDateTime;
+  if (nextTrip.pickup_date_time) {
+    pickupDateTime = new Date(nextTrip.pickup_date_time);
+  } else if (nextTrip.pickup_datetime) {
+    pickupDateTime = new Date(nextTrip.pickup_datetime);
+  } else if (nextTrip.pickup_date && nextTrip.pickup_time) {
+    pickupDateTime = new Date(`${nextTrip.pickup_date}T${nextTrip.pickup_time}`);
+  } else if (nextTrip.pu_date && nextTrip.pu_time) {
+    pickupDateTime = new Date(`${nextTrip.pu_date}T${nextTrip.pu_time}`);
+  } else {
+    overlay?.classList.add('hidden');
+    if (miniContainer) miniContainer.style.display = 'none';
+    return;
+  }
+  
+  if (isNaN(pickupDateTime.getTime())) {
+    overlay?.classList.add('hidden');
+    if (miniContainer) miniContainer.style.display = 'none';
+    return;
+  }
+  
+  // Show overlay if not minimized
+  if (!isCountdownMinimized) {
+    overlay?.classList.remove('hidden');
+  } else {
+    if (miniContainer) miniContainer.style.display = 'flex';
+  }
+  
+  // Set trip info
+  const confNum = nextTrip.confirmation_number || nextTrip.id || '--';
+  if (fullscreenConf) fullscreenConf.textContent = `Conf #${confNum}`;
+  if (fullscreenTime) {
+    fullscreenTime.textContent = pickupDateTime.toLocaleString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  }
+  
+  // Clear existing timer
+  if (fullscreenCountdownTimer) {
+    clearInterval(fullscreenCountdownTimer);
+  }
+  
+  const totalDuration = 12 * 60 * 60 * 1000; // 12 hours
+  
+  const updateTimer = () => {
+    const now = new Date();
+    const timeUntil = pickupDateTime - now;
+    
+    if (timeUntil <= 0) {
+      if (fullscreenTimer) {
+        fullscreenTimer.textContent = 'NOW!';
+        fullscreenTimer.className = 'countdown-timer-large imminent';
+      }
+      if (miniTimer) {
+        miniTimer.textContent = 'NOW!';
+        miniTimer.className = 'mini-timer imminent';
+      }
+      if (fullscreenBar) {
+        fullscreenBar.style.width = '0%';
+        fullscreenBar.className = 'countdown-progress danger';
+      }
+      return;
+    }
+    
+    const hours = Math.floor(timeUntil / (1000 * 60 * 60));
+    const minutes = Math.floor((timeUntil % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((timeUntil % (1000 * 60)) / 1000);
+    
+    // Format display times
+    let fullDisplay, miniDisplay;
+    if (hours > 0) {
+      fullDisplay = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      miniDisplay = `${hours}:${minutes.toString().padStart(2, '0')}`;
+    } else {
+      fullDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      miniDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+    
+    if (fullscreenTimer) fullscreenTimer.textContent = fullDisplay;
+    if (miniTimer) miniTimer.textContent = miniDisplay;
+    
+    // Update styling based on urgency
+    const minutesUntil = timeUntil / 60000;
+    let urgencyClass = '';
+    let barClass = 'countdown-progress';
+    
+    if (minutesUntil < 15) {
+      urgencyClass = 'imminent';
+      barClass = 'countdown-progress danger';
+    } else if (minutesUntil < 60) {
+      urgencyClass = 'urgent';
+      barClass = 'countdown-progress warning';
+    }
+    
+    if (fullscreenTimer) fullscreenTimer.className = `countdown-timer-large ${urgencyClass}`;
+    if (miniTimer) miniTimer.className = `mini-timer ${urgencyClass}`;
+    
+    // Update progress bar
+    if (fullscreenBar) {
+      const percentage = Math.min(100, Math.max(0, (timeUntil / totalDuration) * 100));
+      fullscreenBar.style.width = `${percentage}%`;
+      fullscreenBar.className = barClass;
+    }
+  };
+  
+  updateTimer();
+  fullscreenCountdownTimer = setInterval(updateTimer, 1000);
+}
+
+/**
+ * Sync avatar initials between main and small avatars
+ */
+function syncAvatarInitials(initials) {
+  const mainAvatar = document.getElementById('driverAvatar');
+  const smallAvatar = document.getElementById('driverAvatarSmall');
+  
+  if (mainAvatar) mainAvatar.textContent = initials;
+  if (smallAvatar) smallAvatar.textContent = initials;
+}
 
 // ============================================
 // Service Worker Registration (PWA)
