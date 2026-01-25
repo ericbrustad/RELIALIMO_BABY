@@ -5299,6 +5299,9 @@ async function loadDashboard() {
   updateDriverUI();
   await loadVehicleTypes();
   await refreshTrips();
+  
+  // Initialize map immediately
+  initDriverViewMap();
 }
 
 function updateDriverUI() {
@@ -5859,7 +5862,9 @@ async function fetchDriverTripsWithServiceRole(driverId) {
 async function refreshTrips() {
   if (!state.driverId) return;
   
-  elements.fabRefresh.style.animation = 'spin 1s linear infinite';
+  if (elements.fabRefresh) {
+    elements.fabRefresh.style.animation = 'spin 1s linear infinite';
+  }
   
   try {
     // Fetch trips assigned to this driver using service role key (bypasses RLS)
@@ -6023,7 +6028,9 @@ async function refreshTrips() {
     console.error('[DriverPortal] Failed to refresh trips:', err);
     showToast('Failed to load trips', 'error');
   } finally {
-    elements.fabRefresh.style.animation = '';
+    if (elements.fabRefresh) {
+      elements.fabRefresh.style.animation = '';
+    }
   }
 }
 
@@ -7947,8 +7954,12 @@ function setupCollapsibleHeader() {
   // Profile button opens the sidebar menu
   expandBtn?.addEventListener('click', () => {
     const menuSidebar = document.getElementById('menuSidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
     if (menuSidebar) {
-      menuSidebar.classList.add('open');
+      menuSidebar.classList.add('active');
+    }
+    if (sidebarOverlay) {
+      sidebarOverlay.classList.add('active');
     }
   });
   
