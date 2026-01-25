@@ -6,6 +6,7 @@ import { DriverTracker } from './DriverTracker.js';
 import { FarmoutAutomationService } from './FarmoutAutomationService.js';
 import supabaseDb from './supabase-db.js';
 import { createReservation as createReservationAPI } from './api-service.js';
+import realtimeService, { subscribeToReservations } from './shared/realtime-service.js';
 
 // Use Supabase-only database (no localStorage)
 const db = supabaseDb;
@@ -564,6 +565,9 @@ class LimoReservationSystem {
     // Load initial data (will use company location)
     await this.loadInitialData();
 
+    // Setup real-time subscription for instant farmout updates
+    await this.setupRealtimeSubscription();
+
     this.farmoutAutomationService.init();
     
     // Setup event listeners
@@ -831,6 +835,23 @@ class LimoReservationSystem {
     // Update all views
     this.uiManager.updateAllViews();
     this.persistFarmoutSnapshot();
+  }
+
+  async setupRealtimeSubscription() {
+    try {
+      await realtimeService.init();
+      
+      this.unsubscribeRealtime = subscribeToReservations((eventType, newRecord, oldRecord) => {
+        console.log(`[Main] Real-time ${eventType}:`, newRecord?.confirmation_number || oldRecord?.confirmation_number);
+        
+        // Reload all views on any change for instant updates
+        this.updateListViewsFromDb();
+      });
+      
+      console.log('[Main] Real-time subscription active for instant farmout updates');
+    } catch (err) {
+      console.error('[Main] Failed to set up real-time subscription:', err);
+    }
   }
 
   async loadReservationsFromStorage() {
