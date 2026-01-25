@@ -633,12 +633,9 @@ body {
 }
 
 .driver-view-map {
-  flex: 4;
-  min-height: 80vh;
-  min-height: 80dvh;
-  max-height: 85vh;
-  max-height: 85dvh;
+  flex: 1;
   width: 100%;
+  height: 100%;
   background: var(--bg-card);
   border-radius: 0;
   overflow: hidden;
