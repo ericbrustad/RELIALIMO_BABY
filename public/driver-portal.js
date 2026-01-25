@@ -5284,23 +5284,35 @@ function updateDriverUI() {
   const status = driver.driver_status || 'available';
   const statusMeta = STATUS_META[status] || STATUS_META.available;
   
-  // Header
-  elements.driverName.textContent = fullName;
-  elements.driverStatusBadge.innerHTML = `
-    <span class="status-dot ${statusMeta.color}"></span>
-    ${statusMeta.label}
-  `;
+  // Header (may not exist if panel was removed)
+  if (elements.driverName) {
+    elements.driverName.textContent = fullName;
+  }
+  if (elements.driverStatusBadge) {
+    elements.driverStatusBadge.innerHTML = `
+      <span class="status-dot ${statusMeta.color}"></span>
+      ${statusMeta.label}
+    `;
+  }
   
   // Sidebar
-  elements.sidebarName.textContent = fullName;
-  elements.sidebarEmail.textContent = driver.email || '';
+  if (elements.sidebarName) {
+    elements.sidebarName.textContent = fullName;
+  }
+  if (elements.sidebarEmail) {
+    elements.sidebarEmail.textContent = driver.email || '';
+  }
   
   // Update avatars with photo or initials
   if (driver.profile_photo_url) {
     updateDriverAvatar(driver.profile_photo_url);
   } else {
-    elements.driverAvatar.textContent = initials;
-    elements.sidebarAvatar.textContent = initials;
+    if (elements.driverAvatar) {
+      elements.driverAvatar.textContent = initials;
+    }
+    if (elements.sidebarAvatar) {
+      elements.sidebarAvatar.textContent = initials;
+    }
     // Also sync the small avatar in collapsed header
     syncAvatarInitials(initials);
   }
