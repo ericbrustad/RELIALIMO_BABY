@@ -1832,6 +1832,20 @@ async function bookTrip(includeReturn = false) {
     const puTime = puTimeFull ? puTimeFull.substring(0, 5) : '';
     
     // Build form_snapshot in the format the reservation form expects
+    console.log('[CustomerPortal] Building form_snapshot with:', {
+      statusValue, farmOptionValue, eFarmStatusValue,
+      pickup_date_time: reservationData.pickup_date_time,
+      pickup_address: reservationData.pickup_address,
+      dropoff_address: reservationData.dropoff_address,
+      vehicle_type: reservationData.vehicle_type,
+      service_type: reservationData.service_type,
+      assigned_driver_id: reservationData.assigned_driver_id,
+      fleet_vehicle_id: reservationData.fleet_vehicle_id,
+      customer: state.customer,
+      passenger_first_name: reservationData.passenger_first_name,
+      passenger_last_name: reservationData.passenger_last_name
+    });
+    
     dbData.form_snapshot = {
       source: 'customer_portal',
       booked_at: new Date().toISOString(),

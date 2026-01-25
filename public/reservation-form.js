@@ -8481,7 +8481,16 @@ class ReservationForm {
   }
 
   applyReservationSnapshot(snapshot) {
-    if (!snapshot || typeof snapshot !== 'object') return;
+    console.log('📸 [applyReservationSnapshot] Received snapshot:', snapshot);
+    console.log('📸 [applyReservationSnapshot] Billing:', snapshot?.billing);
+    console.log('📸 [applyReservationSnapshot] Passenger:', snapshot?.passenger);
+    console.log('📸 [applyReservationSnapshot] Routing:', snapshot?.routing);
+    console.log('📸 [applyReservationSnapshot] Details:', snapshot?.details);
+    
+    if (!snapshot || typeof snapshot !== 'object') {
+      console.warn('⚠️ [applyReservationSnapshot] No valid snapshot provided');
+      return;
+    }
 
     this.safeSetValue('billingAccountSearch', snapshot.billing?.account || '');
     this.safeSetValue('billingCompany', snapshot.billing?.company || '');
