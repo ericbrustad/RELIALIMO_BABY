@@ -1795,9 +1795,8 @@ async function bookTrip(includeReturn = false) {
     }
     
     // Build form_snapshot with extra data
-    // Determine status label based on assignment state
+    // Determine status label based on assignment state (autoFarmEnabled already declared above)
     let statusLabel, statusValue;
-    const autoFarmEnabled = isAutoFarmEnabled();
     if (autoFarmEnabled) {
       statusLabel = 'Farmout Unassigned';
       statusValue = 'farmout_unassigned';
