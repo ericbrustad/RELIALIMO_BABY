@@ -2089,12 +2089,19 @@ function buildReservationData() {
   );
   const vehicleTypeName = selectedVehicleTypeData?.name || state.selectedVehicleType || 'Black SUV';
   
-  // Determine service type based on trip type selection
+  // Determine service type CODE based on trip type selection
+  // Using codes that match the service_types table: P2P, HOURLY, AIRPORT
+  const pickupType = document.getElementById('pickupAddressSelect')?.value;
+  const dropoffType = document.getElementById('dropoffAddressSelect')?.value;
+  const isAirportTrip = pickupType === 'airport' || dropoffType === 'airport';
+  
   let serviceType;
   if (state.tripType === 'hourly') {
-    serviceType = 'Hourly';
+    serviceType = 'HOURLY';
+  } else if (isAirportTrip) {
+    serviceType = 'AIRPORT';
   } else {
-    serviceType = 'Point to Point';
+    serviceType = 'P2P';
   }
   
   // Get airline code for flight number
