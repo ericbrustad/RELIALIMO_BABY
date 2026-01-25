@@ -1816,15 +1816,73 @@ async function bookTrip(includeReturn = false) {
       statusValue = 'in_house_unassigned';
     }
     
+    // Parse pickup date/time for form
+    const pickupDT = reservationData.pickup_date_time || '';
+    const [puDate, puTimeFull] = pickupDT.split('T');
+    const puTime = puTimeFull ? puTimeFull.substring(0, 5) : '';
+    
+    // Build form_snapshot in the format the reservation form expects
     dbData.form_snapshot = {
-      ...extraData,
       source: 'customer_portal',
       booked_at: new Date().toISOString(),
-      // Status info for reservations list display
+      
+      // Billing info - use customer account data
+      billing: {
+        firstName: state.customer?.first_name || '',
+        lastName: state.customer?.last_name || '',
+        phone: state.customer?.cell_phone || state.customer?.phone || '',
+        email: state.customer?.email || '',
+        company: state.customer?.company_name || ''
+      },
+      
+      // Passenger info
+      passenger: {
+        firstName: reservationData.passenger_first_name || '',
+        lastName: reservationData.passenger_last_name || '',
+        phone: reservationData.passenger_phone || '',
+        email: reservationData.passenger_email || ''
+      },
+      
+      // Routing - pickup and dropoff stops
+      routing: {
+        stops: [
+          {
+            stopType: 'pickup',
+            type: 'pickup',
+            fullAddress: reservationData.pickup_address || '',
+            address1: reservationData.pickup_address || ''
+          },
+          {
+            stopType: 'dropoff',
+            type: 'dropoff',
+            fullAddress: reservationData.dropoff_address || '',
+            address1: reservationData.dropoff_address || ''
+          }
+        ],
+        tripNotes: reservationData.special_instructions || ''
+      },
+      
+      // Details - all the form fields
       details: {
         resStatus: statusValue,
-        resStatusLabel: statusLabel
-      }
+        resStatusLabel: statusLabel,
+        vehicleType: reservationData.vehicle_type || '',
+        serviceType: reservationData.service_type || '',
+        puDate: puDate || '',
+        puTime: puTime || '',
+        numPax: reservationData.passenger_count || 1,
+        farmOption: reservationData.farm_option || 'in-house',
+        eFarmStatus: reservationData.farmout_status || '',
+        driverId: reservationData.assigned_driver_id || null,
+        driverName: reservationData.assigned_driver_name || '',
+        fleetVehicleId: reservationData.fleet_vehicle_id || null,
+        grandTotal: reservationData.total_price || 0,
+        rateAmount: reservationData.rate_amount || 0,
+        rateType: reservationData.rate_type || ''
+      },
+      
+      // Store extra data that doesn't fit the structure
+      extra: extraData
     };
     
     // Map some fields to valid column names
