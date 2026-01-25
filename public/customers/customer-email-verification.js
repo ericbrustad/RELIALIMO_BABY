@@ -264,6 +264,7 @@ class CustomerEmailVerificationService {
 
     // Send email via API
     try {
+      console.log('[EmailVerification] Sending verification email to:', email);
       const response = await fetch('/api/send-email', {
         method: 'POST',
         headers: {
@@ -277,14 +278,17 @@ class CustomerEmailVerificationService {
         })
       });
 
+      const responseData = await response.json();
+      console.log('[EmailVerification] API response:', response.status, responseData);
+
       if (!response.ok) {
-        throw new Error('Failed to send verification email');
+        throw new Error(responseData.error || 'Failed to send verification email');
       }
 
-      console.log('✅ Verification email sent to:', email);
+      console.log('✅ Verification email sent to:', email, 'Message ID:', responseData.messageId);
       return { success: true, token, verificationUrl, portalSlug };
     } catch (err) {
-      console.error('Failed to send verification email:', err);
+      console.error('[EmailVerification] Failed to send verification email:', err.message || err);
       
       // Try fallback method (Resend API directly)
       try {
