@@ -1556,7 +1556,7 @@ async function checkDriverConflict(driverId, pickupDateTime) {
     
     // Get all reservations for this driver on the same day
     const response = await fetch(
-      `${creds.url}/rest/v1/reservations?driver_id=eq.${driverId}&pickup_date_time=gte.${pickupDate}T00:00:00&pickup_date_time=lte.${pickupDate}T23:59:59&select=id,pickup_date_time,garage_out_time,garage_in_time,status`,
+      `${creds.url}/rest/v1/reservations?assigned_driver_id=eq.${driverId}&pickup_datetime=gte.${pickupDate}T00:00:00&pickup_datetime=lte.${pickupDate}T23:59:59&select=id,pickup_datetime,garage_out_time,garage_in_time,status`,
       {
         headers: {
           'apikey': creds.anonKey
@@ -1584,26 +1584,27 @@ async function checkDriverConflict(driverId, pickupDateTime) {
       
       // Get garage times from reservation, or calculate from pickup
       let garageOut, garageIn;
+      const resPickupTime = res.pickup_datetime || res.pickup_date_time;
       
       if (res.garage_out_time) {
         // Parse garage times (they're stored as time strings like "14:30")
         const [outHour, outMin] = res.garage_out_time.split(':').map(Number);
-        garageOut = new Date(new Date(res.pickup_date_time).setHours(outHour, outMin, 0, 0));
+        garageOut = new Date(new Date(resPickupTime).setHours(outHour, outMin, 0, 0));
       } else {
         // Default: 30 min before pickup
-        garageOut = new Date(new Date(res.pickup_date_time).getTime() - 30 * 60000);
+        garageOut = new Date(new Date(resPickupTime).getTime() - 30 * 60000);
       }
       
       if (res.garage_in_time) {
         const [inHour, inMin] = res.garage_in_time.split(':').map(Number);
-        garageIn = new Date(new Date(res.pickup_date_time).setHours(inHour, inMin, 0, 0));
+        garageIn = new Date(new Date(resPickupTime).setHours(inHour, inMin, 0, 0));
         // If garage in is before garage out, it must be next day
         if (garageIn < garageOut) {
           garageIn.setDate(garageIn.getDate() + 1);
         }
       } else {
         // Default: 2 hours after pickup
-        garageIn = new Date(new Date(res.pickup_date_time).getTime() + 150 * 60000);
+        garageIn = new Date(new Date(resPickupTime).getTime() + 150 * 60000);
       }
       
       // Check for overlap: new trip's garage window overlaps with existing trip
@@ -1743,12 +1744,19 @@ async function bookTrip(includeReturn = false) {
       account_id: reservationData.account_id,
       pickup_address: reservationData.pickup_address,
       dropoff_address: reservationData.dropoff_address,
+      vehicle_type: reservationData.vehicle_type,
+      service_type: reservationData.service_type,
+      status: reservationData.status,
       farm_option: reservationData.farm_option,
       farmout_mode: reservationData.farmout_mode,
+      farmout_status: reservationData.farmout_status,
       assigned_driver_id: reservationData.assigned_driver_id,
       assigned_driver_name: reservationData.assigned_driver_name,
       driver_status: reservationData.driver_status,
-      farmout_status: reservationData.farmout_status
+      fleet_vehicle_id: reservationData.fleet_vehicle_id,
+      grand_total: reservationData.total_price,
+      rate_amount: reservationData.rate_amount,
+      rate_type: reservationData.rate_type
     });
     
     // Save passenger to customer_passengers table for future use
@@ -1839,6 +1847,21 @@ async function bookTrip(includeReturn = false) {
     }
     
     // Create reservation with filtered data
+    // Log what's being sent to the database
+    console.log('[CustomerPortal] DB Data being saved:', {
+      vehicle_type: dbData.vehicle_type,
+      service_type: dbData.service_type,
+      status: dbData.status,
+      assigned_driver_id: dbData.assigned_driver_id,
+      assigned_driver_name: dbData.assigned_driver_name,
+      driver_status: dbData.driver_status,
+      fleet_vehicle_id: dbData.fleet_vehicle_id,
+      farm_option: dbData.farm_option,
+      farmout_status: dbData.farmout_status,
+      grand_total: dbData.grand_total,
+      rate_amount: dbData.rate_amount
+    });
+    
     const creds = getSupabaseCredentials();
     const response = await fetch(`${creds.url}/rest/v1/reservations`, {
       method: 'POST',
@@ -2443,7 +2466,7 @@ async function loadTrips() {
   try {
     const creds = getSupabaseCredentials();
     const response = await fetch(
-      `${creds.url}/rest/v1/reservations?account_id=eq.${state.customer?.id}&select=*&order=pickup_date_time.desc`,
+      `${creds.url}/rest/v1/reservations?account_id=eq.${state.customer?.id}&select=*&order=pickup_datetime.desc`,
       {
         headers: {
           'apikey': creds.anonKey,
