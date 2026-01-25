@@ -2105,8 +2105,7 @@ function buildReservationData() {
   
   // Determine service type CODE based on trip type selection
   // Using codes that match the service_types table: P2P, HOURLY, AIRPORT
-  const pickupType = document.getElementById('pickupAddressSelect')?.value;
-  const dropoffType = document.getElementById('dropoffAddressSelect')?.value;
+  // pickupType and dropoffType already declared above
   const isAirportTrip = pickupType === 'airport' || dropoffType === 'airport';
   
   let serviceType;
