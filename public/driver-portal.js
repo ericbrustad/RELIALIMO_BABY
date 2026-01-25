@@ -1864,31 +1864,12 @@ function setupSplashChecklist() {
 // ============================================
 let driverViewMap = null;
 let driverLocationMarker = null;
+let currentDriverLocation = null;
 
-// Mapbox access token (same as MapboxService.js)
-const MAPBOX_ACCESS_TOKEN = 'pk.eyJ1IjoiZXJpeGNvYWNoIiwiYSI6ImNtaDdocXI0NDB1dW4yaW9tZWFka3NocHAifQ.h1czc1VBwbBJQbdJTU5HHA';
+// Google Maps API Key
+const GOOGLE_MAPS_API_KEY = 'AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartNGg';
 
-// Wait for Mapbox GL JS to load
-function waitForMapbox(timeout = 5000) {
-  return new Promise((resolve, reject) => {
-    if (window.mapboxgl) {
-      resolve(window.mapboxgl);
-      return;
-    }
-    
-    const startTime = Date.now();
-    const checkInterval = setInterval(() => {
-      if (window.mapboxgl) {
-        clearInterval(checkInterval);
-        resolve(window.mapboxgl);
-      } else if (Date.now() - startTime > timeout) {
-        clearInterval(checkInterval);
-        reject(new Error('Mapbox GL JS did not load in time'));
-      }
-    }, 100);
-  });
-}
-
+// Initialize map using Google Maps Embed (reliable, no billing issues)
 async function initDriverViewMap() {
   const mapContainer = document.getElementById('driverViewMap');
   if (!mapContainer) {
@@ -1896,90 +1877,111 @@ async function initDriverViewMap() {
     return;
   }
   
-  // If map already initialized, just resize
+  // If already initialized, skip
   if (driverViewMap) {
-    console.log('[DriverPortal] Map already initialized, resizing');
-    driverViewMap.resize();
+    console.log('[DriverPortal] Map already initialized');
     return;
   }
   
   try {
-    // Wait for Mapbox to be available
-    console.log('[DriverPortal] Waiting for Mapbox GL JS...');
-    await waitForMapbox();
-    console.log('[DriverPortal] Mapbox GL JS loaded');
-    
-    mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
-    
     // Get driver's current location
     const position = await getCurrentPosition().catch(err => {
       console.warn('[DriverPortal] Could not get location:', err.message);
       return null;
     });
-    const center = position 
-      ? [position.coords.longitude, position.coords.latitude]
-      : [-95.3698, 29.7604]; // Default to Houston [lng, lat]
     
-    console.log('[DriverPortal] Initializing map at', center);
+    let lat = 29.7604; // Default Houston
+    let lng = -95.3698;
     
-    // Clear placeholder
-    const placeholder = mapContainer.querySelector('.map-placeholder');
-    if (placeholder) placeholder.style.display = 'none';
-    
-    driverViewMap = new mapboxgl.Map({
-      container: mapContainer,
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: center,
-      zoom: 12
-    });
-    
-    // Add navigation controls
-    driverViewMap.addControl(new mapboxgl.NavigationControl(), 'top-right');
-    
-    // Add driver's location marker
     if (position) {
-      // Create a custom marker element
-      const markerEl = document.createElement('div');
-      markerEl.className = 'driver-location-marker';
-      markerEl.innerHTML = `
-        <div style="
-          width: 24px;
-          height: 24px;
-          background: #4f46e5;
-          border: 3px solid #fff;
-          border-radius: 50%;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-        "></div>
-      `;
-      
-      driverLocationMarker = new mapboxgl.Marker(markerEl)
-        .setLngLat(center)
-        .addTo(driverViewMap);
+      lat = position.coords.latitude;
+      lng = position.coords.longitude;
+      currentDriverLocation = { lat, lng };
     }
     
-    // Add geolocate control
-    const geolocate = new mapboxgl.GeolocateControl({
-      positionOptions: { enableHighAccuracy: true },
-      trackUserLocation: true,
-      showUserHeading: true
-    });
-    driverViewMap.addControl(geolocate, 'top-right');
+    console.log('[DriverPortal] Initializing map at', lat, lng);
     
-    console.log('[DriverPortal] Driver view Mapbox map initialized');
+    // Clear placeholder and insert Google Maps iframe
+    mapContainer.innerHTML = `
+      <iframe 
+        id="driverMapIframe"
+        src="https://www.google.com/maps/embed/v1/view?key=${GOOGLE_MAPS_API_KEY}&center=${lat},${lng}&zoom=14&maptype=roadmap"
+        style="width: 100%; height: 100%; border: none;"
+        allowfullscreen
+        loading="lazy"
+        referrerpolicy="no-referrer-when-downgrade">
+      </iframe>
+      <div class="map-overlay-controls">
+        <button type="button" id="recenterMapBtn" class="map-control-btn" onclick="recenterMap()">
+          📍 My Location
+        </button>
+      </div>
+    `;
+    
+    driverViewMap = true;
+    console.log('[DriverPortal] Google Maps embed initialized');
+    
+    // Start watching location for updates
+    startLocationTracking();
+    
   } catch (err) {
-    console.error('[DriverPortal] Mapbox map initialization error:', err);
-    // Show error in placeholder
-    const placeholder = mapContainer.querySelector('.map-placeholder');
-    if (placeholder) {
-      placeholder.innerHTML = `
-        <div class="map-loading">
-          <span>⚠️</span>
-          <p>Map failed to load: ${err.message}</p>
-        </div>
-      `;
-      placeholder.style.display = 'flex';
-    }
+    console.error('[DriverPortal] Map initialization error:', err);
+    mapContainer.innerHTML = `
+      <div class="map-loading" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
+        <span style="font-size: 48px;">⚠️</span>
+        <p style="color: white; margin-top: 12px;">Map failed to load</p>
+        <button type="button" class="btn btn-primary" onclick="initDriverViewMap()" style="margin-top: 12px;">
+          🔄 Retry
+        </button>
+      </div>
+    `;
   }
+}
+
+// Recenter map on current location
+window.recenterMap = async function() {
+  try {
+    const position = await getCurrentPosition();
+    const lat = position.coords.latitude;
+    const lng = position.coords.longitude;
+    currentDriverLocation = { lat, lng };
+    
+    const iframe = document.getElementById('driverMapIframe');
+    if (iframe) {
+      iframe.src = `https://www.google.com/maps/embed/v1/view?key=${GOOGLE_MAPS_API_KEY}&center=${lat},${lng}&zoom=15&maptype=roadmap`;
+    }
+    
+    showToast('📍 Map centered on your location', 'success');
+  } catch (err) {
+    showToast('Could not get your location', 'error');
+  }
+};
+
+// Show directions on the embedded map
+function showDirectionsOnMap(destination, origin = null) {
+  const iframe = document.getElementById('driverMapIframe');
+  if (!iframe) return;
+  
+  const originStr = origin || (currentDriverLocation ? `${currentDriverLocation.lat},${currentDriverLocation.lng}` : 'current+location');
+  const destEncoded = encodeURIComponent(destination);
+  
+  iframe.src = `https://www.google.com/maps/embed/v1/directions?key=${GOOGLE_MAPS_API_KEY}&origin=${originStr}&destination=${destEncoded}&mode=driving`;
+}
+
+// Start location tracking in background
+function startLocationTracking() {
+  if (!navigator.geolocation) return;
+  
+  navigator.geolocation.watchPosition(
+    (position) => {
+      currentDriverLocation = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude
+      };
+    },
+    (err) => console.warn('[DriverPortal] Location tracking error:', err.message),
+    { enableHighAccuracy: true, maximumAge: 30000 }
+  );
 }
 
 function getCurrentPosition() {
@@ -6919,13 +6921,15 @@ window.startTrip = async function(tripId) {
     // Send passenger notification
     await sendPassengerNotification(tripId, 'on_the_way');
     
-    showToast('🚗 On the way! Navigation opening...', 'success');
+    showToast('🚗 On the way! Navigation ready.', 'success');
     switchTab('active');
     await refreshTrips();
     
-    // Open navigation in background (opens in CarPlay/Android Auto)
+    // Show directions on main map
     if (pickupAddress) {
-      // Small delay to let the UI update first
+      showDirectionsOnMap(pickupAddress);
+      
+      // Also open external navigation for turn-by-turn
       setTimeout(() => {
         openNavigationInBackground(pickupAddress);
       }, 500);
@@ -6952,6 +6956,19 @@ window.updateTripStatus = async function(tripId, newStatus) {
       showToast('⏳ Waiting for passenger...', 'info');
     } else if (newStatus === 'passenger_onboard') {
       showToast('🚗 Customer in car! Drive safe.', 'success');
+      
+      // Show directions to dropoff
+      const trip = state.trips.active;
+      const dropoffAddress = trip?.dropoff_address || trip?.dropoff_location || '';
+      if (dropoffAddress) {
+        showDirectionsOnMap(dropoffAddress);
+        speakAnnouncement('Navigating to dropoff');
+        
+        // Open external navigation for turn-by-turn
+        setTimeout(() => {
+          openNavigationInBackground(dropoffAddress);
+        }, 500);
+      }
     } else if (newStatus === 'done') {
       // When driver marks as Done, show the post-trip incidentals modal
       console.log('[DriverPortal] Opening post-trip modal for trip:', tripId);

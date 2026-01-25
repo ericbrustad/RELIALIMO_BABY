@@ -4852,3 +4852,40 @@ body {
 .active-trip-status-bar.getting_ready {
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
 }
+
+/* Map Overlay Controls */
+.map-overlay-controls {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.map-control-btn {
+  background: rgba(26, 26, 46, 0.9);
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: var(--radius-full);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  backdrop-filter: blur(8px);
+  transition: all 0.2s;
+}
+
+.map-control-btn:hover {
+  background: var(--primary);
+  transform: scale(1.05);
+}
+
+.map-control-btn:active {
+  transform: scale(0.98);
+}
