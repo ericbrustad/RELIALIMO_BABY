@@ -6952,8 +6952,12 @@ window.handleStatusButtonClick = async function(button, tripId, newStatus) {
 };
 
 window.updateTripStatus = async function(tripId, newStatus) {
+  console.log('[DriverPortal] updateTripStatus called:', tripId, newStatus);
+  
   try {
+    console.log('[DriverPortal] Calling updateReservationStatus...');
     await updateReservationStatus(tripId, { driver_status: newStatus });
+    console.log('[DriverPortal] updateReservationStatus succeeded');
     
     // Send notifications for certain statuses
     if (newStatus === 'enroute') {
@@ -6967,9 +6971,19 @@ window.updateTripStatus = async function(tripId, newStatus) {
     } else if (newStatus === 'passenger_onboard') {
       showToast('🚗 Customer in car! Drive safe.', 'success');
     } else if (newStatus === 'done') {
+      console.log('[DriverPortal] Processing done status...');
       // When driver marks as Done, show the post-trip incidentals modal
-      playNotificationSound('trip_complete');
-      stopTripTimer();
+      try {
+        playNotificationSound('trip_complete');
+      } catch (e) {
+        console.warn('[DriverPortal] Sound error:', e);
+      }
+      
+      try {
+        stopTripTimer();
+      } catch (e) {
+        console.warn('[DriverPortal] stopTripTimer error:', e);
+      }
       
       // Reset button states before opening modal
       document.querySelectorAll('.status-action-btn').forEach(btn => {
@@ -6978,14 +6992,17 @@ window.updateTripStatus = async function(tripId, newStatus) {
       });
       
       // Check if modal exists
-      if (!elements.postTripModal) {
-        console.error('[DriverPortal] postTripModal element not found');
-        showToast('Error: Post-trip form not found', 'error');
+      const postTripModal = document.getElementById('postTripModal');
+      if (!postTripModal) {
+        console.error('[DriverPortal] postTripModal element not found in DOM');
+        showToast('Trip completed! ✅', 'success');
+        await refreshTrips();
         return;
       }
       
+      console.log('[DriverPortal] Opening postTripModal...');
       openModal('postTripModal');
-      elements.postTripModal.dataset.tripId = tripId;
+      postTripModal.dataset.tripId = tripId;
       
       // Pre-fill base fare
       const trip = state.trips.active;
@@ -6995,10 +7012,19 @@ window.updateTripStatus = async function(tripId, newStatus) {
       }
       return; // Don't refresh yet, wait for post-trip form
     } else if (newStatus === 'completed') {
+      console.log('[DriverPortal] Processing completed status...');
       // Play completion sound
-      playNotificationSound('trip_complete');
+      try {
+        playNotificationSound('trip_complete');
+      } catch (e) {
+        console.warn('[DriverPortal] Sound error:', e);
+      }
       
-      stopTripTimer();
+      try {
+        stopTripTimer();
+      } catch (e) {
+        console.warn('[DriverPortal] stopTripTimer error:', e);
+      }
       
       // Reset button states before opening modal
       document.querySelectorAll('.status-action-btn').forEach(btn => {
@@ -7007,15 +7033,17 @@ window.updateTripStatus = async function(tripId, newStatus) {
       });
       
       // Check if modal exists
-      if (!elements.postTripModal) {
-        console.error('[DriverPortal] postTripModal element not found');
-        showToast('Error: Post-trip form not found', 'error');
+      const postTripModal = document.getElementById('postTripModal');
+      if (!postTripModal) {
+        console.error('[DriverPortal] postTripModal element not found in DOM');
+        showToast('Trip completed! ✅', 'success');
+        await refreshTrips();
         return;
       }
       
       openModal('postTripModal');
       // Store trip ID for post-trip form
-      elements.postTripModal.dataset.tripId = tripId;
+      postTripModal.dataset.tripId = tripId;
       
       // Pre-fill the base fare from trip data
       const trip = state.trips.active;
