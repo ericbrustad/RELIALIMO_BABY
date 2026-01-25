@@ -1695,8 +1695,7 @@ async function bookTrip(includeReturn = false) {
       reservationData.farmout_mode = 'automatic';
       console.log('[CustomerPortal] Auto-farm enabled: Setting to Farm-out Unassigned (automatic)');
     } else {
-      // AUTO-FARM OFF: Set to In-House with manual mode
-      reservationData.farm_option = 'in-house';
+      // AUTO-FARM OFF: Try to assign default driver
       reservationData.farmout_mode = 'manual';
       
       // Try to find an available default driver
@@ -1704,14 +1703,15 @@ async function bookTrip(includeReturn = false) {
       const availableDriver = await findAvailableDefaultDriver(pickupDateTime);
       
       if (availableDriver) {
-        // Assign the default driver - shows as In-House Assigned in farmout grid
-        // Use assigned_driver_id for driver portal compatibility
+        // Assign the default driver
+        // Set Farm-out radio with In House Assigned eFarm status
+        reservationData.farm_option = 'farm-out';  // Radio button set to Farm-out
         reservationData.assigned_driver_id = availableDriver.id;
         reservationData.assigned_driver_name = `${availableDriver.first_name || ''} ${availableDriver.last_name || ''}`.trim();
         reservationData.driver_phone = availableDriver.phone || availableDriver.cell_phone;
         reservationData.driver_status = 'assigned'; // Directly assigned, not offered
         reservationData.status = 'confirmed'; // Valid DB status for assigned trips
-        reservationData.farmout_status = 'in_house_assigned'; // Key for driver portal to see trip
+        reservationData.farmout_status = 'In House Assigned'; // Shows as In House Assigned in eFarm status
         
         // Set fleet vehicle from driver's assigned vehicle
         if (availableDriver.fleet_vehicle_id) {
@@ -1722,9 +1722,10 @@ async function bookTrip(includeReturn = false) {
         console.log(`[CustomerPortal] ✅ Assigned default driver: ${reservationData.assigned_driver_name} (${availableDriver.id})`);
       } else {
         // No default driver available - leave unassigned In-House
+        reservationData.farm_option = 'in-house';
         reservationData.assigned_driver_id = null;
         reservationData.status = 'pending'; // Valid DB status for unassigned trips
-        reservationData.farmout_status = 'in_house_unassigned'; // In-House but no driver yet
+        reservationData.farmout_status = 'unassigned'; // In-House but no driver yet
         console.log('[CustomerPortal] No default driver available: Setting to In-House Unassigned');
       }
     }
@@ -1803,17 +1804,26 @@ async function bookTrip(includeReturn = false) {
     }
     
     // Build form_snapshot with extra data
-    // Determine status label based on assignment state (autoFarmEnabled already declared above)
-    let statusLabel, statusValue;
+    // Determine status and farm settings based on assignment state (autoFarmEnabled already declared above)
+    let statusLabel, statusValue, farmOptionValue, eFarmStatusValue;
     if (autoFarmEnabled) {
+      // Auto-farm mode: Farm-out with unassigned status
       statusLabel = 'Farmout Unassigned';
-      statusValue = 'farmout_unassigned';
+      statusValue = 'unassigned';
+      farmOptionValue = 'farm-out';
+      eFarmStatusValue = 'unassigned';
     } else if (reservationData.assigned_driver_id) {
-      statusLabel = 'In-House Assigned';
-      statusValue = 'in_house_assigned';
+      // Default driver assigned: Farm-out radio with In-House Assigned eFarm status
+      statusLabel = 'Assigned';
+      statusValue = 'assigned';
+      farmOptionValue = 'farm-out';  // Radio button set to Farm-out
+      eFarmStatusValue = 'In House Assigned';  // eFarm status shows In House Assigned
     } else {
-      statusLabel = 'In-House Unassigned';
-      statusValue = 'in_house_unassigned';
+      // No driver: In-House unassigned
+      statusLabel = 'Unassigned';
+      statusValue = 'unassigned';
+      farmOptionValue = 'in-house';
+      eFarmStatusValue = 'unassigned';
     }
     
     // Parse pickup date/time for form
@@ -1871,8 +1881,9 @@ async function bookTrip(includeReturn = false) {
         puDate: puDate || '',
         puTime: puTime || '',
         numPax: reservationData.passenger_count || 1,
-        farmOption: reservationData.farm_option || 'in-house',
-        eFarmStatus: reservationData.farmout_status || '',
+        farmOption: farmOptionValue,  // Use the calculated farm option
+        eFarmStatus: eFarmStatusValue,  // Use the calculated eFarm status
+        efarmStatus: eFarmStatusValue,  // Also set lowercase version
         driverId: reservationData.assigned_driver_id || null,
         driverName: reservationData.assigned_driver_name || '',
         fleetVehicleId: reservationData.fleet_vehicle_id || null,
