@@ -6526,8 +6526,20 @@ function renderActiveTripCard(trip) {
   const passengerName = trip.passenger_name || trip.passenger_first_name || 'Passenger';
   const passengerPhone = trip.passenger_phone || trip.passenger_cell || '';
   
-  // Parse pickup date/time for display
-  const pickupDateTime = new Date(trip.pickup_date_time || trip.pickup_date);
+  // Parse pickup date/time for display with fallback
+  let pickupDateTime = new Date(trip.pickup_date_time || trip.pickup_datetime || trip.pickup_date);
+  
+  // Handle pu_date + pu_time format as fallback
+  if (isNaN(pickupDateTime.getTime()) && trip.pu_date) {
+    const timeStr = trip.pu_time || '12:00';
+    pickupDateTime = new Date(`${trip.pu_date}T${timeStr}`);
+  }
+  
+  // If still invalid, use current time as fallback
+  if (isNaN(pickupDateTime.getTime())) {
+    pickupDateTime = new Date();
+  }
+  
   const pickupDay = pickupDateTime.toLocaleDateString('en-US', { weekday: 'short' });
   const pickupDate = pickupDateTime.getDate();
   const pickupMonth = pickupDateTime.toLocaleDateString('en-US', { month: 'short' });
@@ -6906,16 +6918,25 @@ window.updateTripStatus = async function(tripId, newStatus) {
       showToast('🚗 Customer in car! Drive safe.', 'success');
     } else if (newStatus === 'done') {
       // When driver marks as Done, show the post-trip incidentals modal
+      console.log('[DriverPortal] Opening post-trip modal for trip:', tripId);
       playNotificationSound('trip_complete');
       stopTripTimer();
-      openModal('postTripModal');
-      elements.postTripModal.dataset.tripId = tripId;
       
-      // Pre-fill base fare
-      const trip = state.trips.active;
-      if (trip) {
-        state.activeTripBaseFare = parseFloat(trip.driver_pay) || parseFloat(trip.base_fare) || 0;
-        updateTripTotals();
+      // Find modal element directly in case elements cache is stale
+      const postTripModal = document.getElementById('postTripModal');
+      if (postTripModal) {
+        postTripModal.dataset.tripId = tripId;
+        openModal('postTripModal');
+        
+        // Pre-fill base fare
+        const trip = state.trips.active;
+        if (trip) {
+          state.activeTripBaseFare = parseFloat(trip.driver_pay) || parseFloat(trip.base_fare) || 0;
+          updateTripTotals();
+        }
+      } else {
+        console.error('[DriverPortal] postTripModal not found!');
+        showToast('Error opening trip completion form', 'error');
       }
       return; // Don't refresh yet, wait for post-trip form
     } else if (newStatus === 'completed') {
@@ -7513,8 +7534,8 @@ function getStatusActionLabel(status) {
     case 'arrived': return 'Arrived';
     case 'waiting': return 'Waiting';
     case 'passenger_onboard': return 'Customer in Car';
-    case 'done': return 'Done';
-    case 'completed': return 'Complete Trip';
+    case 'done': return 'Complete Trip';
+    case 'completed': return 'Submit & Finish';
     default: return STATUS_META[status]?.label || status;
   }
 }
