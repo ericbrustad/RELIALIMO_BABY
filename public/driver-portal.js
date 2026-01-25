@@ -6609,12 +6609,6 @@ function renderActiveTripCard(trip) {
         </div>
       ` : ''}
       
-      <!-- Trip Timer -->
-      <div class="active-trip-timer">
-        <div class="timer-value" id="tripTimer">${elapsed}</div>
-        <div class="timer-label">Trip Duration</div>
-      </div>
-      
       <!-- Route with Navigate buttons -->
       <div class="trip-route-active">
         <div class="route-point">
