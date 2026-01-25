@@ -2669,9 +2669,9 @@ async function showProfileScreen() {
   
   // Populate contact info (read-only)
   const fullName = `${driver.first_name || ''} ${driver.last_name || ''}`.trim();
-  elements.profileFullName.textContent = fullName || '--';
-  elements.profileEmail.textContent = driver.email || '--';
-  elements.profilePhone.textContent = formatPhone(driver.cell_phone || driver.phone) || '--';
+  if (elements.profileFullName) elements.profileFullName.textContent = fullName || '--';
+  if (elements.profileEmail) elements.profileEmail.textContent = driver.email || '--';
+  if (elements.profilePhone) elements.profilePhone.textContent = formatPhone(driver.cell_phone || driver.phone) || '--';
   
   // Populate portal URL
   const portalUrl = getDriverPortalUrl(driver);
@@ -2682,20 +2682,22 @@ async function showProfileScreen() {
   
   // Load profile photo
   if (driver.profile_photo_url) {
-    elements.profilePhoto.src = driver.profile_photo_url;
-    elements.profilePhoto.style.display = 'block';
-    elements.profilePhotoPlaceholder.style.display = 'none';
+    if (elements.profilePhoto) {
+      elements.profilePhoto.src = driver.profile_photo_url;
+      elements.profilePhoto.style.display = 'block';
+    }
+    if (elements.profilePhotoPlaceholder) elements.profilePhotoPlaceholder.style.display = 'none';
   } else {
-    elements.profilePhoto.style.display = 'none';
-    elements.profilePhotoPlaceholder.style.display = 'flex';
+    if (elements.profilePhoto) elements.profilePhoto.style.display = 'none';
+    if (elements.profilePhotoPlaceholder) elements.profilePhotoPlaceholder.style.display = 'flex';
   }
   
   // Populate bio
-  elements.profileBio.value = driver.bio || '';
+  if (elements.profileBio) elements.profileBio.value = driver.bio || '';
   updateBioCharCount();
   
   // Populate years of experience
-  elements.profileYearsExp.value = driver.years_experience || '';
+  if (elements.profileYearsExp) elements.profileYearsExp.value = driver.years_experience || '';
   
   // Populate service areas
   if (document.getElementById('profileServiceAreas')) {
@@ -2845,8 +2847,10 @@ async function saveProfile() {
     return;
   }
   
-  elements.saveProfileMainBtn.disabled = true;
-  elements.saveProfileMainBtn.textContent = 'Saving...';
+  if (elements.saveProfileMainBtn) {
+    elements.saveProfileMainBtn.disabled = true;
+    elements.saveProfileMainBtn.textContent = 'Saving...';
+  }
   
   try {
     const profileData = {
@@ -2872,8 +2876,10 @@ async function saveProfile() {
     console.error('[DriverPortal] Save profile error:', err);
     showToast('Failed to save profile', 'error');
   } finally {
-    elements.saveProfileMainBtn.disabled = false;
-    elements.saveProfileMainBtn.textContent = '💾 Save Profile';
+    if (elements.saveProfileMainBtn) {
+      elements.saveProfileMainBtn.disabled = false;
+      elements.saveProfileMainBtn.textContent = '💾 Save Profile';
+    }
   }
 }
 
@@ -3086,8 +3092,10 @@ async function saveSettings() {
     return;
   }
   
-  elements.saveSettingsBtn.disabled = true;
-  elements.saveSettingsBtn.textContent = 'Saving...';
+  if (elements.saveSettingsBtn) {
+    elements.saveSettingsBtn.disabled = true;
+    elements.saveSettingsBtn.textContent = 'Saving...';
+  }
   
   try {
     // Collect all settings
@@ -3157,8 +3165,10 @@ async function saveSettings() {
     console.error('[DriverPortal] Save settings error:', err);
     showToast('Failed to save settings', 'error');
   } finally {
-    elements.saveSettingsBtn.disabled = false;
-    elements.saveSettingsBtn.textContent = '💾 Save Settings';
+    if (elements.saveSettingsBtn) {
+      elements.saveSettingsBtn.disabled = false;
+      elements.saveSettingsBtn.textContent = '💾 Save Settings';
+    }
   }
 }
 
@@ -3513,8 +3523,10 @@ async function handleLogin() {
     return;
   }
   
-  elements.loginBtn.disabled = true;
-  elements.loginBtn.textContent = 'Signing in...';
+  if (elements.loginBtn) {
+    elements.loginBtn.disabled = true;
+    elements.loginBtn.textContent = 'Signing in...';
+  }
   
   try {
     // Find driver by email
@@ -3543,8 +3555,10 @@ async function handleLogin() {
     console.error('[DriverPortal] Login error:', err);
     showToast(err.message || 'Login failed', 'error');
   } finally {
-    elements.loginBtn.disabled = false;
-    elements.loginBtn.textContent = 'Sign In';
+    if (elements.loginBtn) {
+      elements.loginBtn.disabled = false;
+      elements.loginBtn.textContent = 'Sign In';
+    }
   }
 }
 
@@ -3583,8 +3597,10 @@ async function handleDeleteAccount() {
     return;
   }
   
-  elements.confirmDeleteBtn.disabled = true;
-  elements.confirmDeleteBtn.textContent = 'Deleting...';
+  if (elements.confirmDeleteBtn) {
+    elements.confirmDeleteBtn.disabled = true;
+    elements.confirmDeleteBtn.textContent = 'Deleting...';
+  }
   
   try {
     const client = getSupabase();
@@ -3631,8 +3647,10 @@ async function handleDeleteAccount() {
     console.error('[DriverPortal] Delete account error:', err);
     showToast(err.message || 'Failed to delete account', 'error');
   } finally {
-    elements.confirmDeleteBtn.disabled = false;
-    elements.confirmDeleteBtn.textContent = '🗑️ Delete My Account';
+    if (elements.confirmDeleteBtn) {
+      elements.confirmDeleteBtn.disabled = false;
+      elements.confirmDeleteBtn.textContent = '🗑️ Delete My Account';
+    }
   }
 }
 
@@ -4142,7 +4160,7 @@ function startOtpResendTimer() {
     clearInterval(state.otpResendTimer);
   }
   
-  elements.resendOtpBtn.disabled = true;
+  if (elements.resendOtpBtn) elements.resendOtpBtn.disabled = true;
   
   state.otpResendTimer = setInterval(() => {
     seconds--;
@@ -4153,7 +4171,7 @@ function startOtpResendTimer() {
     
     if (seconds <= 0) {
       clearInterval(state.otpResendTimer);
-      elements.resendOtpBtn.disabled = false;
+      if (elements.resendOtpBtn) elements.resendOtpBtn.disabled = false;
     }
   }, 1000);
 }
@@ -4166,8 +4184,10 @@ async function handleResendOtp() {
     return;
   }
   
-  elements.resendOtpBtn.disabled = true;
-  elements.resendOtpBtn.textContent = 'Sending...';
+  if (elements.resendOtpBtn) {
+    elements.resendOtpBtn.disabled = true;
+    elements.resendOtpBtn.textContent = 'Sending...';
+  }
   
   try {
     await sendOtpToPhone(phone);
@@ -4178,7 +4198,7 @@ async function handleResendOtp() {
   } catch (err) {
     showToast('Failed to resend code', 'error');
   } finally {
-    elements.resendOtpBtn.textContent = 'Resend Code';
+    if (elements.resendOtpBtn) elements.resendOtpBtn.textContent = 'Resend Code';
   }
 }
 
@@ -4217,8 +4237,10 @@ async function handleVerifyOtp() {
   state.phoneVerified = true;
   setOtpStatus('✓ Phone verified!', 'success');
   
-  elements.verifyOtpBtn.disabled = true;
-  elements.verifyOtpBtn.textContent = 'Verified! Continuing...';
+  if (elements.verifyOtpBtn) {
+    elements.verifyOtpBtn.disabled = true;
+    elements.verifyOtpBtn.textContent = 'Verified! Continuing...';
+  }
   
   // Clear timer
   if (state.otpResendTimer) {
@@ -4228,8 +4250,10 @@ async function handleVerifyOtp() {
   // Wait a moment then continue
   setTimeout(() => {
     goToRegStep(3);
-    elements.verifyOtpBtn.disabled = false;
-    elements.verifyOtpBtn.textContent = 'Verify & Continue →';
+    if (elements.verifyOtpBtn) {
+      elements.verifyOtpBtn.disabled = false;
+      elements.verifyOtpBtn.textContent = 'Verify & Continue →';
+    }
   }, 1000);
 }
 
