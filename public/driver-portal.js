@@ -2068,36 +2068,137 @@ async function loadPinnedTrips() {
   }
 }
 
+// Store markers for cleanup
+let tripMarkers = [];
+
 function addTripMarkersToMap(trips) {
-  if (!driverViewMap || !window.google) return;
+  if (!driverViewMap) return;
+  
+  // Clear existing markers
+  tripMarkers.forEach(marker => marker.remove());
+  tripMarkers = [];
+  
+  const bounds = new mapboxgl.LngLatBounds();
+  let hasValidCoords = false;
   
   trips.forEach((trip, index) => {
-    // If we have coordinates, add a marker
-    if (trip.pu_lat && trip.pu_lng) {
-      const marker = new google.maps.Marker({
-        position: { lat: parseFloat(trip.pu_lat), lng: parseFloat(trip.pu_lng) },
-        map: driverViewMap,
-        label: {
-          text: (index + 1).toString(),
-          color: '#fff',
-          fontWeight: 'bold'
-        },
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 15,
-          fillColor: '#10b981',
-          fillOpacity: 0.9,
-          strokeColor: '#fff',
-          strokeWeight: 2
-        },
-        title: `${trip.pu_time || ''} - ${trip.passenger_name || 'Pickup'}`
-      });
+    // Try to get coordinates from various fields
+    const lng = parseFloat(trip.pu_lng || trip.pickup_lng || trip.pickup_longitude);
+    const lat = parseFloat(trip.pu_lat || trip.pickup_lat || trip.pickup_latitude);
+    
+    if (!isNaN(lng) && !isNaN(lat)) {
+      hasValidCoords = true;
+      bounds.extend([lng, lat]);
       
-      marker.addListener('click', () => {
+      // Format pickup time
+      const puTime = trip.pu_time || trip.pickup_time || '';
+      const formattedTime = puTime ? formatTime(puTime) : '--:--';
+      
+      // Calculate time until pickup
+      const timeUntil = getTimeUntilPickup(trip);
+      
+      // Determine marker color based on urgency
+      let markerColor = '#10b981'; // green
+      if (timeUntil !== null) {
+        if (timeUntil <= 30) markerColor = '#ef4444'; // red - within 30 mins
+        else if (timeUntil <= 60) markerColor = '#f59e0b'; // orange - within 1 hour
+      }
+      
+      // Create custom marker element with time
+      const markerEl = document.createElement('div');
+      markerEl.className = 'trip-pickup-marker';
+      markerEl.innerHTML = `
+        <div class="pickup-marker-container" style="
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          cursor: pointer;
+        ">
+          <div class="pickup-time-badge" style="
+            background: ${markerColor};
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            margin-bottom: 4px;
+          ">${formattedTime}</div>
+          <div class="pickup-marker-pin" style="
+            width: 28px;
+            height: 28px;
+            background: ${markerColor};
+            border: 3px solid white;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          ">
+            <span style="transform: rotate(45deg); color: white; font-weight: bold; font-size: 12px;">${index + 1}</span>
+          </div>
+        </div>
+      `;
+      
+      // Create popup with trip details
+      const passengerName = trip.passenger_name || trip.passenger_first_name || 'Passenger';
+      const location = trip.pu_address || trip.pickup_address || trip.pu_location || 'Pickup';
+      const popup = new mapboxgl.Popup({ offset: 25 })
+        .setHTML(`
+          <div style="padding: 8px; min-width: 150px;">
+            <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">${formattedTime}</div>
+            <div style="font-size: 13px; color: #333;">${passengerName}</div>
+            <div style="font-size: 12px; color: #666; margin-top: 4px;">📍 ${location}</div>
+            ${timeUntil !== null ? `<div style="font-size: 11px; color: ${markerColor}; margin-top: 6px; font-weight: 600;">
+              ${timeUntil <= 0 ? '⚠️ NOW' : `In ${timeUntil} min`}
+            </div>` : ''}
+          </div>
+        `);
+      
+      const marker = new mapboxgl.Marker(markerEl)
+        .setLngLat([lng, lat])
+        .setPopup(popup)
+        .addTo(driverViewMap);
+      
+      // Click to show trip detail
+      markerEl.addEventListener('click', () => {
         showTripDetail(trip.id);
       });
+      
+      tripMarkers.push(marker);
     }
   });
+  
+  // Fit map to show all markers
+  if (hasValidCoords && tripMarkers.length > 0) {
+    if (tripMarkers.length === 1) {
+      driverViewMap.flyTo({ center: bounds.getCenter(), zoom: 14 });
+    } else {
+      driverViewMap.fitBounds(bounds, { padding: 60, maxZoom: 14 });
+    }
+  }
+}
+
+function getTimeUntilPickup(trip) {
+  try {
+    const puDate = trip.pu_date || trip.pickup_date;
+    const puTime = trip.pu_time || trip.pickup_time;
+    
+    if (!puDate || !puTime) return null;
+    
+    const pickupDateTime = new Date(`${puDate}T${puTime}`);
+    if (isNaN(pickupDateTime.getTime())) return null;
+    
+    const now = new Date();
+    const diffMs = pickupDateTime - now;
+    const diffMins = Math.round(diffMs / 60000);
+    
+    return diffMins;
+  } catch (err) {
+    return null;
+  }
 }
 
 function formatShortDate(dateStr) {
@@ -5969,6 +6070,11 @@ async function refreshTrips() {
     renderTripLists();
     updateBadges();
     updateInHouseStatusWidget();
+    
+    // Update map markers with upcoming trips
+    const allUpcomingTrips = [...state.trips.upcoming];
+    if (state.trips.active) allUpcomingTrips.unshift(state.trips.active);
+    addTripMarkersToMap(allUpcomingTrips);
     
   } catch (err) {
     console.error('[DriverPortal] Failed to refresh trips:', err);
