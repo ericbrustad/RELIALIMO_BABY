@@ -846,6 +846,47 @@ function handlePassengerCountChange(count) {
 }
 
 // ============================================
+// Trip Type Auto-Selection from Addresses
+// ============================================
+function updateTripTypeFromAddresses() {
+  const pickupType = document.getElementById('pickupAddressSelect')?.value;
+  const dropoffType = document.getElementById('dropoffAddressSelect')?.value;
+  
+  // Don't change if hourly is selected (user explicitly chose hourly)
+  if (state.tripType === 'hourly') {
+    return;
+  }
+  
+  let newTripType = 'standard';
+  
+  // Pickup from airport takes priority
+  if (pickupType === 'airport') {
+    newTripType = 'from-airport';
+  } else if (dropoffType === 'airport') {
+    newTripType = 'to-airport';
+  }
+  
+  // Update radio button selection
+  const radio = document.querySelector(`input[name="tripType"][value="${newTripType}"]`);
+  if (radio && !radio.checked) {
+    radio.checked = true;
+    state.tripType = newTripType;
+    
+    // Hide hourly options if shown
+    document.getElementById('hourlyOptions')?.classList.add('hidden');
+    
+    // Show feedback
+    if (newTripType === 'from-airport') {
+      showToast('Trip type set to From Airport (+$15 MAC fee)', 'info');
+    } else if (newTripType === 'to-airport') {
+      showToast('Trip type set to To Airport (+$15 MAC fee)', 'info');
+    }
+    
+    console.log('[CustomerPortal] Auto-selected trip type:', newTripType);
+  }
+}
+
+// ============================================
 // Flight Verification
 // ============================================
 async function verifyFlight() {
@@ -2130,12 +2171,13 @@ function buildReservationData() {
   const isPickupFromAirport = pickupType === 'airport';
   const isDropoffToAirport = dropoffType === 'airport';
   
+  // Use the trip type directly if it's an airport type, otherwise detect from addresses
   let serviceType;
   if (state.tripType === 'hourly') {
     serviceType = 'hourly';
-  } else if (isPickupFromAirport) {
+  } else if (state.tripType === 'from-airport' || isPickupFromAirport) {
     serviceType = 'from-airport';
-  } else if (isDropoffToAirport) {
+  } else if (state.tripType === 'to-airport' || isDropoffToAirport) {
     serviceType = 'to-airport';
   } else {
     serviceType = 'point-to-point';
@@ -3493,6 +3535,9 @@ function setupEventListeners() {
     if (!val || val === 'airport' || val === 'new') {
       state.selectedPickupAddress = null;
     }
+    
+    // Auto-select trip type based on airport selection
+    updateTripTypeFromAddresses();
   });
   
   document.getElementById('dropoffAddressSelect')?.addEventListener('change', (e) => {
@@ -3504,6 +3549,9 @@ function setupEventListeners() {
     if (!val || val === 'airport' || val === 'new') {
       state.selectedDropoffAddress = null;
     }
+    
+    // Auto-select trip type based on airport selection
+    updateTripTypeFromAddresses();
   });
   
   // Map buttons
