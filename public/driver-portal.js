@@ -6230,15 +6230,11 @@ function updateInHouseStatusWidget() {
   const widget = document.getElementById('inHouseStatusWidget');
   if (!widget) return;
   
-  // Check if driver has In-House trips (farm_mode = 'manual' or assignment_type = 'In-House')
-  const inHouseTrips = state.trips.upcoming.filter(trip => {
-    const farmMode = trip.farm_mode || trip.farmout_mode || '';
-    const assignmentType = trip.assignment_type || '';
-    return farmMode === 'manual' || assignmentType === 'In-House';
-  });
+  // Get all upcoming trips for this driver (not just In-House)
+  const upcomingTrips = state.trips.upcoming || [];
   
-  // If no In-House trips, hide widget
-  if (inHouseTrips.length === 0) {
+  // If no upcoming trips, hide widget
+  if (upcomingTrips.length === 0) {
     widget.style.display = 'none';
     if (inHouseCountdownTimer) {
       clearInterval(inHouseCountdownTimer);
@@ -6250,18 +6246,29 @@ function updateInHouseStatusWidget() {
   // Show widget
   widget.style.display = 'block';
   
-  // Get the next upcoming In-House trip
-  const nextTrip = inHouseTrips[0];
+  // Get the next upcoming trip (first in sorted list)
+  const nextTrip = upcomingTrips[0];
   
   // Update trip info
   const confEl = document.getElementById('nextTripConf');
   const timeEl = document.getElementById('nextTripTime');
-  if (confEl) confEl.textContent = `#${nextTrip.confirmation_number || nextTrip.id?.slice(0, 8)}`;
+  if (confEl) confEl.textContent = `#${nextTrip.confirmation_number || nextTrip.id?.slice(0, 8) || '---'}`;
   if (timeEl) {
-    const pickupTime = nextTrip.pickup_time || nextTrip.pu_time || 
-      (nextTrip.pickup_date_time ? new Date(nextTrip.pickup_date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--');
-    const pickupDate = nextTrip.pickup_date || nextTrip.pu_date ||
-      (nextTrip.pickup_date_time ? new Date(nextTrip.pickup_date_time).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '');
+    // Try multiple date/time fields
+    let pickupTime = '--:--';
+    let pickupDate = '';
+    
+    if (nextTrip.pickup_date_time || nextTrip.pickup_datetime) {
+      const dt = new Date(nextTrip.pickup_date_time || nextTrip.pickup_datetime);
+      if (!isNaN(dt.getTime())) {
+        pickupTime = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        pickupDate = dt.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      }
+    } else {
+      pickupTime = nextTrip.pickup_time || nextTrip.pu_time || '--:--';
+      pickupDate = nextTrip.pickup_date || nextTrip.pu_date || '';
+    }
+    
     timeEl.textContent = `${pickupTime} - ${pickupDate}`;
   }
   
@@ -6275,17 +6282,28 @@ function updateInHouseStatusWidget() {
   if (state.trips.active) {
     driverStatus = 'On Trip';
     statusClass = 'on-trip';
-  } else if (inHouseTrips.length > 0) {
-    const nextPickup = new Date(nextTrip.pickup_date_time || `${nextTrip.pickup_date}T${nextTrip.pickup_time}`);
-    const now = new Date();
-    const minutesUntil = (nextPickup - now) / 60000;
+  } else if (upcomingTrips.length > 0) {
+    // Calculate minutes until next trip
+    let nextPickup;
+    if (nextTrip.pickup_date_time || nextTrip.pickup_datetime) {
+      nextPickup = new Date(nextTrip.pickup_date_time || nextTrip.pickup_datetime);
+    } else if (nextTrip.pickup_date && nextTrip.pickup_time) {
+      nextPickup = new Date(`${nextTrip.pickup_date}T${nextTrip.pickup_time}`);
+    } else if (nextTrip.pu_date && nextTrip.pu_time) {
+      nextPickup = new Date(`${nextTrip.pu_date}T${nextTrip.pu_time}`);
+    }
     
-    if (minutesUntil < 30) {
-      driverStatus = 'Trip Soon';
-      statusClass = 'busy';
-    } else {
-      driverStatus = 'Available';
-      statusClass = '';
+    if (nextPickup && !isNaN(nextPickup.getTime())) {
+      const now = new Date();
+      const minutesUntil = (nextPickup - now) / 60000;
+      
+      if (minutesUntil < 30) {
+        driverStatus = 'Trip Soon';
+        statusClass = 'busy';
+      } else {
+        driverStatus = 'Available';
+        statusClass = '';
+      }
     }
   }
   
@@ -6310,8 +6328,31 @@ function startInHouseCountdown(nextTrip) {
   
   if (!countdownEl) return;
   
-  // Get pickup datetime
-  const pickupDateTime = new Date(nextTrip.pickup_date_time || `${nextTrip.pickup_date}T${nextTrip.pickup_time || '00:00'}`);
+  // Get pickup datetime - handle various formats
+  let pickupDateTime;
+  if (nextTrip.pickup_date_time) {
+    pickupDateTime = new Date(nextTrip.pickup_date_time);
+  } else if (nextTrip.pickup_datetime) {
+    pickupDateTime = new Date(nextTrip.pickup_datetime);
+  } else if (nextTrip.pickup_date && nextTrip.pickup_time) {
+    pickupDateTime = new Date(`${nextTrip.pickup_date}T${nextTrip.pickup_time}`);
+  } else if (nextTrip.pu_date && nextTrip.pu_time) {
+    pickupDateTime = new Date(`${nextTrip.pu_date}T${nextTrip.pu_time}`);
+  } else {
+    // No valid datetime found - show placeholder
+    countdownEl.textContent = '--:--:--';
+    countdownEl.className = 'countdown-time';
+    console.warn('[DriverPortal] No valid pickup time for countdown:', nextTrip);
+    return;
+  }
+  
+  // Validate the date is valid
+  if (isNaN(pickupDateTime.getTime())) {
+    countdownEl.textContent = '--:--:--';
+    countdownEl.className = 'countdown-time';
+    console.warn('[DriverPortal] Invalid pickup datetime for countdown:', nextTrip);
+    return;
+  }
   
   // Calculate total countdown duration for percentage (12 hours before)
   const totalDuration = 12 * 60 * 60 * 1000; // 12 hours in ms
