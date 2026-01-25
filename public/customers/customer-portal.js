@@ -1704,14 +1704,14 @@ async function bookTrip(includeReturn = false) {
       
       if (availableDriver) {
         // Assign the default driver
-        // Set Farm-out radio with In House Assigned eFarm status
-        reservationData.farm_option = 'farm-out';  // Radio button set to Farm-out
+        // Set Farm-out radio with Farm-out Assigned status
+        reservationData.farm_option = 'farm-out';  // Radio button set to Farm-out - REQUIRED for farmout list
         reservationData.assigned_driver_id = availableDriver.id;
         reservationData.assigned_driver_name = `${availableDriver.first_name || ''} ${availableDriver.last_name || ''}`.trim();
         reservationData.driver_phone = availableDriver.phone || availableDriver.cell_phone;
         reservationData.driver_status = 'assigned'; // Directly assigned, not offered
         reservationData.status = 'confirmed'; // Valid DB status for assigned trips
-        reservationData.farmout_status = 'In House Assigned'; // Shows as In House Assigned in eFarm status
+        reservationData.farmout_status = 'assigned'; // DB farmout_status value
         
         // Set fleet vehicle from driver's assigned vehicle
         if (availableDriver.fleet_vehicle_id) {
@@ -1805,19 +1805,21 @@ async function bookTrip(includeReturn = false) {
     
     // Build form_snapshot with extra data
     // Determine status and farm settings based on assignment state (autoFarmEnabled already declared above)
+    // IMPORTANT: Status values must match the resStatus dropdown in reservation-form.html
+    // Valid values: farm_out_unassigned, farm_out_assigned, created_farm_out_assigned, offered, etc.
     let statusLabel, statusValue, farmOptionValue, eFarmStatusValue;
     if (autoFarmEnabled) {
       // Auto-farm mode: Farm-out with unassigned status
-      statusLabel = 'Farmout Unassigned';
-      statusValue = 'unassigned';
+      statusLabel = 'Farm-out Unassigned';
+      statusValue = 'farm_out_unassigned';  // Matches dropdown value
       farmOptionValue = 'farm-out';
-      eFarmStatusValue = 'unassigned';
+      eFarmStatusValue = 'Farm-out Unassigned';
     } else if (reservationData.assigned_driver_id) {
-      // Default driver assigned: Farm-out radio with In-House Assigned eFarm status
-      statusLabel = 'Assigned';
-      statusValue = 'assigned';
+      // Default driver assigned: Farm-out Assigned status
+      statusLabel = 'Farm-out Assigned';
+      statusValue = 'farm_out_assigned';  // Matches dropdown value
       farmOptionValue = 'farm-out';  // Radio button set to Farm-out
-      eFarmStatusValue = 'In House Assigned';  // eFarm status shows In House Assigned
+      eFarmStatusValue = 'Farm-out Assigned';  // eFarm status display
     } else {
       // No driver: In-House unassigned
       statusLabel = 'Unassigned';
@@ -2104,17 +2106,21 @@ function buildReservationData() {
   const vehicleTypeName = selectedVehicleTypeData?.name || state.selectedVehicleType || 'Black SUV';
   
   // Determine service type CODE based on trip type selection
-  // Using codes that match the service_types table: P2P, HOURLY, AIRPORT
+  // Using codes that MUST match the service_types table: 
+  // - from-airport, to-airport, point-to-point, hourly
   // pickupType and dropoffType already declared above
-  const isAirportTrip = pickupType === 'airport' || dropoffType === 'airport';
+  const isPickupFromAirport = pickupType === 'airport';
+  const isDropoffToAirport = dropoffType === 'airport';
   
   let serviceType;
   if (state.tripType === 'hourly') {
-    serviceType = 'HOURLY';
-  } else if (isAirportTrip) {
-    serviceType = 'AIRPORT';
+    serviceType = 'hourly';
+  } else if (isPickupFromAirport) {
+    serviceType = 'from-airport';
+  } else if (isDropoffToAirport) {
+    serviceType = 'to-airport';
   } else {
-    serviceType = 'P2P';
+    serviceType = 'point-to-point';
   }
   
   // Get airline code for flight number
