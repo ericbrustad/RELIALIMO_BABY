@@ -5845,8 +5845,8 @@ async function refreshTrips() {
       console.log('[DriverPortal] Categorizing trip:', trip.confirmation_number, 
         'farmoutStatus:', farmoutStatus, 'driverStatus:', driverStatus, 'tripDate:', tripDate);
       
-      // Active trip (in progress)
-      if (['enroute', 'arrived', 'passenger_onboard'].includes(driverStatus)) {
+      // Active trip (in progress) - including getting_ready and enroute
+      if (['getting_ready', 'enroute', 'arrived', 'passenger_onboard'].includes(driverStatus)) {
         state.trips.active = trip;
         console.log('[DriverPortal] -> ACTIVE');
       }
@@ -6624,6 +6624,11 @@ function renderActiveTripCard(trip) {
         </div>
       </div>
       
+      <!-- Embedded Directions Map -->
+      <div id="embeddedDirectionsMap" class="embedded-directions-container">
+        <!-- Directions map will be inserted here when trip starts -->
+      </div>
+      
       <!-- Map Toggle Button (for mobile) -->
       <button type="button" id="toggleMapBtn" class="btn btn-outline btn-map-toggle" onclick="toggleMapVisibility()">
         🗺️ ${state.mapVisible ? 'Hide Map' : 'Show Map'}
@@ -6663,6 +6668,15 @@ function renderActiveTripCard(trip) {
   if (!state.activeTimer) {
     state.timerStartTime = Date.now();
     startTripTimer();
+  }
+  
+  // Show embedded directions based on current status
+  const destinationAddress = status === 'passenger_onboard' 
+    ? (trip.dropoff_address || trip.dropoff_location)
+    : (trip.pickup_address || trip.pickup_location);
+  
+  if (destinationAddress) {
+    showEmbeddedDirectionsMap(destinationAddress);
   }
 }
 
@@ -6841,20 +6855,34 @@ function clearPendingOffer(tripId, driverId) {
 
 window.startTrip = async function(tripId) {
   try {
+    // Find the trip to get pickup address for navigation
+    const trip = [...state.trips.upcoming, ...state.trips.offered].find(t => t.id === tripId);
+    const pickupAddress = trip?.pickup_address || trip?.pickup_location || '';
+    
     // Play trip start sound
     playNotificationSound('trip_start');
     
-    // Start with "getting_ready" status instead of immediately enroute
-    await updateReservationStatus(tripId, { driver_status: 'getting_ready' });
+    // Announce "On the way" via speech synthesis
+    speakAnnouncement('On the way to pickup');
     
-    showToast('Trip started! Update status as you go.', 'success');
+    // Set status to enroute immediately so trip shows as active
+    await updateReservationStatus(tripId, { driver_status: 'enroute' });
+    
+    // Send passenger notification
+    await sendPassengerNotification(tripId, 'on_the_way');
+    
+    showToast('🚗 On the way! Navigation opening...', 'success');
     switchTab('active');
     await refreshTrips();
     
-    // Check map preference on first navigation
-    if (!state.preferredMapApp) {
-      checkMapPreference();
+    // Open navigation in background (opens in CarPlay/Android Auto)
+    if (pickupAddress) {
+      // Small delay to let the UI update first
+      setTimeout(() => {
+        openNavigationInBackground(pickupAddress);
+      }, 500);
     }
+    
   } catch (err) {
     console.error('[DriverPortal] Start trip error:', err);
     showToast('Failed to start trip', 'error');
@@ -7078,6 +7106,107 @@ window.openNavigation = function(address, usePickup = false) {
   console.log(`[DriverPortal] Opening navigation with ${state.preferredMapApp}:`, navigationUrl);
   window.open(navigationUrl, '_blank');
 };
+
+/**
+ * Open navigation in background without leaving the page
+ * This triggers CarPlay/Android Auto while keeping the driver on this page
+ */
+window.openNavigationInBackground = function(address) {
+  if (!address) return;
+  
+  // Check if user has a preference, otherwise use Google Maps
+  const mapApp = state.preferredMapApp || 'google';
+  const encoded = encodeURIComponent(address);
+  const userAgent = navigator.userAgent.toLowerCase();
+  const isIOS = /iphone|ipad|ipod/.test(userAgent);
+  const isAndroid = /android/.test(userAgent);
+  
+  let navigationUrl = '';
+  
+  switch (mapApp) {
+    case 'google':
+      if (isAndroid) {
+        // Intent URL for Android - opens in background
+        navigationUrl = `intent://navigation/q=${encoded}#Intent;scheme=google.navigation;package=com.google.android.apps.maps;end`;
+      } else {
+        // Use comgooglemaps for iOS - triggers CarPlay
+        navigationUrl = `comgooglemaps://?daddr=${encoded}&directionsmode=driving`;
+      }
+      break;
+      
+    case 'apple':
+      // Apple Maps - triggers CarPlay on iOS
+      navigationUrl = `maps://?daddr=${encoded}&dirflg=d`;
+      break;
+      
+    case 'waze':
+      // Waze - works with CarPlay
+      navigationUrl = `waze://?q=${encoded}&navigate=yes`;
+      break;
+      
+    default:
+      navigationUrl = `comgooglemaps://?daddr=${encoded}&directionsmode=driving`;
+  }
+  
+  console.log(`[DriverPortal] Opening background navigation:`, navigationUrl);
+  
+  // Create hidden iframe to trigger the app without leaving page
+  const iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  iframe.src = navigationUrl;
+  document.body.appendChild(iframe);
+  
+  // Fallback: after 1 second, try window.location if iframe didn't work
+  setTimeout(() => {
+    iframe.remove();
+    // If we're still on this page, the deep link might have worked via CarPlay
+    // If not, the user can tap the navigate button manually
+  }, 1500);
+  
+  // Also show the embedded map with directions
+  showEmbeddedDirectionsMap(address);
+};
+
+/**
+ * Speak an announcement using text-to-speech
+ */
+function speakAnnouncement(text) {
+  if ('speechSynthesis' in window) {
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    utterance.lang = 'en-US';
+    
+    window.speechSynthesis.speak(utterance);
+    console.log('[DriverPortal] Speaking:', text);
+  }
+}
+
+/**
+ * Show embedded Google Maps with directions on the active trip card
+ */
+function showEmbeddedDirectionsMap(destination) {
+  const mapContainer = document.getElementById('embeddedDirectionsMap');
+  if (!mapContainer) return;
+  
+  const encoded = encodeURIComponent(destination);
+  
+  // Create embedded directions iframe
+  mapContainer.innerHTML = `
+    <iframe
+      class="embedded-directions-iframe"
+      src="https://www.google.com/maps/embed/v1/directions?key=AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartNGg&destination=${encoded}&mode=driving"
+      allowfullscreen
+      loading="lazy"
+      referrerpolicy="no-referrer-when-downgrade">
+    </iframe>
+  `;
+  mapContainer.style.display = 'block';
+}
 
 // Toggle map visibility for small screens
 window.toggleMapVisibility = function() {
