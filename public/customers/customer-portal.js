@@ -447,6 +447,11 @@ async function loadBookingDefaults() {
     if (bookingDefaults.defaultVehicleType) {
       state.selectedVehicleType = bookingDefaults.defaultVehicleType;
     }
+    
+    // Apply default service type
+    if (bookingDefaults.serviceType) {
+      state.serviceType = bookingDefaults.serviceType;
+    }
   } catch (err) {
     console.error('[CustomerPortal] Failed to load booking defaults:', err);
   }
@@ -1706,6 +1711,13 @@ async function bookTrip(includeReturn = false) {
         reservationData.driver_status = 'assigned'; // Directly assigned, not offered
         reservationData.status = 'confirmed'; // Valid DB status for assigned trips
         reservationData.farmout_status = 'in_house_assigned'; // Key for driver portal to see trip
+        
+        // Set fleet vehicle from driver's assigned vehicle
+        if (availableDriver.fleet_vehicle_id) {
+          reservationData.fleet_vehicle_id = availableDriver.fleet_vehicle_id;
+          console.log(`[CustomerPortal] ✅ Set fleet vehicle from driver: ${availableDriver.fleet_vehicle_id}`);
+        }
+        
         console.log(`[CustomerPortal] ✅ Assigned default driver: ${reservationData.assigned_driver_name} (${availableDriver.id})`);
       } else {
         // No default driver available - leave unassigned In-House
@@ -1783,10 +1795,29 @@ async function bookTrip(includeReturn = false) {
     }
     
     // Build form_snapshot with extra data
+    // Determine status label based on assignment state
+    let statusLabel, statusValue;
+    const autoFarmEnabled = isAutoFarmEnabled();
+    if (autoFarmEnabled) {
+      statusLabel = 'Farmout Unassigned';
+      statusValue = 'farmout_unassigned';
+    } else if (reservationData.assigned_driver_id) {
+      statusLabel = 'In-House Assigned';
+      statusValue = 'in_house_assigned';
+    } else {
+      statusLabel = 'In-House Unassigned';
+      statusValue = 'in_house_unassigned';
+    }
+    
     dbData.form_snapshot = {
       ...extraData,
       source: 'customer_portal',
-      booked_at: new Date().toISOString()
+      booked_at: new Date().toISOString(),
+      // Status info for reservations list display
+      details: {
+        resStatus: statusValue,
+        resStatusLabel: statusLabel
+      }
     };
     
     // Map some fields to valid column names
@@ -2061,6 +2092,12 @@ function buildReservationData() {
     total_price: totalPrice,
     base_rate: selectedVehicleTypeData?.base_rate || null,
     rate_per_mile: selectedVehicleTypeData?.per_mile_rate || selectedVehicleTypeData?.rate_per_mile || null,
+    
+    // Rate fields for reservation form display
+    rate_amount: state.tripType === 'hourly' 
+      ? (parseFloat(selectedVehicleTypeData?.hourly_rate) || parseFloat(selectedVehicleTypeData?.base_rate) || 75)
+      : (parseFloat(selectedVehicleTypeData?.per_mile_rate) || parseFloat(selectedVehicleTypeData?.rate_per_mile) || 3),
+    rate_type: state.tripType === 'hourly' ? 'hourly' : 'per_mile',
     
     // Hourly reservation
     is_hourly: state.tripType === 'hourly',

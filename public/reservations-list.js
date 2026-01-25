@@ -1,7 +1,9 @@
 import { wireMainNav } from './navigation.js';
+import realtimeService, { subscribeToReservations } from './shared/realtime-service.js';
 
 class ReservationsList {
   constructor() {
+    this.unsubscribeRealtime = null;
     this.init();
   }
 
@@ -12,6 +14,26 @@ class ReservationsList {
     this.setupMessageListener();
     await this.loadReservations();
     this.handleOpenConfFromCalendar();
+    
+    // Set up real-time subscription for reservations
+    await this.setupRealtimeSubscription();
+  }
+  
+  async setupRealtimeSubscription() {
+    try {
+      await realtimeService.init();
+      
+      this.unsubscribeRealtime = subscribeToReservations((eventType, newRecord, oldRecord) => {
+        console.log(`[ReservationsList] Real-time ${eventType}:`, newRecord?.confirmation_number || oldRecord?.confirmation_number);
+        
+        // Reload the list on any change
+        this.loadReservations();
+      });
+      
+      console.log('[ReservationsList] Real-time subscription active');
+    } catch (err) {
+      console.error('[ReservationsList] Failed to set up real-time subscription:', err);
+    }
   }
   
   setupMessageListener() {
