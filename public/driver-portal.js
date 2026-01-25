@@ -7869,54 +7869,34 @@ let fullscreenCountdownTimer = null;
  */
 function setupCollapsibleHeader() {
   const expandBtn = document.getElementById('expandHeaderBtn');
-  const collapseBtn = document.getElementById('collapseHeaderBtn');
-  const panel = document.getElementById('expandableHeaderPanel');
   
-  // Create backdrop element
-  let backdrop = document.querySelector('.panel-backdrop');
-  if (!backdrop) {
-    backdrop = document.createElement('div');
-    backdrop.className = 'panel-backdrop';
-    document.body.appendChild(backdrop);
-  }
-  
-  // Expand header panel
+  // Profile button opens the slide menu
   expandBtn?.addEventListener('click', () => {
-    panel?.classList.add('open');
-    backdrop?.classList.add('show');
-    isHeaderExpanded = true;
+    const slideMenu = document.getElementById('slideMenu');
+    if (slideMenu) {
+      slideMenu.classList.add('open');
+    }
   });
   
-  // Collapse header panel
-  collapseBtn?.addEventListener('click', () => {
-    panel?.classList.remove('open');
-    backdrop?.classList.remove('show');
-    isHeaderExpanded = false;
-  });
-  
-  // Close on backdrop click
-  backdrop?.addEventListener('click', () => {
-    panel?.classList.remove('open');
-    backdrop?.classList.remove('show');
-    isHeaderExpanded = false;
-  });
-  
-  // Tab panel buttons
-  document.querySelectorAll('.tab-panel-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset.tab;
-      switchTab(tab);
-      
-      // Update active state in panel
-      document.querySelectorAll('.tab-panel-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      
-      // Close panel after selection
-      panel?.classList.remove('open');
-      backdrop?.classList.remove('show');
-      isHeaderExpanded = false;
+  // Start updating the current time
+  updateHeaderClock();
+  setInterval(updateHeaderClock, 1000);
+}
+
+/**
+ * Update the current time in the header
+ */
+function updateHeaderClock() {
+  const clockEl = document.getElementById('headerCurrentTime');
+  if (clockEl) {
+    const now = new Date();
+    clockEl.textContent = now.toLocaleString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
     });
-  });
+  }
 }
 
 /**
@@ -8060,11 +8040,11 @@ function updateFullscreenCountdown(nextTrip) {
     const minutes = Math.floor((timeUntil % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((timeUntil % (1000 * 60)) / 1000);
     
-    // Format display times
+    // Format display times - always show seconds in both
     let fullDisplay, miniDisplay;
     if (hours > 0) {
       fullDisplay = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-      miniDisplay = `${hours}:${minutes.toString().padStart(2, '0')}`;
+      miniDisplay = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     } else {
       fullDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;
       miniDisplay = `${minutes}:${seconds.toString().padStart(2, '0')}`;

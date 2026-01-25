@@ -556,74 +556,24 @@
 
       <!-- Collapsed Header Bar (always visible) -->
       <div class="collapsed-header-bar" id="collapsedHeaderBar">
-        <!-- Profile Button (expands header/tabs) -->
-        <button type="button" id="expandHeaderBtn" class="profile-expand-btn" aria-label="Expand Menu">
-          <div class="driver-avatar-small" id="driverAvatarSmall">JD</div>
-        </button>
-        
-        <!-- Mini Timer (shown when countdown minimized) -->
-        <div class="mini-timer-container" id="miniTimerContainer" style="display: none;">
-          <span class="mini-timer-icon">⏱️</span>
-          <span class="mini-timer" id="miniCountdownTimer">--:--</span>
-        </div>
-        
-        <!-- Online Toggle (always visible) -->
+        <!-- Online Toggle (left side) -->
         <label class="online-toggle-mini">
           <input type="checkbox" id="onlineToggle" checked>
           <span class="toggle-slider-mini"></span>
         </label>
-      </div>
-
-      <!-- Expandable Header Panel (slides in from right) -->
-      <div class="expandable-header-panel" id="expandableHeaderPanel">
-        <div class="panel-header">
-          <div class="driver-info-expanded">
-            <div class="driver-avatar" id="driverAvatar">JD</div>
-            <div class="driver-info">
-              <span class="driver-name" id="driverName">John Doe</span>
-              <span class="driver-status" id="driverStatusBadge">
-                <span class="status-dot available"></span>
-                Available
-              </span>
-            </div>
-          </div>
-          <button type="button" id="collapseHeaderBtn" class="collapse-header-btn" aria-label="Collapse">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="9 18 15 12 9 6"></polyline>
-            </svg>
-          </button>
+        
+        <!-- Current Time -->
+        <div class="header-current-time" id="headerCurrentTime">12:00 PM</div>
+        
+        <!-- Mini Timer (shown when countdown minimized) -->
+        <div class="mini-timer-container" id="miniTimerContainer" style="display: none;">
+          <span class="mini-timer-icon">⏱️</span>
+          <span class="mini-timer" id="miniCountdownTimer">--:--:--</span>
         </div>
         
-        <!-- Tab Navigation inside panel -->
-        <nav class="tab-nav-panel">
-          <button class="tab-panel-btn active" data-tab="driverview">
-            <span class="tab-icon">🗺️</span>
-            <span class="tab-label">Driver View</span>
-          </button>
-          <button class="tab-panel-btn" data-tab="offered">
-            <span class="tab-icon">📨</span>
-            <span class="tab-label">Offered</span>
-            <span class="tab-badge" id="offeredBadge">0</span>
-          </button>
-          <button class="tab-panel-btn" data-tab="upcoming">
-            <span class="tab-icon">📅</span>
-            <span class="tab-label">Upcoming</span>
-            <span class="tab-badge" id="upcomingBadge">0</span>
-          </button>
-          <button class="tab-panel-btn" data-tab="active">
-            <span class="tab-icon">🚗</span>
-            <span class="tab-label">Active</span>
-            <span class="tab-badge" id="activeBadge">0</span>
-          </button>
-        </nav>
-        
-        <button type="button" id="menuBtn" class="btn-icon menu-btn-panel" aria-label="Menu">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="3" y1="6" x2="21" y2="6"></line>
-            <line x1="3" y1="12" x2="21" y2="12"></line>
-            <line x1="3" y1="18" x2="21" y2="18"></line>
-          </svg>
-          <span>Settings</span>
+        <!-- Profile Button (right side, opens menu) -->
+        <button type="button" id="expandHeaderBtn" class="profile-expand-btn" aria-label="Open Menu">
+          <div class="driver-avatar-small" id="driverAvatarSmall">JD</div>
         </button>
       </div>
 

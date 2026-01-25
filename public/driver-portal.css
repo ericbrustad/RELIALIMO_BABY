@@ -4506,7 +4506,14 @@ body {
 .mini-timer {
   font-size: 0.9rem;
   font-weight: 700;
-  color: var(--primary-light);
+  color: white;
+  font-variant-numeric: tabular-nums;
+}
+
+.header-current-time {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: white;
   font-variant-numeric: tabular-nums;
 }
 
