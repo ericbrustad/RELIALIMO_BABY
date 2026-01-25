@@ -7881,14 +7881,6 @@ function applyDisplaySettings() {
   if (headerDateTime) {
     headerDateTime.style.display = timerWindowState.headerDateTimeEnabled ? 'flex' : 'none';
   }
-  
-  // Fullscreen map
-  if (bgMap) {
-    bgMap.classList.toggle('active', timerWindowState.fullscreenMapEnabled);
-    if (timerWindowState.fullscreenMapEnabled) {
-      initFullscreenBackgroundMap();
-    }
-  }
 }
 
 /**
@@ -8031,81 +8023,6 @@ function updateTimerWindowCountdown(countdown, tripInfo, progress, urgency) {
   if (headerTimerValue) {
     headerTimerValue.textContent = countdown;
     headerTimerValue.className = urgency;
-  }
-}
-
-// ============================================
-// Fullscreen Background Map with Navigation
-// ============================================
-
-let bgMapInstance = null;
-
-/**
- * Initialize fullscreen background map
- */
-function initFullscreenBackgroundMap() {
-  const container = document.getElementById('bgMapContainer');
-  if (!container || bgMapInstance) return;
-  
-  // Use Leaflet with OpenStreetMap for reliability
-  try {
-    // Load Leaflet if not already loaded
-    if (typeof L === 'undefined') {
-      console.log('[DriverPortal] Loading Leaflet for background map...');
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
-      
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = () => {
-        createBackgroundMap(container);
-      };
-      document.head.appendChild(script);
-    } else {
-      createBackgroundMap(container);
-    }
-  } catch (e) {
-    console.error('[DriverPortal] Failed to init background map:', e);
-  }
-}
-
-function createBackgroundMap(container) {
-  try {
-    // Get driver's location or default to Minneapolis
-    const defaultCenter = [44.9778, -93.2650];
-    
-    bgMapInstance = L.map(container, {
-      center: defaultCenter,
-      zoom: 12,
-      zoomControl: false,
-      attributionControl: false,
-      dragging: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false,
-      touchZoom: false
-    });
-    
-    // Use a dark tile layer
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19
-    }).addTo(bgMapInstance);
-    
-    // Try to get current position
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          bgMapInstance.setView([pos.coords.latitude, pos.coords.longitude], 13);
-        },
-        () => {},
-        { enableHighAccuracy: false, timeout: 5000 }
-      );
-    }
-    
-    console.log('[DriverPortal] Background map initialized');
-  } catch (e) {
-    console.error('[DriverPortal] Background map error:', e);
   }
 }
 

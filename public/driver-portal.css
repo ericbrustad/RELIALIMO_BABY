@@ -4312,33 +4312,6 @@ body {
 }
 
 /* ============================================
-   Fullscreen Background Map
-   ============================================ */
-.fullscreen-bg-map {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.fullscreen-bg-map #bgMapContainer {
-  width: 100%;
-  height: 100%;
-  opacity: 0.4;
-}
-
-.fullscreen-bg-map.active {
-  pointer-events: auto;
-}
-
-.fullscreen-bg-map.active #bgMapContainer {
-  opacity: 1;
-}
-
-/* ============================================
    Compact Header Bar
    ============================================ */
 .compact-header-bar {
@@ -4466,7 +4439,8 @@ body {
   transform: translateX(-50%);
   width: calc(100% - 32px);
   max-width: 400px;
-  background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%);
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(15, 15, 26, 0.95) 100%);
+  backdrop-filter: blur(10px);
   border: 2px solid var(--primary);
   border-radius: var(--radius-lg);
   box-shadow: 0 8px 32px rgba(79, 70, 229, 0.4), 0 0 60px rgba(79, 70, 229, 0.2);
