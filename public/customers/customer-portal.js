@@ -177,13 +177,13 @@ async function init() {
       await fetchFreshCustomerData();
     }
     
-    // Check if onboarding is complete - if explicitly false, redirect to onboarding
-    // Treat null/undefined as complete (for existing users created before onboarding was added)
-    if (state.customer && state.customer.onboarding_complete === false) {
-      console.log('[CustomerPortal] Onboarding not complete, redirecting to onboarding...');
-      window.location.href = '/onboarding';
-      return;
-    }
+    // DISABLED: Onboarding redirect is temporarily disabled
+    // TODO: Re-enable when onboarding flow is properly tested
+    // if (state.customer && state.customer.onboarding_complete === false) {
+    //   console.log('[CustomerPortal] Onboarding not complete, redirecting to onboarding...');
+    //   window.location.href = '/onboarding';
+    //   return;
+    // }
     
     // Inject user menu styles and initialize user menu
     injectUserMenuStyles();
