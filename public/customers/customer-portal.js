@@ -177,8 +177,9 @@ async function init() {
       await fetchFreshCustomerData();
     }
     
-    // Check if onboarding is complete - if not, redirect to onboarding
-    if (state.customer && !state.customer.onboarding_complete) {
+    // Check if onboarding is complete - if explicitly false, redirect to onboarding
+    // Treat null/undefined as complete (for existing users created before onboarding was added)
+    if (state.customer && state.customer.onboarding_complete === false) {
       console.log('[CustomerPortal] Onboarding not complete, redirecting to onboarding...');
       window.location.href = '/onboarding';
       return;

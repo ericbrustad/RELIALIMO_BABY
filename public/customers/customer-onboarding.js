@@ -121,8 +121,8 @@ async function init() {
     console.log('[CustomerOnboarding] Auth check result:', isAuth, 'Customer:', state.customer);
     
     if (isAuth) {
-      // Check if onboarding is complete
-      if (state.customer?.onboarding_complete) {
+      // Check if onboarding is complete (treat null/undefined as complete for existing users)
+      if (state.customer?.onboarding_complete !== false) {
         console.log('[CustomerOnboarding] Onboarding already complete, redirecting to portal');
         redirectToPortal();
       } else {
