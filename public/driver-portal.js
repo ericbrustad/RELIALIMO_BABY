@@ -6919,6 +6919,20 @@ window.updateTripStatus = async function(tripId, newStatus) {
       // When driver marks as Done, show the post-trip incidentals modal
       playNotificationSound('trip_complete');
       stopTripTimer();
+      
+      // Reset button states before opening modal
+      document.querySelectorAll('.status-action-btn').forEach(btn => {
+        btn.classList.remove('loading');
+        btn.disabled = false;
+      });
+      
+      // Check if modal exists
+      if (!elements.postTripModal) {
+        console.error('[DriverPortal] postTripModal element not found');
+        showToast('Error: Post-trip form not found', 'error');
+        return;
+      }
+      
       openModal('postTripModal');
       elements.postTripModal.dataset.tripId = tripId;
       
@@ -6934,6 +6948,20 @@ window.updateTripStatus = async function(tripId, newStatus) {
       playNotificationSound('trip_complete');
       
       stopTripTimer();
+      
+      // Reset button states before opening modal
+      document.querySelectorAll('.status-action-btn').forEach(btn => {
+        btn.classList.remove('loading');
+        btn.disabled = false;
+      });
+      
+      // Check if modal exists
+      if (!elements.postTripModal) {
+        console.error('[DriverPortal] postTripModal element not found');
+        showToast('Error: Post-trip form not found', 'error');
+        return;
+      }
+      
       openModal('postTripModal');
       // Store trip ID for post-trip form
       elements.postTripModal.dataset.tripId = tripId;
