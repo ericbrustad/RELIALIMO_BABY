@@ -371,6 +371,42 @@
             <input type="number" id="driverReminderMinutes" class="form-input" value="60" min="15" max="180">
           </div>
         </div>
+
+        <div class="settings-card">
+          <h2>🗺️ Driver Location Display</h2>
+          <p class="form-hint">Configure how driver locations are shown on dispatch maps</p>
+          
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Use Live GPS Locations</span>
+              <input type="checkbox" id="useLiveDriverLocations">
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="form-hint">When enabled, dispatch maps will show real-time GPS locations from drivers. When disabled, simulated/rendered positions are shown.</p>
+          </div>
+
+          <div class="form-group">
+            <label>GPS Update Interval (seconds)</label>
+            <input type="number" id="driverGpsInterval" class="form-input" value="5" min="3" max="60">
+            <p class="form-hint">How often to poll for live driver location updates</p>
+          </div>
+
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Show driver heading/direction</span>
+              <input type="checkbox" id="showDriverHeading" checked>
+              <span class="toggle-switch"></span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="toggle-label">
+              <span>Show driver speed</span>
+              <input type="checkbox" id="showDriverSpeed" checked>
+              <span class="toggle-switch"></span>
+            </label>
+          </div>
+        </div>
       </section>
 
       <!-- Geofence Settings -->
@@ -576,6 +612,25 @@
       try {
         // Get auth token for authenticated requests
         await getAccessToken();
+        
+        // Load driver location settings from localStorage
+        const useLive = localStorage.getItem('useLiveDriverLocations');
+        const gpsInterval = localStorage.getItem('driverGpsInterval');
+        const showHeading = localStorage.getItem('showDriverHeading');
+        const showSpeed = localStorage.getItem('showDriverSpeed');
+        
+        if (document.getElementById('useLiveDriverLocations')) {
+          document.getElementById('useLiveDriverLocations').checked = useLive === 'true';
+        }
+        if (document.getElementById('driverGpsInterval') && gpsInterval) {
+          document.getElementById('driverGpsInterval').value = gpsInterval;
+        }
+        if (document.getElementById('showDriverHeading')) {
+          document.getElementById('showDriverHeading').checked = showHeading !== 'false';
+        }
+        if (document.getElementById('showDriverSpeed')) {
+          document.getElementById('showDriverSpeed').checked = showSpeed !== 'false';
+        }
         
         // Load portal settings
         const settingsResp = await fetch(`${creds.url}/rest/v1/portal_settings?select=*`, {
@@ -1062,6 +1117,28 @@
           header_title: document.getElementById('driverHeaderTitle').value,
           primary_color: document.getElementById('driverPrimaryColor').value
         };
+
+        // Driver location display settings (save to localStorage for dispatch)
+        const useLiveLocations = document.getElementById('useLiveDriverLocations')?.checked || false;
+        const gpsInterval = document.getElementById('driverGpsInterval')?.value || '5';
+        const showHeading = document.getElementById('showDriverHeading')?.checked || false;
+        const showSpeed = document.getElementById('showDriverSpeed')?.checked || false;
+        
+        // Save to localStorage for dispatch grid to read
+        localStorage.setItem('useLiveDriverLocations', useLiveLocations.toString());
+        localStorage.setItem('driverGpsInterval', gpsInterval);
+        localStorage.setItem('showDriverHeading', showHeading.toString());
+        localStorage.setItem('showDriverSpeed', showSpeed.toString());
+        
+        // Also save to a combined settings object
+        const portalSettings = JSON.parse(localStorage.getItem('portalSettings') || '{}');
+        portalSettings.useLiveDriverLocations = useLiveLocations;
+        portalSettings.driverGpsInterval = parseInt(gpsInterval);
+        portalSettings.showDriverHeading = showHeading;
+        portalSettings.showDriverSpeed = showSpeed;
+        localStorage.setItem('portalSettings', JSON.stringify(portalSettings));
+        
+        console.log('[PortalSettings] Saved driver location settings:', { useLiveLocations, gpsInterval, showHeading, showSpeed });
 
         // Upsert portal settings
         for (const settings of [customerSettings, driverSettings]) {

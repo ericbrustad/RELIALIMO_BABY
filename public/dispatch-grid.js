@@ -31,60 +31,32 @@ class DispatchGrid {
     this.loadGridData(); // Load grid reservations
   }
 
-  // Initialize the Live/Rendered toggle
+  // Initialize the Live/Rendered mode from settings
   initDriverLocationToggle() {
-    const toggle = document.getElementById('liveDriverToggle');
-    const renderedLabel = document.getElementById('renderedLabel');
-    const liveLabel = document.getElementById('liveLabel');
-    const toggleContainer = document.querySelector('.driver-location-toggle');
-    
-    if (!toggle) {
-      console.warn('[DispatchGrid] Toggle element not found');
-      return;
+    // Read setting from localStorage (set in Portal Settings > Driver Portal)
+    const savedSettings = localStorage.getItem('portalSettings');
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+        this.useLiveLocations = settings.useLiveDriverLocations === true;
+        console.log('[DispatchGrid] Driver location mode from settings:', this.useLiveLocations ? 'LIVE' : 'RENDERED');
+      } catch (e) {
+        console.warn('[DispatchGrid] Could not parse portal settings');
+      }
     }
     
-    console.log('[DispatchGrid] Toggle initialized');
+    // Also check for individual setting
+    const liveSetting = localStorage.getItem('useLiveDriverLocations');
+    if (liveSetting !== null) {
+      this.useLiveLocations = liveSetting === 'true';
+      console.log('[DispatchGrid] Driver location mode from localStorage:', this.useLiveLocations ? 'LIVE' : 'RENDERED');
+    }
     
-    // Set initial state
-    renderedLabel?.classList.add('active');
-    
-    // Handle toggle change
-    const handleToggleChange = () => {
-      this.useLiveLocations = toggle.checked;
-      
-      // Update label styles
-      if (this.useLiveLocations) {
-        renderedLabel?.classList.remove('active');
-        liveLabel?.classList.add('active');
-        console.log('[DispatchGrid] Switched to LIVE driver locations');
-        this.startLiveLocationTracking();
-      } else {
-        liveLabel?.classList.remove('active');
-        renderedLabel?.classList.add('active');
-        console.log('[DispatchGrid] Switched to RENDERED driver locations');
-        this.stopLiveLocationTracking();
-        // Refresh both GPS map and main Map view with rendered drivers
-        this.refreshVehicleMarkers();
-        this.addDriverMarkersToMap();
-      }
-    };
-
-    toggle.addEventListener('change', handleToggleChange);
-    
-    // Also allow clicking on labels to toggle
-    renderedLabel?.addEventListener('click', () => {
-      if (toggle.checked) {
-        toggle.checked = false;
-        handleToggleChange();
-      }
-    });
-    
-    liveLabel?.addEventListener('click', () => {
-      if (!toggle.checked) {
-        toggle.checked = true;
-        handleToggleChange();
-      }
-    });
+    // Start live tracking if enabled
+    if (this.useLiveLocations) {
+      console.log('[DispatchGrid] Starting live location tracking (from settings)');
+      this.startLiveLocationTracking();
+    }
   }
 
   // Initialize simulated/rendered driver positions
