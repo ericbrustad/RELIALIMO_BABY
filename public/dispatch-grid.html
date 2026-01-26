@@ -7,16 +7,20 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="dispatch-grid.css" />
     <script src="https://relialimo.com/env.js"></script>
+    <script src="config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
       // Initialize Supabase client
       document.addEventListener('DOMContentLoaded', function() {
-        if (window.ENV && window.ENV.SUPABASE_URL && window.ENV.SUPABASE_ANON_KEY) {
-          window.supabaseClient = supabase.createClient(
-            window.ENV.SUPABASE_URL,
-            window.ENV.SUPABASE_ANON_KEY
-          );
+        // Try ENV first, then fall back to config
+        const supabaseUrl = (window.ENV && window.ENV.SUPABASE_URL) || (window.CONFIG && window.CONFIG.SUPABASE_URL);
+        const supabaseKey = (window.ENV && window.ENV.SUPABASE_ANON_KEY) || (window.CONFIG && window.CONFIG.SUPABASE_ANON_KEY);
+        
+        if (supabaseUrl && supabaseKey) {
+          window.supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
           console.log('[DispatchGrid] Supabase client initialized');
+        } else {
+          console.warn('[DispatchGrid] No Supabase config found, will use sample data');
         }
       });
       

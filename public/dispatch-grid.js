@@ -427,6 +427,13 @@ class DispatchGrid {
   async loadGridData() {
     try {
       const dateInput = document.getElementById('dispatchDate');
+      
+      // Set today's date if not already set
+      if (dateInput && !dateInput.dataset.userSet) {
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.value = today;
+      }
+      
       const selectedDate = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
       
       // Check if supabase client is available
@@ -438,7 +445,8 @@ class DispatchGrid {
 
       console.log('[DispatchGrid] Loading grid data for', selectedDate);
       
-      const { data, error } = await window.supabaseClient
+      // Try to load reservations for selected date first
+      let { data, error } = await window.supabaseClient
         .from('reservations')
         .select('*')
         .gte('pickup_datetime', `${selectedDate}T00:00:00`)
@@ -452,11 +460,26 @@ class DispatchGrid {
       }
 
       if (data && data.length > 0) {
-        console.log(`[DispatchGrid] Loaded ${data.length} reservations`);
+        console.log(`[DispatchGrid] Loaded ${data.length} reservations for ${selectedDate}`);
         this.gridData = this.mapReservationsToGrid(data);
       } else {
-        console.log('[DispatchGrid] No reservations for this date');
-        this.gridData = [];
+        // No reservations for this specific date, try loading recent reservations
+        console.log('[DispatchGrid] No reservations for this date, trying to load recent...');
+        
+        const { data: recentData, error: recentError } = await window.supabaseClient
+          .from('reservations')
+          .select('*')
+          .order('pickup_datetime', { ascending: false })
+          .limit(50);
+        
+        if (recentData && recentData.length > 0) {
+          console.log(`[DispatchGrid] Loaded ${recentData.length} recent reservations`);
+          this.gridData = this.mapReservationsToGrid(recentData);
+        } else {
+          console.log('[DispatchGrid] No reservations found, using sample data');
+          this.loadSampleGridData();
+          return;
+        }
       }
       
       this.applyFiltersAndRender();
@@ -514,13 +537,15 @@ class DispatchGrid {
 
   // Load sample data when Supabase not available
   loadSampleGridData() {
+    const today = new Date().toLocaleDateString('en-US');
+    
     this.gridData = [
       {
         id: 1,
         svcType: 'Transfer',
         confNum: '22456',
         status: 'Assigned',
-        reqPuDate: '12/12/2025',
+        reqPuDate: today,
         puTime: '8:00 AM',
         type: 'One Way',
         puLocation: '123 Main St, Minneapolis, MN',
@@ -546,7 +571,7 @@ class DispatchGrid {
         svcType: 'Hourly',
         confNum: '22457',
         status: 'Pending',
-        reqPuDate: '12/12/2025',
+        reqPuDate: today,
         puTime: '10:30 AM',
         type: 'Hourly',
         puLocation: 'Downtown Hilton',
@@ -572,7 +597,7 @@ class DispatchGrid {
         svcType: 'Transfer',
         confNum: '22458',
         status: 'Settled',
-        reqPuDate: '12/12/2025',
+        reqPuDate: today,
         puTime: '2:00 PM',
         type: 'Round Trip',
         puLocation: 'MSP Airport Terminal 2',
