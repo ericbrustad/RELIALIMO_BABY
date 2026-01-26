@@ -545,6 +545,29 @@ body {
 .window-tabs {
   display: flex;
   gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 transparent;
+  padding-bottom: 2px;
+}
+
+.window-tabs::-webkit-scrollbar {
+  height: 6px;
+}
+
+.window-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.window-tabs::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.window-tabs::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .window-tab {
