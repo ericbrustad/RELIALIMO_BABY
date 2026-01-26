@@ -13,8 +13,8 @@ class DispatchGrid {
     this.sortColumn = null; // Current sort column
     this.sortDirection = 'asc'; // 'asc' or 'desc'
     this.activeFilters = {
-      newLeg: false,
-      settled: false,
+      newLeg: true,    // Show new/pending/assigned reservations
+      settled: false,  // Hide settled/complete reservations by default
       inHouse: true,
       farmIn: true,
       farmOut: true,
@@ -638,35 +638,57 @@ class DispatchGrid {
       };
     }
 
+    console.log('[DispatchGrid] Active filters:', this.activeFilters);
+
     // Filter data
     this.filteredData = this.gridData.filter(row => {
-      const origin = (row.origins || row._raw?.trip_origin || '').toLowerCase();
-      const status = (row.status || '').toLowerCase();
+      const origin = (row.origins || row._raw?.trip_origin || 'In-House').toLowerCase().replace('-', '');
+      const status = (row.status || 'pending').toLowerCase();
       
-      // Check status filters
-      if (status === 'new' || status === 'pending') {
-        if (!this.activeFilters.newLeg) return false;
-      }
-      if (status === 'settled' || status === 'complete') {
-        if (!this.activeFilters.settled) return false;
+      // STATUS FILTERS (NewLeg, Settled)
+      // NewLeg = new, pending, assigned (active reservations)
+      // Settled = settled, complete, cancelled
+      const isActiveStatus = ['new', 'pending', 'assigned', 'confirmed'].includes(status);
+      const isSettledStatus = ['settled', 'complete', 'completed', 'cancelled'].includes(status);
+      const isQuoteStatus = status === 'quote';
+      
+      // ORIGIN FILTERS (In-House, Farm-In, Farm-Out)
+      const isInHouse = origin === '' || origin === 'inhouse' || origin === 'in house';
+      const isFarmIn = origin === 'farmin' || origin === 'farm in';
+      const isFarmOut = origin === 'farmout' || origin === 'farm out';
+      
+      // Check status - must match at least one checked status filter
+      let statusMatch = false;
+      if (isActiveStatus && this.activeFilters.newLeg) statusMatch = true;
+      if (isSettledStatus && this.activeFilters.settled) statusMatch = true;
+      if (isQuoteStatus && this.activeFilters.quotes) statusMatch = true;
+      // If no specific status filters apply, check if it's a regular active reservation
+      if (!isActiveStatus && !isSettledStatus && !isQuoteStatus) {
+        // Unknown status - show if newLeg is checked (default active)
+        if (this.activeFilters.newLeg) statusMatch = true;
       }
       
-      // Check origin filters
-      if (origin === 'in-house' || origin === 'inhouse' || origin === '') {
-        if (!this.activeFilters.inHouse) return false;
-      }
-      if (origin === 'farm-in' || origin === 'farmin') {
-        if (!this.activeFilters.farmIn) return false;
-      }
-      if (origin === 'farm-out' || origin === 'farmout') {
-        if (!this.activeFilters.farmOut) return false;
-      }
-      if (origin === 'quote' || status === 'quote') {
-        if (!this.activeFilters.quotes) return false;
+      // Check origin - must match at least one checked origin filter
+      let originMatch = false;
+      if (isInHouse && this.activeFilters.inHouse) originMatch = true;
+      if (isFarmIn && this.activeFilters.farmIn) originMatch = true;
+      if (isFarmOut && this.activeFilters.farmOut) originMatch = true;
+      // If no origin specified, treat as In-House
+      if (!isInHouse && !isFarmIn && !isFarmOut && this.activeFilters.inHouse) {
+        originMatch = true;
       }
       
-      return true;
+      // Must pass both status AND origin filters
+      const passes = statusMatch && originMatch;
+      
+      if (!passes) {
+        console.log(`[DispatchGrid] Filtered out: ${row.confNum} (status: ${status}/${statusMatch}, origin: ${origin}/${originMatch})`);
+      }
+      
+      return passes;
     });
+
+    console.log(`[DispatchGrid] Filtered ${this.filteredData.length} of ${this.gridData.length} reservations`);
 
     // Apply current sort if any
     if (this.currentSortColumn) {
