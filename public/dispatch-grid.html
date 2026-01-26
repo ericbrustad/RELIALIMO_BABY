@@ -6,7 +6,20 @@
     <title>Dispatch Grid - RELIA🐂LIMO™</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="dispatch-grid.css" />
+    <script src="https://relialimo.com/env.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
+      // Initialize Supabase client
+      document.addEventListener('DOMContentLoaded', function() {
+        if (window.ENV && window.ENV.SUPABASE_URL && window.ENV.SUPABASE_ANON_KEY) {
+          window.supabaseClient = supabase.createClient(
+            window.ENV.SUPABASE_URL,
+            window.ENV.SUPABASE_ANON_KEY
+          );
+          console.log('[DispatchGrid] Supabase client initialized');
+        }
+      });
+      
       // Hide main navigation if in iframe
       if (window.self !== window.top) {
         document.addEventListener('DOMContentLoaded', function() {
@@ -38,6 +51,16 @@
             <a href="#" class="dispatch-link" id="manageResourcesLink">Manage Resources</a>
             <a href="#" class="dispatch-link" id="linkDriversCarsLink">Link Drivers and Cars</a>
             <button class="dispatch-print">🖨 Print</button>
+            
+            <!-- Live/Rendered Driver Toggle -->
+            <div class="driver-location-toggle">
+              <span class="toggle-label" id="renderedLabel">Rendered</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="liveDriverToggle" />
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="toggle-label" id="liveLabel">Live</span>
+            </div>
           </div>
           <div class="dispatch-actions">
             <span class="dispatch-info">Now: <span id="currentTime">12/12/2025</span></span>

@@ -4,12 +4,233 @@ class DispatchGrid {
     this.gpsMap = null;
     this.markers = [];
     this.vehicleMarkers = [];
+    this.useLiveLocations = false; // Toggle state: false = rendered, true = live
+    this.liveLocationInterval = null;
+    this.renderedDrivers = []; // Simulated driver positions
     this.init();
   }
 
   init() {
     this.setupEventListeners();
     this.updateCurrentTime();
+    this.initDriverLocationToggle();
+    this.initRenderedDrivers();
+  }
+
+  // Initialize the Live/Rendered toggle
+  initDriverLocationToggle() {
+    const toggle = document.getElementById('liveDriverToggle');
+    const renderedLabel = document.getElementById('renderedLabel');
+    const liveLabel = document.getElementById('liveLabel');
+    
+    if (!toggle) return;
+    
+    // Set initial state
+    renderedLabel?.classList.add('active');
+    
+    toggle.addEventListener('change', () => {
+      this.useLiveLocations = toggle.checked;
+      
+      // Update label styles
+      if (this.useLiveLocations) {
+        renderedLabel?.classList.remove('active');
+        liveLabel?.classList.add('active');
+        console.log('[DispatchGrid] Switched to LIVE driver locations');
+        this.startLiveLocationTracking();
+      } else {
+        liveLabel?.classList.remove('active');
+        renderedLabel?.classList.add('active');
+        console.log('[DispatchGrid] Switched to RENDERED driver locations');
+        this.stopLiveLocationTracking();
+        this.refreshVehicleMarkers();
+      }
+    });
+  }
+
+  // Initialize simulated/rendered driver positions
+  initRenderedDrivers() {
+    this.renderedDrivers = [
+      {
+        id: 'car-suv',
+        lat: 44.9778,
+        lng: -93.2650,
+        name: '7 Passenger Suv',
+        driver: 'Eric Brustad',
+        status: 'available',
+        heading: Math.random() * 360,
+        speed: 0.0008
+      },
+      {
+        id: 'black-suv',
+        lat: 44.9500,
+        lng: -93.2200,
+        name: 'BLACK_SUV',
+        driver: 'Eric B',
+        status: 'busy',
+        heading: Math.random() * 360,
+        speed: 0.0006
+      },
+      {
+        id: 'sedan',
+        lat: 45.0000,
+        lng: -93.2900,
+        name: 'Sedan',
+        driver: 'Tony Arroyo',
+        status: 'available',
+        heading: Math.random() * 360,
+        speed: 0.0007
+      }
+    ];
+    
+    // Start simulated movement
+    setInterval(() => {
+      if (!this.useLiveLocations) {
+        this.updateRenderedDriverPositions();
+        this.refreshVehicleMarkers();
+      }
+    }, 3000);
+  }
+
+  // Simulate rendered driver movement
+  updateRenderedDriverPositions() {
+    const baseLat = 44.9778;
+    const baseLng = -93.2650;
+    const bounds = { north: baseLat + 0.15, south: baseLat - 0.15, east: baseLng + 0.2, west: baseLng - 0.2 };
+    
+    this.renderedDrivers.forEach(driver => {
+      if (driver.status === 'available' || driver.status === 'busy') {
+        const headingRad = (driver.heading * Math.PI) / 180;
+        driver.lat += Math.cos(headingRad) * driver.speed;
+        driver.lng += Math.sin(headingRad) * driver.speed;
+        
+        // Random heading adjustment
+        if (Math.random() < 0.3) {
+          driver.heading += (Math.random() - 0.5) * 40;
+          driver.heading = (driver.heading + 360) % 360;
+        }
+        
+        // Bounce off boundaries
+        if (driver.lat > bounds.north || driver.lat < bounds.south) {
+          driver.heading = (180 - driver.heading + 360) % 360;
+          driver.lat = Math.max(bounds.south, Math.min(bounds.north, driver.lat));
+        }
+        if (driver.lng > bounds.east || driver.lng < bounds.west) {
+          driver.heading = (360 - driver.heading) % 360;
+          driver.lng = Math.max(bounds.west, Math.min(bounds.east, driver.lng));
+        }
+      }
+    });
+  }
+
+  // Start tracking live GPS locations from database
+  startLiveLocationTracking() {
+    this.fetchLiveDriverLocations();
+    this.liveLocationInterval = setInterval(() => {
+      this.fetchLiveDriverLocations();
+    }, 5000); // Poll every 5 seconds
+  }
+
+  stopLiveLocationTracking() {
+    if (this.liveLocationInterval) {
+      clearInterval(this.liveLocationInterval);
+      this.liveLocationInterval = null;
+    }
+  }
+
+  // Fetch real driver locations from Supabase
+  async fetchLiveDriverLocations() {
+    try {
+      // Check if supabase client is available
+      if (typeof window.supabaseClient === 'undefined') {
+        console.warn('[DispatchGrid] Supabase client not available for live locations');
+        this.showNoLiveDataMessage();
+        return;
+      }
+      
+      // First check if table exists by doing a simple query
+      const { data, error } = await window.supabaseClient
+        .from('driver_locations')
+        .select('id, driver_id, latitude, longitude, heading, speed, created_at')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      
+      if (error) {
+        // Table might not exist yet
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('[DispatchGrid] driver_locations table not set up yet');
+          this.showNoLiveDataMessage('Table not configured. Run driver-locations-setup.sql in Supabase.');
+        } else {
+          console.error('[DispatchGrid] Error fetching live locations:', error);
+          this.showNoLiveDataMessage('Error loading live data');
+        }
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        console.log(`[DispatchGrid] Received ${data.length} live driver locations`);
+        this.updateLiveVehicleMarkers(data);
+      } else {
+        console.log('[DispatchGrid] No live driver locations available');
+        this.showNoLiveDataMessage('No live driver locations yet. Drivers need to share their location.');
+      }
+    } catch (err) {
+      console.error('[DispatchGrid] Failed to fetch live locations:', err);
+      this.showNoLiveDataMessage('Connection error');
+    }
+  }
+
+  // Show message when no live data available
+  showNoLiveDataMessage(message = 'No live driver data available') {
+    if (!this.gpsMap) return;
+    
+    // Remove existing message popup
+    if (this.noDataPopup) {
+      this.gpsMap.closePopup(this.noDataPopup);
+    }
+    
+    // Show centered popup with message
+    this.noDataPopup = L.popup()
+      .setLatLng([44.9778, -93.2650])
+      .setContent(`<div style="text-align:center;padding:10px;"><strong>🔴 Live Mode</strong><br>${message}</div>`)
+      .openOn(this.gpsMap);
+  }
+
+  // Update markers with live location data
+  updateLiveVehicleMarkers(liveData) {
+    if (!this.gpsMap) return;
+    
+    // Close any "no data" popup
+    if (this.noDataPopup) {
+      this.gpsMap.closePopup(this.noDataPopup);
+      this.noDataPopup = null;
+    }
+    
+    // Clear existing markers
+    this.vehicleMarkers.forEach(({ marker }) => {
+      this.gpsMap.removeLayer(marker);
+    });
+    this.vehicleMarkers = [];
+    
+    liveData.forEach(loc => {
+      const driverName = loc.driver_id ? `Driver ${loc.driver_id.substring(0, 8)}...` : 'Unknown Driver';
+      
+      const markerIcon = L.divIcon({
+        className: 'vehicle-marker available live-marker',
+        html: '📍',
+        iconSize: [40, 40]
+      });
+
+      const marker = L.marker([loc.latitude, loc.longitude], { icon: markerIcon })
+        .addTo(this.gpsMap)
+        .bindPopup(`
+          <strong>🟢 LIVE</strong><br>
+          Driver: ${driverName}<br>
+          Speed: ${loc.speed ? (loc.speed * 2.237).toFixed(1) + ' mph' : 'N/A'}<br>
+          Updated: ${new Date(loc.created_at).toLocaleTimeString()}
+        `);
+
+      this.vehicleMarkers.push({ id: loc.driver_id, marker, vehicle: loc });
+    });
   }
 
   setupEventListeners() {
@@ -354,33 +575,8 @@ class DispatchGrid {
   }
 
   addVehicleMarkers() {
-    // Sample vehicle locations
-    const vehicles = [
-      {
-        id: 'car-suv',
-        lat: 44.9778,
-        lng: -93.2650,
-        name: '7 Passenger Suv',
-        driver: 'Eric Brustad',
-        status: 'available'
-      },
-      {
-        id: 'black-suv',
-        lat: 44.9500,
-        lng: -93.2200,
-        name: 'BLACK_SUV',
-        driver: 'Eric B',
-        status: 'busy'
-      },
-      {
-        id: 'sedan',
-        lat: 45.0000,
-        lng: -93.2900,
-        name: 'Sedan',
-        driver: 'Tony Arroyo',
-        status: 'available'
-      }
-    ];
+    // Use rendered drivers array (simulated positions)
+    const vehicles = this.renderedDrivers;
 
     vehicles.forEach(vehicle => {
       // Create vehicle marker
@@ -395,10 +591,24 @@ class DispatchGrid {
         .bindPopup(`
           <strong>${vehicle.name}</strong><br>
           Driver: ${vehicle.driver}<br>
-          Status: ${vehicle.status === 'available' ? 'Available' : 'On Trip'}
+          Status: ${vehicle.status === 'available' ? 'Available' : 'On Trip'}<br>
+          <em style="color: #ffa500;">🔸 Rendered Location</em>
         `);
 
       this.vehicleMarkers.push({ id: vehicle.id, marker, vehicle });
+    });
+  }
+
+  // Refresh vehicle markers with current positions
+  refreshVehicleMarkers() {
+    if (!this.gpsMap) return;
+    
+    this.vehicleMarkers.forEach(({ marker, vehicle }) => {
+      // Find updated position from rendered drivers
+      const updated = this.renderedDrivers.find(d => d.id === vehicle.id);
+      if (updated) {
+        marker.setLatLng([updated.lat, updated.lng]);
+      }
     });
   }
 
