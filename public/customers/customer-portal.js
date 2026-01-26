@@ -1172,12 +1172,28 @@ function updateTripTypeFromAddresses() {
     if (newTripType === 'from-airport') {
       showToast('Trip type set to From Airport (+$15 MAC fee)', 'info');
     } else if (newTripType === 'to-airport') {
-      showToast('Trip type set to To Airport (+$15 MAC fee)', 'info');
+      showToast('Trip type set to To Airport', 'info');
     }
     
     console.log('[CustomerPortal] Auto-selected trip type:', newTripType);
   }
 }
+
+// ============================================
+// Dropoff Flight Details Toggle (Optional)
+// ============================================
+function toggleDropoffFlightDetails() {
+  const fields = document.getElementById('dropoffFlightFields');
+  const arrow = document.getElementById('dropoffFlightArrow');
+  
+  if (fields && arrow) {
+    const isHidden = fields.classList.contains('hidden');
+    fields.classList.toggle('hidden');
+    arrow.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+  }
+}
+// Expose to window for inline onclick
+window.toggleDropoffFlightDetails = toggleDropoffFlightDetails;
 
 // ============================================
 // Flight Verification
