@@ -412,22 +412,28 @@
         overflow-x: hidden;
         padding-right: 4px;
         padding-bottom: 20px;
+        /* Firefox scrollbar */
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,0.4) rgba(255,255,255,0.1);
       }
 
       /* Scrollbar styling for vertical nav */
       html[data-layout="vertical"] #app > header.header .main-nav::-webkit-scrollbar {
-        width: 8px;
+        width: 10px;
       }
       html[data-layout="vertical"] #app > header.header .main-nav::-webkit-scrollbar-track {
-        background: rgba(255,255,255,0.08);
-        border-radius: 4px;
+        background: rgba(255,255,255,0.15);
+        border-radius: 5px;
+        margin: 4px 0;
       }
       html[data-layout="vertical"] #app > header.header .main-nav::-webkit-scrollbar-thumb {
-        background: rgba(255,255,255,0.3);
-        border-radius: 4px;
+        background: rgba(255,255,255,0.45);
+        border-radius: 5px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
       }
       html[data-layout="vertical"] #app > header.header .main-nav::-webkit-scrollbar-thumb:hover {
-        background: rgba(255,255,255,0.5);
+        background: rgba(255,255,255,0.65);
       }
 
       html[data-layout="vertical"] #app > header.header .nav-btn {
