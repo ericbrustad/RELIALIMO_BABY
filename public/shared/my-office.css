@@ -666,6 +666,30 @@ body {
   display: flex;
   flex-direction: column;
   padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: calc(100vh - 90px);
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f0f0f0;
+}
+
+/* Webkit scrollbar styling for sidebar */
+.sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .sidebar-group {
