@@ -7,6 +7,7 @@ class DispatchGrid {
     this.useLiveLocations = false; // Toggle state: false = rendered, true = live
     this.liveLocationInterval = null;
     this.renderedDrivers = []; // Simulated driver positions
+    this.liveDrivers = []; // Live driver positions from database
     this.init();
   }
 
@@ -23,7 +24,12 @@ class DispatchGrid {
     const renderedLabel = document.getElementById('renderedLabel');
     const liveLabel = document.getElementById('liveLabel');
     
-    if (!toggle) return;
+    if (!toggle) {
+      console.warn('[DispatchGrid] Toggle element not found');
+      return;
+    }
+    
+    console.log('[DispatchGrid] Toggle initialized');
     
     // Set initial state
     renderedLabel?.classList.add('active');
@@ -42,7 +48,9 @@ class DispatchGrid {
         renderedLabel?.classList.add('active');
         console.log('[DispatchGrid] Switched to RENDERED driver locations');
         this.stopLiveLocationTracking();
+        // Refresh both GPS map and main Map view with rendered drivers
         this.refreshVehicleMarkers();
+        this.addDriverMarkersToMap();
       }
     });
   }
@@ -197,40 +205,59 @@ class DispatchGrid {
 
   // Update markers with live location data
   updateLiveVehicleMarkers(liveData) {
-    if (!this.gpsMap) return;
-    
-    // Close any "no data" popup
-    if (this.noDataPopup) {
-      this.gpsMap.closePopup(this.noDataPopup);
-      this.noDataPopup = null;
+    // Store live drivers for use by addDriverMarkersToMap
+    this.liveDrivers = liveData.map(loc => ({
+      id: loc.driver_id,
+      lat: loc.latitude,
+      lng: loc.longitude,
+      name: `Driver ${loc.driver_id?.substring(0, 8) || 'Unknown'}`,
+      driver: loc.driver_id ? `Driver ${loc.driver_id.substring(0, 8)}...` : 'Unknown',
+      status: 'available',
+      heading: loc.heading || 0,
+      speed: loc.speed || 0,
+      updatedAt: loc.created_at
+    }));
+
+    // Update GPS Map if it exists
+    if (this.gpsMap) {
+      // Close any "no data" popup
+      if (this.noDataPopup) {
+        this.gpsMap.closePopup(this.noDataPopup);
+        this.noDataPopup = null;
+      }
+      
+      // Clear existing markers
+      this.vehicleMarkers.forEach(({ marker }) => {
+        this.gpsMap.removeLayer(marker);
+      });
+      this.vehicleMarkers = [];
+      
+      liveData.forEach(loc => {
+        const driverName = loc.driver_id ? `Driver ${loc.driver_id.substring(0, 8)}...` : 'Unknown Driver';
+        
+        const markerIcon = L.divIcon({
+          className: 'vehicle-marker available live-marker',
+          html: '📍',
+          iconSize: [40, 40]
+        });
+
+        const marker = L.marker([loc.latitude, loc.longitude], { icon: markerIcon })
+          .addTo(this.gpsMap)
+          .bindPopup(`
+            <strong>🟢 LIVE</strong><br>
+            Driver: ${driverName}<br>
+            Speed: ${loc.speed ? (loc.speed * 2.237).toFixed(1) + ' mph' : 'N/A'}<br>
+            Updated: ${new Date(loc.created_at).toLocaleTimeString()}
+          `);
+
+        this.vehicleMarkers.push({ id: loc.driver_id, marker, vehicle: loc });
+      });
     }
     
-    // Clear existing markers
-    this.vehicleMarkers.forEach(({ marker }) => {
-      this.gpsMap.removeLayer(marker);
-    });
-    this.vehicleMarkers = [];
-    
-    liveData.forEach(loc => {
-      const driverName = loc.driver_id ? `Driver ${loc.driver_id.substring(0, 8)}...` : 'Unknown Driver';
-      
-      const markerIcon = L.divIcon({
-        className: 'vehicle-marker available live-marker',
-        html: '📍',
-        iconSize: [40, 40]
-      });
-
-      const marker = L.marker([loc.latitude, loc.longitude], { icon: markerIcon })
-        .addTo(this.gpsMap)
-        .bindPopup(`
-          <strong>🟢 LIVE</strong><br>
-          Driver: ${driverName}<br>
-          Speed: ${loc.speed ? (loc.speed * 2.237).toFixed(1) + ' mph' : 'N/A'}<br>
-          Updated: ${new Date(loc.created_at).toLocaleTimeString()}
-        `);
-
-      this.vehicleMarkers.push({ id: loc.driver_id, marker, vehicle: loc });
-    });
+    // Also update main Map view with live drivers
+    if (this.map) {
+      this.addDriverMarkersToMap();
+    }
   }
 
   setupEventListeners() {
@@ -541,6 +568,8 @@ class DispatchGrid {
 
   // Add driver markers to the main map view
   addDriverMarkersToMap() {
+    if (!this.map) return;
+    
     // Clear existing driver markers on map
     if (this.mapDriverMarkers) {
       this.mapDriverMarkers.forEach(marker => this.map.removeLayer(marker));
@@ -548,15 +577,24 @@ class DispatchGrid {
     this.mapDriverMarkers = [];
     this.mapDriverMarkersById = {};
     
-    // Use rendered drivers or fetch live based on toggle
-    const drivers = this.useLiveLocations ? [] : this.renderedDrivers;
+    // Use live drivers or rendered drivers based on toggle
+    const drivers = this.useLiveLocations ? (this.liveDrivers || []) : this.renderedDrivers;
+    
+    if (this.useLiveLocations && (!this.liveDrivers || this.liveDrivers.length === 0)) {
+      // Show message if no live data
+      console.log('[DispatchGrid] No live drivers to display on map');
+      return;
+    }
     
     drivers.forEach(driver => {
       const statusColor = driver.status === 'available' ? '#28a745' : 
                           driver.status === 'busy' ? '#ffc107' : '#6c757d';
       
+      // Different icon for live vs rendered
+      const iconEmoji = this.useLiveLocations ? '📍' : '🚗';
+      
       const markerIcon = L.divIcon({
-        className: 'driver-map-marker',
+        className: `driver-map-marker ${this.useLiveLocations ? 'live-marker' : ''}`,
         html: `<div style="
           background: ${statusColor};
           color: white;
@@ -567,9 +605,9 @@ class DispatchGrid {
           align-items: center;
           justify-content: center;
           font-size: 16px;
-          border: 2px solid white;
+          border: 2px solid ${this.useLiveLocations ? '#00ff00' : 'white'};
           box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-        ">🚗</div>`,
+        ">${iconEmoji}</div>`,
         iconSize: [32, 32],
         iconAnchor: [16, 16]
       });
@@ -577,14 +615,17 @@ class DispatchGrid {
       const marker = L.marker([driver.lat, driver.lng], { icon: markerIcon })
         .addTo(this.map)
         .bindPopup(`
-          <strong>${driver.driver}</strong><br>
+          <strong>${this.useLiveLocations ? '🟢 LIVE - ' : ''}${driver.driver || driver.name}</strong><br>
           Vehicle: ${driver.name}<br>
           Status: ${driver.status === 'available' ? '🟢 Available' : '🟡 On Trip'}
+          ${this.useLiveLocations && driver.updatedAt ? '<br>Updated: ' + new Date(driver.updatedAt).toLocaleTimeString() : ''}
         `);
 
       this.mapDriverMarkers.push(marker);
       this.mapDriverMarkersById[driver.id] = { marker, driver };
     });
+    
+    console.log(`[DispatchGrid] Added ${drivers.length} ${this.useLiveLocations ? 'live' : 'rendered'} driver markers to map`);
   }
 
   // Highlight a specific driver on the map
