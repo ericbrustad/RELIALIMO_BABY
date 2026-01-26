@@ -456,20 +456,87 @@ class DispatchGrid {
       maxZoom: 19
     }).addTo(this.map);
 
-    // Add reservation markers
-    this.addReservationMarkers();
+    // Load and add reservation markers
+    this.loadMapReservations();
     
     // Add driver markers
     this.addDriverMarkersToMap();
 
     // Setup map controls
     this.setupMapControls();
-
-    // Setup reservation list interactions
-    this.setupMapReservationList();
     
     // Start driver position updates on map
     this.startMapDriverUpdates();
+  }
+
+  // Load reservations from Supabase for the map view
+  async loadMapReservations() {
+    try {
+      if (typeof window.supabaseClient === 'undefined') {
+        console.warn('[DispatchGrid] Supabase client not available for reservations');
+        return;
+      }
+      
+      // Get today's date for filtering
+      const today = new Date().toISOString().split('T')[0];
+      
+      const { data, error } = await window.supabaseClient
+        .from('reservations')
+        .select('id, confirmation_number, status, pickup_datetime, dropoff_datetime, pickup_address, dropoff_address, passenger_name, assigned_driver_id, assigned_driver_name')
+        .gte('pickup_datetime', today)
+        .order('pickup_datetime', { ascending: true })
+        .limit(50);
+      
+      if (error) {
+        console.error('[DispatchGrid] Error loading reservations:', error);
+        return;
+      }
+      
+      this.mapReservations = data || [];
+      console.log(`[DispatchGrid] Loaded ${this.mapReservations.length} reservations for map`);
+      
+      // Populate sidebar
+      this.populateMapReservationsSidebar();
+      
+    } catch (err) {
+      console.error('[DispatchGrid] Failed to load reservations:', err);
+    }
+  }
+
+  // Populate the reservations sidebar
+  populateMapReservationsSidebar() {
+    const tbody = document.querySelector('.map-reservations-table tbody');
+    if (!tbody || !this.mapReservations) return;
+    
+    tbody.innerHTML = this.mapReservations.map(res => {
+      const puDate = res.pickup_datetime ? new Date(res.pickup_datetime).toLocaleDateString() : '-';
+      const puTime = res.pickup_datetime ? new Date(res.pickup_datetime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
+      const doTime = res.dropoff_datetime ? new Date(res.dropoff_datetime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-';
+      const hasDriver = res.assigned_driver_id || res.assigned_driver_name;
+      const driverBadge = hasDriver ? '🟢' : '🔴';
+      
+      return `
+        <tr class="map-reservation-row" data-conf="${res.confirmation_number}" data-driver-id="${res.assigned_driver_id || ''}">
+          <td>${driverBadge} ${res.confirmation_number || res.id.substring(0,8)}</td>
+          <td>${puDate}</td>
+          <td>${puTime}</td>
+          <td>${doTime}</td>
+        </tr>
+        <tr class="map-reservation-detail" data-conf="${res.confirmation_number}">
+          <td colspan="4">
+            <div class="res-detail-content">
+              <strong>${res.passenger_name || 'No passenger'}</strong><br>
+              <small>PU: ${res.pickup_address || 'N/A'}</small><br>
+              <small>DO: ${res.dropoff_address || 'N/A'}</small><br>
+              <small>Driver: ${hasDriver ? (res.assigned_driver_name || 'Assigned') : '<span style="color:red">UNASSIGNED</span>'}</small>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+    
+    // Setup click handlers
+    this.setupMapReservationList();
   }
 
   // Add driver markers to the main map view
@@ -479,6 +546,7 @@ class DispatchGrid {
       this.mapDriverMarkers.forEach(marker => this.map.removeLayer(marker));
     }
     this.mapDriverMarkers = [];
+    this.mapDriverMarkersById = {};
     
     // Use rendered drivers or fetch live based on toggle
     const drivers = this.useLiveLocations ? [] : this.renderedDrivers;
@@ -515,7 +583,66 @@ class DispatchGrid {
         `);
 
       this.mapDriverMarkers.push(marker);
+      this.mapDriverMarkersById[driver.id] = { marker, driver };
     });
+  }
+
+  // Highlight a specific driver on the map
+  highlightDriverOnMap(driverId) {
+    // Reset all driver markers to normal
+    if (this.mapDriverMarkers) {
+      this.mapDriverMarkers.forEach((marker, idx) => {
+        const driver = this.renderedDrivers[idx];
+        if (driver) {
+          const statusColor = driver.status === 'available' ? '#28a745' : 
+                              driver.status === 'busy' ? '#ffc107' : '#6c757d';
+          marker.setIcon(L.divIcon({
+            className: 'driver-map-marker',
+            html: `<div style="
+              background: ${statusColor};
+              color: white;
+              width: 32px;
+              height: 32px;
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 16px;
+              border: 2px solid white;
+              box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            ">🚗</div>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16]
+          }));
+        }
+      });
+    }
+    
+    // Highlight the selected driver
+    if (driverId && this.mapDriverMarkersById && this.mapDriverMarkersById[driverId]) {
+      const { marker, driver } = this.mapDriverMarkersById[driverId];
+      marker.setIcon(L.divIcon({
+        className: 'driver-map-marker highlighted',
+        html: `<div style="
+          background: #ff4757;
+          color: white;
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 20px;
+          border: 3px solid #fff;
+          box-shadow: 0 0 15px rgba(255,71,87,0.8);
+          animation: pulse 1s infinite;
+        ">🚗</div>`,
+        iconSize: [44, 44],
+        iconAnchor: [22, 22]
+      }));
+      marker.openPopup();
+      this.map.setView(marker.getLatLng(), 13);
+    }
   }
   
   // Start updating driver positions on map
@@ -589,10 +716,11 @@ class DispatchGrid {
   }
 
   setupMapReservationList() {
-    // Make reservation rows clickable to show details and center map
+    // Make reservation rows clickable to show details and highlight driver
     document.querySelectorAll('.map-reservation-row').forEach(row => {
       row.addEventListener('click', (e) => {
         const conf = row.dataset.conf;
+        const driverId = row.dataset.driverId;
         
         // Toggle active state
         document.querySelectorAll('.map-reservation-row').forEach(r => r.classList.remove('active'));
@@ -605,7 +733,18 @@ class DispatchGrid {
           detailRow.classList.add('show');
         }
 
-        // Center map on this reservation's markers
+        // Highlight the assigned driver on the map
+        if (driverId) {
+          this.highlightDriverOnMap(driverId);
+        } else {
+          // No driver - show popup for unassigned
+          L.popup()
+            .setLatLng([44.9778, -93.2650])
+            .setContent(`<div style="text-align:center;padding:10px;"><strong>🔴 UNASSIGNED</strong><br>Conf# ${conf} has no driver assigned</div>`)
+            .openOn(this.map);
+        }
+
+        // Center map on reservation markers if they exist
         const markerSet = this.markers.find(m => m.conf === conf);
         if (markerSet) {
           const group = L.featureGroup([markerSet.pickup, markerSet.dropoff]);
