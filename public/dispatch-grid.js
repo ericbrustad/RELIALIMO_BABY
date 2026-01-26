@@ -36,6 +36,7 @@ class DispatchGrid {
     const toggle = document.getElementById('liveDriverToggle');
     const renderedLabel = document.getElementById('renderedLabel');
     const liveLabel = document.getElementById('liveLabel');
+    const toggleContainer = document.querySelector('.driver-location-toggle');
     
     if (!toggle) {
       console.warn('[DispatchGrid] Toggle element not found');
@@ -47,7 +48,8 @@ class DispatchGrid {
     // Set initial state
     renderedLabel?.classList.add('active');
     
-    toggle.addEventListener('change', () => {
+    // Handle toggle change
+    const handleToggleChange = () => {
       this.useLiveLocations = toggle.checked;
       
       // Update label styles
@@ -64,6 +66,23 @@ class DispatchGrid {
         // Refresh both GPS map and main Map view with rendered drivers
         this.refreshVehicleMarkers();
         this.addDriverMarkersToMap();
+      }
+    };
+
+    toggle.addEventListener('change', handleToggleChange);
+    
+    // Also allow clicking on labels to toggle
+    renderedLabel?.addEventListener('click', () => {
+      if (toggle.checked) {
+        toggle.checked = false;
+        handleToggleChange();
+      }
+    });
+    
+    liveLabel?.addEventListener('click', () => {
+      if (!toggle.checked) {
+        toggle.checked = true;
+        handleToggleChange();
       }
     });
   }
