@@ -243,11 +243,14 @@ class ReservationsList {
         modeIndicator = `<span class="farmout-mode-indicator ${modeClass}" title="${modeTitle}">${modeLabel}</span>`;
       }
       
+      // Use pickup_datetime (database column) with fallback to pickup_at for compatibility
+      const pickupDateTime = res.pickup_datetime || res.pickup_at;
+      
       const row = document.createElement('tr');
       row.innerHTML = `
         <td><a href="#" class="conf-link" data-conf="${res.confirmation_number || ''}">${res.confirmation_number || 'N/A'}</a></td>
-        <td>${this.formatDate(res.pickup_at)}</td>
-        <td>${this.formatTime(res.pickup_at)}</td>
+        <td>${this.formatDate(pickupDateTime)}</td>
+        <td>${this.formatTime(pickupDateTime)}</td>
         <td>${res.passenger_name || [res.passenger_first_name, res.passenger_last_name].filter(Boolean).join(' ') || ''}</td>
         <td>${companyName}</td>
         <td>${vehicleTypeName}</td>
