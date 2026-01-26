@@ -52,11 +52,50 @@ class DispatchGrid {
       console.log('[DispatchGrid] Driver location mode from localStorage:', this.useLiveLocations ? 'LIVE' : 'RENDERED');
     }
     
+    // Show mode indicator in header
+    this.showDriverModeIndicator();
+    
     // Start live tracking if enabled
     if (this.useLiveLocations) {
       console.log('[DispatchGrid] Starting live location tracking (from settings)');
       this.startLiveLocationTracking();
     }
+  }
+
+  // Show indicator of current driver location mode
+  showDriverModeIndicator() {
+    // Add indicator after the dispatch tabs
+    const tabsBar = document.querySelector('.dispatch-tabs');
+    if (!tabsBar) return;
+    
+    // Remove existing indicator
+    const existing = document.getElementById('driverModeIndicator');
+    if (existing) existing.remove();
+    
+    const indicator = document.createElement('div');
+    indicator.id = 'driverModeIndicator';
+    indicator.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: 15px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      background: ${this.useLiveLocations ? '#d4edda' : '#fff3cd'};
+      color: ${this.useLiveLocations ? '#155724' : '#856404'};
+      border: 1px solid ${this.useLiveLocations ? '#c3e6cb' : '#ffc107'};
+    `;
+    indicator.innerHTML = `
+      <span style="font-size: 14px;">${this.useLiveLocations ? '📡' : '🎮'}</span>
+      <span>Drivers: ${this.useLiveLocations ? 'LIVE GPS' : 'SIMULATED'}</span>
+    `;
+    indicator.title = this.useLiveLocations 
+      ? 'Showing real GPS locations from drivers' 
+      : 'Showing simulated driver positions. Enable Live mode in Portal Settings > Driver Portal.';
+    
+    tabsBar.appendChild(indicator);
   }
 
   // Initialize simulated/rendered driver positions
@@ -1039,12 +1078,32 @@ class DispatchGrid {
     this.mapDriverMarkersById = {};
     
     // Use live drivers or rendered drivers based on toggle
-    const drivers = this.useLiveLocations ? (this.liveDrivers || []) : this.renderedDrivers;
+    let drivers = this.useLiveLocations ? (this.liveDrivers || []) : this.renderedDrivers;
+    let showingFallback = false;
     
     if (this.useLiveLocations && (!this.liveDrivers || this.liveDrivers.length === 0)) {
-      // Show message if no live data
-      console.log('[DispatchGrid] No live drivers to display on map');
-      return;
+      // Show fallback rendered drivers with DEMO label when no live data
+      console.log('[DispatchGrid] No live drivers available, showing simulated as fallback');
+      drivers = this.renderedDrivers;
+      showingFallback = true;
+      
+      // Show info popup on map
+      if (this.map && !this.noLiveDataPopup) {
+        this.noLiveDataPopup = L.popup()
+          .setLatLng([44.9778, -93.2650])
+          .setContent(`
+            <div style="text-align:center;padding:10px;">
+              <strong>📡 Live Mode Enabled</strong><br>
+              <span style="color:#666;">No live driver GPS data available yet.</span><br>
+              <small>Showing simulated positions as fallback.</small><br>
+              <small style="color:#888;">Drivers must share location from Driver Portal.</small>
+            </div>
+          `)
+          .openOn(this.map);
+      }
+    } else if (this.noLiveDataPopup) {
+      this.map.closePopup(this.noLiveDataPopup);
+      this.noLiveDataPopup = null;
     }
     
     drivers.forEach(driver => {
@@ -1052,10 +1111,11 @@ class DispatchGrid {
                           driver.status === 'busy' ? '#ffc107' : '#6c757d';
       
       // Different icon for live vs rendered
-      const iconEmoji = this.useLiveLocations ? '📍' : '🚗';
+      const iconEmoji = (this.useLiveLocations && !showingFallback) ? '📍' : '🚗';
+      const borderColor = (this.useLiveLocations && !showingFallback) ? '#00ff00' : (showingFallback ? '#ffc107' : 'white');
       
       const markerIcon = L.divIcon({
-        className: `driver-map-marker ${this.useLiveLocations ? 'live-marker' : ''}`,
+        className: `driver-map-marker ${(this.useLiveLocations && !showingFallback) ? 'live-marker' : ''}`,
         html: `<div style="
           background: ${statusColor};
           color: white;
@@ -1066,27 +1126,30 @@ class DispatchGrid {
           align-items: center;
           justify-content: center;
           font-size: 16px;
-          border: 2px solid ${this.useLiveLocations ? '#00ff00' : 'white'};
+          border: 2px solid ${borderColor};
           box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-        ">${iconEmoji}</div>`,
+          position: relative;
+        ">${iconEmoji}${showingFallback ? '<span style="position:absolute;top:-8px;right:-8px;background:#ffc107;color:#000;font-size:8px;padding:1px 3px;border-radius:3px;">DEMO</span>' : ''}</div>`,
         iconSize: [32, 32],
         iconAnchor: [16, 16]
       });
 
+      const modeLabel = (this.useLiveLocations && !showingFallback) ? '🟢 LIVE - ' : (showingFallback ? '🟡 DEMO - ' : '');
       const marker = L.marker([driver.lat, driver.lng], { icon: markerIcon })
         .addTo(this.map)
         .bindPopup(`
-          <strong>${this.useLiveLocations ? '🟢 LIVE - ' : ''}${driver.driver || driver.name}</strong><br>
+          <strong>${modeLabel}${driver.driver || driver.name}</strong><br>
           Vehicle: ${driver.name}<br>
           Status: ${driver.status === 'available' ? '🟢 Available' : '🟡 On Trip'}
-          ${this.useLiveLocations && driver.updatedAt ? '<br>Updated: ' + new Date(driver.updatedAt).toLocaleTimeString() : ''}
+          ${(this.useLiveLocations && !showingFallback && driver.updatedAt) ? '<br>Updated: ' + new Date(driver.updatedAt).toLocaleTimeString() : ''}
+          ${showingFallback ? '<br><small style="color:#888;">Simulated position - no live GPS</small>' : ''}
         `);
 
       this.mapDriverMarkers.push(marker);
       this.mapDriverMarkersById[driver.id] = { marker, driver };
     });
     
-    console.log(`[DispatchGrid] Added ${drivers.length} ${this.useLiveLocations ? 'live' : 'rendered'} driver markers to map`);
+    console.log(`[DispatchGrid] Added ${drivers.length} ${(this.useLiveLocations && !showingFallback) ? 'live' : showingFallback ? 'fallback demo' : 'rendered'} driver markers to map`);
   }
 
   // Highlight a specific driver on the map
