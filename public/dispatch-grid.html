@@ -60,10 +60,10 @@
             <button class="dispatch-print">🖨 Print</button>
             
             <!-- Live/Rendered Driver Toggle -->
-            <div class="driver-location-toggle">
-              <span class="toggle-label" id="renderedLabel">Rendered</span>
+            <div class="driver-location-toggle" id="driverToggleContainer">
+              <span class="toggle-label active" id="renderedLabel">Rendered</span>
               <label class="toggle-switch">
-                <input type="checkbox" id="liveDriverToggle" />
+                <input type="checkbox" id="liveDriverToggle" onclick="console.log('Toggle clicked!', this.checked)" />
                 <span class="toggle-slider"></span>
               </label>
               <span class="toggle-label" id="liveLabel">Live</span>
