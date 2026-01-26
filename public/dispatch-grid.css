@@ -17,6 +17,13 @@ body {
   flex-direction: column;
 }
 
+/* Spacer for floating controls from parent frame */
+.dispatch-header-spacer {
+  height: 45px;
+  background: #2c3e50;
+  flex-shrink: 0;
+}
+
 /* Header */
 .header {
   background: #fff;
