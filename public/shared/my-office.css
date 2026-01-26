@@ -570,6 +570,52 @@ body {
   background: #a8a8a8;
 }
 
+/* Vertical mode for window tabs bar (use class "vertical" on window-tabs-bar) */
+.window-tabs-bar.vertical {
+  flex-direction: column;
+  align-items: stretch;
+  max-height: calc(100vh - 50px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f0f0f0;
+}
+
+.window-tabs-bar.vertical::-webkit-scrollbar {
+  width: 8px;
+}
+
+.window-tabs-bar.vertical::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+.window-tabs-bar.vertical::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.window-tabs-bar.vertical::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.window-tabs-bar.vertical .window-tabs {
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: calc(100vh - 100px);
+}
+
+.window-tabs-bar.vertical .window-tabs::-webkit-scrollbar {
+  width: 6px;
+  height: auto;
+}
+
+.window-tabs-bar.vertical .window-tab {
+  border-radius: 3px;
+  text-align: left;
+}
+
 .window-tab {
   padding: 6px 16px;
   border: 1px solid #ccc;
