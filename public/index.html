@@ -380,6 +380,26 @@
         color: white;
         box-shadow: 2px 0 8px rgba(0,0,0,0.15);
         z-index: 1000;
+        overflow-y: auto;
+        overflow-x: hidden;
+        /* Firefox scrollbar */
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,0.5) rgba(255,255,255,0.15);
+      }
+
+      /* Webkit scrollbar for vertical header */
+      html[data-layout="vertical"] #app > header.header::-webkit-scrollbar {
+        width: 10px;
+      }
+      html[data-layout="vertical"] #app > header.header::-webkit-scrollbar-track {
+        background: rgba(255,255,255,0.1);
+      }
+      html[data-layout="vertical"] #app > header.header::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.4);
+        border-radius: 5px;
+      }
+      html[data-layout="vertical"] #app > header.header::-webkit-scrollbar-thumb:hover {
+        background: rgba(255,255,255,0.6);
       }
 
       html[data-layout="vertical"] #app > header.header .header-content {
@@ -388,10 +408,9 @@
         align-items: stretch;
         gap: 12px;
         padding: 16px;
-        padding-bottom: 20px;
-        height: 100%;
+        padding-bottom: 80px; /* Space for user menu at bottom */
+        min-height: min-content;
         box-sizing: border-box;
-        overflow: visible;
       }
 
       /* Logo + Controls container */
@@ -407,34 +426,7 @@
         display: flex;
         flex-direction: column;
         gap: 6px;
-        flex: 1 1 auto;
-        max-height: calc(100vh - 200px); /* Constrain height to force scrolling */
-        overflow-y: auto;
-        overflow-x: hidden;
-        padding-right: 8px;
-        padding-bottom: 60px;
-        /* Firefox scrollbar */
-        scrollbar-width: thin;
-        scrollbar-color: rgba(255,255,255,0.5) rgba(255,255,255,0.15);
-      }
-
-      /* Scrollbar styling for vertical nav */
-      html[data-layout="vertical"] #app > header.header .main-nav::-webkit-scrollbar {
-        width: 10px;
-      }
-      html[data-layout="vertical"] #app > header.header .main-nav::-webkit-scrollbar-track {
-        background: rgba(255,255,255,0.15);
-        border-radius: 5px;
-        margin: 4px 0;
-      }
-      html[data-layout="vertical"] #app > header.header .main-nav::-webkit-scrollbar-thumb {
-        background: rgba(255,255,255,0.45);
-        border-radius: 5px;
-        border: 2px solid transparent;
-        background-clip: padding-box;
-      }
-      html[data-layout="vertical"] #app > header.header .main-nav::-webkit-scrollbar-thumb:hover {
-        background: rgba(255,255,255,0.65);
+        flex: 0 0 auto; /* Don't grow/shrink, use natural size */
       }
 
       html[data-layout="vertical"] #app > header.header .nav-btn {
