@@ -13,7 +13,6 @@
   <div class="admin-container">
     <header class="admin-header">
       <div class="header-left">
-        <a href="index.html" class="back-link">← Back to Admin</a>
         <h1>Portal Settings</h1>
       </div>
     </header>
@@ -33,6 +32,9 @@
           
           <div class="form-group">
             <label>Portal Logo</label>
+            <p class="settings-note" style="font-size: 12px; color: #6b7280; margin-bottom: 10px; padding: 8px; background: #f3f4f6; border-radius: 6px;">
+              🔄 <strong>Mirrored:</strong> This logo syncs with <a href="my-office.html" style="color: #3b82f6;">Office → Company Information → Company Logo</a>. Changes here will update there and vice versa.
+            </p>
             <div class="logo-upload">
               <img id="customerLogoPreview" src="favicon.ico" alt="Logo" class="logo-preview">
               <div class="upload-controls">
@@ -106,7 +108,10 @@
 
         <div class="settings-card">
           <h2>🚗 Vehicle Types</h2>
-          <p class="form-hint">Configure vehicle options for customer booking</p>
+          <p class="form-hint">Configure vehicle options for customer booking. Sorted by: Active first, then by passenger count.</p>
+          <p class="settings-note" style="font-size: 12px; color: #6b7280; margin-bottom: 10px; padding: 8px; background: #f3f4f6; border-radius: 6px;">
+            🔄 <strong>Mirrored:</strong> Vehicle types sync with <a href="my-office.html" style="color: #3b82f6;">Office → Company Resources → Vehicle Types</a>. Changes here update there and vice versa.
+          </p>
           
           <div id="vehicleTypesList" class="items-list">
             <!-- Loaded dynamically -->
@@ -121,6 +126,10 @@
         <div class="settings-card">
           <h2>📋 Booking Defaults</h2>
           <p class="form-hint">Configure default values for customer bookings created through the portal</p>
+          <p class="settings-note" style="font-size: 12px; color: #6b7280; margin-bottom: 10px; padding: 8px; background: #f3f4f6; border-radius: 6px;">
+            🔄 <strong>Mirrored:</strong> Default Driver syncs with <a href="my-office.html" style="color: #3b82f6;">Office → Company Resources → Drivers</a> (is_default_driver field). 
+            Default Vehicle Type syncs with vehicle_types table (is_app_default field). Changes propagate to reservation-form automatically.
+          </p>
           
           <div class="form-row">
             <div class="form-group">
@@ -561,8 +570,8 @@
           renderAirports();
         }
 
-        // Load vehicle types
-        const vehiclesResp = await fetch(`${creds.url}/rest/v1/vehicle_types?select=*&order=sort_order.asc`, {
+        // Load vehicle types - sorted by active first, then by passenger count
+        const vehiclesResp = await fetch(`${creds.url}/rest/v1/vehicle_types?select=*&order=is_active.desc,passenger_capacity.asc,name.asc`, {
           headers: { 'apikey': creds.anonKey }
         });
         
@@ -776,12 +785,16 @@
         return;
       }
 
+      // Already sorted from API: is_active DESC, passenger_capacity ASC
       container.innerHTML = state.vehicleTypes.map(v => `
-        <div class="list-item ${v.is_active ? '' : 'inactive'}">
+        <div class="list-item ${v.is_active !== false ? '' : 'inactive'}">
           <div class="item-info">
             <span class="item-icon">${v.icon || '🚗'}</span>
             <span class="item-name">${v.name}</span>
-            <span class="item-detail">${v.capacity || ''}</span>
+            <span class="item-detail" style="margin-left: 8px; font-size: 12px; color: #666;">
+              👥 ${v.passenger_capacity || v.capacity || '?'} pax
+              ${v.is_active !== false ? '<span style="color: #22c55e;">✓ Active</span>' : '<span style="color: #ef4444;">✗ Inactive</span>'}
+            </span>
           </div>
           <div class="item-actions">
             <button class="btn-icon btn-edit" data-id="${v.id}" title="Edit">✏️</button>

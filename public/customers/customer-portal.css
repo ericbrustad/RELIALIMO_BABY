@@ -519,6 +519,34 @@ body {
 }
 
 /* ============================================
+   Memo Notifications
+   ============================================ */
+.memo-notifications {
+  padding: 0 var(--space-md);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.memo-banner {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ============================================
    Tab Navigation
    ============================================ */
 .tab-nav {

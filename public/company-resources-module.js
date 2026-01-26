@@ -234,6 +234,22 @@ export class CompanyResourcesManager {
     const isContainer = config.listType === 'container';
 
     this.els.centerTitle.textContent = config.title;
+    
+    // Show description/sync note if present
+    let descEl = document.getElementById('cr-section-description');
+    if (!descEl) {
+      descEl = document.createElement('p');
+      descEl.id = 'cr-section-description';
+      descEl.style.cssText = 'font-size: 12px; color: #6b7280; margin: 8px 0 16px 0; padding: 8px; background: #f3f4f6; border-radius: 6px;';
+      this.els.centerTitle.parentNode.insertBefore(descEl, this.els.centerTitle.nextSibling);
+    }
+    if (config.description) {
+      descEl.innerHTML = config.description;
+      descEl.style.display = 'block';
+    } else {
+      descEl.style.display = 'none';
+    }
+    
     this.els.listbox.style.display = (isTable || isContainer) ? 'none' : 'block';
     this.els.tableWrapper.style.display = (isTable || isContainer) ? 'block' : 'none';
 
@@ -545,6 +561,7 @@ export class CompanyResourcesManager {
     const configs = {
       drivers: {
         title: 'Drivers',
+        description: '🔄 Mirrored: Default Driver setting syncs with Portal Settings → Booking Defaults. Changes here update there and vice versa.',
         listType: 'table',
         tableColumns: ['first_name', 'last_name', 'phone', 'is_default_driver'],
         formTitle: (mode) => mode === 'edit' ? 'Edit Driver' : 'Add New Driver',
@@ -594,8 +611,11 @@ export class CompanyResourcesManager {
       },
       'vehicle-types': {
         title: 'Vehicle Types',
+        description: '🔄 Mirrored: Vehicle types sync with Portal Settings → Customer Portal → Vehicle Types. Changes here update there and vice versa.',
         listType: 'table',
-        tableColumns: ['name', 'passenger_capacity', 'is_app_default'],
+        tableColumns: ['name', 'passenger_capacity', 'is_app_default', 'is_active'],
+        sortBy: ['is_active', 'passenger_capacity', 'name'],  // Sort by active first, then passenger count
+        sortOrder: ['desc', 'asc', 'asc'],
         formTitle: (mode) => mode === 'edit' ? 'Edit Vehicle Type' : 'Add New Vehicle Type',
         listLabel: (x) => x.name || '',
         blocks: [
@@ -615,12 +635,13 @@ export class CompanyResourcesManager {
             head: 'App Settings',
             columns: 1,
             fields: [
+              { id: 'is_active', label: 'Active (available for booking)', type: 'checkbox' },
               { id: 'is_app_default', label: 'Default Vehicle Type for Customer App', type: 'checkbox' },
               { id: 'show_in_app', label: 'Show in Customer App', type: 'checkbox' }
             ]
           }
         ],
-        defaults: { passenger_capacity: 4, show_in_app: true },
+        defaults: { passenger_capacity: 4, show_in_app: true, is_active: true },
         storageKey: 'cr_vehicle_types',
       },
       fleet: {

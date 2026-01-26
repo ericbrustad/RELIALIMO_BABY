@@ -8,6 +8,7 @@ import './CompanySettingsManager.js';
 import supabaseDb from './supabase-db.js';
 import { wireMainNav } from './navigation.js';
 import { loadServiceTypes, SERVICE_TYPES_STORAGE_KEY } from './service-types-store.js';
+import { LocalAirportsService } from './LocalAirportsService.js';
 
 // Use Supabase-only database (no localStorage)
 const db = supabaseDb;
@@ -2782,12 +2783,47 @@ class ReservationForm {
       console.log('📍 searchAirportsList called with query:', query);
       const { searchAirports } = await import('./api-service.js');
       console.log('✅ searchAirports function imported');
-      const airports = await searchAirports(query);
+      
+      // Get organization ID for local airport lookup
+      const organizationId = window.currentOrganizationId || this.organizationId;
+      
+      // searchAirports now includes LocalAirportsService fallback
+      const airports = await searchAirports(query, organizationId);
       console.log('✅ Airports found:', airports);
+      
+      // If no results from API, try local airports directly
+      if ((!airports || airports.length === 0) && organizationId) {
+        console.log('📍 Trying local airports fallback');
+        const localAirports = await LocalAirportsService.searchLocalAirports(query, organizationId);
+        if (localAirports && localAirports.length > 0) {
+          const formatted = localAirports.map(a => LocalAirportsService.formatAirport(a));
+          console.log('✅ Local airports found:', formatted);
+          this.showAirportSuggestions(formatted);
+          return;
+        }
+      }
+      
       this.showAirportSuggestions(airports);
     } catch (error) {
       console.error('❌ Airport search error:', error);
-      // Show fallback message
+      
+      // Try local airports as last resort fallback
+      try {
+        const organizationId = window.currentOrganizationId || this.organizationId;
+        if (organizationId) {
+          const localAirports = await LocalAirportsService.searchLocalAirports(query, organizationId);
+          if (localAirports && localAirports.length > 0) {
+            const formatted = localAirports.map(a => LocalAirportsService.formatAirport(a));
+            console.log('✅ Fallback to local airports:', formatted);
+            this.showAirportSuggestions(formatted);
+            return;
+          }
+        }
+      } catch (fallbackError) {
+        console.error('❌ Local airport fallback also failed:', fallbackError);
+      }
+      
+      // Show error message only if all fallbacks fail
       const container = document.getElementById('airportSuggestions');
       if (container) {
         container.innerHTML = '<div class="airport-suggestion-item" style="color: red;">Error searching airports. Please try again.</div>';

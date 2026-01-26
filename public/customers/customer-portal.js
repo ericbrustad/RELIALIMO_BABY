@@ -5,6 +5,119 @@
 import { getSupabaseCredentials } from '/shared/supabase-config.js';
 import CustomerAuth from './customer-auth-service.js';
 import { initUserMenu, injectUserMenuStyles } from './customer-user-menu.js';
+import { LocalAirportsService } from '../LocalAirportsService.js';
+
+// ============================================
+// Memo Notification Functions
+// ============================================
+async function loadAndDisplayMemos() {
+  try {
+    const config = getSupabaseCredentials();
+    if (!config || !config.url) {
+      console.warn('[Memos] No Supabase config available');
+      return;
+    }
+    
+    // Get active memos for account-login location
+    const now = new Date().toISOString();
+    const url = `${config.url}/rest/v1/company_memos?select=*&is_active=eq.true&notify_location=eq.account-login&or=(display_from.is.null,display_from.lte.${now})&or=(display_to.is.null,display_to.gte.${now})&order=created_at.desc&limit=5`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'apikey': config.anonKey,
+        'Authorization': `Bearer ${config.anonKey}`
+      }
+    });
+    
+    if (!response.ok) {
+      console.warn('[Memos] Failed to load memos:', response.statusText);
+      return;
+    }
+    
+    const memos = await response.json();
+    console.log('[Memos] Loaded', memos.length, 'memos for account-login');
+    
+    if (memos.length === 0) return;
+    
+    // Filter out dismissed memos
+    const dismissedMemos = JSON.parse(localStorage.getItem('dismissedMemos') || '[]');
+    const activeMemos = memos.filter(m => !dismissedMemos.includes(m.id));
+    
+    if (activeMemos.length === 0) return;
+    
+    // Get or create container
+    const container = document.getElementById('memoNotificationContainer');
+    if (!container) return;
+    
+    // Generate memo HTML
+    const colorMap = {
+      'red': '#ff3333',
+      'yellow': '#ffd700',
+      'green': '#90ee90',
+      'blue': '#87ceeb',
+      'orange': '#ffb366',
+      'purple': '#dda0dd'
+    };
+    
+    container.innerHTML = activeMemos.map(memo => `
+      <div class="memo-banner" data-memo-id="${memo.id}" style="
+        background: ${colorMap[memo.color] || '#ffd700'};
+        color: #333;
+        padding: 12px 16px;
+        margin: 8px 0;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      ">
+        <div class="memo-content" style="flex: 1;">
+          <span style="font-weight: 600;">📢</span>
+          ${memo.memo_text}
+        </div>
+        <button class="memo-dismiss-btn" onclick="dismissMemo('${memo.id}')" style="
+          background: rgba(0,0,0,0.2);
+          border: none;
+          border-radius: 50%;
+          width: 24px;
+          height: 24px;
+          cursor: pointer;
+          font-size: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-left: 12px;
+        ">×</button>
+      </div>
+    `).join('');
+    
+    container.style.display = 'block';
+    
+    // Add global dismiss function
+    window.dismissMemo = function(memoId) {
+      const dismissed = JSON.parse(localStorage.getItem('dismissedMemos') || '[]');
+      if (!dismissed.includes(memoId)) {
+        dismissed.push(memoId);
+        localStorage.setItem('dismissedMemos', JSON.stringify(dismissed));
+      }
+      const banner = document.querySelector(`[data-memo-id="${memoId}"]`);
+      if (banner) {
+        banner.style.transition = 'opacity 0.3s, transform 0.3s';
+        banner.style.opacity = '0';
+        banner.style.transform = 'translateX(100%)';
+        setTimeout(() => banner.remove(), 300);
+      }
+      // Hide container if no more memos
+      const remaining = container.querySelectorAll('.memo-banner');
+      if (remaining.length <= 1) {
+        container.style.display = 'none';
+      }
+    };
+    
+  } catch (err) {
+    console.error('[Memos] Error loading memos:', err);
+  }
+}
 
 // ============================================
 // State Management
@@ -440,6 +553,9 @@ async function init() {
     // Show portal screen
     document.getElementById('loadingScreen').classList.remove('active');
     document.getElementById('portalScreen').classList.add('active');
+    
+    // Load and display company memos
+    await loadAndDisplayMemos();
     
     // Load initial data
     await Promise.all([
@@ -1035,21 +1151,51 @@ function renderVehicleTypes(filterByCapacity = null) {
 
 // ============================================
 // Airports
+// Uses LocalAirportsService with fallback to legacy airports table
 // ============================================
 async function loadAirports() {
+  const creds = getSupabaseCredentials();
+  
+  // Get organization ID from portal settings or session
+  const organizationId = state.customer?.organization_id || 
+                         window.portalOrganizationId || 
+                         portalSettings.organizationId;
+  
   try {
-    const creds = getSupabaseCredentials();
-    const response = await fetch(
-      `${creds.url}/rest/v1/airports?is_active=eq.true&select=*&order=name.asc`,
-      {
-        headers: {
-          'apikey': creds.anonKey
-        }
+    // First, try LocalAirportsService (uses local_airports table)
+    if (organizationId) {
+      const localAirports = await LocalAirportsService.getFormattedAirports(organizationId);
+      if (localAirports && localAirports.length > 0) {
+        console.log('[CustomerPortal] Loaded local airports:', localAirports.length);
+        state.airports = localAirports;
       }
-    );
+    }
     
-    if (response.ok) {
-      state.airports = await response.json();
+    // If no local airports, fall back to legacy airports table
+    if (state.airports.length === 0) {
+      const response = await fetch(
+        `${creds.url}/rest/v1/airports?is_active=eq.true&select=*&order=name.asc`,
+        {
+          headers: {
+            'apikey': creds.anonKey
+          }
+        }
+      );
+      
+      if (response.ok) {
+        const legacyAirports = await response.json();
+        // Format legacy airports to match local format
+        state.airports = legacyAirports.map(a => ({
+          code: a.code || a.iata_code,
+          iata_code: a.iata_code || a.code,
+          name: a.name,
+          city: a.city,
+          state: a.state,
+          address: a.address,
+          is_primary: a.is_primary || false,
+          source: 'legacy'
+        }));
+      }
     }
   } catch (err) {
     console.error('[CustomerPortal] Failed to load airports:', err);
@@ -1058,16 +1204,17 @@ async function loadAirports() {
   // Fallback defaults if no data
   if (state.airports.length === 0) {
     state.airports = [
-      { code: 'MSP', name: 'Minneapolis-St. Paul International (MSP)', address: '4300 Glumack Dr, St Paul, MN 55111' },
+      { code: 'MSP', name: 'Minneapolis-St. Paul International (MSP)', address: '4300 Glumack Dr, St Paul, MN 55111', is_primary: true },
       { code: 'STP', name: 'St. Paul Downtown Airport (STP)', address: '644 Bayfield St, St Paul, MN 55107' }
     ];
+    console.warn('[CustomerPortal] Using hardcoded fallback airports');
   }
   
   // Get customer's preferred airports (from onboarding)
   const preferredAirports = state.customer?.preferred_airports || [];
   const preferredCodes = preferredAirports.map(a => a.code);
   
-  // Populate airport dropdowns with preferred airports first
+  // Populate airport dropdowns with preferred airports first, then primary, then rest
   ['pickupAirport', 'dropoffAirport'].forEach(id => {
     const select = document.getElementById(id);
     if (select) {
@@ -1085,11 +1232,19 @@ async function loadAirports() {
         html += '<optgroup label="All Airports">';
       }
       
-      // Add all airports (excluding preferred to avoid duplicates)
-      state.airports.forEach(a => {
-        if (!preferredCodes.includes(a.code)) {
-          html += `<option value="${a.code}" data-address="${a.address || ''}">${a.name}</option>`;
-        }
+      // Add primary airports first (excluding preferred to avoid duplicates)
+      const primaryAirports = state.airports.filter(a => a.is_primary && !preferredCodes.includes(a.code));
+      const otherAirports = state.airports.filter(a => !a.is_primary && !preferredCodes.includes(a.code));
+      
+      if (primaryAirports.length > 0) {
+        primaryAirports.forEach(a => {
+          html += `<option value="${a.code}" data-address="${a.address || ''}">⭐ ${a.name}</option>`;
+        });
+      }
+      
+      // Add other airports
+      otherAirports.forEach(a => {
+        html += `<option value="${a.code}" data-address="${a.address || ''}">${a.name}</option>`;
       });
       
       if (preferredAirports.length > 0) {

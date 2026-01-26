@@ -5,6 +5,121 @@
 
 console.log('[DriverPortal] Script loading...');
 
+// ============================================
+// Memo Notification Functions
+// ============================================
+async function loadAndDisplayDriverMemos() {
+  try {
+    const supabaseUrl = window.ENV?.SUPABASE_URL || '';
+    const supabaseKey = window.ENV?.SUPABASE_ANON_KEY || '';
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.warn('[Memos] No Supabase config available');
+      return;
+    }
+    
+    // Get active memos for driver-login location
+    const now = new Date().toISOString();
+    const url = `${supabaseUrl}/rest/v1/company_memos?select=*&is_active=eq.true&notify_location=eq.driver-login&or=(display_from.is.null,display_from.lte.${now})&or=(display_to.is.null,display_to.gte.${now})&order=created_at.desc&limit=5`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`
+      }
+    });
+    
+    if (!response.ok) {
+      console.warn('[Memos] Failed to load memos:', response.statusText);
+      return;
+    }
+    
+    const memos = await response.json();
+    console.log('[Memos] Loaded', memos.length, 'memos for driver-login');
+    
+    if (memos.length === 0) return;
+    
+    // Filter out dismissed memos
+    const dismissedMemos = JSON.parse(localStorage.getItem('dismissedDriverMemos') || '[]');
+    const activeMemos = memos.filter(m => !dismissedMemos.includes(m.id));
+    
+    if (activeMemos.length === 0) return;
+    
+    // Get or create container
+    const container = document.getElementById('memoNotificationContainer');
+    if (!container) return;
+    
+    // Color map
+    const colorMap = {
+      'red': '#ff3333',
+      'yellow': '#ffd700',
+      'green': '#90ee90',
+      'blue': '#87ceeb',
+      'orange': '#ffb366',
+      'purple': '#dda0dd'
+    };
+    
+    container.innerHTML = activeMemos.map(memo => `
+      <div class="memo-banner" data-memo-id="${memo.id}" style="
+        background: ${colorMap[memo.color] || '#ffd700'};
+        color: #333;
+        padding: 12px 16px;
+        margin: 8px 16px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      ">
+        <div class="memo-content" style="flex: 1;">
+          <span style="font-weight: 600;">📢</span>
+          ${memo.memo_text}
+        </div>
+        <button class="memo-dismiss-btn" onclick="dismissDriverMemo('${memo.id}')" style="
+          background: rgba(0,0,0,0.2);
+          border: none;
+          border-radius: 50%;
+          width: 24px;
+          height: 24px;
+          cursor: pointer;
+          font-size: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-left: 12px;
+        ">×</button>
+      </div>
+    `).join('');
+    
+    container.style.display = 'block';
+    
+  } catch (err) {
+    console.error('[Memos] Error loading memos:', err);
+  }
+}
+
+// Global function to dismiss memos
+window.dismissDriverMemo = function(memoId) {
+  const dismissed = JSON.parse(localStorage.getItem('dismissedDriverMemos') || '[]');
+  if (!dismissed.includes(memoId)) {
+    dismissed.push(memoId);
+    localStorage.setItem('dismissedDriverMemos', JSON.stringify(dismissed));
+  }
+  const banner = document.querySelector(`[data-memo-id="${memoId}"]`);
+  if (banner) {
+    banner.style.transition = 'opacity 0.3s, transform 0.3s';
+    banner.style.opacity = '0';
+    banner.style.transform = 'translateX(100%)';
+    setTimeout(() => banner.remove(), 300);
+  }
+  // Hide container if no more memos
+  const container = document.getElementById('memoNotificationContainer');
+  const remaining = container?.querySelectorAll('.memo-banner');
+  if (remaining && remaining.length <= 1) {
+    container.style.display = 'none';
+  }
+};
+
 // Global error handler
 window.addEventListener('error', (e) => {
   console.error('[DriverPortal] Global error:', e.message, e.filename, e.lineno);
@@ -5598,6 +5713,9 @@ async function loadDashboard() {
   updateDriverUI();
   await loadVehicleTypes();
   await refreshTrips();
+  
+  // Load and display company memos for driver portal
+  await loadAndDisplayDriverMemos();
 }
 
 function updateDriverUI() {

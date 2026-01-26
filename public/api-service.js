@@ -1174,7 +1174,95 @@ export function resetConfirmationCounterToStart() {
 // Geocoding / helpers (stubs)
 export async function geocodeAddress(address) { return []; }
 export async function reverseGeocode(lat, lon) { return null; }
-export async function searchAirports(query) { return []; }
+
+/**
+ * Search airports with local fallback
+ * Uses LocalAirportsService for fallback when external API unavailable
+ * @param {string} query - Search query (airport code, name, or city)
+ * @param {string} organizationId - Optional organization ID for local airports
+ * @returns {Promise<Array>} - Array of airport objects
+ */
+export async function searchAirports(query, organizationId = null) {
+  if (!query || query.length < 2) return [];
+  
+  try {
+    // Import LocalAirportsService dynamically to avoid circular deps
+    const { LocalAirportsService } = await import('./LocalAirportsService.js');
+    
+    // Get organization ID if not provided
+    let orgId = organizationId;
+    if (!orgId) {
+      try {
+        // Try to get from current session/context
+        const { getSupabaseConfig } = await import('./config.js');
+        const cfg = getSupabaseConfig();
+        orgId = cfg?.organizationId || window?.currentOrganizationId;
+      } catch (e) {
+        // Ignore
+      }
+    }
+    
+    // Check settings to determine behavior
+    const settings = await LocalAirportsService.getSettings(orgId);
+    
+    // If using local only, return local results
+    if (settings.use_local_airports_only && orgId) {
+      console.log('[searchAirports] Using local airports only');
+      const localAirports = await LocalAirportsService.searchLocalAirports(query, orgId);
+      return localAirports.map(a => LocalAirportsService.formatAirport(a));
+    }
+    
+    // Try external API first (placeholder for actual API)
+    // TODO: Add real external airport API integration here
+    let externalResults = [];
+    
+    // External API call would go here...
+    // For now, we just use local as primary source
+    
+    // If external returns nothing or fails, use local fallback
+    if ((!externalResults || externalResults.length === 0) && settings.fallback_to_local && orgId) {
+      console.log('[searchAirports] Falling back to local airports');
+      const localAirports = await LocalAirportsService.searchLocalAirports(query, orgId);
+      return localAirports.map(a => LocalAirportsService.formatAirport(a));
+    }
+    
+    return externalResults;
+  } catch (err) {
+    console.error('[searchAirports] Error:', err);
+    
+    // Last resort: try local airports on any error
+    try {
+      const { LocalAirportsService } = await import('./LocalAirportsService.js');
+      const orgId = organizationId || window?.currentOrganizationId;
+      if (orgId) {
+        const localAirports = await LocalAirportsService.searchLocalAirports(query, orgId);
+        return localAirports.map(a => LocalAirportsService.formatAirport(a));
+      }
+    } catch (e) {
+      console.error('[searchAirports] Fallback also failed:', e);
+    }
+    
+    return [];
+  }
+}
+
+/**
+ * Get all airports for an organization (for dropdowns)
+ * @param {string} organizationId - Organization ID
+ * @returns {Promise<Array>} - Array of airport objects
+ */
+export async function getAirportsForOrganization(organizationId) {
+  if (!organizationId) return [];
+  
+  try {
+    const { LocalAirportsService } = await import('./LocalAirportsService.js');
+    return await LocalAirportsService.getFormattedAirports(organizationId);
+  } catch (err) {
+    console.error('[getAirportsForOrganization] Error:', err);
+    return [];
+  }
+}
+
 export async function calculateDistance(from, to) { return { meters: 0, miles: 0, duration_secs: 0 }; }
 
 // Dev helpers

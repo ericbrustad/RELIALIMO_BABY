@@ -1270,6 +1270,33 @@ body {
 .status-dot.onboard { background: var(--status-onboard); }
 .status-dot.offline { background: var(--status-offline); }
 
+/* ============================================
+   Memo Notifications
+   ============================================ */
+.memo-notifications {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.memo-banner {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* Tab Navigation */
 .tab-nav {
   display: flex;
