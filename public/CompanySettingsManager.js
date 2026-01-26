@@ -331,6 +331,20 @@ class CompanySettingsManager {
       reservations: {
         label: 'Reservation Settings',
         settings: {
+          confirmationStartNumber: { 
+            label: 'Confirmation # Starts With', 
+            type: 'number', 
+            default: 20000, 
+            min: 1,
+            description: 'Starting number for new reservation confirmation numbers'
+          },
+          accountStartNumber: { 
+            label: 'Account # Starts With', 
+            type: 'number', 
+            default: 5000, 
+            min: 1,
+            description: 'Starting number for new customer account numbers'
+          },
           enableReservationViewMode: {
             label: 'Enable View Mode for current reservations',
             type: 'checkbox',
