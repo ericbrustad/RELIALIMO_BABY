@@ -1013,10 +1013,243 @@ async function loadEnvSettingsToLocalStorage() {
   }
 }
 
+// ============================================
+// Location & Notification Permission Management
+// ============================================
+async function checkAndRequestLocationPermission() {
+  console.log('[DriverPortal] Checking location permission...');
+  
+  if (!('geolocation' in navigator)) {
+    console.warn('[DriverPortal] Geolocation not supported by this browser');
+    return { supported: false, granted: false };
+  }
+  
+  // Check current permission status if Permissions API is available
+  if ('permissions' in navigator) {
+    try {
+      const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
+      console.log('[DriverPortal] Location permission status:', permissionStatus.state);
+      
+      if (permissionStatus.state === 'granted') {
+        console.log('[DriverPortal] ✅ Location permission already granted');
+        return { supported: true, granted: true };
+      } else if (permissionStatus.state === 'denied') {
+        console.warn('[DriverPortal] ❌ Location permission denied by user');
+        showLocationPermissionDeniedWarning();
+        return { supported: true, granted: false, denied: true };
+      }
+      // If 'prompt', we'll request below
+    } catch (err) {
+      console.warn('[DriverPortal] Could not query location permission:', err);
+    }
+  }
+  
+  // Request location permission by attempting to get current position
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        console.log('[DriverPortal] ✅ Location permission granted');
+        resolve({ supported: true, granted: true });
+      },
+      (error) => {
+        console.warn('[DriverPortal] ❌ Location permission error:', error.message);
+        if (error.code === error.PERMISSION_DENIED) {
+          showLocationPermissionDeniedWarning();
+          resolve({ supported: true, granted: false, denied: true });
+        } else {
+          resolve({ supported: true, granted: false, error: error.message });
+        }
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+    );
+  });
+}
+
+async function checkAndRequestNotificationPermission() {
+  console.log('[DriverPortal] Checking notification permission...');
+  
+  if (!('Notification' in window)) {
+    console.warn('[DriverPortal] Notifications not supported by this browser');
+    return { supported: false, granted: false };
+  }
+  
+  const currentPermission = Notification.permission;
+  console.log('[DriverPortal] Current notification permission:', currentPermission);
+  
+  if (currentPermission === 'granted') {
+    console.log('[DriverPortal] ✅ Notification permission already granted');
+    return { supported: true, granted: true };
+  }
+  
+  if (currentPermission === 'denied') {
+    console.warn('[DriverPortal] ❌ Notification permission denied by user');
+    showNotificationPermissionDeniedWarning();
+    return { supported: true, granted: false, denied: true };
+  }
+  
+  // Permission is 'default' - request it
+  try {
+    const permission = await Notification.requestPermission();
+    console.log('[DriverPortal] Notification permission result:', permission);
+    
+    if (permission === 'granted') {
+      console.log('[DriverPortal] ✅ Notification permission granted');
+      return { supported: true, granted: true };
+    } else {
+      console.warn('[DriverPortal] ❌ Notification permission not granted:', permission);
+      if (permission === 'denied') {
+        showNotificationPermissionDeniedWarning();
+      }
+      return { supported: true, granted: false, denied: permission === 'denied' };
+    }
+  } catch (err) {
+    console.error('[DriverPortal] Error requesting notification permission:', err);
+    return { supported: true, granted: false, error: err.message };
+  }
+}
+
+function showLocationPermissionDeniedWarning() {
+  // Show a persistent warning banner about location permission
+  const existingBanner = document.getElementById('location-permission-banner');
+  if (existingBanner) return; // Already showing
+  
+  const banner = document.createElement('div');
+  banner.id = 'location-permission-banner';
+  banner.className = 'permission-warning-banner';
+  banner.innerHTML = `
+    <div class="permission-warning-content">
+      <span class="permission-warning-icon">📍</span>
+      <span class="permission-warning-text">Location services are disabled. Enable location in your browser settings for trip tracking.</span>
+      <button class="permission-warning-close" onclick="this.parentElement.parentElement.remove()">✕</button>
+    </div>
+  `;
+  banner.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: #ff6b35;
+    color: white;
+    padding: 10px 15px;
+    z-index: 10000;
+    font-size: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  `;
+  
+  const content = banner.querySelector('.permission-warning-content');
+  if (content) {
+    content.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      max-width: 600px;
+      margin: 0 auto;
+    `;
+  }
+  
+  const closeBtn = banner.querySelector('.permission-warning-close');
+  if (closeBtn) {
+    closeBtn.style.cssText = `
+      background: none;
+      border: none;
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 0 5px;
+      margin-left: 10px;
+    `;
+  }
+  
+  document.body.prepend(banner);
+}
+
+function showNotificationPermissionDeniedWarning() {
+  // Show a persistent warning banner about notification permission
+  const existingBanner = document.getElementById('notification-permission-banner');
+  if (existingBanner) return; // Already showing
+  
+  const banner = document.createElement('div');
+  banner.id = 'notification-permission-banner';
+  banner.className = 'permission-warning-banner';
+  banner.innerHTML = `
+    <div class="permission-warning-content">
+      <span class="permission-warning-icon">🔔</span>
+      <span class="permission-warning-text">Notifications are disabled. Enable in browser settings to receive trip alerts.</span>
+      <button class="permission-warning-close" onclick="this.parentElement.parentElement.remove()">✕</button>
+    </div>
+  `;
+  banner.style.cssText = `
+    position: fixed;
+    top: ${document.getElementById('location-permission-banner') ? '45px' : '0'};
+    left: 0;
+    right: 0;
+    background: #f59e0b;
+    color: white;
+    padding: 10px 15px;
+    z-index: 9999;
+    font-size: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  `;
+  
+  const content = banner.querySelector('.permission-warning-content');
+  if (content) {
+    content.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      max-width: 600px;
+      margin: 0 auto;
+    `;
+  }
+  
+  const closeBtn = banner.querySelector('.permission-warning-close');
+  if (closeBtn) {
+    closeBtn.style.cssText = `
+      background: none;
+      border: none;
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 0 5px;
+      margin-left: 10px;
+    `;
+  }
+  
+  document.body.prepend(banner);
+}
+
+async function ensureRequiredPermissions() {
+  console.log('[DriverPortal] Checking required permissions (location & notifications)...');
+  
+  // Check both permissions in parallel
+  const [locationResult, notificationResult] = await Promise.all([
+    checkAndRequestLocationPermission(),
+    checkAndRequestNotificationPermission()
+  ]);
+  
+  console.log('[DriverPortal] Permission check results:', {
+    location: locationResult,
+    notifications: notificationResult
+  });
+  
+  // Store permission states
+  state.permissions = {
+    location: locationResult,
+    notifications: notificationResult
+  };
+  
+  return { location: locationResult, notifications: notificationResult };
+}
+
 async function init() {
   console.log('[DriverPortal] Initializing...');
   
   try {
+    // Check and request required permissions first (location & notifications)
+    await ensureRequiredPermissions();
+    
     // Load ENV settings for SMS/Email
     await loadEnvSettingsToLocalStorage();
     

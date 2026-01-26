@@ -106,7 +106,6 @@ class MyOffice {
     this.setupSystemUsers();
     this.setupCompanyInfoForm();
     this.setupCompanyRouteTester();
-    this.setupAccountsCalendarPrefs();
     this.setupVehicleTypeSelection();
     this.setupVehicleTypeShowAllToggle();
     this.setupVehicleTypeSave();
@@ -517,16 +516,6 @@ class MyOffice {
     // Main navigation
         wireMainNav();
 
-    // Company Preferences sub-navigation
-    document.querySelectorAll('.prefs-subnav-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const prefTab = e.currentTarget?.dataset?.pref;
-        if (prefTab) {
-          this.switchPrefTab(prefTab);
-        }
-      });
-    });
-
     // Company Resources navigation (sidebar)
     const companyResourcesGroup = document.getElementById('companyResourcesGroup');
     if (companyResourcesGroup) {
@@ -538,14 +527,6 @@ class MyOffice {
           console.log('Navigating to resource:', resource);
           this.navigateToResource(resource);
         }
-      });
-    }
-
-    const updateAccountsCalendarPrefsBtn = document.getElementById('updateAccountsCalendarPrefsBtn');
-    if (updateAccountsCalendarPrefsBtn) {
-      updateAccountsCalendarPrefsBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.saveAccountsCalendarPrefs();
       });
     }
 
@@ -2528,115 +2509,6 @@ class MyOffice {
     }
 
     this.currentTab = tabName;
-  }
-
-  switchPrefTab(prefTab) {
-    // Update pref tab active state
-    document.querySelectorAll('.prefs-subnav-btn').forEach(btn => {
-      btn.classList.remove('active');
-      if (btn.dataset.pref === prefTab) {
-        btn.classList.add('active');
-      }
-    });
-
-    // Update content sections
-    document.querySelectorAll('.prefs-content').forEach(content => {
-      content.classList.remove('active');
-    });
-
-    const contentElement = document.getElementById(`${prefTab}-prefs`);
-    if (contentElement) {
-      contentElement.classList.add('active');
-      this.currentPrefTab = prefTab;
-    }
-  }
-
-  setupAccountsCalendarPrefs() {
-    this.loadAccountsCalendarPrefs();
-  }
-
-  loadAccountsCalendarPrefs() {
-    try {
-      const settings = this.companySettingsManager?.getAllSettings?.() || {};
-      
-      // Load confirmation number start
-      const confStartInput = document.getElementById('confirmationNumberStart');
-      const defaultConfStart = 100000;
-      const storedConfStart = parseInt(settings.confirmationStartNumber, 10);
-      const confStartValue = !isNaN(storedConfStart) && storedConfStart > 0 ? storedConfStart : defaultConfStart;
-
-      if (confStartInput) {
-        confStartInput.value = confStartValue;
-        confStartInput.placeholder = confStartValue.toString();
-      }
-      
-      // Load account number start
-      const acctStartInput = document.getElementById('accountNumberStart');
-      const defaultAcctStart = 30000;
-      const storedAcctStart = parseInt(settings.accountStartNumber, 10);
-      const acctStartValue = !isNaN(storedAcctStart) && storedAcctStart > 0 ? storedAcctStart : defaultAcctStart;
-
-      if (acctStartInput) {
-        acctStartInput.value = acctStartValue;
-        acctStartInput.placeholder = acctStartValue.toString();
-      }
-
-      const tickerCityInput = document.getElementById('tickerSearchCity');
-      if (tickerCityInput) {
-        tickerCityInput.value = settings.tickerSearchCity || '';
-      }
-    } catch (error) {
-      console.error('Failed to load accounts/calendar prefs:', error);
-    }
-  }
-
-  saveAccountsCalendarPrefs() {
-    try {
-      // Handle confirmation number start
-      const confStartInput = document.getElementById('confirmationNumberStart');
-      const rawConfStart = confStartInput?.value?.trim();
-      let confStartValue = parseInt(rawConfStart, 10);
-      const defaultConfStart = 100000;
-      if (isNaN(confStartValue) || confStartValue <= 0) {
-        confStartValue = defaultConfStart;
-      }
-
-      const existingSettings = this.companySettingsManager?.getAllSettings?.() || {};
-      const existingLastUsedConfRaw = existingSettings.lastUsedConfirmationNumber;
-      const existingLastUsedConf = parseInt(existingLastUsedConfRaw, 10);
-      const normalizedLastUsedConf = isNaN(existingLastUsedConf) ? null : existingLastUsedConf;
-      const adjustedLastUsedConf = Math.max(normalizedLastUsedConf ?? (confStartValue - 1), confStartValue - 1);
-      
-      // Handle account number start
-      const acctStartInput = document.getElementById('accountNumberStart');
-      const rawAcctStart = acctStartInput?.value?.trim();
-      let acctStartValue = parseInt(rawAcctStart, 10);
-      const defaultAcctStart = 30000;
-      if (isNaN(acctStartValue) || acctStartValue <= 0) {
-        acctStartValue = defaultAcctStart;
-      }
-      
-      const existingLastUsedAcctRaw = existingSettings.lastUsedAccountNumber;
-      const existingLastUsedAcct = parseInt(existingLastUsedAcctRaw, 10);
-      const normalizedLastUsedAcct = isNaN(existingLastUsedAcct) ? null : existingLastUsedAcct;
-      const adjustedLastUsedAcct = Math.max(normalizedLastUsedAcct ?? (acctStartValue - 1), acctStartValue - 1);
-
-      const tickerCityInput = document.getElementById('tickerSearchCity');
-      const tickerCity = tickerCityInput?.value?.trim() || '';
-
-      this.companySettingsManager?.updateSettings({
-        confirmationStartNumber: confStartValue,
-        lastUsedConfirmationNumber: adjustedLastUsedConf,
-        accountStartNumber: acctStartValue,
-        lastUsedAccountNumber: adjustedLastUsedAcct,
-        tickerSearchCity: tickerCity
-      });
-
-      alert('Company preferences updated.');
-    } catch (error) {
-      console.error('Failed to save accounts/calendar prefs:', error);
-      alert('Could not save preferences. Please try again.');
-    }
   }
 
   selectUser(userId) {
