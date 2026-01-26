@@ -330,7 +330,12 @@ class Accounts {
       if (listbox) {
         listbox.innerHTML = allAccounts.map(acc => {
           const inactiveLabel = (acc.status || '').toString().toLowerCase() === 'inactive' ? ' (INACTIVE)' : '';
-          const displayName = `${acc.account_number || acc.id}${inactiveLabel} - ${acc.first_name || ''} ${acc.last_name || ''} ${acc.company_name ? '- ' + acc.company_name : ''}`.trim();
+          const firstName = acc.first_name || '';
+          const lastName = acc.last_name || '';
+          const fullName = `${firstName} ${lastName}`.trim() || 'No Name';
+          const company = acc.company_name ? ` - ${acc.company_name}` : '';
+          const acctNum = acc.account_number ? ` (#${acc.account_number})` : '';
+          const displayName = `${fullName}${company}${acctNum}${inactiveLabel}`;
           return `<option value="${acc.id}">${displayName}</option>`; // Use acc.id for consistency
         }).join('');
 
