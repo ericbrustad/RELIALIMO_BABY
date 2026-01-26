@@ -399,13 +399,15 @@ body {
 /* Map View Styles */
 .dispatch-map-container {
   position: relative;
-  height: 100%;
+  height: calc(100vh - 200px);
+  min-height: 500px;
   width: 100%;
 }
 
 .dispatch-map {
   height: 100%;
   width: 100%;
+  min-height: 500px;
 }
 
 .map-controls {
