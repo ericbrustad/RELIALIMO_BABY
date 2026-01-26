@@ -1145,37 +1145,95 @@ function updateTripTypeFromAddresses() {
   const pickupType = document.getElementById('pickupAddressSelect')?.value;
   const dropoffType = document.getElementById('dropoffAddressSelect')?.value;
   
-  // Don't change if hourly is selected (user explicitly chose hourly)
-  if (state.tripType === 'hourly') {
-    return;
-  }
+  // Get actual addresses to compare for same-location detection
+  const pickupAddress = pickupType === 'airport' 
+    ? document.getElementById('pickupAirport')?.value 
+    : document.getElementById('pickupAddressInput')?.value?.trim();
+  const dropoffAddress = dropoffType === 'airport'
+    ? document.getElementById('dropoffAirport')?.value
+    : document.getElementById('dropoffAddressInput')?.value?.trim();
   
-  let newTripType = 'standard';
+  let newTripType = 'standard'; // Default to point-to-point
+  let isLocked = true; // Trip type selection should be locked by default
+  let lockReason = '';
   
-  // Pickup from airport takes priority
+  // Priority 1: Pickup from airport → From Airport (with MAC fee)
   if (pickupType === 'airport') {
     newTripType = 'from-airport';
-  } else if (dropoffType === 'airport') {
+    lockReason = 'Airport pickup selected';
+  }
+  // Priority 2: Dropoff to airport → To Airport (no MAC fee)
+  else if (dropoffType === 'airport') {
     newTripType = 'to-airport';
+    lockReason = 'Airport dropoff selected';
+  }
+  // Priority 3: Same pickup/dropoff with stops → Hourly
+  else if (pickupAddress && dropoffAddress && pickupAddress === dropoffAddress && state.stops.length > 0) {
+    newTripType = 'hourly';
+    lockReason = 'Same location with stops - hourly billing';
+  }
+  // Default: Point-to-point for distance-based billing
+  else {
+    newTripType = 'standard';
+    lockReason = 'Distance-based billing';
   }
   
   // Update radio button selection
   const radio = document.querySelector(`input[name="tripType"][value="${newTripType}"]`);
-  if (radio && !radio.checked) {
+  if (radio) {
     radio.checked = true;
     state.tripType = newTripType;
     
-    // Hide hourly options if shown
-    document.getElementById('hourlyOptions')?.classList.add('hidden');
-    
-    // Show feedback
-    if (newTripType === 'from-airport') {
-      showToast('Trip type set to From Airport (+$15 MAC fee)', 'info');
-    } else if (newTripType === 'to-airport') {
-      showToast('Trip type set to To Airport', 'info');
+    // Hide hourly options unless hourly is selected
+    const hourlyOptions = document.getElementById('hourlyOptions');
+    if (newTripType === 'hourly') {
+      hourlyOptions?.classList.remove('hidden');
+    } else {
+      hourlyOptions?.classList.add('hidden');
     }
-    
-    console.log('[CustomerPortal] Auto-selected trip type:', newTripType);
+  }
+  
+  // Lock/unlock trip type selection
+  lockTripTypeSelection(isLocked, lockReason);
+  
+  console.log('[CustomerPortal] Auto-selected trip type:', newTripType, '- Locked:', isLocked, '- Reason:', lockReason);
+}
+
+// Lock or unlock the trip type radio buttons
+function lockTripTypeSelection(lock, reason = '') {
+  const tripTypeRadios = document.querySelectorAll('input[name="tripType"]');
+  const tripTypeLabels = document.querySelectorAll('.trip-type-option');
+  const tripTypeSection = document.querySelector('.trip-type-selector');
+  
+  tripTypeRadios.forEach(radio => {
+    radio.disabled = lock;
+  });
+  
+  tripTypeLabels.forEach(label => {
+    if (lock) {
+      label.style.opacity = '0.7';
+      label.style.cursor = 'not-allowed';
+      label.style.pointerEvents = 'none';
+    } else {
+      label.style.opacity = '1';
+      label.style.cursor = 'pointer';
+      label.style.pointerEvents = 'auto';
+    }
+  });
+  
+  // Add/remove locked indicator
+  let lockedIndicator = document.getElementById('tripTypeLocked');
+  if (lock && reason) {
+    if (!lockedIndicator) {
+      lockedIndicator = document.createElement('div');
+      lockedIndicator.id = 'tripTypeLocked';
+      lockedIndicator.style.cssText = 'font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 8px; display: flex; align-items: center; gap: 6px;';
+      tripTypeSection?.parentElement?.appendChild(lockedIndicator);
+    }
+    lockedIndicator.innerHTML = `<span style="font-size: 14px;">🔒</span> <span>Auto-selected: ${reason}</span>`;
+    lockedIndicator.style.display = 'flex';
+  } else if (lockedIndicator) {
+    lockedIndicator.style.display = 'none';
   }
 }
 
@@ -1829,6 +1887,8 @@ function addStop() {
   const stopIndex = state.stops.length + 1;
   state.stops.push({ address: '', order: stopIndex });
   renderStops();
+  // Re-check trip type in case pickup/dropoff are same with stops
+  updateTripTypeFromAddresses();
 }
 
 function removeStop(index) {
@@ -1836,6 +1896,8 @@ function removeStop(index) {
   // Re-order
   state.stops.forEach((s, i) => s.order = i + 1);
   renderStops();
+  // Re-check trip type in case no more stops with same location
+  updateTripTypeFromAddresses();
 }
 
 function renderStops() {
