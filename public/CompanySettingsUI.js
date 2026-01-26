@@ -5,8 +5,11 @@
  * Integrates CompanySettingsManager with HTML forms and provides save/load/import/export functionality.
  */
 
+console.log('[CompanySettingsUI] Script loading...');
+
 class CompanySettingsUI {
   constructor() {
+    console.log('[CompanySettingsUI] Constructor called');
     this.settingsManager = new CompanySettingsManager();
     this.formDirty = false;
     this.currentSettings = {};
@@ -17,6 +20,7 @@ class CompanySettingsUI {
    * Initialize the settings UI
    */
   init() {
+    console.log('[CompanySettingsUI] init() called');
     this.loadSettings();
     this.setupEventListeners();
     this.renderSettingsTable();
@@ -246,9 +250,14 @@ class CompanySettingsUI {
    */
   renderSettingsTable() {
     const container = document.getElementById('settings-table-container');
-    if (!container) return;
+    console.log('[CompanySettingsUI] renderSettingsTable - container found:', !!container);
+    if (!container) {
+      console.warn('[CompanySettingsUI] settings-table-container not found!');
+      return;
+    }
 
     const categorySettings = this.settingsManager.getSettingsByCategory();
+    console.log('[CompanySettingsUI] Categories to render:', Object.keys(categorySettings));
     let html = '';
 
     Object.entries(categorySettings).forEach(([categoryKey, categoryData]) => {
@@ -256,6 +265,7 @@ class CompanySettingsUI {
     });
 
     container.innerHTML = html;
+    console.log('[CompanySettingsUI] Settings table rendered with', Object.keys(categorySettings).length, 'categories');
     
     // Re-setup event listeners after rendering
     setTimeout(() => this.setupEventListeners(), 0);
@@ -390,8 +400,10 @@ window.CompanySettingsUI = CompanySettingsUI;
 // Initialize UI when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
+    console.log('[CompanySettingsUI] Initializing on DOMContentLoaded');
     window.companySettingsUI = new CompanySettingsUI();
   });
 } else {
+  console.log('[CompanySettingsUI] DOM already ready, initializing immediately');
   window.companySettingsUI = new CompanySettingsUI();
 }
