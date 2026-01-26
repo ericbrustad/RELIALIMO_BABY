@@ -47,7 +47,7 @@ async function loadDriversFromSupabase() {
   }
 }
 
-async function loadVehicleTypesFromSupabase(orgId, authToken) {
+async function loadFleetVehiclesFromSupabase(orgId, authToken) {
   try {
     const supabaseUrl = window.ENV && window.ENV.SUPABASE_URL;
     const supabaseKey = window.ENV && window.ENV.SUPABASE_ANON_KEY;
@@ -56,22 +56,67 @@ async function loadVehicleTypesFromSupabase(orgId, authToken) {
     const token = authToken || supabaseKey;
     const effectiveOrg = orgId || window.VEHICLE_FORCE_ORG_ID || window.FORCED_ORG_ID || '';
     const orgFilter = effectiveOrg ? `&organization_id=eq.${encodeURIComponent(effectiveOrg)}` : '';
-    const res = await fetch(`${supabaseUrl}/rest/v1/vehicle_types?select=id,name,code,status&status=eq.ACTIVE${orgFilter}&order=sort_order.asc,name.asc`, {
+    
+    // Try fleet_vehicles first, then vehicles table
+    let vehicles = [];
+    
+    // Try fleet_vehicles table first
+    let res = await fetch(`${supabaseUrl}/rest/v1/fleet_vehicles?select=id,name,make,model,year,color,license_plate,vehicle_type,status&status=neq.RETIRED${orgFilter}&order=name.asc`, {
       headers: { apikey: supabaseKey, Authorization: `Bearer ${token}` }
     });
-    if (!res.ok) return false;
-    const vehicleTypes = await res.json();
+    
+    if (res.ok) {
+      vehicles = await res.json();
+    }
+    
+    // If no fleet_vehicles, try vehicles table
+    if (!vehicles || vehicles.length === 0) {
+      res = await fetch(`${supabaseUrl}/rest/v1/vehicles?select=id,make,model,year,color,license_plate,vehicle_type,status&status=neq.RETIRED${orgFilter}&order=make.asc,model.asc`, {
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        vehicles = await res.json();
+      }
+    }
+    
     const sel = document.getElementById('carSelect');
     if (!sel) return false;
-    sel.innerHTML = '<option value="">Select Vehicle Type</option>';
-    (vehicleTypes || []).forEach((vt) => {
+    sel.innerHTML = '<option value="">Select Fleet Vehicle</option>';
+    
+    (vehicles || []).forEach((v) => {
       const opt = document.createElement('option');
-      opt.value = vt.id || vt.code || vt.name;
-      opt.textContent = vt.name || vt.code || 'Vehicle Type';
+      opt.value = v.id;
+      // Build display name: "Name" or "Year Make Model (Plate)" or "Make Model"
+      let displayName = '';
+      if (v.name) {
+        displayName = v.name;
+      } else if (v.year && v.make && v.model) {
+        displayName = `${v.year} ${v.make} ${v.model}`;
+      } else if (v.make && v.model) {
+        displayName = `${v.make} ${v.model}`;
+      } else if (v.make) {
+        displayName = v.make;
+      } else {
+        displayName = v.vehicle_type || 'Vehicle';
+      }
+      
+      // Add license plate if available
+      if (v.license_plate) {
+        displayName += ` (${v.license_plate})`;
+      }
+      
+      // Add color if available
+      if (v.color && !v.name) {
+        displayName = `${v.color} ${displayName}`;
+      }
+      
+      opt.textContent = displayName;
       sel.appendChild(opt);
     });
-    return vehicleTypes.length > 0;
+    
+    return vehicles.length > 0;
   } catch (e) {
+    console.error('[LinkDriversCars] Error loading fleet vehicles:', e);
     return false;
   }
 }
@@ -265,10 +310,10 @@ function toggleCarSelection(id) {
 document.addEventListener('DOMContentLoaded', () => {
   renderLinkedCars();
   renderSelectedCars();
-  // Try to load drivers and active vehicle types from Supabase; fallback to static options if unavailable
+  // Try to load drivers and fleet vehicles from Supabase; fallback to static options if unavailable
   loadDriversFromSupabase().then(({ success, orgId, authToken }) => {
     if (success) {
-      loadVehicleTypesFromSupabase(orgId, authToken);
+      loadFleetVehiclesFromSupabase(orgId, authToken);
     }
   });
   
