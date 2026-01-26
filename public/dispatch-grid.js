@@ -439,9 +439,10 @@ class DispatchGrid {
 
   initializeMap() {
     if (this.map) {
-      // Map already initialized, just invalidate size
+      // Map already initialized, just invalidate size and refresh drivers
       setTimeout(() => {
         this.map.invalidateSize();
+        this.addDriverMarkersToMap();
       }, 100);
       return;
     }
@@ -457,12 +458,80 @@ class DispatchGrid {
 
     // Add reservation markers
     this.addReservationMarkers();
+    
+    // Add driver markers
+    this.addDriverMarkersToMap();
 
     // Setup map controls
     this.setupMapControls();
 
     // Setup reservation list interactions
     this.setupMapReservationList();
+    
+    // Start driver position updates on map
+    this.startMapDriverUpdates();
+  }
+
+  // Add driver markers to the main map view
+  addDriverMarkersToMap() {
+    // Clear existing driver markers on map
+    if (this.mapDriverMarkers) {
+      this.mapDriverMarkers.forEach(marker => this.map.removeLayer(marker));
+    }
+    this.mapDriverMarkers = [];
+    
+    // Use rendered drivers or fetch live based on toggle
+    const drivers = this.useLiveLocations ? [] : this.renderedDrivers;
+    
+    drivers.forEach(driver => {
+      const statusColor = driver.status === 'available' ? '#28a745' : 
+                          driver.status === 'busy' ? '#ffc107' : '#6c757d';
+      
+      const markerIcon = L.divIcon({
+        className: 'driver-map-marker',
+        html: `<div style="
+          background: ${statusColor};
+          color: white;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 16px;
+          border: 2px solid white;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        ">🚗</div>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+      });
+
+      const marker = L.marker([driver.lat, driver.lng], { icon: markerIcon })
+        .addTo(this.map)
+        .bindPopup(`
+          <strong>${driver.driver}</strong><br>
+          Vehicle: ${driver.name}<br>
+          Status: ${driver.status === 'available' ? '🟢 Available' : '🟡 On Trip'}
+        `);
+
+      this.mapDriverMarkers.push(marker);
+    });
+  }
+  
+  // Start updating driver positions on map
+  startMapDriverUpdates() {
+    if (this.mapDriverInterval) return;
+    
+    this.mapDriverInterval = setInterval(() => {
+      if (this.map && !this.useLiveLocations) {
+        // Update marker positions
+        this.renderedDrivers.forEach((driver, idx) => {
+          if (this.mapDriverMarkers && this.mapDriverMarkers[idx]) {
+            this.mapDriverMarkers[idx].setLatLng([driver.lat, driver.lng]);
+          }
+        });
+      }
+    }, 3000);
   }
 
   addReservationMarkers() {
