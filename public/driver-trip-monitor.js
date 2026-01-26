@@ -279,7 +279,69 @@ function refreshAssignments({ silent = false } = {}) {
   }
 }
 
+// ============================================
+// Location & Notification Permission Management
+// ============================================
+async function checkAndRequestLocationPermission() {
+  if (!('geolocation' in navigator)) return { supported: false, granted: false };
+  
+  if ('permissions' in navigator) {
+    try {
+      const status = await navigator.permissions.query({ name: 'geolocation' });
+      if (status.state === 'granted') return { supported: true, granted: true };
+      if (status.state === 'denied') {
+        showPermissionWarning('location');
+        return { supported: true, granted: false, denied: true };
+      }
+    } catch (err) { /* continue */ }
+  }
+  
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      () => resolve({ supported: true, granted: true }),
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) showPermissionWarning('location');
+        resolve({ supported: true, granted: false, denied: error.code === error.PERMISSION_DENIED });
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+    );
+  });
+}
+
+async function checkAndRequestNotificationPermission() {
+  if (!('Notification' in window)) return { supported: false, granted: false };
+  if (Notification.permission === 'granted') return { supported: true, granted: true };
+  if (Notification.permission === 'denied') {
+    showPermissionWarning('notification');
+    return { supported: true, granted: false, denied: true };
+  }
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm === 'denied') showPermissionWarning('notification');
+    return { supported: true, granted: perm === 'granted', denied: perm === 'denied' };
+  } catch (err) {
+    return { supported: true, granted: false, error: err.message };
+  }
+}
+
+function showPermissionWarning(type) {
+  const bannerId = `${type}-permission-banner`;
+  if (document.getElementById(bannerId)) return;
+  const banner = document.createElement('div');
+  banner.id = bannerId;
+  banner.style.cssText = `position:fixed;top:${type === 'notification' && document.getElementById('location-permission-banner') ? '45px' : '0'};left:0;right:0;background:${type === 'location' ? '#ff6b35' : '#f59e0b'};color:white;padding:10px 15px;z-index:${type === 'location' ? 10000 : 9999};font-size:14px;text-align:center;`;
+  banner.innerHTML = `${type === 'location' ? '📍 Location services disabled.' : '🔔 Notifications disabled.'} Enable in browser settings. <button onclick="this.parentElement.remove()" style="margin-left:10px;background:none;border:none;color:white;font-size:16px;cursor:pointer;">✕</button>`;
+  document.body.prepend(banner);
+}
+
+async function ensureRequiredPermissions() {
+  await Promise.all([checkAndRequestLocationPermission(), checkAndRequestNotificationPermission()]);
+}
+
 function init() {
+  // Check permissions first
+  ensureRequiredPermissions();
+  
   refreshAssignments({ silent: true });
 
   if (elements.refreshBtn) {
