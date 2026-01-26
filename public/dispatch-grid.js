@@ -8,6 +8,18 @@ class DispatchGrid {
     this.liveLocationInterval = null;
     this.renderedDrivers = []; // Simulated driver positions
     this.liveDrivers = []; // Live driver positions from database
+    this.gridData = []; // All reservations data
+    this.filteredData = []; // Filtered reservations
+    this.sortColumn = null; // Current sort column
+    this.sortDirection = 'asc'; // 'asc' or 'desc'
+    this.activeFilters = {
+      newLeg: false,
+      settled: false,
+      inHouse: true,
+      farmIn: true,
+      farmOut: true,
+      quotes: false
+    };
     this.init();
   }
 
@@ -16,6 +28,7 @@ class DispatchGrid {
     this.updateCurrentTime();
     this.initDriverLocationToggle();
     this.initRenderedDrivers();
+    this.loadGridData(); // Load grid reservations
   }
 
   // Initialize the Live/Rendered toggle
@@ -388,46 +401,456 @@ class DispatchGrid {
 
   loadDispatchData() {
     console.log('Loading dispatch data for date:', document.getElementById('dispatchDate').value);
-    // This would load data from backend
+    this.loadGridData();
+  }
+
+  // Load reservations from Supabase for the grid
+  async loadGridData() {
+    try {
+      const dateInput = document.getElementById('dispatchDate');
+      const selectedDate = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
+      
+      // Check if supabase client is available
+      if (typeof window.supabaseClient === 'undefined') {
+        console.warn('[DispatchGrid] Supabase client not available, using sample data');
+        this.loadSampleGridData();
+        return;
+      }
+
+      console.log('[DispatchGrid] Loading grid data for', selectedDate);
+      
+      const { data, error } = await window.supabaseClient
+        .from('reservations')
+        .select('*')
+        .gte('pickup_datetime', `${selectedDate}T00:00:00`)
+        .lte('pickup_datetime', `${selectedDate}T23:59:59`)
+        .order('pickup_datetime', { ascending: true });
+
+      if (error) {
+        console.error('[DispatchGrid] Error loading grid data:', error);
+        this.loadSampleGridData();
+        return;
+      }
+
+      if (data && data.length > 0) {
+        console.log(`[DispatchGrid] Loaded ${data.length} reservations`);
+        this.gridData = this.mapReservationsToGrid(data);
+      } else {
+        console.log('[DispatchGrid] No reservations for this date');
+        this.gridData = [];
+      }
+      
+      this.applyFiltersAndRender();
+      this.updateTripCount();
+    } catch (err) {
+      console.error('[DispatchGrid] Failed to load grid data:', err);
+      this.loadSampleGridData();
+    }
+  }
+
+  // Map Supabase reservation data to grid columns
+  mapReservationsToGrid(reservations) {
+    return reservations.map(res => {
+      const pickupDate = new Date(res.pickup_datetime);
+      const status = this.determineReservationStatus(res);
+      
+      return {
+        id: res.id,
+        svcType: res.service_type || 'Transfer',
+        confNum: res.confirmation_number || res.id?.toString().slice(-5),
+        status: status,
+        reqPuDate: pickupDate.toLocaleDateString('en-US'),
+        puTime: pickupDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        type: res.trip_type || 'One Way',
+        puLocation: res.pickup_address || '',
+        doLocation: res.dropoff_address || '',
+        veh: res.vehicle_type || '',
+        driver: res.assigned_driver_name || 'Unassigned',
+        car: res.assigned_vehicle || '',
+        passengerName: res.passenger_name || res.account_name || '',
+        passCount: res.passenger_count || 1,
+        luggage: res.luggage_count || 0,
+        currTm: '',
+        affiliateName: res.affiliate_name || '',
+        recordedTm: '',
+        fitActTm: '',
+        fitTmDte: '',
+        fitStatus: '',
+        origins: res.trip_origin || 'In-House',
+        fotNum: '',
+        // Keep raw data for filtering
+        _raw: res
+      };
+    });
+  }
+
+  // Determine reservation status based on data
+  determineReservationStatus(res) {
+    if (res.status) return res.status;
+    if (res.is_cancelled) return 'Cancelled';
+    if (res.is_complete) return 'Complete';
+    if (res.assigned_driver_id) return 'Assigned';
+    return 'Pending';
+  }
+
+  // Load sample data when Supabase not available
+  loadSampleGridData() {
+    this.gridData = [
+      {
+        id: 1,
+        svcType: 'Transfer',
+        confNum: '22456',
+        status: 'Assigned',
+        reqPuDate: '12/12/2025',
+        puTime: '8:00 AM',
+        type: 'One Way',
+        puLocation: '123 Main St, Minneapolis, MN',
+        doLocation: 'MSP Airport Terminal 1',
+        veh: 'SUV',
+        driver: 'Eric Brustad',
+        car: 'Black SUV',
+        passengerName: 'John Smith',
+        passCount: 2,
+        luggage: 3,
+        currTm: '',
+        affiliateName: '',
+        recordedTm: '',
+        fitActTm: '',
+        fitTmDte: '',
+        fitStatus: '',
+        origins: 'In-House',
+        fotNum: '',
+        _raw: { trip_origin: 'In-House' }
+      },
+      {
+        id: 2,
+        svcType: 'Hourly',
+        confNum: '22457',
+        status: 'Pending',
+        reqPuDate: '12/12/2025',
+        puTime: '10:30 AM',
+        type: 'Hourly',
+        puLocation: 'Downtown Hilton',
+        doLocation: 'Multiple Stops',
+        veh: 'Sedan',
+        driver: 'Unassigned',
+        car: '',
+        passengerName: 'Jane Doe',
+        passCount: 1,
+        luggage: 1,
+        currTm: '',
+        affiliateName: 'ABC Limo',
+        recordedTm: '',
+        fitActTm: '',
+        fitTmDte: '',
+        fitStatus: '',
+        origins: 'Farm-In',
+        fotNum: 'F-1234',
+        _raw: { trip_origin: 'Farm-In' }
+      },
+      {
+        id: 3,
+        svcType: 'Transfer',
+        confNum: '22458',
+        status: 'Settled',
+        reqPuDate: '12/12/2025',
+        puTime: '2:00 PM',
+        type: 'Round Trip',
+        puLocation: 'MSP Airport Terminal 2',
+        doLocation: '456 Oak Ave, St Paul, MN',
+        veh: 'SUV',
+        driver: 'Tony Arroyo',
+        car: '7 Passenger SUV',
+        passengerName: 'Robert Johnson',
+        passCount: 4,
+        luggage: 6,
+        currTm: '',
+        affiliateName: '',
+        recordedTm: '',
+        fitActTm: '',
+        fitTmDte: '',
+        fitStatus: '',
+        origins: 'In-House',
+        fotNum: '',
+        _raw: { trip_origin: 'In-House' }
+      }
+    ];
+    this.applyFiltersAndRender();
+    this.updateTripCount();
+  }
+
+  // Apply filters and re-render grid
+  applyFiltersAndRender() {
+    // Read current filter states
+    const checkboxes = document.querySelectorAll('.filter-checkbox input');
+    if (checkboxes.length >= 6) {
+      this.activeFilters = {
+        newLeg: checkboxes[0].checked,
+        settled: checkboxes[1].checked,
+        inHouse: checkboxes[2].checked,
+        farmIn: checkboxes[3].checked,
+        farmOut: checkboxes[4].checked,
+        quotes: checkboxes[5].checked
+      };
+    }
+
+    // Filter data
+    this.filteredData = this.gridData.filter(row => {
+      const origin = (row.origins || row._raw?.trip_origin || '').toLowerCase();
+      const status = (row.status || '').toLowerCase();
+      
+      // Check status filters
+      if (status === 'new' || status === 'pending') {
+        if (!this.activeFilters.newLeg) return false;
+      }
+      if (status === 'settled' || status === 'complete') {
+        if (!this.activeFilters.settled) return false;
+      }
+      
+      // Check origin filters
+      if (origin === 'in-house' || origin === 'inhouse' || origin === '') {
+        if (!this.activeFilters.inHouse) return false;
+      }
+      if (origin === 'farm-in' || origin === 'farmin') {
+        if (!this.activeFilters.farmIn) return false;
+      }
+      if (origin === 'farm-out' || origin === 'farmout') {
+        if (!this.activeFilters.farmOut) return false;
+      }
+      if (origin === 'quote' || status === 'quote') {
+        if (!this.activeFilters.quotes) return false;
+      }
+      
+      return true;
+    });
+
+    // Apply current sort if any
+    if (this.currentSortColumn) {
+      this.sortGridData(this.currentSortColumn, false);
+    }
+
+    this.renderGrid();
+  }
+
+  // Render the grid table body
+  renderGrid() {
+    const tbody = document.querySelector('.dispatch-grid-table tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (this.filteredData.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="22" style="text-align: center; padding: 40px; color: #666;">
+            No reservations found for the selected date and filters.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    this.filteredData.forEach(row => {
+      const tr = document.createElement('tr');
+      tr.className = 'grid-row';
+      tr.dataset.confNum = row.confNum;
+      tr.dataset.id = row.id;
+      
+      // Add status-based styling
+      if (row.status === 'Assigned') tr.classList.add('status-assigned');
+      else if (row.status === 'Pending') tr.classList.add('status-pending');
+      else if (row.status === 'Settled') tr.classList.add('status-settled');
+      else if (row.status === 'Cancelled') tr.classList.add('status-cancelled');
+      
+      tr.innerHTML = `
+        <td>${row.svcType}</td>
+        <td><a href="#" class="conf-link">${row.confNum}</a></td>
+        <td><span class="status-badge status-${row.status.toLowerCase()}">${row.status}</span></td>
+        <td>${row.reqPuDate}</td>
+        <td>${row.puTime}</td>
+        <td>${row.type}</td>
+        <td class="truncate" title="${row.puLocation}">${row.puLocation}</td>
+        <td class="truncate" title="${row.doLocation}">${row.doLocation}</td>
+        <td>${row.veh}</td>
+        <td>${row.driver}</td>
+        <td>${row.car}</td>
+        <td>${row.passengerName}</td>
+        <td>${row.passCount}</td>
+        <td>${row.luggage}</td>
+        <td>${row.currTm}</td>
+        <td>${row.affiliateName}</td>
+        <td>${row.recordedTm}</td>
+        <td>${row.fitActTm}</td>
+        <td>${row.fitTmDte}</td>
+        <td>${row.fitStatus}</td>
+        <td>${row.origins}</td>
+        <td>${row.fotNum}</td>
+      `;
+
+      // Click to open reservation in edit mode
+      tr.addEventListener('click', (e) => {
+        // Don't trigger if clicking the conf link
+        if (e.target.classList.contains('conf-link')) return;
+        this.openReservation(row.confNum);
+      });
+
+      tbody.appendChild(tr);
+    });
+
+    // Re-attach conf link handlers
+    tbody.querySelectorAll('.conf-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const confNum = e.target.textContent;
+        this.openReservation(confNum);
+      });
+    });
+  }
+
+  // Update trip count display
+  updateTripCount() {
+    const tripCountEl = document.querySelector('.dispatch-info strong');
+    if (tripCountEl && tripCountEl.parentElement.textContent.includes('Trip Count')) {
+      tripCountEl.textContent = this.filteredData.length;
+    }
   }
 
   performSearch(query) {
     console.log('Searching for:', query);
-    if (!query) return;
+    if (!query) {
+      // Reset to filtered data
+      this.applyFiltersAndRender();
+      return;
+    }
     
-    const rows = document.querySelectorAll('.dispatch-grid-table tbody tr');
-    rows.forEach(row => {
-      const text = row.textContent.toLowerCase();
-      if (text.includes(query.toLowerCase())) {
-        row.style.display = '';
-      } else {
-        row.style.display = 'none';
-      }
+    const searchLower = query.toLowerCase();
+    
+    // Filter the already filtered data by search term
+    this.filteredData = this.filteredData.filter(row => {
+      return (
+        row.confNum?.toLowerCase().includes(searchLower) ||
+        row.passengerName?.toLowerCase().includes(searchLower) ||
+        row.driver?.toLowerCase().includes(searchLower) ||
+        row.puLocation?.toLowerCase().includes(searchLower) ||
+        row.doLocation?.toLowerCase().includes(searchLower) ||
+        row.affiliateName?.toLowerCase().includes(searchLower) ||
+        row.status?.toLowerCase().includes(searchLower)
+      );
     });
+    
+    this.renderGrid();
+    this.updateTripCount();
   }
 
   applyFilters() {
     console.log('Applying filters...');
-    // This would filter the grid based on checked filters
-    const filters = {
-      newLeg: document.querySelector('.filter-checkbox:nth-child(1) input').checked,
-      settled: document.querySelector('.filter-checkbox:nth-child(2) input').checked,
-      inHouse: document.querySelector('.filter-checkbox:nth-child(3) input').checked,
-      farmIn: document.querySelector('.filter-checkbox:nth-child(4) input').checked,
-      farmOut: document.querySelector('.filter-checkbox:nth-child(5) input').checked,
-      quotes: document.querySelector('.filter-checkbox:nth-child(6) input').checked
-    };
-    console.log('Active filters:', filters);
+    this.applyFiltersAndRender();
+    this.updateTripCount();
   }
 
+  // Sort column implementation
   sortColumn(columnName) {
     console.log('Sorting by:', columnName);
-    // This would sort the table by the selected column
+    this.sortGridData(columnName, true);
+    this.renderGrid();
+  }
+
+  // Sort grid data by column
+  sortGridData(columnName, toggleDirection = true) {
+    // Map display column names to data keys
+    const columnMap = {
+      'Svc Type': 'svcType',
+      'Conf#': 'confNum',
+      'Status': 'status',
+      'Req/PU Date': 'reqPuDate',
+      'PU Time': 'puTime',
+      'Type': 'type',
+      'PU Location': 'puLocation',
+      'DO Location': 'doLocation',
+      'Veh': 'veh',
+      'Driver': 'driver',
+      'Car': 'car',
+      'Passenger Name': 'passengerName',
+      'Pass#': 'passCount',
+      'Lug': 'luggage',
+      'Affiliate Name': 'affiliateName',
+      'Origins': 'origins'
+    };
+
+    const key = columnMap[columnName];
+    if (!key) return;
+
+    // Toggle direction if clicking same column
+    if (toggleDirection) {
+      if (this.currentSortColumn === columnName) {
+        this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        this.currentSortColumn = columnName;
+        this.sortDirection = 'asc';
+      }
+    }
+
+    // Update sort arrows in header
+    document.querySelectorAll('.sortable .sort-arrow').forEach(arrow => {
+      arrow.textContent = '▼';
+      arrow.parentElement.classList.remove('sorted-asc', 'sorted-desc');
+    });
+    
+    const activeHeader = Array.from(document.querySelectorAll('.sortable')).find(h => 
+      h.textContent.trim().startsWith(columnName)
+    );
+    if (activeHeader) {
+      const arrow = activeHeader.querySelector('.sort-arrow');
+      if (arrow) {
+        arrow.textContent = this.sortDirection === 'asc' ? '▲' : '▼';
+      }
+      activeHeader.classList.add(this.sortDirection === 'asc' ? 'sorted-asc' : 'sorted-desc');
+    }
+
+    // Sort the data
+    this.filteredData.sort((a, b) => {
+      let valA = a[key] || '';
+      let valB = b[key] || '';
+
+      // Handle numeric values
+      if (key === 'passCount' || key === 'luggage') {
+        valA = parseInt(valA) || 0;
+        valB = parseInt(valB) || 0;
+      } else if (key === 'puTime') {
+        // Convert time to sortable format
+        valA = this.timeToMinutes(valA);
+        valB = this.timeToMinutes(valB);
+      } else {
+        valA = valA.toString().toLowerCase();
+        valB = valB.toString().toLowerCase();
+      }
+
+      if (valA < valB) return this.sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return this.sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  // Convert time string to minutes for sorting
+  timeToMinutes(timeStr) {
+    if (!timeStr) return 0;
+    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if (!match) return 0;
+    let hours = parseInt(match[1]);
+    const minutes = parseInt(match[2]);
+    const period = match[3]?.toUpperCase();
+    
+    if (period === 'PM' && hours !== 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+    
+    return hours * 60 + minutes;
   }
 
   openReservation(confNum) {
     console.log('Opening reservation:', confNum);
-    window.location.href = `reservation-form.html?conf=${confNum}`;
+    // Open reservation form in edit mode
+    window.location.href = `reservation-form.html?conf=${confNum}&mode=edit`;
   }
 
   switchView(view) {

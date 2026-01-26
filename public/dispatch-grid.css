@@ -386,6 +386,78 @@ body {
   font-weight: 600;
 }
 
+.status-badge.status-assigned {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-badge.status-pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-badge.status-settled,
+.status-badge.status-complete {
+  background: #cce5ff;
+  color: #004085;
+}
+
+.status-badge.status-cancelled {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.status-badge.status-new {
+  background: #e2e3e5;
+  color: #383d41;
+}
+
+/* Grid row status styles */
+.grid-row {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.grid-row:hover {
+  background: #e3f2fd !important;
+}
+
+.grid-row.status-assigned {
+  background: #fff;
+}
+
+.grid-row.status-pending {
+  background: #fffbf0;
+}
+
+.grid-row.status-settled {
+  background: #f0f7ff;
+}
+
+.grid-row.status-cancelled {
+  background: #fff5f5;
+  color: #999;
+}
+
+/* Sorted column header */
+.sortable.sorted-asc,
+.sortable.sorted-desc {
+  background: #e3f2fd !important;
+}
+
+.sortable.sorted-asc .sort-arrow,
+.sortable.sorted-desc .sort-arrow {
+  color: #1976d2;
+}
+
+/* Truncate long text */
+td.truncate {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .status-assigned {
   background: #d4edda;
   color: #155724;
