@@ -388,10 +388,10 @@
         align-items: stretch;
         gap: 12px;
         padding: 16px;
-        padding-bottom: 80px; /* Extra space for user menu pill */
+        padding-bottom: 20px;
         height: 100%;
         box-sizing: border-box;
-        overflow: hidden;
+        overflow: visible;
       }
 
       /* Logo + Controls container */
@@ -407,12 +407,12 @@
         display: flex;
         flex-direction: column;
         gap: 6px;
-        flex: 1;
-        min-height: 0;
-        overflow-y: scroll; /* Always show scrollbar */
+        flex: 1 1 auto;
+        max-height: calc(100vh - 200px); /* Constrain height to force scrolling */
+        overflow-y: auto;
         overflow-x: hidden;
-        padding-right: 4px;
-        padding-bottom: 40px;
+        padding-right: 8px;
+        padding-bottom: 60px;
         /* Firefox scrollbar */
         scrollbar-width: thin;
         scrollbar-color: rgba(255,255,255,0.5) rgba(255,255,255,0.15);
