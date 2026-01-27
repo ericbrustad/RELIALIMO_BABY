@@ -553,6 +553,112 @@ export async function deleteAccount(accountId) {
   
   try {
     await setupAPI();
+    
+    // Use service role key if available (bypasses RLS)
+    const supabaseUrl = window.ENV?.SUPABASE_URL;
+    const serviceKey = window.ENV?.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (supabaseUrl && serviceKey) {
+      console.log('🗑️ Using service role key for delete (bypasses RLS)');
+      
+      // First get account info
+      const getResp = await fetch(
+        `${supabaseUrl}/rest/v1/accounts?or=(id.eq.${accountId},account_number.eq.${accountId})&select=id,user_id,email`,
+        {
+          method: 'GET',
+          headers: {
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`
+          }
+        }
+      );
+      
+      let accountToDelete = null;
+      if (getResp.ok) {
+        const accounts = await getResp.json();
+        if (accounts && accounts.length > 0) {
+          accountToDelete = accounts[0];
+          console.log('🗑️ Found account to delete:', accountToDelete);
+        }
+      }
+      
+      // Delete by ID first
+      let deleted = false;
+      const deleteByIdResp = await fetch(
+        `${supabaseUrl}/rest/v1/accounts?id=eq.${accountId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`,
+            'Prefer': 'return=representation'
+          }
+        }
+      );
+      
+      if (deleteByIdResp.ok) {
+        const deletedData = await deleteByIdResp.json();
+        if (deletedData && deletedData.length > 0) {
+          deleted = true;
+          console.log('🗑️ Deleted account by ID:', deletedData);
+        }
+      }
+      
+      // If not deleted by ID, try by account_number
+      if (!deleted) {
+        const deleteByNumResp = await fetch(
+          `${supabaseUrl}/rest/v1/accounts?account_number=eq.${accountId}`,
+          {
+            method: 'DELETE',
+            headers: {
+              'apikey': serviceKey,
+              'Authorization': `Bearer ${serviceKey}`,
+              'Prefer': 'return=representation'
+            }
+          }
+        );
+        
+        if (deleteByNumResp.ok) {
+          const deletedData = await deleteByNumResp.json();
+          if (deletedData && deletedData.length > 0) {
+            deleted = true;
+            console.log('🗑️ Deleted account by account_number:', deletedData);
+          }
+        }
+      }
+      
+      // Try to delete auth user if account had one
+      if (accountToDelete?.user_id || accountToDelete?.email) {
+        console.log('🗑️ Attempting to delete auth user...');
+        try {
+          const response = await fetch('/api/delete-auth-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              userId: accountToDelete.user_id,
+              email: accountToDelete.email 
+            })
+          });
+          
+          if (response.ok) {
+            console.log('🗑️ Auth user deleted');
+          }
+        } catch (authErr) {
+          console.warn('⚠️ Auth user deletion failed:', authErr);
+        }
+      }
+      
+      accountCache = null;
+      
+      if (deleted) {
+        logSuccess('Account deleted from Supabase', accountId);
+      } else {
+        console.log('ℹ️ Account was not in Supabase (may have been local-only)');
+      }
+      return true;
+    }
+    
+    // Fallback to regular client if no service key
     const client = getSupabaseClient();
     if (!client) throw new Error('No Supabase client');
 
