@@ -1217,6 +1217,15 @@ class Calendar {
     try {
       all = await this.db.getAllReservations() || [];
       console.log(`📋 Calendar: getAllReservations returned ${all.length} total reservations`);
+      // Debug: show first 5 reservation dates
+      if (all.length > 0) {
+        const sample = all.slice(0, 5).map(r => ({
+          conf: r.confirmation_number,
+          pickup_at: r.pickup_at,
+          parsed: this.parseLocalDateTime(r.pickup_at)?.toISOString?.() || 'null'
+        }));
+        console.log('📅 Calendar: Sample reservation dates:', sample);
+      }
     } catch (e) {
       console.error('❌ Failed to load reservations from db:', e);
       return [];
