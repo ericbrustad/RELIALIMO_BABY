@@ -1729,6 +1729,32 @@
       </div>
     </div>
 
+    <!-- Driver Assignment Modal -->
+    <div id="driverAssignModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>👤 Assign Driver</h2>
+          <button type="button" class="modal-close" onclick="closeModal('driverAssignModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p style="margin-bottom: 16px;">Select a driver to assign this trip to:</p>
+          <div class="form-group">
+            <label for="driverAssignSelect">Driver</label>
+            <select id="driverAssignSelect" class="form-control" style="width: 100%; padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #ddd;">
+              <option value="">-- Select a Driver --</option>
+            </select>
+          </div>
+          <div id="selectedDriverInfo" style="margin-top: 16px; padding: 12px; background: #f5f5f5; border-radius: 8px; display: none;">
+            <div id="selectedDriverDetails"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('driverAssignModal')">Cancel</button>
+          <button type="button" id="confirmDriverAssignBtn" class="btn btn-success" disabled>✓ Assign Driver</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Trip Offer Overlay Modal -->
     <div id="tripOfferOverlay" class="trip-offer-overlay" style="display: none;">
       <div class="trip-offer-modal">

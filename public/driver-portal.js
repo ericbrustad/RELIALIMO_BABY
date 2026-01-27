@@ -7570,14 +7570,166 @@ function switchTab(tabName) {
 // ============================================
 // Trip Actions
 // ============================================
+
+// Store pending trip assignment while selecting driver
+let pendingAssignmentTripId = null;
+
 window.acceptTrip = async function(tripId) {
+  try {
+    // Store the trip ID for later assignment
+    pendingAssignmentTripId = tripId;
+    
+    // Show driver selection modal
+    await showDriverAssignmentModal(tripId);
+    
+  } catch (err) {
+    console.error('[DriverPortal] Accept trip error:', err);
+    showToast('Failed to accept trip', 'error');
+  }
+};
+
+/**
+ * Show the driver assignment modal with a dropdown of available drivers
+ */
+async function showDriverAssignmentModal(tripId) {
+  const select = document.getElementById('driverAssignSelect');
+  const confirmBtn = document.getElementById('confirmDriverAssignBtn');
+  const driverInfo = document.getElementById('selectedDriverInfo');
+  const driverDetails = document.getElementById('selectedDriverDetails');
+  
+  if (!select) {
+    console.error('[DriverPortal] Driver assign select not found');
+    // Fallback to direct assignment
+    await assignTripToDriver(tripId, state.driverId, state.driver?.first_name + ' ' + state.driver?.last_name);
+    return;
+  }
+  
+  // Reset the modal
+  select.innerHTML = '<option value="">-- Loading Drivers --</option>';
+  confirmBtn.disabled = true;
+  driverInfo.style.display = 'none';
+  
+  // Open the modal
+  openModal('driverAssignModal');
+  
+  try {
+    // Fetch all available drivers
+    let drivers = await fetchDrivers();
+    
+    // Filter to show drivers that belong to the same affiliate company or are the current driver
+    const currentDriver = state.driver;
+    const affiliateCompany = currentDriver?.affiliated_company;
+    
+    if (affiliateCompany) {
+      // Show all drivers from the same affiliate company
+      drivers = drivers.filter(d => 
+        d.affiliated_company === affiliateCompany || d.id === currentDriver.id
+      );
+    } else {
+      // If no affiliate company, show just the current driver and any drivers without affiliate
+      drivers = drivers.filter(d => 
+        d.id === currentDriver.id || 
+        (d.driver_type === 'affiliate' && !d.affiliated_company)
+      );
+    }
+    
+    // Sort: current driver first, then alphabetically
+    drivers.sort((a, b) => {
+      if (a.id === currentDriver?.id) return -1;
+      if (b.id === currentDriver?.id) return 1;
+      const nameA = `${a.first_name || ''} ${a.last_name || ''}`.trim();
+      const nameB = `${b.first_name || ''} ${b.last_name || ''}`.trim();
+      return nameA.localeCompare(nameB);
+    });
+    
+    // Populate the dropdown
+    select.innerHTML = '<option value="">-- Select a Driver --</option>';
+    drivers.forEach(driver => {
+      const name = `${driver.first_name || ''} ${driver.last_name || ''}`.trim() || 'Unnamed Driver';
+      const status = driver.driver_status || 'available';
+      const statusIcon = status === 'available' ? '🟢' : status === 'busy' ? '🟡' : '⚪';
+      const isCurrentDriver = driver.id === currentDriver?.id;
+      
+      const option = document.createElement('option');
+      option.value = driver.id;
+      option.textContent = `${statusIcon} ${name}${isCurrentDriver ? ' (You)' : ''}`;
+      option.dataset.driverName = name;
+      option.dataset.driverPhone = driver.home_phone || driver.cell_phone || '';
+      option.dataset.driverEmail = driver.email || '';
+      option.dataset.driverStatus = status;
+      select.appendChild(option);
+    });
+    
+    // Pre-select current driver if available
+    if (currentDriver?.id) {
+      select.value = currentDriver.id;
+      updateSelectedDriverInfo(select);
+      confirmBtn.disabled = false;
+    }
+    
+  } catch (err) {
+    console.error('[DriverPortal] Failed to load drivers for assignment:', err);
+    select.innerHTML = '<option value="">-- Error loading drivers --</option>';
+    showToast('Failed to load driver list', 'error');
+  }
+  
+  // Set up event listeners
+  select.onchange = function() {
+    updateSelectedDriverInfo(select);
+    confirmBtn.disabled = !select.value;
+  };
+  
+  confirmBtn.onclick = async function() {
+    if (!select.value || !pendingAssignmentTripId) return;
+    
+    const selectedOption = select.options[select.selectedIndex];
+    const driverId = select.value;
+    const driverName = selectedOption.dataset.driverName || 'Driver';
+    
+    closeModal('driverAssignModal');
+    await assignTripToDriver(pendingAssignmentTripId, driverId, driverName);
+    pendingAssignmentTripId = null;
+  };
+}
+
+/**
+ * Update the driver info panel when selection changes
+ */
+function updateSelectedDriverInfo(select) {
+  const driverInfo = document.getElementById('selectedDriverInfo');
+  const driverDetails = document.getElementById('selectedDriverDetails');
+  
+  if (!select.value) {
+    driverInfo.style.display = 'none';
+    return;
+  }
+  
+  const selectedOption = select.options[select.selectedIndex];
+  const name = selectedOption.dataset.driverName || 'Driver';
+  const phone = selectedOption.dataset.driverPhone || '';
+  const email = selectedOption.dataset.driverEmail || '';
+  const status = selectedOption.dataset.driverStatus || 'available';
+  
+  driverInfo.style.display = 'block';
+  driverDetails.innerHTML = `
+    <div style="font-weight: 600; font-size: 16px; margin-bottom: 8px;">👤 ${name}</div>
+    ${phone ? `<div>📞 ${phone}</div>` : ''}
+    ${email ? `<div>📧 ${email}</div>` : ''}
+    <div style="margin-top: 8px;">
+      <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; background: ${status === 'available' ? '#d4edda' : '#fff3cd'}; color: ${status === 'available' ? '#155724' : '#856404'};">
+        ${status === 'available' ? '🟢 Available' : status === 'busy' ? '🟡 Busy' : '⚪ ' + status}
+      </span>
+    </div>
+  `;
+}
+
+/**
+ * Assign the trip to the selected driver
+ */
+async function assignTripToDriver(tripId, driverId, driverName) {
   try {
     // Play accept sound immediately for feedback
     playNotificationSound('accept');
-    
-    // Get current driver info
-    const driverId = state.driverId || localStorage.getItem('driver_id');
-    const driverName = state.driverName || localStorage.getItem('driver_portal_name') || 'Driver';
     
     // Update reservation with driver assignment (use correct column names)
     await updateReservationStatus(tripId, { 
@@ -7614,14 +7766,15 @@ window.acceptTrip = async function(tripId) {
     // Clear from pending offers
     clearPendingOffer(tripId, driverId);
     
-    showToast('🎉 Trip accepted! Check your upcoming trips.', 'success');
+    const assignedToSelf = driverId === state.driverId;
+    showToast(`🎉 Trip assigned to ${assignedToSelf ? 'you' : driverName}!`, 'success');
     switchTab('upcoming');
     await refreshTrips();
   } catch (err) {
-    console.error('[DriverPortal] Accept trip error:', err);
-    showToast('Failed to accept trip', 'error');
+    console.error('[DriverPortal] Assign trip error:', err);
+    showToast('Failed to assign trip', 'error');
   }
-};
+}
 
 window.declineTrip = async function(tripId) {
   if (!confirm('Are you sure you want to decline this trip?')) return;
