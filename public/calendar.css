@@ -4,6 +4,14 @@
   box-sizing: border-box;
 }
 
+/* 7px Black Header Bar - pushes iframe content down */
+.iframe-header-bar {
+  height: 7px;
+  background: #000;
+  width: 100%;
+  flex-shrink: 0;
+}
+
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background: #e8e8e8;
@@ -531,8 +539,6 @@ body.show-holiday-ticker .holiday-ticker {
   position: sticky;
   top: 0;
   z-index: 10;
-  box-shadow: 0 -7px 0 0 #000; /* 7px solid black bar above header */
-  margin-top: 7px; /* Make room for the black bar */
 }
 
 .calendar-header-cell {
