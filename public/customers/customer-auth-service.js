@@ -600,6 +600,8 @@ async function createAccountRecord(accessToken, email) {
     console.log('[AuthService] Auto-creating account for:', email, { firstName, lastName, accountNumber: nextAccountNumber });
     
     // Only include columns that exist in the accounts table
+    // Accounts created from customer portal are always billing clients
+    // If same person is the passenger, they're also marked as passenger
     const accountData = {
       organization_id: CUSTOMER_ORG_ID,
       account_number: nextAccountNumber.toString(),
@@ -608,6 +610,8 @@ async function createAccountRecord(accessToken, email) {
       last_name: lastName,
       status: 'active',
       portal_slug: portalSlug || null,
+      is_billing_client: true,  // Always billing for accounts created through customer portal
+      is_passenger: true,       // Also passenger since they're signing up for themselves
       created_at: new Date().toISOString()
     };
     

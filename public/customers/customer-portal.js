@@ -2349,6 +2349,20 @@ async function bookTrip(includeReturn = false) {
       passengerSelect === 'self' ? 'self' : 'other'
     );
     
+    // If passenger is different from billing (booker), create a passenger-only account
+    if (passengerSelect !== 'self') {
+      const billingFirstName = state.customer?.first_name?.toLowerCase() || '';
+      const billingLastName = state.customer?.last_name?.toLowerCase() || '';
+      const paxFirstName = passengerFirstName.toLowerCase();
+      const paxLastName = passengerLastName.toLowerCase();
+      
+      // Check if passenger name differs from billing account holder
+      if (paxFirstName !== billingFirstName || paxLastName !== billingLastName) {
+        console.log('[CustomerPortal] Creating separate passenger account for:', passengerFirstName, passengerLastName);
+        await createPassengerAccount(passengerFirstName, passengerLastName, passengerPhone, passengerEmail);
+      }
+    }
+    
     // Valid reservation columns in the database (exact match from api-service.js)
     const VALID_COLUMNS = new Set([
       'id', 'organization_id', 'confirmation_number', 'status', 'account_id',
@@ -2880,6 +2894,99 @@ async function getNextConfirmationNumber() {
     const settingsRaw = localStorage.getItem('relia_company_settings');
     const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
     return parseInt(settings.confirmationStartNumber, 10) || 100000;
+  }
+}
+
+/**
+ * Create a passenger-only account when booking for someone else
+ * This creates a separate account marked as is_passenger=true only
+ */
+async function createPassengerAccount(firstName, lastName, phone, email) {
+  try {
+    const creds = getSupabaseCredentials();
+    const CUSTOMER_ORG_ID = 'c0000000-0000-0000-0000-000000000001';
+    
+    // Check if an account with this name/email already exists
+    const checkQuery = email 
+      ? `first_name=ilike.${encodeURIComponent(firstName)}&last_name=ilike.${encodeURIComponent(lastName)}&email=eq.${encodeURIComponent(email.toLowerCase())}`
+      : `first_name=ilike.${encodeURIComponent(firstName)}&last_name=ilike.${encodeURIComponent(lastName)}`;
+    
+    const checkResp = await fetch(
+      `${creds.url}/rest/v1/accounts?${checkQuery}&select=id,account_number`,
+      {
+        headers: {
+          'apikey': creds.anonKey,
+          'Authorization': `Bearer ${state.session?.access_token}`
+        }
+      }
+    );
+    
+    if (checkResp.ok) {
+      const existing = await checkResp.json();
+      if (existing.length > 0) {
+        console.log('[CustomerPortal] Passenger account already exists:', existing[0].account_number);
+        return existing[0];
+      }
+    }
+    
+    // Get next account number
+    const maxResp = await fetch(
+      `${creds.url}/rest/v1/accounts?organization_id=eq.${CUSTOMER_ORG_ID}&order=account_number.desc&limit=1&select=account_number`,
+      {
+        headers: {
+          'apikey': creds.anonKey,
+          'Authorization': `Bearer ${state.session?.access_token}`
+        }
+      }
+    );
+    
+    let nextAccountNumber = 30001;
+    if (maxResp.ok) {
+      const maxAccounts = await maxResp.json();
+      if (maxAccounts.length > 0 && maxAccounts[0].account_number) {
+        nextAccountNumber = parseInt(maxAccounts[0].account_number) + 1;
+      }
+    }
+    
+    // Create the passenger-only account
+    const accountData = {
+      organization_id: CUSTOMER_ORG_ID,
+      account_number: nextAccountNumber.toString(),
+      first_name: firstName,
+      last_name: lastName,
+      phone: phone || null,
+      email: email ? email.toLowerCase() : null,
+      status: 'active',
+      is_billing_client: false,  // NOT a billing client
+      is_passenger: true,        // IS a passenger
+      created_at: new Date().toISOString()
+    };
+    
+    const createResp = await fetch(`${creds.url}/rest/v1/accounts`, {
+      method: 'POST',
+      headers: {
+        'apikey': creds.anonKey,
+        'Authorization': `Bearer ${state.session?.access_token}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify(accountData)
+    });
+    
+    if (createResp.ok) {
+      const newAccounts = await createResp.json();
+      if (newAccounts?.length > 0) {
+        console.log('[CustomerPortal] Created passenger account:', newAccounts[0].account_number);
+        return newAccounts[0];
+      }
+    } else {
+      console.error('[CustomerPortal] Failed to create passenger account:', await createResp.text());
+    }
+    
+    return null;
+  } catch (err) {
+    console.error('[CustomerPortal] Error creating passenger account:', err);
+    return null;
   }
 }
 
