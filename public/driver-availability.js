@@ -1,3 +1,5 @@
+import { supabase, getSupabaseClient } from './config.js';
+
 const STATUS_OPTIONS = [
 	{ value: 'available', label: 'Available', hint: 'Ready for new trips' },
 	{ value: 'enroute', label: 'En Route', hint: 'Heading to the pickup location' },
@@ -176,7 +178,7 @@ function renderDrivers() {
 	}
 }
 
-function updateOverride(driverId, changes) {
+async function updateOverride(driverId, changes) {
 	if (!driverId) return;
 
 	if (changes?.status && !STATUS_OPTIONS.some(option => option.value === changes.status)) {
@@ -187,8 +189,86 @@ function updateOverride(driverId, changes) {
 	if (changes) Object.assign(override, changes);
 	override.updatedAt = new Date().toISOString();
 	saveOverrides();
+	
+	// Also update local driver directory cache
+	if (changes?.status) {
+		updateLocalDriverDirectory(driverId, changes.status);
+	}
+	
 	renderDrivers();
-	showToast('Status updated.');
+	showToast('Updating...');
+	
+	// Sync to Supabase
+	if (changes?.status) {
+		const success = await syncStatusToSupabase(driverId, changes.status);
+		if (success) {
+			showToast('Status saved to database ✓');
+		} else {
+			showToast('Saved locally (sync pending)');
+		}
+	} else {
+		showToast('Notes updated.');
+	}
+}
+
+// Update the local relia_driver_directory cache
+function updateLocalDriverDirectory(driverId, newStatus) {
+	try {
+		const raw = localStorage.getItem('relia_driver_directory');
+		if (!raw) return;
+		
+		const drivers = JSON.parse(raw);
+		if (!Array.isArray(drivers)) return;
+		
+		const normalizedId = String(driverId);
+		const updated = drivers.map(d => {
+			if (String(d.id) === normalizedId) {
+				return {
+					...d,
+					driver_status: newStatus,
+					status: newStatus.toUpperCase()
+				};
+			}
+			return d;
+		});
+		
+		localStorage.setItem('relia_driver_directory', JSON.stringify(updated));
+		console.log('[driver-availability] Updated local driver directory for', driverId, 'to', newStatus);
+	} catch (e) {
+		console.warn('[driver-availability] Could not update local driver directory:', e);
+	}
+}
+
+// Sync status change to Supabase drivers table
+async function syncStatusToSupabase(driverId, newStatus) {
+	try {
+		const client = getSupabaseClient ? getSupabaseClient() : supabase;
+		if (!client) {
+			console.warn('[driver-availability] No Supabase client available');
+			return false;
+		}
+		
+		// Map availability status to driver_status field in Supabase
+		// The drivers table has 'driver_status' column
+		const { error } = await client
+			.from('drivers')
+			.update({ 
+				driver_status: newStatus,
+				updated_at: new Date().toISOString()
+			})
+			.eq('id', driverId);
+		
+		if (error) {
+			console.error('[driver-availability] Supabase update failed:', error);
+			return false;
+		}
+		
+		console.log('[driver-availability] Synced driver', driverId, 'status to Supabase:', newStatus);
+		return true;
+	} catch (e) {
+		console.error('[driver-availability] Error syncing to Supabase:', e);
+		return false;
+	}
 }
 
 function updateNotes(driverId, notes) {
@@ -302,12 +382,50 @@ function attachEvents() {
 	}
 }
 
-function init() {
+// Load drivers fresh from Supabase and update local cache
+async function refreshDriversFromSupabase() {
+	try {
+		const client = getSupabaseClient ? getSupabaseClient() : supabase;
+		if (!client) {
+			console.warn('[driver-availability] No Supabase client for refresh');
+			return false;
+		}
+		
+		const { data, error } = await client
+			.from('drivers')
+			.select('*')
+			.order('last_name', { ascending: true });
+		
+		if (error) {
+			console.error('[driver-availability] Failed to load drivers from Supabase:', error);
+			return false;
+		}
+		
+		if (data && data.length > 0) {
+			localStorage.setItem('relia_driver_directory', JSON.stringify(data));
+			console.log('[driver-availability] Refreshed', data.length, 'drivers from Supabase');
+			return true;
+		}
+		
+		return false;
+	} catch (e) {
+		console.error('[driver-availability] Error refreshing from Supabase:', e);
+		return false;
+	}
+}
+
+async function init() {
 	loadOverrides();
 	renderDrivers();
 	updateLastSync();
 	attachEvents();
+	
+	// Try to refresh drivers from Supabase in background
+	const refreshed = await refreshDriversFromSupabase();
+	if (refreshed) {
+		renderDrivers();
+		showToast('Drivers synced from database');
+	}
 }
 
 init();
-
