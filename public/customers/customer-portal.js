@@ -5,7 +5,7 @@
 import { getSupabaseCredentials } from '/shared/supabase-config.js';
 import CustomerAuth from './customer-auth-service.js';
 import { initUserMenu, injectUserMenuStyles } from './customer-user-menu.js';
-import { LocalAirportsService } from '../LocalAirportsService.js';
+import { LocalAirportsService } from './LocalAirportsService.js';
 
 // ============================================
 // Memo Notification Functions
