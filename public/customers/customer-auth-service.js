@@ -625,8 +625,38 @@ async function createAccountRecord(accessToken, email) {
     if (createResp.ok) {
       const newAccounts = await createResp.json();
       if (newAccounts?.length > 0) {
-        console.log('[AuthService] Auto-created account:', newAccounts[0]);
-        return newAccounts[0];
+        const newAccount = newAccounts[0];
+        console.log('[AuthService] Auto-created account:', newAccount);
+        
+        // Also add the email to account_emails table
+        try {
+          const emailData = {
+            account_id: newAccount.id,
+            organization_id: CUSTOMER_ORG_ID,
+            email: email.toLowerCase(),
+            email_type: 'primary'
+          };
+          
+          const emailResp = await fetch(`${creds.url}/rest/v1/account_emails`, {
+            method: 'POST',
+            headers: {
+              'apikey': creds.anonKey,
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(emailData)
+          });
+          
+          if (emailResp.ok) {
+            console.log('[AuthService] Added email to account_emails');
+          } else {
+            console.warn('[AuthService] Failed to add email to account_emails:', await emailResp.text());
+          }
+        } catch (emailErr) {
+          console.warn('[AuthService] Error adding to account_emails:', emailErr);
+        }
+        
+        return newAccount;
       }
     } else {
       const errorText = await createResp.text();
