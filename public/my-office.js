@@ -4188,7 +4188,7 @@ class MyOffice {
     if (deleteBtn) deleteBtn.disabled = !hasSelection;
 
     if (hasSelection && this.savedRateSchemes) {
-      const scheme = this.savedRateSchemes.find(s => s.id === schemeId);
+      const scheme = this.savedRateSchemes.find(s => (s.id === schemeId || s.scheme_id === schemeId));
       if (scheme && infoPanel && infoText) {
         const rateTypeLabel = this.getRateTypeLabel(scheme.rate_type);
         const createdDate = scheme.created_at ? new Date(scheme.created_at).toLocaleDateString() : 'Unknown';
@@ -4262,13 +4262,14 @@ class MyOffice {
       return;
     }
 
-    const scheme = this.savedRateSchemes?.find(s => s.id === schemeId);
+    const scheme = this.savedRateSchemes?.find(s => (s.id === schemeId || s.scheme_id === schemeId));
     if (!scheme) {
       alert('Scheme not found.');
       return;
     }
 
-    if (!confirm(`Apply "${scheme.name}" rates to this vehicle type?`)) {
+    const schemeName = scheme.scheme_name || scheme.name || 'Unnamed';
+    if (!confirm(`Apply "${schemeName}" rates to this vehicle type?`)) {
       return;
     }
 
@@ -4307,13 +4308,14 @@ class MyOffice {
       return;
     }
 
-    const scheme = this.savedRateSchemes?.find(s => s.id === schemeId);
+    const scheme = this.savedRateSchemes?.find(s => (s.id === schemeId || s.scheme_id === schemeId));
     if (!scheme) {
       alert('Scheme not found.');
       return;
     }
 
-    const newName = prompt('Enter new name for this scheme:', scheme.name);
+    const schemeName = scheme.scheme_name || scheme.name || 'Unnamed';
+    const newName = prompt('Enter new name for this scheme:', schemeName);
     if (newName === null) return; // User cancelled
     if (!newName.trim()) {
       alert('Scheme name cannot be empty.');
@@ -4346,13 +4348,14 @@ class MyOffice {
       return;
     }
 
-    const scheme = this.savedRateSchemes?.find(s => s.id === schemeId);
+    const scheme = this.savedRateSchemes?.find(s => (s.id === schemeId || s.scheme_id === schemeId));
     if (!scheme) {
       alert('Scheme not found.');
       return;
     }
 
-    if (!confirm(`Are you sure you want to delete "${scheme.name}"? This cannot be undone.`)) {
+    const schemeName = scheme.scheme_name || scheme.name || 'Unnamed';
+    if (!confirm(`Are you sure you want to delete "${schemeName}"? This cannot be undone.`)) {
       return;
     }
 
@@ -4810,14 +4813,15 @@ class MyOffice {
       return;
     }
 
-    const scheme = this.savedRateSchemes?.find(s => s.id === schemeId);
+    const scheme = this.savedRateSchemes?.find(s => (s.id === schemeId || s.scheme_id === schemeId));
     if (!scheme) {
       detailsDiv.style.display = 'none';
       return;
     }
 
+    const schemeName = scheme.scheme_name || scheme.name || 'Unnamed';
     contentDiv.innerHTML = `
-      <div><strong>Name:</strong> ${scheme.name}</div>
+      <div><strong>Name:</strong> ${schemeName}</div>
       <div><strong>Rate Type:</strong> ${this.getRateTypeLabel(scheme.rate_type)}</div>
       ${scheme.source_vehicle_type_name ? `<div><strong>Source Vehicle:</strong> ${scheme.source_vehicle_type_name}</div>` : ''}
       ${scheme.entry_count ? `<div><strong>Entries:</strong> ${scheme.entry_count}</div>` : ''}
@@ -4910,7 +4914,7 @@ class MyOffice {
     }
 
     // Fallback: Get scheme entries and apply them to vehicle type's rates JSON
-    const scheme = this.savedRateSchemes?.find(s => s.id === schemeId);
+    const scheme = this.savedRateSchemes?.find(s => (s.id === schemeId || s.scheme_id === schemeId));
     if (!scheme) {
       throw new Error('Scheme not found');
     }
