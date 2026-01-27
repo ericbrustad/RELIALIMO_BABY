@@ -28,10 +28,11 @@
     <script>
       // Derive company location from saved Office > Company Info (localStorage)
       (function syncCompanyLocationFromSettings() {
-        const fallbackZip = '55431'; // Minneapolis fallback
         let city = '';
         let state = '';
         let postal = '';
+        let latitude = null;
+        let longitude = null;
 
         try {
           const cached = localStorage.getItem('companyInfo');
@@ -40,6 +41,8 @@
             city = info?.city?.trim() || '';
             state = info?.state?.trim() || '';
             postal = info?.postal_code?.trim() || '';
+            latitude = info?.latitude ? parseFloat(info.latitude) : null;
+            longitude = info?.longitude ? parseFloat(info.longitude) : null;
           }
         } catch (e) {
           console.warn('Unable to read companyInfo from storage:', e.message);
@@ -65,7 +68,13 @@
         if (cityState) {
           window.COMPANY_LOCATION_QUERY = cityState;
         }
-        window.COMPANY_ZIP_CODE = postal || fallbackZip;
+        window.COMPANY_ZIP_CODE = postal || '';
+        
+        // Set company center from lat/lng if available
+        if (latitude && longitude && !isNaN(latitude) && !isNaN(longitude)) {
+          window.COMPANY_CENTER = [latitude, longitude];
+          console.log('Company center set from settings:', window.COMPANY_CENTER);
+        }
       })();
 
       const activateFarmOutTab = () => {

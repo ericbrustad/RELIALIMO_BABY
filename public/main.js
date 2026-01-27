@@ -553,14 +553,18 @@ class LimoReservationSystem {
     // Get company location from zip code
     await this.getCompanyLocation();
     
-    // Initialize maps with company location; fall back to last known center or neutral default
-    const fallbackCenter = window.COMPANY_CENTER || [39.7392, -104.9903];
-    const center = this.companyLocation || fallbackCenter;
-    this.mapManager.initUserMap('userMap', center);
-    this.mapManager.initDriverMap('driverMap', center);
-    
-    // Set driver tracker base location
-    this.driverTracker.setBaseLocation(center);
+    // Initialize maps with company location from settings (no hardcoded fallback)
+    const center = this.companyLocation || window.COMPANY_CENTER || null;
+    if (center) {
+      this.mapManager.initUserMap('userMap', center);
+      this.mapManager.initDriverMap('driverMap', center);
+      this.driverTracker.setBaseLocation(center);
+    } else {
+      console.warn('No company location configured. Please set address in My Office > Company Settings.');
+      // Initialize with null - maps will show world view until location is set
+      this.mapManager.initUserMap('userMap', [0, 0]);
+      this.mapManager.initDriverMap('driverMap', [0, 0]);
+    }
     
     // Load initial data (will use company location)
     await this.loadInitialData();
@@ -664,10 +668,23 @@ class LimoReservationSystem {
 
   async getCompanyLocation() {
     try {
+      // First check if COMPANY_CENTER was already set from localStorage lat/lng
+      if (window.COMPANY_CENTER && Array.isArray(window.COMPANY_CENTER) && window.COMPANY_CENTER.length === 2) {
+        this.companyLocation = window.COMPANY_CENTER;
+        console.log('✓ Company location from saved settings:', this.companyLocation);
+        return;
+      }
+      
       // Build location query from globals injected by index-reservations.html
       const companyZip = (window.COMPANY_ZIP_CODE || '').toString().trim();
       const cityState = (window.COMPANY_LOCATION_QUERY || '').toString().trim();
       const locationQuery = cityState || companyZip;
+      
+      if (!locationQuery) {
+        console.warn('No company location configured. Please set address in My Office > Company Settings.');
+        this.companyLocation = null;
+        return;
+      }
       
       console.log('Geocoding company location:', { locationQuery, companyZip, cityState });
       
@@ -677,7 +694,7 @@ class LimoReservationSystem {
       if (results && results.length > 0) {
         // Convert from [lng, lat] to [lat, lng] for Leaflet
         this.companyLocation = [results[0].coordinates[1], results[0].coordinates[0]];
-        console.log('✓ Company location set to:', this.companyLocation, '(' + locationQuery + ')');
+        console.log('✓ Company location geocoded to:', this.companyLocation, '(' + locationQuery + ')');
         window.COMPANY_CENTER = this.companyLocation;
       } else {
         console.warn('No geocoding results for company location query:', locationQuery);
@@ -839,7 +856,8 @@ class LimoReservationSystem {
   async loadInitialData() {
     await this.updateListViewsFromDb();
 
-    const center = this.companyLocation || [44.8848, -93.2223];
+    // Use company location from settings (no hardcoded fallback)
+    const center = this.companyLocation || window.COMPANY_CENTER || null;
     await this.loadReservationsFromStorage();
 
     // REMOVED: Sample reservation seeding - production apps should not seed demo data
