@@ -1857,9 +1857,21 @@ class MyOffice {
   setupCompanyAddressLookup() {
     const addressInput = document.getElementById('companyStreetAddress');
     const suggestions = document.getElementById('companyAddressSuggestions');
-    if (!addressInput || !suggestions) {
+    if (!addressInput) {
       return;
     }
+
+    // Use Google Places Autocomplete if available
+    if (typeof google !== 'undefined' && google.maps && google.maps.places) {
+      this.setupGooglePlacesAutocomplete(addressInput);
+      // Hide the custom suggestions container since Google provides its own
+      if (suggestions) suggestions.style.display = 'none';
+      return;
+    }
+
+    // Fallback to Mapbox if Google not available
+    console.log('[MyOffice] Google Places not available, falling back to Mapbox');
+    if (!suggestions) return;
 
     let debounceTimer;
     addressInput.addEventListener('input', (e) => {
@@ -1878,6 +1890,66 @@ class MyOffice {
 
     addressInput.addEventListener('blur', () => {
       setTimeout(() => suggestions.classList.remove('active'), 200);
+    });
+  }
+
+  setupGooglePlacesAutocomplete(addressInput) {
+    const autocomplete = new google.maps.places.Autocomplete(addressInput, {
+      types: ['address'],
+      componentRestrictions: { country: 'us' },
+      fields: ['address_components', 'geometry', 'formatted_address', 'name']
+    });
+
+    autocomplete.addListener('place_changed', () => {
+      const place = autocomplete.getPlace();
+      if (!place.geometry) {
+        console.warn('[MyOffice] No geometry for selected place');
+        return;
+      }
+
+      // Extract address components
+      let streetNumber = '';
+      let streetName = '';
+      let city = '';
+      let state = '';
+      let zip = '';
+
+      (place.address_components || []).forEach(component => {
+        const types = component.types;
+        if (types.includes('street_number')) {
+          streetNumber = component.long_name;
+        } else if (types.includes('route')) {
+          streetName = component.long_name;
+        } else if (types.includes('locality')) {
+          city = component.long_name;
+        } else if (types.includes('administrative_area_level_1')) {
+          state = component.short_name; // Already abbreviated (e.g., "MN")
+        } else if (types.includes('postal_code')) {
+          zip = component.long_name;
+        }
+      });
+
+      const streetAddress = [streetNumber, streetName].filter(Boolean).join(' ');
+      const latitude = place.geometry.location.lat();
+      const longitude = place.geometry.location.lng();
+
+      // Update form fields
+      const cityInput = document.getElementById('companyCity');
+      const stateInput = document.getElementById('companyState');
+      const zipInput = document.getElementById('companyZipCode');
+      const latitudeInput = document.getElementById('companyLatitude');
+      const longitudeInput = document.getElementById('companyLongitude');
+
+      if (addressInput) addressInput.value = streetAddress;
+      if (cityInput) cityInput.value = city;
+      if (stateInput) stateInput.value = state;
+      if (zipInput) zipInput.value = zip;
+      if (latitudeInput) latitudeInput.value = latitude;
+      if (longitudeInput) longitudeInput.value = longitude;
+
+      this.companyGeo = { latitude, longitude };
+
+      console.log('[MyOffice] Google Places selected:', { streetAddress, city, state, zip, latitude, longitude });
     });
   }
 
