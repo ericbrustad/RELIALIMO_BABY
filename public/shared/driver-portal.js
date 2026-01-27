@@ -1448,6 +1448,11 @@ async function init() {
               await loadDashboard();
               showScreen('dashboard');
               
+              // Start location broadcast if driver is online
+              if (driver.driver_status !== 'offline') {
+                startLocationBroadcast();
+              }
+              
               // Check for offer parameter and highlight/show the offer
               await handleOfferParameter();
               return;
@@ -1465,6 +1470,11 @@ async function init() {
             state.portalSlug = driver.portal_slug || generatePortalSlug(driver.first_name, driver.last_name);
             await loadDashboard();
             showScreen('dashboard');
+            
+            // Start location broadcast if driver is online
+            if (driver.driver_status !== 'offline') {
+              startLocationBroadcast();
+            }
             
             // Check for offer parameter and highlight/show the offer
             await handleOfferParameter();
@@ -2967,6 +2977,192 @@ async function handleOnlineToggle() {
       }
     }
   }
+  
+  // Start or stop location broadcasting based on online status
+  if (isOnline) {
+    startLocationBroadcast();
+  } else {
+    stopLocationBroadcast();
+  }
+}
+
+// ============================================
+// Live GPS Location Broadcasting
+// ============================================
+let locationBroadcastInterval = null;
+let lastBroadcastPosition = null;
+
+function startLocationBroadcast() {
+  if (locationBroadcastInterval) {
+    console.log('[GPS] Location broadcast already running');
+    return;
+  }
+  
+  console.log('[GPS] Starting location broadcast...');
+  
+  // Broadcast immediately, then every 15 seconds
+  broadcastCurrentLocation();
+  locationBroadcastInterval = setInterval(broadcastCurrentLocation, 15000);
+}
+
+function stopLocationBroadcast() {
+  if (locationBroadcastInterval) {
+    console.log('[GPS] Stopping location broadcast');
+    clearInterval(locationBroadcastInterval);
+    locationBroadcastInterval = null;
+  }
+  
+  // Optionally delete the location record when going offline
+  deleteDriverLocation();
+}
+
+async function broadcastCurrentLocation() {
+  if (!state.driver?.id) {
+    console.warn('[GPS] No driver ID, cannot broadcast location');
+    return;
+  }
+  
+  if (!navigator.geolocation) {
+    console.warn('[GPS] Geolocation not supported');
+    return;
+  }
+  
+  try {
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 5000
+      });
+    });
+    
+    const { latitude, longitude, heading, speed, accuracy, altitude } = position.coords;
+    
+    // Check if position has changed significantly (at least 10 meters)
+    if (lastBroadcastPosition) {
+      const distance = calculateDistance(
+        lastBroadcastPosition.latitude, 
+        lastBroadcastPosition.longitude,
+        latitude, 
+        longitude
+      );
+      if (distance < 0.01) { // Less than ~10 meters
+        console.log('[GPS] Position unchanged, skipping broadcast');
+        return;
+      }
+    }
+    
+    lastBroadcastPosition = { latitude, longitude };
+    
+    // Determine if moving (speed > 1 m/s = ~2.2 mph)
+    const isMoving = speed && speed > 1;
+    
+    // Get battery level if available
+    let batteryLevel = null;
+    if (navigator.getBattery) {
+      try {
+        const battery = await navigator.getBattery();
+        batteryLevel = Math.round(battery.level * 100);
+      } catch (e) {
+        // Battery API not available
+      }
+    }
+    
+    // Upsert to driver_locations table
+    const supabaseUrl = window.ENV?.SUPABASE_URL;
+    const supabaseKey = window.ENV?.SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('[GPS] Missing Supabase credentials');
+      return;
+    }
+    
+    const locationData = {
+      driver_id: state.driver.id,
+      latitude: latitude.toFixed(7),
+      longitude: longitude.toFixed(7),
+      heading: heading ? heading.toFixed(2) : null,
+      speed: speed ? speed.toFixed(2) : null,
+      accuracy: accuracy ? accuracy.toFixed(2) : null,
+      altitude: altitude ? altitude.toFixed(2) : null,
+      is_moving: isMoving,
+      battery_level: batteryLevel,
+      updated_at: new Date().toISOString()
+    };
+    
+    console.log('[GPS] Broadcasting location:', locationData.latitude, locationData.longitude);
+    
+    // Use upsert (POST with Prefer: resolution=merge-duplicates)
+    const response = await fetch(`${supabaseUrl}/rest/v1/driver_locations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify(locationData)
+    });
+    
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('[GPS] Failed to broadcast location:', response.status, errText);
+    } else {
+      console.log('[GPS] ✅ Location broadcast successful');
+    }
+    
+  } catch (err) {
+    if (err.code === 1) {
+      console.warn('[GPS] Location permission denied');
+    } else if (err.code === 2) {
+      console.warn('[GPS] Location unavailable');
+    } else if (err.code === 3) {
+      console.warn('[GPS] Location request timed out');
+    } else {
+      console.error('[GPS] Error getting location:', err);
+    }
+  }
+}
+
+async function deleteDriverLocation() {
+  if (!state.driver?.id) return;
+  
+  const supabaseUrl = window.ENV?.SUPABASE_URL;
+  const supabaseKey = window.ENV?.SUPABASE_ANON_KEY;
+  
+  if (!supabaseUrl || !supabaseKey) return;
+  
+  try {
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/driver_locations?driver_id=eq.${state.driver.id}`,
+      {
+        method: 'DELETE',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`
+        }
+      }
+    );
+    
+    if (response.ok) {
+      console.log('[GPS] Driver location record deleted (driver offline)');
+    }
+  } catch (err) {
+    console.error('[GPS] Failed to delete location record:', err);
+  }
+}
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  // Haversine formula - returns distance in km
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
 }
 
 // ============================================
@@ -4183,6 +4379,11 @@ async function handleLogin() {
     showScreen('dashboard');
     showToast('Welcome back, ' + (driver.first_name || 'Driver') + '!', 'success');
     
+    // Start location broadcast if driver is online
+    if (driver.driver_status !== 'offline') {
+      startLocationBroadcast();
+    }
+    
     // Check for offer parameter and highlight/show the offer
     await handleOfferParameter();
     
@@ -4197,6 +4398,10 @@ async function handleLogin() {
 
 async function handleLogout(e) {
   e?.preventDefault();
+  
+  // Stop location broadcasting when logging out
+  stopLocationBroadcast();
+  
   localStorage.removeItem('driver_portal_id');
   state.driver = null;
   state.driverId = null;
