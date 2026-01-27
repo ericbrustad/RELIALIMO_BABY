@@ -4648,6 +4648,7 @@ class MyOffice {
         sort_order: sortOrder++
       });
     } else if (rateType === 'DISTANCE' && rates.distance) {
+      // Base fare and included miles
       entries.push({
         scheme_id: schemeId,
         from_quantity: 0,
@@ -4656,6 +4657,7 @@ class MyOffice {
         unit: 'flat',
         sort_order: sortOrder++
       });
+      // Per mile rate
       entries.push({
         scheme_id: schemeId,
         from_quantity: rates.distance.includedMiles || 0,
@@ -4664,6 +4666,61 @@ class MyOffice {
         unit: 'per_mile',
         sort_order: sortOrder++
       });
+      // Minimum fare
+      entries.push({
+        scheme_id: schemeId,
+        from_quantity: 0,
+        to_quantity: 0,
+        rate: rates.distance.minimumFare || 0,
+        unit: 'minimum',
+        sort_order: sortOrder++
+      });
+      // Gratuity percentage
+      entries.push({
+        scheme_id: schemeId,
+        from_quantity: 0,
+        to_quantity: 0,
+        rate: rates.distance.gratuity || 0,
+        unit: 'gratuity',
+        sort_order: sortOrder++
+      });
+      // Dead mile rate
+      entries.push({
+        scheme_id: schemeId,
+        from_quantity: 0,
+        to_quantity: 0,
+        rate: rates.distance.deadMileRate || 0,
+        unit: 'dead_mile',
+        sort_order: sortOrder++
+      });
+      // Tiered formula config (store as JSON in rate field won't work, use separate entries)
+      if (rates.distance.tieredFormula) {
+        const tf = rates.distance.tieredFormula;
+        entries.push({
+          scheme_id: schemeId,
+          from_quantity: tf.enabled ? 1 : 0,
+          to_quantity: tf.multiplier || 1.27,
+          rate: tf.tier1_rate || 0,
+          unit: 'tiered_config',
+          sort_order: sortOrder++
+        });
+        entries.push({
+          scheme_id: schemeId,
+          from_quantity: tf.tier1_max || 3,
+          to_quantity: tf.tier2_range || 7,
+          rate: tf.tier2_rate || 0,
+          unit: 'tiered_tier2',
+          sort_order: sortOrder++
+        });
+        entries.push({
+          scheme_id: schemeId,
+          from_quantity: 0,
+          to_quantity: 0,
+          rate: tf.tier3_rate || 0,
+          unit: 'tiered_tier3',
+          sort_order: sortOrder++
+        });
+      }
     }
 
     return entries;
@@ -4982,12 +5039,29 @@ class MyOffice {
       });
     } else if (rateType === 'DISTANCE') {
       rates.distance = rates.distance || {};
+      rates.distance.tieredFormula = rates.distance.tieredFormula || {};
       entries.forEach(entry => {
         if (entry.unit === 'flat') {
           rates.distance.baseFare = entry.rate;
           rates.distance.includedMiles = entry.to_quantity;
         } else if (entry.unit === 'per_mile') {
           rates.distance.ratePerMile = entry.rate;
+        } else if (entry.unit === 'minimum') {
+          rates.distance.minimumFare = entry.rate;
+        } else if (entry.unit === 'gratuity') {
+          rates.distance.gratuity = entry.rate;
+        } else if (entry.unit === 'dead_mile') {
+          rates.distance.deadMileRate = entry.rate;
+        } else if (entry.unit === 'tiered_config') {
+          rates.distance.tieredFormula.enabled = entry.from_quantity === 1;
+          rates.distance.tieredFormula.multiplier = entry.to_quantity;
+          rates.distance.tieredFormula.tier1_rate = entry.rate;
+        } else if (entry.unit === 'tiered_tier2') {
+          rates.distance.tieredFormula.tier1_max = entry.from_quantity;
+          rates.distance.tieredFormula.tier2_range = entry.to_quantity;
+          rates.distance.tieredFormula.tier2_rate = entry.rate;
+        } else if (entry.unit === 'tiered_tier3') {
+          rates.distance.tieredFormula.tier3_rate = entry.rate;
         }
       });
     }
