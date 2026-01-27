@@ -340,8 +340,16 @@
         return true;
       } catch (error) {
         console.error('Failed to send OTP:', error);
-        // For development: log the code
+        // For development: log the code and show a toast so user knows
         console.log('📱 OTP Code (for testing):', otpCode);
+        // Show the OTP code in an alert for testing (remove in production)
+        if (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
+          alert(`DEV MODE: SMS service unavailable.\n\nYour OTP code is: ${otpCode}\n\n(This alert only shows in localhost)`);
+        } else {
+          // On production, show a more helpful message
+          console.warn('⚠️ SMS service unavailable. Check Twilio configuration on Vercel.');
+          showToast('SMS service temporarily unavailable. Check console for OTP code.', 'warning');
+        }
         return true; // Continue anyway for dev
       }
     }
@@ -904,6 +912,18 @@
 
     // Toggle forms
     document.getElementById('showRegisterBtn')?.addEventListener('click', () => {
+      // Clear any existing session data when switching to register
+      // This prevents old user data from persisting when creating a new account
+      const keysToRemove = [
+        'customer_session', 
+        'current_customer', 
+        'customer_remember_me',
+        'customer_refresh_token',
+        'customer_last_activity'
+      ];
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      console.log('[Auth] Cleared previous session data for new registration');
+      
       document.getElementById('loginForm').classList.remove('active');
       document.getElementById('registerForm').classList.add('active');
     });
@@ -1059,6 +1079,19 @@
       btn.textContent = 'Creating account...';
 
       try {
+        // *** IMPORTANT: Clear any existing session/customer data from previous users ***
+        // This prevents stale localStorage data from a previous session from being used
+        const keysToRemove = [
+          'customer_session', 
+          'current_customer', 
+          'customer_remember_me',
+          'customer_refresh_token',
+          'customer_last_activity',
+          'pendingRegistration'
+        ];
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        console.log('[Auth] Cleared previous session data before new registration');
+        
         // Store pending registration data (phone will be added later)
         pendingRegistration = { firstName, lastName, email, password };
         
