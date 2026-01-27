@@ -558,8 +558,9 @@
         
         tbody.innerHTML = drivers.map(d => {
           const initials = `${(d.first_name || '')[0] || ''}${(d.last_name || '')[0] || ''}`.toUpperCase();
-          const vehicle = d.vehicles ? `${d.vehicles.make} ${d.vehicles.model}` : '-';
+          const vehicle = d.vehicles ? `${d.vehicles.make} ${d.vehicles.model}` : (d.vehicle_type || '-');
           const isActive = d.is_active !== false;
+          const phone = d.cell_phone || d.mobile_phone || d.phone || d.phone_number || d.primary_phone || '';
           
           return `
             <tr>
@@ -571,11 +572,11 @@
                       ${d.first_name || ''} ${d.last_name || ''}
                       ${d.is_default_driver ? '<span class="badge badge-default">⭐ Default</span>' : ''}
                     </div>
-                    <div class="driver-phone">${d.phone || ''}</div>
+                    <div class="driver-phone">${phone}</div>
                   </div>
                 </div>
               </td>
-              <td>${d.phone || '-'}</td>
+              <td>${phone || '-'}</td>
               <td>${d.email || '-'}</td>
               <td>
                 <span class="badge ${isActive ? 'badge-active' : 'badge-inactive'}">
@@ -583,7 +584,7 @@
                 </span>
               </td>
               <td>
-                <span class="badge badge-available">${d.availability_status || 'Unknown'}</span>
+                <span class="badge badge-available">${d.driver_status || d.availability_status || 'available'}</span>
               </td>
               <td>${vehicle}</td>
               <td class="actions-cell">
@@ -607,10 +608,11 @@
         let filtered = allDrivers;
         
         if (search) {
+          const phoneSearch = (d) => (d.cell_phone || d.mobile_phone || d.phone || '').includes(search);
           filtered = filtered.filter(d => 
             (d.first_name || '').toLowerCase().includes(search) ||
             (d.last_name || '').toLowerCase().includes(search) ||
-            (d.phone || '').includes(search) ||
+            phoneSearch(d) ||
             (d.email || '').toLowerCase().includes(search)
           );
         }
@@ -649,15 +651,18 @@
         const d = allDrivers.find(x => x.id === id);
         if (!d) return;
         
+        // Normalize phone field from various possible column names
+        const phone = d.cell_phone || d.mobile_phone || d.phone || d.phone_number || d.primary_phone || '';
+        
         document.getElementById('modalTitle').textContent = 'Edit Driver';
         document.getElementById('driverId').value = d.id;
         document.getElementById('firstName').value = d.first_name || '';
         document.getElementById('lastName').value = d.last_name || '';
-        document.getElementById('phone').value = d.phone || '';
+        document.getElementById('phone').value = phone;
         document.getElementById('email').value = d.email || '';
         document.getElementById('licenseNumber').value = d.license_number || '';
         document.getElementById('licenseExpiry').value = d.license_expiry || '';
-        document.getElementById('vehicleAssignment').value = d.vehicle_id || '';
+        document.getElementById('vehicleAssignment').value = d.vehicle_id || d.assigned_vehicle_id || '';
         document.getElementById('notes').value = d.notes || '';
         document.getElementById('isActive').checked = d.is_active !== false;
         document.getElementById('isDefaultDriver').checked = d.is_default_driver || false;
@@ -670,20 +675,22 @@
       
       window.saveDriver = async function() {
         const id = document.getElementById('driverId').value;
+        const phoneValue = document.getElementById('phone').value.trim();
         const data = {
           first_name: document.getElementById('firstName').value.trim(),
           last_name: document.getElementById('lastName').value.trim(),
-          phone: document.getElementById('phone').value.trim(),
+          cell_phone: phoneValue,
+          phone: phoneValue, // Also set phone for compatibility
           email: document.getElementById('email').value.trim() || null,
           license_number: document.getElementById('licenseNumber').value.trim() || null,
           license_expiry: document.getElementById('licenseExpiry').value || null,
-          vehicle_id: document.getElementById('vehicleAssignment').value || null,
+          assigned_vehicle_id: document.getElementById('vehicleAssignment').value || null,
           notes: document.getElementById('notes').value.trim() || null,
           is_active: document.getElementById('isActive').checked,
           is_default_driver: document.getElementById('isDefaultDriver').checked
         };
         
-        if (!data.first_name || !data.last_name || !data.phone) {
+        if (!data.first_name || !data.last_name || !data.cell_phone) {
           alert('First Name, Last Name, and Phone are required.');
           return;
         }
@@ -696,7 +703,7 @@
               body: JSON.stringify(data)
             });
           } else {
-            data.availability_status = 'available';
+            data.driver_status = 'available';
             await apiRequest('/drivers', {
               method: 'POST',
               headers: { 'Prefer': 'return=minimal' },

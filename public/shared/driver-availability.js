@@ -26,7 +26,7 @@ async function fetchDriversFromSupabase() {
 		
 		const { data, error } = await client
 			.from('drivers')
-			.select('id, first_name, last_name, cell_phone, mobile_phone, phone, driver_status, status, is_active, driver_level, vehicle_type, affiliate_id')
+			.select('id, first_name, last_name, cell_phone, mobile_phone, phone, home_phone, other_phone, pager, driver_status, status, is_active, driver_level, vehicle_type, affiliate_id, assigned_vehicle_id, email, city, state')
 			.order('last_name', { ascending: true });
 		
 		if (error) {
