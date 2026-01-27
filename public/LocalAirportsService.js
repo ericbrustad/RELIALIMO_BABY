@@ -12,7 +12,7 @@
  *   const airports = await LocalAirportsService.searchAirports('MSP', organizationId);
  */
 
-import supabaseDb from './supabase-db.js';
+import { getSupabaseCredentials } from './shared/supabase-config.js';
 
 class LocalAirportsServiceClass {
   constructor() {
@@ -22,18 +22,26 @@ class LocalAirportsServiceClass {
   }
 
   /**
+   * Get Supabase credentials
+   */
+  getCredentials() {
+    return getSupabaseCredentials();
+  }
+
+  /**
    * Get airport settings for an organization
    */
   async getSettings(organizationId) {
     if (!organizationId) return { use_local_airports_only: false, fallback_to_local: true };
     
     try {
+      const creds = this.getCredentials();
       const response = await fetch(
-        `${supabaseDb.supabaseUrl}/rest/v1/airport_settings?organization_id=eq.${organizationId}&select=*`,
+        `${creds.url}/rest/v1/airport_settings?organization_id=eq.${organizationId}&select=*`,
         {
           headers: {
-            'apikey': supabaseDb.supabaseKey,
-            'Authorization': `Bearer ${supabaseDb.supabaseKey}`
+            'apikey': creds.anonKey,
+            'Authorization': `Bearer ${creds.anonKey}`
           }
         }
       );
@@ -70,12 +78,13 @@ class LocalAirportsServiceClass {
     }
 
     try {
+      const creds = this.getCredentials();
       const response = await fetch(
-        `${supabaseDb.supabaseUrl}/rest/v1/local_airports?organization_id=eq.${organizationId}&is_active=eq.true&select=*&order=is_primary.desc,sort_order.asc,name.asc`,
+        `${creds.url}/rest/v1/local_airports?organization_id=eq.${organizationId}&is_active=eq.true&select=*&order=is_primary.desc,sort_order.asc,name.asc`,
         {
           headers: {
-            'apikey': supabaseDb.supabaseKey,
-            'Authorization': `Bearer ${supabaseDb.supabaseKey}`
+            'apikey': creds.anonKey,
+            'Authorization': `Bearer ${creds.anonKey}`
           }
         }
       );
@@ -229,13 +238,14 @@ class LocalAirportsServiceClass {
    */
   async refreshAirports(organizationId) {
     try {
+      const creds = this.getCredentials();
       const response = await fetch(
-        `${supabaseDb.supabaseUrl}/rest/v1/rpc/refresh_local_airports`,
+        `${creds.url}/rest/v1/rpc/refresh_local_airports`,
         {
           method: 'POST',
           headers: {
-            'apikey': supabaseDb.supabaseKey,
-            'Authorization': `Bearer ${supabaseDb.supabaseKey}`,
+            'apikey': creds.anonKey,
+            'Authorization': `Bearer ${creds.anonKey}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
