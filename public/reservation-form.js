@@ -6171,12 +6171,20 @@ class ReservationForm {
    * Update rate configuration based on selected service and vehicle types
    * Sends pricing basis and rates to the rate section iframe
    */
-  updateRateConfigDisplay() {
+  updateRateConfigDisplay(forceReset = false) {
     const serviceTypeEl = document.getElementById('serviceType');
     const vehicleTypeEl = document.getElementById('vehicleTypeRes');
 
     const serviceTypeCode = serviceTypeEl?.value || '';
     const vehicleTypeId = vehicleTypeEl?.value || '';
+
+    // Track service type changes and clear rates when it changes
+    const previousServiceType = this._lastServiceTypeForRates || '';
+    if (forceReset || (previousServiceType && previousServiceType !== serviceTypeCode)) {
+      console.log('[ReservationForm] Service type changed from', previousServiceType, 'to', serviceTypeCode, '- clearing rates');
+      this.clearRateFields();
+    }
+    this._lastServiceTypeForRates = serviceTypeCode;
 
     // Get pricing types from cached service types (support both array and single value)
     let allowedPricingTypes = ['DISTANCE']; // Default
@@ -6472,6 +6480,15 @@ class ReservationForm {
             // Simple per-mile: always set qty from distance, rate from vehicle type
             rateData.mile.qty = distanceMiles;
             rateData.mile.rate = perMile || 0;
+            
+            // Set mileQty in DOM when distance is available
+            if (distanceMiles > 0) {
+              const mileQtyEl = document.getElementById('mileQty');
+              if (mileQtyEl) {
+                mileQtyEl.value = distanceMiles.toFixed(2);
+                mileQtyEl.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+            }
             if (perMile > 0) {
               setInputValue('mileRate', perMile);
             }
@@ -6904,6 +6921,39 @@ class ReservationForm {
         resolve(this.currentRatesData || null);
       }, 500);
     });
+  }
+
+  /**
+   * Clear all rate fields when service type changes
+   * This ensures old rates don't persist when switching between service types
+   */
+  clearRateFields() {
+    const rateFields = [
+      'flatQty', 'flatRate', 'flatExt',
+      'hourQty', 'hourRate', 'hourExt',
+      'mileQty', 'mileRate', 'mileExt',
+      'passQty', 'passRate', 'passExt',
+      'unitQty', 'unitRate', 'unitExt',
+      'otQty', 'otRate', 'otExt',
+      'gratuityQty', 'gratuityExt',
+      'baseRateQty', 'baseRateExt'
+    ];
+    
+    rateFields.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.value = '0';
+      }
+    });
+    
+    // Also clear rates in iframe if available
+    if (this.rateSectionFrame && this.rateSectionReady) {
+      this.rateSectionFrame.contentWindow.postMessage({
+        type: 'clear'
+      }, '*');
+    }
+    
+    console.log('[ReservationForm] Rate fields cleared');
   }
 
   initializeCostCalculations() {

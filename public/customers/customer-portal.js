@@ -895,6 +895,8 @@ async function loadSavedAddresses() {
       return;
     }
     
+    console.log('[CustomerPortal] Loading addresses for account:', accountId);
+    
     // Try to load from both tables - customer_addresses (newer) and account_addresses (legacy)
     const headers = {
       'apikey': creds.anonKey,
@@ -902,18 +904,22 @@ async function loadSavedAddresses() {
     };
     
     // First try customer_addresses table
-    const customerAddressesResp = await fetch(
-      `${creds.url}/rest/v1/customer_addresses?account_id=eq.${accountId}&is_deleted=eq.false&is_visible=eq.true&select=*&order=is_favorite.desc,usage_count.desc`,
-      { headers }
-    );
+    // Note: is_visible filter allows true OR null for backward compatibility
+    const customerAddressUrl = `${creds.url}/rest/v1/customer_addresses?account_id=eq.${accountId}&is_deleted=eq.false&or=(is_visible.eq.true,is_visible.is.null)&select=*&order=is_favorite.desc.nullslast,usage_count.desc.nullslast`;
+    console.log('[CustomerPortal] Fetching customer_addresses from:', customerAddressUrl);
+    
+    const customerAddressesResp = await fetch(customerAddressUrl, { headers });
     
     let addresses = [];
     if (customerAddressesResp.ok) {
       const customerAddresses = await customerAddressesResp.json();
+      console.log('[CustomerPortal] customer_addresses response:', customerAddresses);
       addresses = customerAddresses.map(a => ({
         ...a,
         source: 'customer_addresses'
       }));
+    } else {
+      console.warn('[CustomerPortal] customer_addresses fetch failed:', customerAddressesResp.status, await customerAddressesResp.text());
     }
     
     // Also check account_addresses table for addresses saved from admin portal
@@ -924,6 +930,7 @@ async function loadSavedAddresses() {
     
     if (accountAddressesResp.ok) {
       const accountAddresses = await accountAddressesResp.json();
+      console.log('[CustomerPortal] account_addresses response:', accountAddresses);
       
       // Merge account_addresses, avoiding duplicates based on address_line1
       for (const addr of accountAddresses) {
@@ -957,10 +964,12 @@ async function loadSavedAddresses() {
           });
         }
       }
+    } else {
+      console.warn('[CustomerPortal] account_addresses fetch failed:', accountAddressesResp.status);
     }
     
     state.savedAddresses = addresses;
-    console.log('[CustomerPortal] Loaded', addresses.length, 'saved addresses');
+    console.log('[CustomerPortal] Loaded', addresses.length, 'total saved addresses:', addresses);
     
   } catch (err) {
     console.error('[CustomerPortal] Failed to load addresses:', err);
@@ -1857,6 +1866,18 @@ async function saveNewAddress() {
   
   try {
     const creds = getSupabaseCredentials();
+    console.log('[CustomerPortal] Saving new address for account:', state.customer?.id);
+    
+    const payload = {
+      account_id: state.customer?.id,
+      label,
+      full_address: address,
+      is_deleted: false,
+      is_visible: true,
+      usage_count: 0
+    };
+    console.log('[CustomerPortal] Address payload:', payload);
+    
     const response = await fetch(`${creds.url}/rest/v1/customer_addresses`, {
       method: 'POST',
       headers: {
@@ -1865,23 +1886,22 @@ async function saveNewAddress() {
         'Content-Type': 'application/json',
         'Prefer': 'return=representation'
       },
-      body: JSON.stringify({
-        customer_id: state.customer?.id,
-        label,
-        address,
-        is_deleted: false,
-        usage_count: 0
-      })
+      body: JSON.stringify(payload)
     });
     
     if (response.ok) {
       const newAddresses = await response.json();
+      console.log('[CustomerPortal] Address saved successfully:', newAddresses);
       if (newAddresses?.length > 0) {
         state.savedAddresses.push(newAddresses[0]);
       }
       populateAddressDropdowns();
       closeModal('addressModal');
       showToast('Address saved', 'success');
+    } else {
+      const errorText = await response.text();
+      console.error('[CustomerPortal] Address save failed:', response.status, errorText);
+      showToast(`Failed to save address: ${response.status}`, 'error');
     }
   } catch (err) {
     console.error('[CustomerPortal] Failed to save address:', err);
