@@ -537,26 +537,6 @@
 
     <!-- Main Dashboard Screen -->
     <div id="dashboardScreen" class="screen">
-      <!-- Compact Header Bar (shown when timer minimized) -->
-      <div id="compactHeaderBar" class="compact-header-bar">
-        <div class="compact-header-left">
-          <label class="online-toggle-compact">
-            <input type="checkbox" id="onlineToggleCompact" checked>
-            <span class="toggle-slider-compact"></span>
-          </label>
-          <span id="headerMinimizedTimer" class="header-timer-mini" style="display:none;">
-            <span class="timer-icon">⏱️</span>
-            <span id="headerTimerValue">--:--</span>
-          </span>
-        </div>
-        <div class="compact-header-right">
-          <span id="headerDateTime" class="header-datetime">
-            <span id="headerTime">--:--</span>
-            <span id="headerDate">---</span>
-          </span>
-        </div>
-      </div>
-
       <!-- Expandable Countdown Timer Window -->
       <div id="countdownTimerWindow" class="countdown-timer-window">
         <div class="timer-window-header">
@@ -690,6 +670,29 @@
           </div>
         </div>
       </main>
+
+      <!-- Bottom Status Bar (Online/Offline Toggle + Time) -->
+      <div id="bottomStatusBar" class="bottom-status-bar">
+        <div class="bottom-status-left">
+          <label class="online-toggle-compact">
+            <input type="checkbox" id="onlineToggleCompact" checked>
+            <span class="toggle-slider-compact"></span>
+          </label>
+          <span class="online-status-label" id="bottomOnlineLabel">ONLINE</span>
+        </div>
+        <div class="bottom-status-center">
+          <span id="headerMinimizedTimer" class="header-timer-mini" style="display:none;">
+            <span class="timer-icon">⏱️</span>
+            <span id="headerTimerValue">--:--</span>
+          </span>
+        </div>
+        <div class="bottom-status-right">
+          <span id="headerDateTime" class="header-datetime">
+            <span id="headerTime">--:--</span>
+            <span id="headerDate">---</span>
+          </span>
+        </div>
+      </div>
 
       <!-- Quick Actions FAB -->
       <div class="fab-container">

@@ -1773,6 +1773,67 @@ body {
 }
 
 /* ============================================
+   Bottom Status Bar (Online/Offline + Time)
+   ============================================ */
+.bottom-status-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.98) 0%, rgba(15, 15, 26, 0.98) 100%);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-md);
+  padding-bottom: var(--safe-bottom);
+  z-index: 100;
+  border-top: 1px solid rgba(79, 70, 229, 0.3);
+}
+
+.bottom-status-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.bottom-status-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.bottom-status-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.online-status-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--success);
+  text-transform: uppercase;
+}
+
+.online-status-label.offline {
+  color: var(--danger);
+}
+
+/* Adjust FAB position for bottom status bar */
+.fab-container {
+  bottom: calc(56px + var(--safe-bottom) + var(--space-lg));
+}
+
+/* Adjust tab content padding for bottom bar */
+#dashboardScreen .tab-content {
+  padding-bottom: calc(56px + var(--safe-bottom) + var(--space-md));
+}
+
+/* ============================================
    Modals
    ============================================ */
 .modal {

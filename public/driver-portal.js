@@ -2925,13 +2925,27 @@ async function goToDashboard() {
 // Online/Offline Toggle
 // ============================================
 async function handleOnlineToggle() {
-  const isOnline = elements.onlineToggle?.checked ?? true;
+  // Get the checked state from the bottom bar toggle or legacy toggle
+  const compactToggle = document.getElementById('onlineToggleCompact');
+  const legacyToggle = elements.onlineToggle;
+  const isOnline = compactToggle?.checked ?? legacyToggle?.checked ?? true;
   const newStatus = isOnline ? 'available' : 'offline';
   
-  // Update label
+  // Update legacy label (if visible)
   if (elements.onlineLabel) {
     elements.onlineLabel.textContent = isOnline ? 'ONLINE' : 'OFFLINE';
   }
+  
+  // Update bottom bar label
+  const bottomLabel = document.getElementById('bottomOnlineLabel');
+  if (bottomLabel) {
+    bottomLabel.textContent = isOnline ? 'ONLINE' : 'OFFLINE';
+    bottomLabel.classList.toggle('offline', !isOnline);
+  }
+  
+  // Sync both toggles
+  if (compactToggle) compactToggle.checked = isOnline;
+  if (legacyToggle) legacyToggle.checked = isOnline;
   
   // Update driver status in database
   if (state.driver?.id) {
@@ -2943,9 +2957,14 @@ async function handleOnlineToggle() {
     } catch (err) {
       console.error('[DriverPortal] Failed to update online status:', err);
       showToast('Failed to update status', 'error');
-      // Revert toggle
-      elements.onlineToggle.checked = !isOnline;
-      elements.onlineLabel.textContent = !isOnline ? 'ONLINE' : 'OFFLINE';
+      // Revert toggles
+      if (compactToggle) compactToggle.checked = !isOnline;
+      if (legacyToggle) legacyToggle.checked = !isOnline;
+      if (elements.onlineLabel) elements.onlineLabel.textContent = !isOnline ? 'ONLINE' : 'OFFLINE';
+      if (bottomLabel) {
+        bottomLabel.textContent = !isOnline ? 'ONLINE' : 'OFFLINE';
+        bottomLabel.classList.toggle('offline', isOnline);
+      }
     }
   }
 }
@@ -8472,22 +8491,35 @@ function initTimerWindowSystem() {
     headerTimerMini.addEventListener('click', () => expandTimerWindow());
   }
   
-  // Sync online toggles
+  // Sync online toggles (bottom bar and legacy)
   const compactToggle = document.getElementById('onlineToggleCompact');
   const mainToggle = document.getElementById('onlineToggle');
   
-  if (compactToggle && mainToggle) {
+  if (compactToggle) {
     compactToggle.addEventListener('change', (e) => {
-      mainToggle.checked = e.target.checked;
-      handleOnlineToggle.call({ checked: e.target.checked });
+      if (mainToggle) mainToggle.checked = e.target.checked;
+      handleOnlineToggle();
     });
-    
+  }
+  
+  if (mainToggle) {
     mainToggle.addEventListener('change', (e) => {
-      compactToggle.checked = e.target.checked;
+      if (compactToggle) compactToggle.checked = e.target.checked;
+      handleOnlineToggle();
     });
-    
-    // Initial sync
+  }
+  
+  // Initial sync
+  if (compactToggle && mainToggle) {
     compactToggle.checked = mainToggle.checked;
+  }
+  
+  // Initialize bottom bar label based on current state
+  const bottomLabel = document.getElementById('bottomOnlineLabel');
+  if (bottomLabel) {
+    const isOnline = compactToggle?.checked ?? mainToggle?.checked ?? true;
+    bottomLabel.textContent = isOnline ? 'ONLINE' : 'OFFLINE';
+    bottomLabel.classList.toggle('offline', !isOnline);
   }
   
   // Start clock updates
