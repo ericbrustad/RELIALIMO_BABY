@@ -473,10 +473,14 @@ class Calendar {
 
     // Add reservations
     const reservations = await this.getReservationsForMonth(year, monthIndex);
+    console.log(`📅 Calendar: Found ${reservations.length} reservations for ${year}-${monthIndex + 1}`);
     for (const res of reservations) {
       const el = this.createReservationEventEl(res);
       const container = dayCellMap.get(el.dataset.dateKey);
-      if (!container) continue;
+      if (!container) {
+        console.warn(`⚠️ Calendar: No container for dateKey ${el.dataset.dateKey}`, res);
+        continue;
+      }
       container.appendChild(el);
     }
 
@@ -1205,10 +1209,14 @@ class Calendar {
   }
 
   async getReservationsForMonth(year, monthIndex) {
-    if (!this.db) return [];
+    if (!this.db) {
+      console.warn('❌ Calendar: this.db is null, cannot load reservations');
+      return [];
+    }
     let all = [];
     try {
       all = await this.db.getAllReservations() || [];
+      console.log(`📋 Calendar: getAllReservations returned ${all.length} total reservations`);
     } catch (e) {
       console.error('❌ Failed to load reservations from db:', e);
       return [];
