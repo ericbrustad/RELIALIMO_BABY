@@ -1221,8 +1221,10 @@ class Calendar {
       if (all.length > 0) {
         const sample = all.slice(0, 5).map(r => ({
           conf: r.confirmation_number,
+          pickup_datetime: r.pickup_datetime,
           pickup_at: r.pickup_at,
-          parsed: this.parseLocalDateTime(r.pickup_at)?.toISOString?.() || 'null'
+          used: r.pickup_datetime || r.pickup_at,
+          parsed: this.parseLocalDateTime(r.pickup_datetime || r.pickup_at)?.toISOString?.() || 'null'
         }));
         console.log('📅 Calendar: Sample reservation dates:', sample);
       }
@@ -1236,9 +1238,9 @@ class Calendar {
     const onlyMyEvents = document.getElementById('onlyMyEvents')?.checked ?? false;
     console.log(`🔍 Calendar: onlyMyEvents=${onlyMyEvents}, currentUser=`, this.currentUser);
 
-    // First filter: must have pickup_at
-    const withPickup = all.filter(r => r && r.pickup_at);
-    console.log(`🔍 Calendar: ${withPickup.length} reservations have pickup_at`);
+    // First filter: must have pickup_datetime or pickup_at
+    const withPickup = all.filter(r => r && (r.pickup_datetime || r.pickup_at));
+    console.log(`🔍 Calendar: ${withPickup.length} reservations have pickup date`);
 
     // Second filter: onlyMyEvents
     const afterMyEventsFilter = withPickup.filter(r => {
@@ -1263,7 +1265,7 @@ class Calendar {
     const filtered = afterMyEventsFilter
       .map(r => ({
         raw: r,
-        pickupDate: this.parseLocalDateTime(r.pickup_at)
+        pickupDate: this.parseLocalDateTime(r.pickup_datetime || r.pickup_at)
       }))
       .filter(x => {
         if (!x.pickupDate) {
@@ -1298,7 +1300,7 @@ class Calendar {
   }
 
   createReservationEventEl(res) {
-    const pickupDate = this.parseLocalDateTime(res.pickup_at);
+    const pickupDate = this.parseLocalDateTime(res.pickup_datetime || res.pickup_at);
     const dateKey = this.dateKey(pickupDate);
     const timeLabel = pickupDate
       ? pickupDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })

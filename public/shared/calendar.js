@@ -993,7 +993,7 @@ class Calendar {
     const onlyMyEvents = document.getElementById('onlyMyEvents')?.checked ?? false;
 
     const filtered = all
-      .filter(r => r && r.pickup_at)
+      .filter(r => r && (r.pickup_datetime || r.pickup_at))
       .filter(r => {
         if (!onlyMyEvents) return true;
         const userId = this.currentUser?.id;
@@ -1010,7 +1010,7 @@ class Calendar {
       })
       .map(r => ({
         raw: r,
-        pickupDate: this.parseLocalDateTime(r.pickup_at)
+        pickupDate: this.parseLocalDateTime(r.pickup_datetime || r.pickup_at)
       }))
       .filter(x => x.pickupDate && x.pickupDate.getFullYear() === year && x.pickupDate.getMonth() === monthIndex)
       .sort((a, b) => a.pickupDate - b.pickupDate);
@@ -1033,7 +1033,7 @@ class Calendar {
   }
 
   createReservationEventEl(res) {
-    const pickupDate = this.parseLocalDateTime(res.pickup_at);
+    const pickupDate = this.parseLocalDateTime(res.pickup_datetime || res.pickup_at);
     const dateKey = this.dateKey(pickupDate);
     const timeLabel = pickupDate
       ? pickupDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
