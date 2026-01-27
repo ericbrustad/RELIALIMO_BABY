@@ -877,6 +877,7 @@ export class FarmoutAutomationService {
 
   /**
    * Store offer in Supabase by updating reservation with current_offer fields
+   * AND creating a farmout_offers record for SMS reply tracking
    */
   async storeOfferInSupabase(reservationId, driverId, offerDetails) {
     try {
@@ -887,6 +888,7 @@ export class FarmoutAutomationService {
       
       const expiresAt = new Date(Date.now() + this.settings.dispatchIntervalMinutes * 60000);
       
+      // Update reservation with current offer info
       const { error } = await supabase
         .from('reservations')
         .update({
@@ -902,6 +904,33 @@ export class FarmoutAutomationService {
         console.warn('[FarmoutAutomation] Failed to store offer in Supabase:', error);
       } else {
         console.log('[FarmoutAutomation] Offer stored in Supabase for reservation:', reservationId);
+      }
+      
+      // Also create farmout_offers record for SMS reply tracking
+      // First, cancel any existing pending offers for this reservation
+      await supabase
+        .from('farmout_offers')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('reservation_id', reservationId)
+        .eq('status', 'pending');
+      
+      // Create new offer record
+      const { error: offerError } = await supabase
+        .from('farmout_offers')
+        .insert({
+          reservation_id: reservationId,
+          driver_id: driverId,
+          driver_pay: parseFloat(offerDetails.driverPay) || 0,
+          offer_method: 'sms',
+          expires_at: expiresAt.toISOString(),
+          status: 'pending'
+        });
+      
+      if (offerError) {
+        // Table might not exist yet - that's ok, fall back to reservation-only tracking
+        console.warn('[FarmoutAutomation] Could not create farmout_offers record:', offerError.message);
+      } else {
+        console.log('[FarmoutAutomation] Created farmout_offers record for SMS tracking');
       }
     } catch (e) {
       console.warn('[FarmoutAutomation] Error storing offer in Supabase:', e);
