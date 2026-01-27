@@ -4538,6 +4538,45 @@ async function calculateRouteAndPrice() {
   }
 }
 
+/**
+ * Calculate price using tiered distance formula
+ * Tier 1: First X miles at rate1
+ * Tier 2: Next Y miles at rate2
+ * Tier 3: Remaining miles at rate3
+ * Final result multiplied by multiplier
+ */
+function calculateTieredPrice(distanceMiles, formula) {
+  const multiplier = parseFloat(formula.multiplier) || 1.27;
+  const tier1Rate = parseFloat(formula.tier1_rate) || 7.87;
+  const tier1Max = parseFloat(formula.tier1_max) || 3;
+  const tier2Rate = parseFloat(formula.tier2_rate) || 3.50;
+  const tier2Range = parseFloat(formula.tier2_range) || 7;
+  const tier3Rate = parseFloat(formula.tier3_rate) || 3.25;
+  
+  let cost = 0;
+  let remainingMiles = distanceMiles;
+  
+  // Tier 1
+  const tier1Miles = Math.min(remainingMiles, tier1Max);
+  cost += tier1Miles * tier1Rate;
+  remainingMiles -= tier1Miles;
+  
+  // Tier 2
+  if (remainingMiles > 0) {
+    const tier2Miles = Math.min(remainingMiles, tier2Range);
+    cost += tier2Miles * tier2Rate;
+    remainingMiles -= tier2Miles;
+  }
+  
+  // Tier 3 (remaining)
+  if (remainingMiles > 0) {
+    cost += remainingMiles * tier3Rate;
+  }
+  
+  // Apply multiplier
+  return cost * multiplier;
+}
+
 function calculatePrice() {
   const priceDisplay = document.getElementById('estimatedPrice');
   const routeInfoDisplay = document.getElementById('routeInfo');
@@ -4561,25 +4600,54 @@ function calculatePrice() {
   const distanceMiles = state.routeInfo.distanceMiles;
   const durationMinutes = state.routeInfo.durationSeconds / 60;
   
+  // Extract rates from the nested structure (metadata.rates or rates)
+  const rates = vehicleType.rates || vehicleType.metadata?.rates || {};
+  const distanceRates = rates.distance || {};
+  const hourlyRates = rates.perHour || {};
+  
   // Check for hourly vs point-to-point
   if (state.tripType === 'hourly') {
-    // Hourly rate
-    const hourlyRate = parseFloat(vehicleType.hourly_rate) || parseFloat(vehicleType.base_rate) || 75;
-    price = hourlyRate * state.hourlyDuration;
+    // Hourly rate - check nested rates first, then flat fields
+    const hourlyRate = parseFloat(hourlyRates.ratePerHour) || 
+                       parseFloat(vehicleType.hourly_rate) || 
+                       parseFloat(vehicleType.base_rate) || 75;
+    const minHours = parseFloat(hourlyRates.minimumHours) || 2;
+    price = hourlyRate * Math.max(state.hourlyDuration || minHours, minHours);
   } else {
-    // Point-to-point: base rate + per-mile rate
-    const baseRate = parseFloat(vehicleType.base_rate) || 0;
-    const perMileRate = parseFloat(vehicleType.per_mile_rate) || parseFloat(vehicleType.rate_per_mile) || 3;
-    const minimumFare = parseFloat(vehicleType.minimum_fare) || parseFloat(vehicleType.min_fare) || 50;
+    // Point-to-point / Airport Transfer: use distance-based pricing
+    // Check for tiered formula first
+    const tieredFormula = distanceRates.tieredFormula;
     
-    price = baseRate + (distanceMiles * perMileRate);
-    price = Math.max(price, minimumFare);
+    if (tieredFormula?.enabled && distanceMiles > 0) {
+      // Use tiered distance formula
+      price = calculateTieredPrice(distanceMiles, tieredFormula);
+    } else {
+      // Simple: base fare + (miles × per-mile rate)
+      const baseFare = parseFloat(distanceRates.baseFare) || 
+                       parseFloat(distanceRates.minimumFare) || 
+                       parseFloat(vehicleType.base_rate) || 0;
+      const perMileRate = parseFloat(distanceRates.ratePerMile) || 
+                          parseFloat(vehicleType.per_mile_rate) || 
+                          parseFloat(vehicleType.rate_per_mile) || 3;
+      const minimumFare = parseFloat(distanceRates.minimumFare) || 
+                          parseFloat(vehicleType.minimum_fare) || 
+                          parseFloat(vehicleType.min_fare) || 50;
+      
+      price = baseFare + (distanceMiles * perMileRate);
+      price = Math.max(price, minimumFare);
+    }
+    
+    // Add gratuity if configured
+    const gratuityPercent = parseFloat(distanceRates.gratuity) || 0;
+    if (gratuityPercent > 0) {
+      price = price * (1 + gratuityPercent / 100);
+    }
   }
   
   // Round to 2 decimal places
   state.estimatedPrice = Math.round(price * 100) / 100;
   
-  console.log('[CustomerPortal] Estimated price:', state.estimatedPrice, 'for', vehicleType.name);
+  console.log('[CustomerPortal] Estimated price:', state.estimatedPrice, 'for', vehicleType.name, 'rates:', rates);
   
   // Update price display
   if (priceDisplay) {
