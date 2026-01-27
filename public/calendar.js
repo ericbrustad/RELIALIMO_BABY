@@ -1255,7 +1255,19 @@ class Calendar {
         raw: r,
         pickupDate: this.parseLocalDateTime(r.pickup_at)
       }))
-      .filter(x => x.pickupDate && x.pickupDate.getFullYear() === year && x.pickupDate.getMonth() === monthIndex)
+      .filter(x => {
+        if (!x.pickupDate) {
+          console.warn(`⚠️ Calendar: Reservation ${x.raw.confirmation_number} has unparseable pickup_at: ${x.raw.pickup_at}`);
+          return false;
+        }
+        const resYear = x.pickupDate.getFullYear();
+        const resMonth = x.pickupDate.getMonth();
+        const matches = resYear === year && resMonth === monthIndex;
+        if (!matches) {
+          console.log(`📆 Calendar: Res ${x.raw.confirmation_number} date ${resYear}-${resMonth + 1} doesn't match ${year}-${monthIndex + 1}`);
+        }
+        return matches;
+      })
       .sort((a, b) => a.pickupDate - b.pickupDate);
 
     return filtered.map(x => x.raw);
