@@ -463,6 +463,33 @@ async function fetchCustomerInfo(accessToken, email) {
       if (customers?.length > 0) {
         authState.customer = customers[0];
         
+        // If user authenticated but email_verified is false, update it
+        // Successful authentication proves email ownership
+        if (!authState.customer.email_verified && authState.customer.id) {
+          console.log('[AuthService] Updating email_verified for authenticated user');
+          try {
+            await fetch(
+              `${creds.url}/rest/v1/accounts?id=eq.${authState.customer.id}`,
+              {
+                method: 'PATCH',
+                headers: {
+                  'apikey': creds.anonKey,
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  email_verified: true,
+                  email_verified_at: new Date().toISOString()
+                })
+              }
+            );
+            authState.customer.email_verified = true;
+            authState.customer.email_verified_at = new Date().toISOString();
+          } catch (updateErr) {
+            console.warn('[AuthService] Failed to update email_verified:', updateErr);
+          }
+        }
+        
         // Fallback: If first_name/last_name empty but portal_slug exists, extract from slug
         if (!authState.customer.first_name && authState.customer.portal_slug) {
           const slugParts = authState.customer.portal_slug.split('_');
@@ -602,6 +629,7 @@ async function createAccountRecord(accessToken, email) {
     // Only include columns that exist in the accounts table
     // Accounts created from customer portal are always billing clients
     // If same person is the passenger, they're also marked as passenger
+    // email_verified is true because they authenticated successfully
     const accountData = {
       organization_id: CUSTOMER_ORG_ID,
       account_number: nextAccountNumber.toString(),
@@ -612,6 +640,8 @@ async function createAccountRecord(accessToken, email) {
       portal_slug: portalSlug || null,
       is_billing_client: true,  // Always billing for accounts created through customer portal
       is_passenger: true,       // Also passenger since they're signing up for themselves
+      email_verified: true,     // User authenticated successfully, email is verified
+      email_verified_at: new Date().toISOString(),
       created_at: new Date().toISOString()
     };
     
