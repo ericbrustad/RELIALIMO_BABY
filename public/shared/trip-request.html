@@ -879,9 +879,58 @@
         document.getElementById('tripNotesContent').textContent = tripNotes;
       }
 
-      // Payout - calculate from costs or use default percentage
+      // Payout - calculate from multiple cost sources
       let payout = 0;
-      const grandTotal = parseFloat(res.grand_total) || 0;
+      
+      // Try to get grand total from various sources
+      let grandTotal = parseFloat(res.grand_total) || 0;
+      
+      // If grand_total is 0, try to calculate from form_snapshot costs
+      if (grandTotal === 0 && costs) {
+        // Try flat rate first
+        const flatRate = parseFloat(costs.flat?.rate) || 0;
+        const flatQty = parseFloat(costs.flat?.qty) || 1;
+        
+        // Hourly
+        const hourRate = parseFloat(costs.hour?.rate) || 0;
+        const hourQty = parseFloat(costs.hour?.qty) || 0;
+        
+        // Base rate
+        const baseRate = parseFloat(costs.baseRate) || 0;
+        
+        // Stops
+        const stopsRate = parseFloat(costs.stops?.rate) || 0;
+        const stopsQty = parseFloat(costs.stops?.qty) || 0;
+        
+        // Calculate total
+        if (flatRate > 0) {
+          grandTotal = flatRate * flatQty;
+        } else if (hourRate > 0) {
+          grandTotal = hourRate * hourQty;
+        } else if (baseRate > 0) {
+          grandTotal = baseRate;
+        }
+        
+        // Add stops
+        grandTotal += (stopsRate * stopsQty);
+        
+        // Add gratuity if present
+        const gratuity = parseFloat(costs.gratuity) || 0;
+        grandTotal += gratuity;
+        
+        // Add fuel surcharge if present
+        const fuel = parseFloat(costs.fuel) || 0;
+        grandTotal += fuel;
+        
+        // Subtract discount if present
+        const discount = parseFloat(costs.discount) || 0;
+        grandTotal -= discount;
+      }
+      
+      // Also check for base_fare or driver_pay directly on reservation
+      if (grandTotal === 0) {
+        grandTotal = parseFloat(res.base_fare) || parseFloat(res.base_price) || 0;
+      }
       
       // Try to get driver pay percentage from localStorage farmout settings
       let payPercentage = 70; // default
@@ -890,8 +939,25 @@
         payPercentage = farmoutSettings.driver_pay_percentage || 70;
       } catch (e) {}
       
-      payout = grandTotal * (payPercentage / 100);
+      // If driver_pay is already set on reservation, use that directly
+      if (res.driver_pay && parseFloat(res.driver_pay) > 0) {
+        payout = parseFloat(res.driver_pay);
+      } else {
+        payout = grandTotal * (payPercentage / 100);
+      }
+      
       document.getElementById('payoutAmount').textContent = `$${payout.toFixed(2)}`;
+      
+      // Also show the total fare if we have it
+      if (grandTotal > 0 && grandTotal !== payout) {
+        const payoutSection = document.querySelector('.payout-section');
+        if (payoutSection) {
+          const fareInfo = document.createElement('div');
+          fareInfo.style.cssText = 'font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 5px;';
+          fareInfo.textContent = `Trip fare: $${grandTotal.toFixed(2)} (${payPercentage}% driver share)`;
+          payoutSection.appendChild(fareInfo);
+        }
+      }
     }
 
     function startCountdown(expiresAt) {
