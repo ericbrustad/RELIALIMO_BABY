@@ -28,6 +28,7 @@ class DispatchGrid {
     this.updateCurrentTime();
     this.initDriverLocationToggle();
     this.initRenderedDrivers();
+    this.initReservationPanel(); // Initialize sliding panel handlers
     this.loadGridData(); // Load grid reservations
   }
 
@@ -926,8 +927,96 @@ class DispatchGrid {
 
   openReservation(confNum) {
     console.log('Opening reservation:', confNum);
-    // Open reservation form in edit mode
-    window.location.href = `reservation-form.html?conf=${confNum}&mode=edit`;
+    
+    // Check if we're in Grid view - use sliding panel
+    const gridView = document.getElementById('gridView');
+    if (gridView && gridView.style.display !== 'none') {
+      this.openReservationPanel(confNum);
+    } else {
+      // For other views, navigate to reservation form
+      window.location.href = `reservation-form.html?conf=${confNum}&mode=edit`;
+    }
+  }
+
+  // Open sliding reservation detail panel
+  openReservationPanel(confNum) {
+    const overlay = document.getElementById('reservationDetailOverlay');
+    const panel = document.getElementById('reservationDetailPanel');
+    const iframe = document.getElementById('reservationDetailFrame');
+    const confDisplay = document.getElementById('detailConfNumber');
+    
+    if (!overlay || !panel || !iframe) {
+      console.error('Reservation detail panel elements not found');
+      window.location.href = `reservation-form.html?conf=${confNum}&mode=edit`;
+      return;
+    }
+    
+    // Update conf number display
+    if (confDisplay) {
+      confDisplay.textContent = `#${confNum}`;
+    }
+    
+    // Load reservation form in iframe
+    iframe.src = `reservation-form.html?conf=${confNum}&mode=edit&embedded=true`;
+    
+    // Show the sliding panel
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden'; // Prevent background scrolling
+    
+    console.log('[DispatchGrid] Opened reservation panel for:', confNum);
+  }
+
+  // Close sliding reservation detail panel
+  closeReservationPanel() {
+    const overlay = document.getElementById('reservationDetailOverlay');
+    const iframe = document.getElementById('reservationDetailFrame');
+    
+    if (overlay) {
+      overlay.classList.remove('active');
+      document.body.style.overflow = ''; // Restore scrolling
+    }
+    
+    // Clear iframe after animation
+    setTimeout(() => {
+      if (iframe) {
+        iframe.src = 'about:blank';
+      }
+    }, 400);
+    
+    // Refresh grid data in case changes were made
+    this.loadGridData();
+    
+    console.log('[DispatchGrid] Closed reservation panel');
+  }
+
+  // Initialize the reservation panel close handlers
+  initReservationPanel() {
+    const overlay = document.getElementById('reservationDetailOverlay');
+    const closeTab = document.getElementById('reservationCloseTab');
+    
+    // Close on clicking the large close tab
+    if (closeTab) {
+      closeTab.addEventListener('click', () => {
+        this.closeReservationPanel();
+      });
+    }
+    
+    // Close on clicking the dark overlay (outside the panel)
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        // Only close if clicking the overlay itself, not the panel
+        if (e.target === overlay) {
+          this.closeReservationPanel();
+        }
+      });
+    }
+    
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && overlay?.classList.contains('active')) {
+        this.closeReservationPanel();
+      }
+    });
   }
 
   switchView(view) {
