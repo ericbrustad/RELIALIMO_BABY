@@ -2043,23 +2043,57 @@ class MyOffice {
     const latitude = Array.isArray(addressData.coordinates) ? addressData.coordinates[1] : null;
     const longitude = Array.isArray(addressData.coordinates) ? addressData.coordinates[0] : null;
 
-    // Parse address components from the full address
+    // Full address from Mapbox (e.g., "10019 Fremont Avenue South, Bloomington, Minnesota 55431, United States")
     const fullAddress = addressData.address || addressData.name || '';
-    const city = addressData.context?.city || addressData.context?.place || '';
-    const stateRaw = addressData.context?.state || '';
-    const zip = addressData.context?.zipcode || addressData.context?.postcode || '';
     
-    // Extract just the street address (first part before city)
-    let streetAddress = fullAddress;
-    if (city && fullAddress.includes(city)) {
-      streetAddress = fullAddress.split(city)[0].replace(/,\s*$/, '').trim();
-    } else if (fullAddress.includes(',')) {
-      // Fallback: take everything before the first comma after the house number
-      const parts = fullAddress.split(',');
-      streetAddress = parts[0].trim();
+    // Try to get from context first (Mapbox parsed components)
+    let city = addressData.context?.city || addressData.context?.place || '';
+    let stateRaw = addressData.context?.state || '';
+    let zip = addressData.context?.zipcode || addressData.context?.postcode || '';
+    let streetAddress = addressData.name || '';
+    
+    // If context is missing components, parse from full address string
+    // Format: "Street, City, State ZIP, Country" or "Street, City, State, ZIP, Country"
+    if (!city || !stateRaw || !zip) {
+      const parts = fullAddress.split(',').map(p => p.trim());
+      
+      if (parts.length >= 3) {
+        // First part is always street address
+        streetAddress = parts[0];
+        
+        // Second part is usually city
+        if (!city && parts[1]) {
+          city = parts[1];
+        }
+        
+        // Third part usually has "State ZIP" or just "State"
+        if (parts[2]) {
+          const stateZipPart = parts[2].trim();
+          // Check if it contains a zip code (5 digits)
+          const zipMatch = stateZipPart.match(/(\d{5})(-\d{4})?/);
+          if (zipMatch) {
+            if (!zip) zip = zipMatch[0];
+            // State is the part before the zip
+            if (!stateRaw) {
+              stateRaw = stateZipPart.replace(zipMatch[0], '').trim();
+            }
+          } else {
+            // No zip in this part, it's just the state
+            if (!stateRaw) stateRaw = stateZipPart;
+          }
+        }
+        
+        // Fourth part might be zip or country
+        if (parts[3] && !zip) {
+          const zipMatch = parts[3].match(/(\d{5})(-\d{4})?/);
+          if (zipMatch) {
+            zip = zipMatch[0];
+          }
+        }
+      }
     }
     
-    // Convert state name to abbreviation if needed
+    // State abbreviation mapping
     const stateAbbreviations = {
       'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
       'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
@@ -2072,12 +2106,15 @@ class MyOffice {
       'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
       'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY'
     };
+    
+    // Convert state name to abbreviation if needed
     let state = stateRaw;
     if (stateRaw && stateRaw.length > 2) {
       const abbrev = stateAbbreviations[stateRaw.toLowerCase()];
       if (abbrev) state = abbrev;
     }
 
+    // Update form fields
     const addressInput = document.getElementById('companyStreetAddress');
     const cityInput = document.getElementById('companyCity');
     const stateInput = document.getElementById('companyState');
@@ -2093,6 +2130,8 @@ class MyOffice {
     if (longitudeInput) longitudeInput.value = longitude ?? '';
 
     this.companyGeo = { latitude, longitude };
+    
+    console.log('[MyOffice] Selected company address:', { streetAddress, city, state, zip, latitude, longitude });
   }
 
   async saveCompanyInfo() {
