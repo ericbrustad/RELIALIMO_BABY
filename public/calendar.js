@@ -1234,14 +1234,21 @@ class Calendar {
     // "Only Reservations" affects whether we show holidays; reservations always show.
 
     const onlyMyEvents = document.getElementById('onlyMyEvents')?.checked ?? false;
+    console.log(`🔍 Calendar: onlyMyEvents=${onlyMyEvents}, currentUser=`, this.currentUser);
 
-    const filtered = all
-      .filter(r => r && r.pickup_at)
-      .filter(r => {
+    // First filter: must have pickup_at
+    const withPickup = all.filter(r => r && r.pickup_at);
+    console.log(`🔍 Calendar: ${withPickup.length} reservations have pickup_at`);
+
+    // Second filter: onlyMyEvents
+    const afterMyEventsFilter = withPickup.filter(r => {
         if (!onlyMyEvents) return true;
         const userId = this.currentUser?.id;
         const userEmail = (this.currentUser?.email || '').toLowerCase();
-        if (!userId && !userEmail) return false;
+        if (!userId && !userEmail) {
+          console.log(`⚠️ Calendar: onlyMyEvents is ON but no currentUser id/email`);
+          return false;
+        }
 
         const driverId = this.getReservationDriverId(r);
         if (userId && driverId && String(driverId) === String(userId)) return true;
@@ -1250,7 +1257,10 @@ class Calendar {
         if (userEmail && bookedByEmail && bookedByEmail.toLowerCase() === userEmail) return true;
 
         return false;
-      })
+      });
+    console.log(`🔍 Calendar: ${afterMyEventsFilter.length} reservations after onlyMyEvents filter`);
+
+    const filtered = afterMyEventsFilter
       .map(r => ({
         raw: r,
         pickupDate: this.parseLocalDateTime(r.pickup_at)
