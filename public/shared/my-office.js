@@ -4976,17 +4976,31 @@ class MyOffice {
       throw new Error('Scheme not found');
     }
 
+    console.log('📦 Applying scheme:', scheme);
+    console.log('📦 Scheme rate_type:', scheme.rate_type);
+
     // Fetch scheme entries
     let entries = [];
     try {
-      entries = await apiFetch(`/saved_rate_scheme_entries?scheme_id=eq.${schemeId}&order=sort_order.asc`);
+      const entriesUrl = `/saved_rate_scheme_entries?scheme_id=eq.${schemeId}&order=sort_order.asc`;
+      console.log('📦 Fetching entries from:', entriesUrl);
+      entries = await apiFetch(entriesUrl);
+      console.log('📦 Fetched entries:', entries);
     } catch (e) {
-      console.warn('Could not fetch scheme entries:', e);
+      console.error('❌ Could not fetch scheme entries:', e);
+      throw new Error(`Failed to fetch scheme entries: ${e.message || e}`);
+    }
+
+    if (!entries || entries.length === 0) {
+      console.warn('⚠️ No entries found for scheme', schemeId);
+      throw new Error('No rate entries found for this scheme');
     }
 
     // Convert entries back to rates JSON format
     const currentRates = this.captureVehicleRates();
+    console.log('📦 Current rates before apply:', currentRates);
     const updatedRates = this.convertEntriesToRates(entries, scheme.rate_type, currentRates);
+    console.log('📦 Updated rates after apply:', updatedRates);
 
     // Update the vehicle type with new rates
     const draft = this.captureVehicleTypeForm(this.activeVehicleTypeId);
