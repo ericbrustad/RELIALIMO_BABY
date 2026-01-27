@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Trip Request | RELIA LIMO</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      color: #fff;
+    }
+
+    .loading-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .loading-spinner {
+      width: 60px;
+      height: 60px;
+      border: 4px solid rgba(255,255,255,0.2);
+      border-top-color: #00d4aa;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      margin-top: 20px;
+      font-size: 18px;
+      color: rgba(255,255,255,0.8);
+    }
+
+    .error-screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .error-icon {
+      font-size: 80px;
+      margin-bottom: 20px;
+    }
+
+    .error-title {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+
+    .error-message {
+      font-size: 16px;
+      color: rgba(255,255,255,0.7);
+      max-width: 400px;
+    }
+
+    .container {
+      display: none;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      padding-bottom: 120px;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      padding: 20px 0 30px;
+    }
+
+    .company-logo {
+      max-height: 60px;
+      max-width: 200px;
+      margin-bottom: 15px;
+    }
+
+    .offer-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #00d4aa, #00a885);
+      color: #fff;
+      padding: 10px 24px;
+      border-radius: 30px;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      box-shadow: 0 4px 15px rgba(0, 212, 170, 0.4);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.02); }
+    }
+
+    .expires-timer {
+      margin-top: 15px;
+      padding: 8px 20px;
+      background: rgba(255,107,107,0.2);
+      border-radius: 20px;
+      font-size: 14px;
+      color: #ff6b6b;
+      display: inline-block;
+    }
+
+    .expires-timer.urgent {
+      background: rgba(255,107,107,0.4);
+      animation: urgentPulse 0.5s ease-in-out infinite;
+    }
+
+    @keyframes urgentPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    /* Passenger Info Card */
+    .info-card {
+      background: rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .info-card-header {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-card-header .icon {
+      font-size: 16px;
+    }
+
+    /* Passenger Details */
+    .passenger-name {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .passenger-count {
+      font-size: 14px;
+      color: rgba(255,255,255,0.7);
+    }
+
+    /* Date/Time Section */
+    .datetime-section {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .datetime-box {
+      flex: 1;
+      background: rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 15px;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .datetime-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 8px;
+    }
+
+    .datetime-value {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .datetime-sub {
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      margin-top: 4px;
+    }
+
+    /* Route Section */
+    .route-section {
+      position: relative;
+      padding-left: 30px;
+    }
+
+    .route-line {
+      position: absolute;
+      left: 10px;
+      top: 30px;
+      bottom: 30px;
+      width: 2px;
+      background: linear-gradient(to bottom, #00d4aa, #ff6b6b);
+    }
+
+    .route-stop {
+      position: relative;
+      padding: 15px 0;
+    }
+
+    .route-marker {
+      position: absolute;
+      left: -26px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .route-marker.pickup {
+      background: #00d4aa;
+      color: #000;
+    }
+
+    .route-marker.dropoff {
+      background: #ff6b6b;
+      color: #fff;
+    }
+
+    .route-marker.stop {
+      background: #ffd93d;
+      color: #000;
+    }
+
+    .route-type {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 6px;
+    }
+
+    .route-address {
+      font-size: 16px;
+      font-weight: 500;
+      line-height: 1.4;
+    }
+
+    .route-city {
+      font-size: 13px;
+      color: rgba(255,255,255,0.6);
+      margin-top: 4px;
+    }
+
+    .route-time {
+      font-size: 12px;
+      color: #00d4aa;
+      margin-top: 4px;
+    }
+
+    /* Trip Stats */
+    .trip-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .stat-box {
+      background: rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 15px 10px;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .stat-icon {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: rgba(255,255,255,0.5);
+      margin-top: 4px;
+    }
+
+    /* Vehicle Type */
+    .vehicle-badge {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .vehicle-icon {
+      font-size: 28px;
+    }
+
+    .vehicle-name {
+      font-size: 18px;
+      font-weight: 500;
+    }
+
+    /* Trip Notes */
+    .trip-notes {
+      background: rgba(255,193,7,0.15);
+      border-left: 3px solid #ffc107;
+      border-radius: 0 12px 12px 0;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+
+    .notes-header {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #ffc107;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .notes-content {
+      font-size: 14px;
+      line-height: 1.5;
+      color: rgba(255,255,255,0.9);
+    }
+
+    /* Payout Section */
+    .payout-section {
+      background: linear-gradient(135deg, rgba(0,212,170,0.2), rgba(0,168,133,0.2));
+      border-radius: 16px;
+      padding: 25px;
+      text-align: center;
+      margin-bottom: 30px;
+      border: 1px solid rgba(0,212,170,0.3);
+    }
+
+    .payout-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 10px;
+    }
+
+    .payout-amount {
+      font-size: 48px;
+      font-weight: 700;
+      color: #00d4aa;
+      text-shadow: 0 0 30px rgba(0,212,170,0.5);
+    }
+
+    /* Action Buttons */
+    .action-buttons {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      gap: 12px;
+      padding: 15px 20px 30px;
+      background: linear-gradient(to top, rgba(26,26,46,1) 0%, rgba(26,26,46,0.95) 80%, transparent 100%);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 18px 24px;
+      border: none;
+      border-radius: 14px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .btn-accept {
+      background: linear-gradient(135deg, #00d4aa, #00a885);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(0,212,170,0.4);
+    }
+
+    .btn-accept:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(0,212,170,0.5);
+    }
+
+    .btn-accept:active {
+      transform: translateY(0);
+    }
+
+    .btn-decline {
+      background: rgba(255,107,107,0.2);
+      color: #ff6b6b;
+      border: 2px solid rgba(255,107,107,0.4);
+    }
+
+    .btn-decline:hover {
+      background: rgba(255,107,107,0.3);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Success/Error States */
+    .result-screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .result-icon {
+      font-size: 100px;
+      margin-bottom: 20px;
+    }
+
+    .result-title {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 15px;
+    }
+
+    .result-message {
+      font-size: 16px;
+      color: rgba(255,255,255,0.7);
+      max-width: 400px;
+      line-height: 1.6;
+    }
+
+    .result-action {
+      margin-top: 30px;
+    }
+
+    .btn-portal {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: #fff;
+      padding: 15px 40px;
+      border-radius: 12px;
+      text-decoration: none;
+      font-weight: 600;
+      display: inline-block;
+      transition: all 0.3s ease;
+    }
+
+    .btn-portal:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102,126,234,0.4);
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 1000;
+    }
+
+    .toast.show {
+      opacity: 1;
+    }
+
+    .toast.error {
+      background: #ff4757;
+    }
+
+    .toast.success {
+      background: #2ed573;
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Screen -->
+  <div id="loadingScreen" class="loading-screen">
+    <div class="loading-spinner"></div>
+    <p class="loading-text">Loading trip details...</p>
+  </div>
+
+  <!-- Error Screen -->
+  <div id="errorScreen" class="error-screen">
+    <div class="error-icon">❌</div>
+    <h1 class="error-title">Trip Not Found</h1>
+    <p class="error-message" id="errorMessage">This trip request may have expired or already been assigned to another driver.</p>
+  </div>
+
+  <!-- Success Screen -->
+  <div id="successScreen" class="result-screen">
+    <div class="result-icon">✅</div>
+    <h1 class="result-title">Trip Accepted!</h1>
+    <p class="result-message">This trip has been added to your upcoming trips. Check your Driver Portal for full details and navigation.</p>
+    <div class="result-action">
+      <a href="driver-portal.html" class="btn-portal">Open Driver Portal</a>
+    </div>
+  </div>
+
+  <!-- Declined Screen -->
+  <div id="declinedScreen" class="result-screen">
+    <div class="result-icon">👋</div>
+    <h1 class="result-title">Trip Declined</h1>
+    <p class="result-message">No problem! This trip will be offered to other drivers. You can continue to receive new trip offers.</p>
+    <div class="result-action">
+      <a href="driver-portal.html" class="btn-portal">Open Driver Portal</a>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div id="mainContainer" class="container">
+    <!-- Header -->
+    <header class="header">
+      <img src="" alt="Company Logo" class="company-logo" id="companyLogo" style="display: none;">
+      <div class="offer-badge">🚗 Trip Request</div>
+      <div class="expires-timer" id="expiresTimer">Expires in 15:00</div>
+    </header>
+
+    <!-- Passenger Info -->
+    <div class="info-card">
+      <div class="info-card-header">
+        <span class="icon">👤</span>
+        Passenger Information
+      </div>
+      <div class="passenger-name" id="passengerName">Loading...</div>
+      <div class="passenger-count" id="passengerCount">1 Passenger</div>
+    </div>
+
+    <!-- Date/Time -->
+    <div class="datetime-section">
+      <div class="datetime-box">
+        <div class="datetime-label">Pickup Date</div>
+        <div class="datetime-value" id="pickupDate">--</div>
+        <div class="datetime-sub" id="pickupDay">--</div>
+      </div>
+      <div class="datetime-box">
+        <div class="datetime-label">Pickup Time</div>
+        <div class="datetime-value" id="pickupTime">--</div>
+        <div class="datetime-sub" id="spotTime">Spot: --</div>
+      </div>
+    </div>
+
+    <!-- Route/Itinerary -->
+    <div class="info-card">
+      <div class="info-card-header">
+        <span class="icon">📍</span>
+        Itinerary
+      </div>
+      <div class="route-section" id="routeSection">
+        <!-- Dynamic stops will be inserted here -->
+      </div>
+    </div>
+
+    <!-- Trip Stats -->
+    <div class="trip-stats">
+      <div class="stat-box">
+        <div class="stat-icon">📏</div>
+        <div class="stat-value" id="tripDistance">-- mi</div>
+        <div class="stat-label">Distance</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-icon">⏱️</div>
+        <div class="stat-value" id="tripDuration">-- min</div>
+        <div class="stat-label">Duration</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-icon">🧳</div>
+        <div class="stat-value" id="tripLuggage">0</div>
+        <div class="stat-label">Luggage</div>
+      </div>
+    </div>
+
+    <!-- Vehicle Type -->
+    <div class="vehicle-badge">
+      <span class="vehicle-icon">🚙</span>
+      <span class="vehicle-name" id="vehicleType">Vehicle</span>
+    </div>
+
+    <!-- Trip Notes (if any) -->
+    <div class="trip-notes" id="tripNotes" style="display: none;">
+      <div class="notes-header">
+        <span>📝</span>
+        Trip Notes
+      </div>
+      <div class="notes-content" id="tripNotesContent"></div>
+    </div>
+
+    <!-- Payout -->
+    <div class="payout-section">
+      <div class="payout-label">Your Payout</div>
+      <div class="payout-amount" id="payoutAmount">$0.00</div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+      <button class="btn btn-decline" id="declineBtn" onclick="handleDecline()">
+        ✗ Decline
+      </button>
+      <button class="btn btn-accept" id="acceptBtn" onclick="handleAccept()">
+        ✓ Accept Trip
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <script type="module">
+    import { getSupabaseClient } from './config.js';
+
+    // Parse URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const reservationId = urlParams.get('id') || urlParams.get('reservation_id');
+    const driverId = urlParams.get('driver_id') || urlParams.get('driver');
+    const token = urlParams.get('token');
+
+    let currentReservation = null;
+    let currentDriver = null;
+    let countdownTimer = null;
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!reservationId) {
+        showError('No trip ID provided in the URL.');
+        return;
+      }
+
+      await loadTripDetails();
+    });
+
+    async function loadTripDetails() {
+      try {
+        const supabase = getSupabaseClient();
+        
+        // Fetch reservation details
+        const { data: reservation, error } = await supabase
+          .from('reservations')
+          .select('*')
+          .eq('id', reservationId)
+          .single();
+
+        if (error || !reservation) {
+          showError('Trip not found or has expired.');
+          return;
+        }
+
+        // Check if this offer is still valid
+        if (reservation.assigned_driver_id && reservation.farmout_status === 'accepted') {
+          showError('This trip has already been assigned to a driver.');
+          return;
+        }
+
+        // Check if offer has expired
+        if (reservation.current_offer_expires_at) {
+          const expiresAt = new Date(reservation.current_offer_expires_at);
+          if (expiresAt < new Date()) {
+            showError('This trip offer has expired.');
+            return;
+          }
+        }
+
+        currentReservation = reservation;
+
+        // Load driver info if driver_id provided
+        if (driverId) {
+          const { data: driver } = await supabase
+            .from('drivers')
+            .select('id, first_name, last_name, email, cell_phone')
+            .eq('id', driverId)
+            .single();
+          
+          if (driver) {
+            currentDriver = driver;
+          }
+        }
+
+        // Load company logo from portal settings
+        await loadCompanyLogo(supabase);
+
+        // Render trip details
+        renderTripDetails(reservation);
+
+        // Show main container
+        document.getElementById('loadingScreen').style.display = 'none';
+        document.getElementById('mainContainer').style.display = 'block';
+
+        // Start countdown timer
+        if (reservation.current_offer_expires_at) {
+          startCountdown(new Date(reservation.current_offer_expires_at));
+        }
+
+      } catch (err) {
+        console.error('Error loading trip:', err);
+        showError('Failed to load trip details. Please try again.');
+      }
+    }
+
+    async function loadCompanyLogo(supabase) {
+      try {
+        const { data: settings } = await supabase
+          .from('portal_settings')
+          .select('logo_url, company_name')
+          .limit(1)
+          .single();
+
+        if (settings?.logo_url) {
+          const logoEl = document.getElementById('companyLogo');
+          logoEl.src = settings.logo_url;
+          logoEl.alt = settings.company_name || 'Company Logo';
+          logoEl.style.display = 'block';
+        }
+      } catch (e) {
+        console.log('No company logo found');
+      }
+    }
+
+    function renderTripDetails(res) {
+      // Parse form_snapshot for detailed info
+      const snapshot = res.form_snapshot || {};
+      const details = snapshot.details || {};
+      const routing = snapshot.routing || {};
+      const passenger = snapshot.passenger || {};
+      const costs = snapshot.costs || {};
+
+      // Passenger name (hide email)
+      const firstName = passenger.firstName || res.passenger_name?.split(' ')[0] || 'Passenger';
+      const lastName = passenger.lastName || res.passenger_name?.split(' ').slice(1).join(' ') || '';
+      document.getElementById('passengerName').textContent = `${firstName} ${lastName}`.trim();
+
+      // Passenger count
+      const paxCount = details.numPax || res.passenger_count || 1;
+      document.getElementById('passengerCount').textContent = `${paxCount} Passenger${paxCount > 1 ? 's' : ''}`;
+
+      // Date and Time
+      const pickupDatetime = res.pickup_datetime || details.puDate;
+      if (pickupDatetime) {
+        const date = new Date(pickupDatetime);
+        const dateStr = details.puDate || date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const dayStr = date.toLocaleDateString('en-US', { weekday: 'long' });
+        document.getElementById('pickupDate').textContent = dateStr;
+        document.getElementById('pickupDay').textContent = dayStr;
+      }
+
+      const pickupTime = details.puTime || '';
+      if (pickupTime) {
+        // Convert 24h to 12h format
+        const [h, m] = pickupTime.split(':');
+        const hour = parseInt(h);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const hour12 = hour % 12 || 12;
+        document.getElementById('pickupTime').textContent = `${hour12}:${m} ${ampm}`;
+      }
+
+      // Spot time
+      if (details.spotTime) {
+        document.getElementById('spotTime').textContent = `Spot: ${details.spotTime}`;
+      }
+
+      // Render route/itinerary
+      const routeSection = document.getElementById('routeSection');
+      routeSection.innerHTML = '';
+      
+      const stops = routing.stops || [];
+      if (stops.length > 0) {
+        stops.forEach((stop, idx) => {
+          const isPickup = stop.type === 'pickup' || stop.stopType === 'pickup' || idx === 0;
+          const isDropoff = stop.type === 'dropoff' || stop.stopType === 'dropoff' || idx === stops.length - 1;
+          
+          const stopDiv = document.createElement('div');
+          stopDiv.className = 'route-stop';
+          
+          let markerClass = 'stop';
+          let markerText = (idx + 1).toString();
+          let typeLabel = 'Stop';
+          
+          if (isPickup && idx === 0) {
+            markerClass = 'pickup';
+            markerText = 'PU';
+            typeLabel = 'Pickup';
+          } else if (isDropoff && idx === stops.length - 1) {
+            markerClass = 'dropoff';
+            markerText = 'DO';
+            typeLabel = 'Dropoff';
+          }
+          
+          const address = stop.address || stop.fullAddress || stop.location || '';
+          const city = stop.city || '';
+          const state = stop.state || '';
+          const locationName = stop.locationName || stop.location || '';
+          
+          stopDiv.innerHTML = `
+            <div class="route-marker ${markerClass}">${markerText}</div>
+            <div class="route-type">${typeLabel}</div>
+            <div class="route-address">${locationName || address}</div>
+            ${city ? `<div class="route-city">${city}${state ? ', ' + state : ''}</div>` : ''}
+          `;
+          
+          routeSection.appendChild(stopDiv);
+        });
+      } else {
+        // Fallback to pickup/dropoff addresses
+        routeSection.innerHTML = `
+          <div class="route-stop">
+            <div class="route-marker pickup">PU</div>
+            <div class="route-type">Pickup</div>
+            <div class="route-address">${res.pickup_address || res.pu_address || 'Pickup location'}</div>
+            <div class="route-city">${res.pickup_city || ''}${res.pickup_state ? ', ' + res.pickup_state : ''}</div>
+          </div>
+          <div class="route-stop">
+            <div class="route-marker dropoff">DO</div>
+            <div class="route-type">Dropoff</div>
+            <div class="route-address">${res.dropoff_address || res.do_address || 'Dropoff location'}</div>
+            <div class="route-city">${res.dropoff_city || ''}${res.dropoff_state ? ', ' + res.dropoff_state : ''}</div>
+          </div>
+        `;
+      }
+
+      // Trip stats
+      document.getElementById('tripLuggage').textContent = details.luggage || '0';
+
+      // Vehicle type
+      const vehicleType = details.vehicleType || res.vehicle_type || 'Vehicle';
+      document.getElementById('vehicleType').textContent = vehicleType;
+
+      // Trip notes
+      const tripNotes = routing.tripNotes || routing.dispatchNotes || res.special_instructions || '';
+      if (tripNotes && !tripNotes.includes('Email:')) {
+        document.getElementById('tripNotes').style.display = 'block';
+        document.getElementById('tripNotesContent').textContent = tripNotes;
+      }
+
+      // Payout - calculate from costs or use default percentage
+      let payout = 0;
+      const grandTotal = parseFloat(res.grand_total) || 0;
+      
+      // Try to get driver pay percentage from localStorage farmout settings
+      let payPercentage = 70; // default
+      try {
+        const farmoutSettings = JSON.parse(localStorage.getItem('farmoutAutomationSettings') || '{}');
+        payPercentage = farmoutSettings.driver_pay_percentage || 70;
+      } catch (e) {}
+      
+      payout = grandTotal * (payPercentage / 100);
+      document.getElementById('payoutAmount').textContent = `$${payout.toFixed(2)}`;
+    }
+
+    function startCountdown(expiresAt) {
+      const timerEl = document.getElementById('expiresTimer');
+      
+      function update() {
+        const now = Date.now();
+        const remaining = expiresAt.getTime() - now;
+        
+        if (remaining <= 0) {
+          timerEl.textContent = 'EXPIRED';
+          timerEl.classList.add('urgent');
+          document.getElementById('acceptBtn').disabled = true;
+          document.getElementById('declineBtn').disabled = true;
+          clearInterval(countdownTimer);
+          return;
+        }
+        
+        const minutes = Math.floor(remaining / 60000);
+        const seconds = Math.floor((remaining % 60000) / 1000);
+        timerEl.textContent = `Expires in ${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        if (remaining < 60000) {
+          timerEl.classList.add('urgent');
+        }
+      }
+      
+      update();
+      countdownTimer = setInterval(update, 1000);
+    }
+
+    window.handleAccept = async function() {
+      const acceptBtn = document.getElementById('acceptBtn');
+      const declineBtn = document.getElementById('declineBtn');
+      
+      acceptBtn.disabled = true;
+      declineBtn.disabled = true;
+      acceptBtn.innerHTML = '⏳ Accepting...';
+      
+      try {
+        const supabase = getSupabaseClient();
+        
+        // Update reservation to assign this driver
+        const updateData = {
+          assigned_driver_id: driverId || currentDriver?.id,
+          farmout_status: 'accepted',
+          status: 'assigned',
+          current_offer_driver_id: null,
+          current_offer_sent_at: null,
+          current_offer_expires_at: null,
+          updated_at: new Date().toISOString()
+        };
+        
+        const { error } = await supabase
+          .from('reservations')
+          .update(updateData)
+          .eq('id', reservationId);
+
+        if (error) {
+          throw error;
+        }
+
+        // Show success screen
+        document.getElementById('mainContainer').style.display = 'none';
+        document.getElementById('successScreen').style.display = 'flex';
+        
+        if (countdownTimer) clearInterval(countdownTimer);
+
+      } catch (err) {
+        console.error('Error accepting trip:', err);
+        showToast('Failed to accept trip. Please try again.', 'error');
+        acceptBtn.disabled = false;
+        declineBtn.disabled = false;
+        acceptBtn.innerHTML = '✓ Accept Trip';
+      }
+    };
+
+    window.handleDecline = async function() {
+      const acceptBtn = document.getElementById('acceptBtn');
+      const declineBtn = document.getElementById('declineBtn');
+      
+      acceptBtn.disabled = true;
+      declineBtn.disabled = true;
+      declineBtn.innerHTML = '⏳ Declining...';
+      
+      try {
+        const supabase = getSupabaseClient();
+        
+        // Add driver to declined list
+        const declinedDrivers = currentReservation.farmout_declined_drivers || [];
+        if (driverId && !declinedDrivers.includes(driverId)) {
+          declinedDrivers.push(driverId);
+        }
+        
+        // Update reservation
+        const updateData = {
+          current_offer_driver_id: null,
+          current_offer_sent_at: null,
+          current_offer_expires_at: null,
+          farmout_declined_drivers: declinedDrivers,
+          farmout_attempts: (currentReservation.farmout_attempts || 0) + 1,
+          updated_at: new Date().toISOString()
+        };
+        
+        const { error } = await supabase
+          .from('reservations')
+          .update(updateData)
+          .eq('id', reservationId);
+
+        if (error) {
+          throw error;
+        }
+
+        // Show declined screen
+        document.getElementById('mainContainer').style.display = 'none';
+        document.getElementById('declinedScreen').style.display = 'flex';
+        
+        if (countdownTimer) clearInterval(countdownTimer);
+
+      } catch (err) {
+        console.error('Error declining trip:', err);
+        showToast('Failed to decline trip. Please try again.', 'error');
+        acceptBtn.disabled = false;
+        declineBtn.disabled = false;
+        declineBtn.innerHTML = '✗ Decline';
+      }
+    };
+
+    function showError(message) {
+      document.getElementById('loadingScreen').style.display = 'none';
+      document.getElementById('errorMessage').textContent = message;
+      document.getElementById('errorScreen').style.display = 'flex';
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `toast show ${type}`;
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+  </script>
+</body>
+</html>

@@ -1018,6 +1018,10 @@ Accept/Decline: {portal_link}`;
     const portalLink = `${portalBaseUrl}/${portalSlug}?offer=${offerDetails.reservationId}`;
     result = result.replace(/{portal_link}/g, portalLink);
     
+    // Generate trip request URL for accept/decline page
+    const tripRequestUrl = `${portalBaseUrl}/trip-request.html?id=${offerDetails.reservationId}&driver_id=${driver.id}`;
+    result = result.replace(/{trip_request_url}/g, tripRequestUrl);
+    
     return result;
   }
 
