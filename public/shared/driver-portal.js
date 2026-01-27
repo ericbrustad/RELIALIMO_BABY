@@ -5,6 +5,121 @@
 
 console.log('[DriverPortal] Script loading...');
 
+// ============================================
+// Memo Notification Functions
+// ============================================
+async function loadAndDisplayDriverMemos() {
+  try {
+    const supabaseUrl = window.ENV?.SUPABASE_URL || '';
+    const supabaseKey = window.ENV?.SUPABASE_ANON_KEY || '';
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.warn('[Memos] No Supabase config available');
+      return;
+    }
+    
+    // Get active memos for driver-login location
+    const now = new Date().toISOString();
+    const url = `${supabaseUrl}/rest/v1/company_memos?select=*&is_active=eq.true&notify_location=eq.driver-login&or=(display_from.is.null,display_from.lte.${now})&or=(display_to.is.null,display_to.gte.${now})&order=created_at.desc&limit=5`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`
+      }
+    });
+    
+    if (!response.ok) {
+      console.warn('[Memos] Failed to load memos:', response.statusText);
+      return;
+    }
+    
+    const memos = await response.json();
+    console.log('[Memos] Loaded', memos.length, 'memos for driver-login');
+    
+    if (memos.length === 0) return;
+    
+    // Filter out dismissed memos
+    const dismissedMemos = JSON.parse(localStorage.getItem('dismissedDriverMemos') || '[]');
+    const activeMemos = memos.filter(m => !dismissedMemos.includes(m.id));
+    
+    if (activeMemos.length === 0) return;
+    
+    // Get or create container
+    const container = document.getElementById('memoNotificationContainer');
+    if (!container) return;
+    
+    // Color map
+    const colorMap = {
+      'red': '#ff3333',
+      'yellow': '#ffd700',
+      'green': '#90ee90',
+      'blue': '#87ceeb',
+      'orange': '#ffb366',
+      'purple': '#dda0dd'
+    };
+    
+    container.innerHTML = activeMemos.map(memo => `
+      <div class="memo-banner" data-memo-id="${memo.id}" style="
+        background: ${colorMap[memo.color] || '#ffd700'};
+        color: #333;
+        padding: 12px 16px;
+        margin: 8px 16px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      ">
+        <div class="memo-content" style="flex: 1;">
+          <span style="font-weight: 600;">📢</span>
+          ${memo.memo_text}
+        </div>
+        <button class="memo-dismiss-btn" onclick="dismissDriverMemo('${memo.id}')" style="
+          background: rgba(0,0,0,0.2);
+          border: none;
+          border-radius: 50%;
+          width: 24px;
+          height: 24px;
+          cursor: pointer;
+          font-size: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-left: 12px;
+        ">×</button>
+      </div>
+    `).join('');
+    
+    container.style.display = 'block';
+    
+  } catch (err) {
+    console.error('[Memos] Error loading memos:', err);
+  }
+}
+
+// Global function to dismiss memos
+window.dismissDriverMemo = function(memoId) {
+  const dismissed = JSON.parse(localStorage.getItem('dismissedDriverMemos') || '[]');
+  if (!dismissed.includes(memoId)) {
+    dismissed.push(memoId);
+    localStorage.setItem('dismissedDriverMemos', JSON.stringify(dismissed));
+  }
+  const banner = document.querySelector(`[data-memo-id="${memoId}"]`);
+  if (banner) {
+    banner.style.transition = 'opacity 0.3s, transform 0.3s';
+    banner.style.opacity = '0';
+    banner.style.transform = 'translateX(100%)';
+    setTimeout(() => banner.remove(), 300);
+  }
+  // Hide container if no more memos
+  const container = document.getElementById('memoNotificationContainer');
+  const remaining = container?.querySelectorAll('.memo-banner');
+  if (remaining && remaining.length <= 1) {
+    container.style.display = 'none';
+  }
+};
+
 // Global error handler
 window.addEventListener('error', (e) => {
   console.error('[DriverPortal] Global error:', e.message, e.filename, e.lineno);
@@ -547,6 +662,11 @@ const state = {
   vehicleTypes: [],
   activeTimer: null,
   timerStartTime: null,
+  // Map preferences
+  preferredMapApp: localStorage.getItem('driver_preferred_map') || null,
+  mapVisible: true, // Show/hide map toggle state
+  // Active trip state
+  activeTripBaseFare: 0,
   // OTP verification state (phone)
   otpCode: null,
   otpExpiry: null,
@@ -927,24 +1047,38 @@ const elements = {
 };
 
 // ============================================
-// Status Configuration
+// Status Configuration - Enhanced Flow
 // ============================================
 const STATUS_META = {
   available: { emoji: '🟢', label: 'Available', color: 'available' },
+  getting_ready: { emoji: '🔵', label: 'Getting Ready', color: 'getting-ready' },
   enroute: { emoji: '🟡', label: 'On the Way', color: 'enroute' },
   arrived: { emoji: '🟠', label: 'Arrived', color: 'arrived' },
-  passenger_onboard: { emoji: '🔵', label: 'Passenger On Board', color: 'onboard' },
-  completed: { emoji: '✅', label: 'Completed', color: 'completed' },
+  waiting: { emoji: '⏳', label: 'Waiting', color: 'waiting' },
+  passenger_onboard: { emoji: '🚗', label: 'Customer in Car', color: 'onboard' },
+  done: { emoji: '✅', label: 'Done', color: 'done' },
+  completed: { emoji: '🏁', label: 'Completed', color: 'completed' },
   busy: { emoji: '🔴', label: 'Busy', color: 'busy' },
   offline: { emoji: '⚫', label: 'Offline', color: 'offline' }
 };
 
+// Status flow with skip options (e.g., can skip 'waiting')
 const STATUS_TRANSITIONS = {
   // What statuses are available from each status
-  available: ['enroute'],
+  available: ['getting_ready'],
+  getting_ready: ['enroute'],
   enroute: ['arrived'],
-  arrived: ['passenger_onboard'],
-  passenger_onboard: ['completed']
+  arrived: ['waiting', 'passenger_onboard'], // Can skip waiting
+  waiting: ['passenger_onboard'],
+  passenger_onboard: ['done'],
+  done: ['completed'] // After done, goes to post-trip incidentals
+};
+
+// Map app preferences
+const MAP_APPS = {
+  google: { name: 'Google Maps', icon: '🗺️', scheme: 'google.navigation:q=' },
+  apple: { name: 'Apple Maps', icon: '🍎', scheme: 'maps://maps.google.com/maps?daddr=' },
+  waze: { name: 'Waze', icon: '🚗', scheme: 'waze://?ll=' }
 };
 
 // ============================================
@@ -969,15 +1103,16 @@ async function loadEnvSettingsToLocalStorage() {
     
     if (data.success) {
       // Save SMS/Twilio settings
-      if (data.twilio && (data.twilio.accountSid || data.twilio.authToken || data.twilio.phoneNumber)) {
+      if (data.twilio && (data.twilio.accountSid || data.twilio.authToken || data.twilio.fromNumber || data.twilio.messagingServiceSid)) {
         const smsProviders = JSON.parse(localStorage.getItem('smsProviders') || '[]');
         const existingTwilioIndex = smsProviders.findIndex(p => p.type === 'twilio');
         const twilioProvider = {
           type: 'twilio',
           accountSid: data.twilio.accountSid || '',
           authToken: data.twilio.authToken || '',
-          phoneNumber: data.twilio.phoneNumber || '',
-          fromNumber: data.twilio.phoneNumber || '',
+          phoneNumber: data.twilio.fromNumber || data.twilio.messagingServiceSid || '',
+          fromNumber: data.twilio.fromNumber || data.twilio.messagingServiceSid || '',
+          messagingServiceSid: data.twilio.messagingServiceSid || '',
           isDefault: true,
           enabled: true
         };
@@ -1253,6 +1388,9 @@ async function init() {
     // Load ENV settings for SMS/Email
     await loadEnvSettingsToLocalStorage();
     
+    // Load portal branding settings from database
+    await loadDriverPortalSettings();
+    
     // Load modules first
     console.log('[DriverPortal] Loading modules...');
     await loadModules();
@@ -1368,6 +1506,17 @@ async function init() {
 // Wait for DOM and initialize
 document.addEventListener('DOMContentLoaded', () => {
   console.log('[DriverPortal] DOM loaded, setting up...');
+  
+  // Check for dev mode URL parameter (?dev=1 or ?devmode=1)
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('dev') === '1' || urlParams.get('devmode') === '1') {
+    window.ENV = window.ENV || {};
+    window.ENV.DEV_MODE = true;
+    state.emailVerified = true;
+    state.phoneVerified = true;
+    console.log('[DriverPortal] 🔧 DEV MODE enabled via URL parameter - skipping verification');
+  }
+  
   try {
     setupEventListeners();
     console.log('[DriverPortal] Event listeners attached');
@@ -1938,6 +2087,57 @@ function getDriverSettings() {
   }
 }
 
+// Load driver portal branding settings from database
+async function loadDriverPortalSettings() {
+  try {
+    const supabaseUrl = window.ENV?.SUPABASE_URL || '';
+    const supabaseKey = window.ENV?.SUPABASE_ANON_KEY || '';
+    
+    if (!supabaseUrl || !supabaseKey) return;
+    
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/portal_settings?portal_type=eq.driver&select=*`,
+      {
+        headers: { 'apikey': supabaseKey }
+      }
+    );
+    
+    if (response.ok) {
+      const settings = await response.json();
+      if (settings?.length > 0) {
+        const dbSettings = settings[0];
+        
+        // Apply header title
+        const headerTitle = dbSettings.header_title || dbSettings.headerTitle;
+        if (headerTitle) {
+          document.querySelectorAll('.portal-header h1, .header-title').forEach(el => {
+            el.textContent = headerTitle;
+          });
+        }
+        
+        // Apply logo
+        const logo = dbSettings.logo || dbSettings.logo_url;
+        if (logo) {
+          document.querySelectorAll('#splashLogo, .splash-logo, .header-logo, .favicon-logo').forEach(img => {
+            img.src = logo;
+          });
+        }
+        
+        // Apply primary color
+        const primaryColor = dbSettings.primary_color || dbSettings.primaryColor;
+        if (primaryColor) {
+          document.documentElement.style.setProperty('--primary', primaryColor);
+          document.documentElement.style.setProperty('--primary-color', primaryColor);
+        }
+        
+        console.log('[DriverPortal] Portal settings loaded from database');
+      }
+    }
+  } catch (err) {
+    console.warn('[DriverPortal] Failed to load portal settings:', err);
+  }
+}
+
 async function showRegistrationSplash() {
   console.log('[DriverPortal] Starting registration splash sequence');
   
@@ -2216,36 +2416,137 @@ async function loadPinnedTrips() {
   }
 }
 
+// Store markers for cleanup
+let tripMarkers = [];
+
 function addTripMarkersToMap(trips) {
-  if (!driverViewMap || !window.google) return;
+  if (!driverViewMap) return;
+  
+  // Clear existing markers
+  tripMarkers.forEach(marker => marker.remove());
+  tripMarkers = [];
+  
+  const bounds = new mapboxgl.LngLatBounds();
+  let hasValidCoords = false;
   
   trips.forEach((trip, index) => {
-    // If we have coordinates, add a marker
-    if (trip.pu_lat && trip.pu_lng) {
-      const marker = new google.maps.Marker({
-        position: { lat: parseFloat(trip.pu_lat), lng: parseFloat(trip.pu_lng) },
-        map: driverViewMap,
-        label: {
-          text: (index + 1).toString(),
-          color: '#fff',
-          fontWeight: 'bold'
-        },
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 15,
-          fillColor: '#10b981',
-          fillOpacity: 0.9,
-          strokeColor: '#fff',
-          strokeWeight: 2
-        },
-        title: `${trip.pu_time || ''} - ${trip.passenger_name || 'Pickup'}`
-      });
+    // Try to get coordinates from various fields
+    const lng = parseFloat(trip.pu_lng || trip.pickup_lng || trip.pickup_longitude);
+    const lat = parseFloat(trip.pu_lat || trip.pickup_lat || trip.pickup_latitude);
+    
+    if (!isNaN(lng) && !isNaN(lat)) {
+      hasValidCoords = true;
+      bounds.extend([lng, lat]);
       
-      marker.addListener('click', () => {
+      // Format pickup time
+      const puTime = trip.pu_time || trip.pickup_time || '';
+      const formattedTime = puTime ? formatTime(puTime) : '--:--';
+      
+      // Calculate time until pickup
+      const timeUntil = getTimeUntilPickup(trip);
+      
+      // Determine marker color based on urgency
+      let markerColor = '#10b981'; // green
+      if (timeUntil !== null) {
+        if (timeUntil <= 30) markerColor = '#ef4444'; // red - within 30 mins
+        else if (timeUntil <= 60) markerColor = '#f59e0b'; // orange - within 1 hour
+      }
+      
+      // Create custom marker element with time
+      const markerEl = document.createElement('div');
+      markerEl.className = 'trip-pickup-marker';
+      markerEl.innerHTML = `
+        <div class="pickup-marker-container" style="
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          cursor: pointer;
+        ">
+          <div class="pickup-time-badge" style="
+            background: ${markerColor};
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            margin-bottom: 4px;
+          ">${formattedTime}</div>
+          <div class="pickup-marker-pin" style="
+            width: 28px;
+            height: 28px;
+            background: ${markerColor};
+            border: 3px solid white;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          ">
+            <span style="transform: rotate(45deg); color: white; font-weight: bold; font-size: 12px;">${index + 1}</span>
+          </div>
+        </div>
+      `;
+      
+      // Create popup with trip details
+      const passengerName = trip.passenger_name || trip.passenger_first_name || 'Passenger';
+      const location = trip.pu_address || trip.pickup_address || trip.pu_location || 'Pickup';
+      const popup = new mapboxgl.Popup({ offset: 25 })
+        .setHTML(`
+          <div style="padding: 8px; min-width: 150px;">
+            <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">${formattedTime}</div>
+            <div style="font-size: 13px; color: #333;">${passengerName}</div>
+            <div style="font-size: 12px; color: #666; margin-top: 4px;">📍 ${location}</div>
+            ${timeUntil !== null ? `<div style="font-size: 11px; color: ${markerColor}; margin-top: 6px; font-weight: 600;">
+              ${timeUntil <= 0 ? '⚠️ NOW' : `In ${timeUntil} min`}
+            </div>` : ''}
+          </div>
+        `);
+      
+      const marker = new mapboxgl.Marker(markerEl)
+        .setLngLat([lng, lat])
+        .setPopup(popup)
+        .addTo(driverViewMap);
+      
+      // Click to show trip detail
+      markerEl.addEventListener('click', () => {
         showTripDetail(trip.id);
       });
+      
+      tripMarkers.push(marker);
     }
   });
+  
+  // Fit map to show all markers
+  if (hasValidCoords && tripMarkers.length > 0) {
+    if (tripMarkers.length === 1) {
+      driverViewMap.flyTo({ center: bounds.getCenter(), zoom: 14 });
+    } else {
+      driverViewMap.fitBounds(bounds, { padding: 60, maxZoom: 14 });
+    }
+  }
+}
+
+function getTimeUntilPickup(trip) {
+  try {
+    const puDate = trip.pu_date || trip.pickup_date;
+    const puTime = trip.pu_time || trip.pickup_time;
+    
+    if (!puDate || !puTime) return null;
+    
+    const pickupDateTime = new Date(`${puDate}T${puTime}`);
+    if (isNaN(pickupDateTime.getTime())) return null;
+    
+    const now = new Date();
+    const diffMs = pickupDateTime - now;
+    const diffMins = Math.round(diffMs / 60000);
+    
+    return diffMins;
+  } catch (err) {
+    return null;
+  }
 }
 
 function formatShortDate(dateStr) {
@@ -2396,7 +2697,14 @@ function setupEventListeners() {
         const isPassword = input.type === 'password';
         input.type = isPassword ? 'text' : 'password';
         btn.classList.toggle('active', isPassword);
-        btn.querySelector('.eye-icon').textContent = isPassword ? '🙈' : '👁️';
+        
+        // Toggle SVG icons
+        const eyeOpen = btn.querySelector('.eye-open');
+        const eyeClosed = btn.querySelector('.eye-closed');
+        if (eyeOpen && eyeClosed) {
+          eyeOpen.style.display = isPassword ? 'none' : 'block';
+          eyeClosed.style.display = isPassword ? 'block' : 'none';
+        }
       }
     });
   });
@@ -2959,15 +3267,32 @@ async function handleProfilePhotoUpload(event) {
 function updateDriverAvatar(photoUrl) {
   // Update all avatar elements to show the photo
   const avatars = document.querySelectorAll('.driver-avatar');
+  const driver = state.driver;
+  const initials = `${driver?.first_name?.[0] || ''}${driver?.last_name?.[0] || ''}`.toUpperCase() || '?';
+  
   avatars.forEach(avatar => {
     if (photoUrl) {
       avatar.innerHTML = `<img src="${photoUrl}" alt="Profile" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
     } else {
-      const driver = state.driver;
-      const initials = `${driver.first_name?.[0] || ''}${driver.last_name?.[0] || ''}`.toUpperCase() || '?';
       avatar.textContent = initials;
     }
   });
+  
+  // Also update the sidebar avatar specifically (with image/initials structure)
+  const sidebarAvatarImg = document.getElementById('sidebarAvatarImg');
+  const sidebarAvatarInitials = document.getElementById('sidebarAvatarInitials');
+  
+  if (sidebarAvatarImg && sidebarAvatarInitials) {
+    if (photoUrl) {
+      sidebarAvatarImg.src = photoUrl;
+      sidebarAvatarImg.style.display = 'block';
+      sidebarAvatarInitials.style.display = 'none';
+    } else {
+      sidebarAvatarImg.style.display = 'none';
+      sidebarAvatarInitials.style.display = 'block';
+      sidebarAvatarInitials.textContent = initials;
+    }
+  }
 }
 
 async function saveProfile() {
@@ -3120,6 +3445,9 @@ async function showSettingsScreen() {
     return;
   }
   
+  // Check location status
+  await checkLocationStatusForSettings();
+  
   // Load settings from driver record or local storage
   const settings = driver.settings || {};
   
@@ -3151,6 +3479,174 @@ async function showSettingsScreen() {
   if (elements.themePreference) elements.themePreference.value = settings.theme || 'dark';
   if (elements.distanceUnit) elements.distanceUnit.value = settings.distance_unit || 'miles';
   if (elements.timeFormat) elements.timeFormat.value = settings.time_format || '12h';
+}
+
+// Check location permission status for settings display
+async function checkLocationStatusForSettings() {
+  const statusIcon = document.getElementById('locationStatusIcon');
+  const statusLabel = document.getElementById('locationStatusLabel');
+  const statusHint = document.getElementById('locationStatusHint');
+  const enableBtn = document.getElementById('enableLocationSettingsBtn');
+  const deniedWarning = document.getElementById('locationDeniedWarning');
+  const deviceSettingsBtn = document.getElementById('openDeviceSettingsBtn');
+  
+  if (!statusIcon || !statusLabel) return;
+  
+  // Check if geolocation is supported
+  if (!('geolocation' in navigator)) {
+    statusIcon.textContent = '❌';
+    statusLabel.textContent = 'Not Supported';
+    statusLabel.className = 'location-status-label denied';
+    statusHint.textContent = 'Your browser does not support location services';
+    return;
+  }
+  
+  try {
+    // Check permission status using Permissions API
+    if ('permissions' in navigator) {
+      const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
+      
+      if (permissionStatus.state === 'granted') {
+        statusIcon.textContent = '✅';
+        statusLabel.textContent = 'Location Enabled';
+        statusLabel.className = 'location-status-label granted';
+        statusHint.textContent = 'Dispatch can see your position';
+        if (enableBtn) enableBtn.style.display = 'none';
+        if (deniedWarning) deniedWarning.style.display = 'none';
+      } else if (permissionStatus.state === 'denied') {
+        statusIcon.textContent = '🚫';
+        statusLabel.textContent = 'Location Denied';
+        statusLabel.className = 'location-status-label denied';
+        statusHint.textContent = 'Please enable in device settings';
+        if (enableBtn) enableBtn.style.display = 'none';
+        if (deniedWarning) deniedWarning.style.display = 'block';
+      } else {
+        // Prompt state
+        statusIcon.textContent = '📍';
+        statusLabel.textContent = 'Location Not Set';
+        statusLabel.className = 'location-status-label';
+        statusHint.textContent = 'Tap Enable to allow location access';
+        if (enableBtn) enableBtn.style.display = 'block';
+        if (deniedWarning) deniedWarning.style.display = 'none';
+      }
+      
+      // Listen for permission changes
+      permissionStatus.onchange = () => {
+        checkLocationStatusForSettings();
+      };
+    } else {
+      // Fallback: Try to get location to determine status
+      statusIcon.textContent = '📍';
+      statusLabel.textContent = 'Checking...';
+      statusLabel.className = 'location-status-label';
+      statusHint.textContent = 'Testing location access';
+      
+      navigator.geolocation.getCurrentPosition(
+        () => {
+          statusIcon.textContent = '✅';
+          statusLabel.textContent = 'Location Enabled';
+          statusLabel.className = 'location-status-label granted';
+          statusHint.textContent = 'Dispatch can see your position';
+          if (enableBtn) enableBtn.style.display = 'none';
+          if (deniedWarning) deniedWarning.style.display = 'none';
+        },
+        (error) => {
+          if (error.code === error.PERMISSION_DENIED) {
+            statusIcon.textContent = '🚫';
+            statusLabel.textContent = 'Location Denied';
+            statusLabel.className = 'location-status-label denied';
+            statusHint.textContent = 'Please enable in device settings';
+            if (enableBtn) enableBtn.style.display = 'none';
+            if (deniedWarning) deniedWarning.style.display = 'block';
+          } else {
+            statusIcon.textContent = '⚠️';
+            statusLabel.textContent = 'Location Unavailable';
+            statusLabel.className = 'location-status-label';
+            statusHint.textContent = 'Unable to get location';
+            if (enableBtn) enableBtn.style.display = 'block';
+            if (deniedWarning) deniedWarning.style.display = 'none';
+          }
+        },
+        { timeout: 5000 }
+      );
+    }
+  } catch (err) {
+    console.warn('[DriverPortal] Error checking location status:', err);
+    statusIcon.textContent = '⚠️';
+    statusLabel.textContent = 'Unknown Status';
+    statusLabel.className = 'location-status-label';
+    statusHint.textContent = 'Unable to check location permissions';
+    if (enableBtn) enableBtn.style.display = 'block';
+  }
+  
+  // Set up event listeners for buttons
+  if (enableBtn) {
+    enableBtn.onclick = async () => {
+      try {
+        await requestLocationPermission();
+        await checkLocationStatusForSettings();
+      } catch (e) {
+        console.error('[DriverPortal] Location enable error:', e);
+      }
+    };
+  }
+  
+  if (deviceSettingsBtn) {
+    deviceSettingsBtn.onclick = () => {
+      showLocationSettingsGuide();
+    };
+  }
+}
+
+// Show guide for opening device location settings
+function showLocationSettingsGuide() {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isAndroid = /Android/.test(navigator.userAgent);
+  
+  let instructions = '';
+  
+  if (isIOS) {
+    instructions = `
+      <div style="text-align:left; line-height:1.8;">
+        <strong>iPhone/iPad:</strong>
+        <ol style="margin:10px 0 0 20px;">
+          <li>Open <strong>Settings</strong></li>
+          <li>Scroll down and tap <strong>Safari</strong> (or your browser)</li>
+          <li>Tap <strong>Location</strong></li>
+          <li>Select <strong>Allow</strong></li>
+          <li>Return to this app and refresh</li>
+        </ol>
+      </div>
+    `;
+  } else if (isAndroid) {
+    instructions = `
+      <div style="text-align:left; line-height:1.8;">
+        <strong>Android:</strong>
+        <ol style="margin:10px 0 0 20px;">
+          <li>Open <strong>Settings</strong></li>
+          <li>Tap <strong>Apps</strong> or <strong>Applications</strong></li>
+          <li>Find and tap your <strong>Browser</strong></li>
+          <li>Tap <strong>Permissions</strong></li>
+          <li>Enable <strong>Location</strong></li>
+          <li>Return to this app and refresh</li>
+        </ol>
+      </div>
+    `;
+  } else {
+    instructions = `
+      <div style="text-align:left; line-height:1.8;">
+        <strong>Desktop Browser:</strong>
+        <ol style="margin:10px 0 0 20px;">
+          <li>Click the <strong>lock icon</strong> 🔒 in your address bar</li>
+          <li>Find <strong>Location</strong> settings</li>
+          <li>Change to <strong>Allow</strong></li>
+          <li>Refresh this page</li>
+        </ol>
+      </div>
+    `;
+  }
+  
+  showToast(instructions, 'info', 15000);
 }
 
 function loadPaymentSettings(payments) {
@@ -4508,8 +5004,16 @@ async function sendOtpToEmail(email) {
  * Show fallback code prominently when email fails
  */
 function showFallbackCode(code, reason) {
+  // Make the reason more user-friendly
+  let userReason = reason;
+  if (reason.includes('Failed to fetch') || reason.includes('network')) {
+    userReason = 'Network error - check your connection';
+  } else if (reason.includes('not configured')) {
+    userReason = 'Email service temporarily unavailable';
+  }
+  
   // Show persistent toast with the code
-  showToast(`Your code: ${code}`, 'warning', 30000); // 30 second toast
+  showToast(`📧 Email couldn't be sent. Your code: ${code}`, 'warning', 30000); // 30 second toast
   
   // Also show in the OTP section if visible
   const otpSection = document.getElementById('emailOtpSection');
@@ -4555,6 +5059,8 @@ async function sendOTPEmail(to, code) {
   
   // Use server-side API endpoint (Resend) - this is the only reliable method
   try {
+    console.log('[DriverPortal] Attempting to send email to:', to);
+    
     const apiResponse = await fetch('/api/email-send', {
       method: 'POST',
       headers: {
@@ -4567,17 +5073,29 @@ async function sendOTPEmail(to, code) {
       })
     });
     
+    console.log('[DriverPortal] Email API response status:', apiResponse.status);
+    
     if (apiResponse.ok) {
       const result = await apiResponse.json();
       console.log('[DriverPortal] ✅ Email sent via Resend API:', result);
       return true;
     } else {
-      const error = await apiResponse.json();
-      console.error('[DriverPortal] ❌ Resend API failed:', error);
-      throw new Error(error.error || 'Failed to send email');
+      let error = {};
+      try {
+        error = await apiResponse.json();
+      } catch (e) {
+        error = { error: `HTTP ${apiResponse.status}` };
+      }
+      console.error('[DriverPortal] ❌ Resend API failed:', apiResponse.status, error);
+      throw new Error(error.error || `Failed to send email (${apiResponse.status})`);
     }
   } catch (apiError) {
-    console.error('[DriverPortal] ❌ Email send error:', apiError.message);
+    console.error('[DriverPortal] ❌ Email send error:', apiError.message || apiError);
+    
+    // Check if it's a network error (common on mobile)
+    if (apiError.name === 'TypeError' && apiError.message.includes('Failed to fetch')) {
+      console.error('[DriverPortal] Network error - possibly offline or CORS issue');
+    }
     
     // Fallback: Log to console for development/debugging
     console.log('[DriverPortal] ========== EMAIL OTP (Console Fallback) ==========');
@@ -4585,9 +5103,7 @@ async function sendOTPEmail(to, code) {
     console.log('[DriverPortal] SUBJECT:', `Your ${fromName} Verification Code`);
     console.log('[DriverPortal] CODE:', code);
     console.log('[DriverPortal] ====================================================');
-    console.log('[DriverPortal] Email failed. Ensure RESEND_API_KEY is set in Vercel.');
-    console.log('[DriverPortal] ====================================================');
-    
+
     throw apiError; // Re-throw so caller knows email failed
   }
 }
@@ -5079,26 +5595,24 @@ function validateRegStep(step) {
 
 async function handleRegistration() {
   let vehicleType = document.getElementById('regVehicleType').value;
+  const vehicleTypeOther = document.getElementById('regVehicleTypeOther')?.value?.trim();
   const licensePlate = document.getElementById('regVehiclePlate').value.trim();
   
-  if (!vehicleType) {
+  // Handle "Other" vehicle type
+  if (vehicleType === '__other__') {
+    if (!vehicleTypeOther) {
+      showToast('Please enter a custom vehicle type name', 'error');
+      return;
+    }
+    // Will create new vehicle type after driver is created
+  } else if (!vehicleType) {
     showToast('Please select a vehicle type', 'error');
     return;
   }
+  
   if (!licensePlate) {
     showToast('Please enter license plate', 'error');
     return;
-  }
-  
-  // Handle "Other" vehicle type - user typed in a custom type
-  const vehicleTypeOtherInput = document.getElementById('regVehicleTypeOther');
-  if (vehicleType === '__other__' && vehicleTypeOtherInput) {
-    const customTypeName = vehicleTypeOtherInput.value.trim();
-    if (!customTypeName) {
-      showToast('Please enter a vehicle type name', 'error');
-      return;
-    }
-    // Will create the custom vehicle type during registration below
   }
   
   // Verify email was verified (unless in dev mode)
@@ -5149,7 +5663,7 @@ async function handleRegistration() {
     
     console.log('[DriverPortal] Using organization_id:', organizationId, 
                 affiliate?.organization_id ? '(from affiliate)' : '(main organization)');
-
+    
     // Get company info for driver record (use selected affiliate or form data)
     const companyInfo = affiliate ? {
       address: affiliate.primary_address,
@@ -5235,61 +5749,57 @@ async function handleRegistration() {
       
       console.log('[DriverPortal] ✅ Driver created:', newDriver.id, 'for affiliate:', affiliate?.company_name || 'None');
       
-      // Handle "Other" vehicle type - create a new active vehicle type
-      if (vehicleType === '__other__') {
-        const vehicleTypeOtherInput = document.getElementById('regVehicleTypeOther');
-        const customTypeName = vehicleTypeOtherInput?.value.trim();
-        if (customTypeName) {
-          console.log('[DriverPortal] Creating custom vehicle type:', customTypeName);
-          try {
-            const newType = await createCustomVehicleType(customTypeName, organizationId);
-            if (newType && newType.id) {
-              vehicleType = newType.id;
-              console.log('[DriverPortal] ✅ Created custom vehicle type:', newType.id);
-            }
-          } catch (err) {
-            console.error('[DriverPortal] Failed to create custom vehicle type:', err);
-            showToast('Failed to create custom vehicle type', 'error');
-            throw err;
-          }
-        }
-      } else if (vehicleType) {
-        // Check if selected type is inactive and needs activation
-        const selectedOption = document.querySelector(`#regVehicleType option[value="${vehicleType}"]`);
-        if (selectedOption && selectedOption.parentElement.label === 'Inactive Vehicle Types') {
-          console.log('[DriverPortal] Activating inactive vehicle type:', vehicleType);
-          try {
-            await activateVehicleType(vehicleType);
-            console.log('[DriverPortal] ✅ Activated vehicle type');
-          } catch (err) {
-            console.warn('[DriverPortal] Could not activate vehicle type:', err.message);
-          }
-        }
-      }
-      
       // Create vehicle - generate a unique unit number
       // Format: Initials + timestamp suffix (guaranteed unique)
       const driverInitials = `${(newDriver.first_name || 'X')[0]}${(newDriver.last_name || 'X')[0]}`.toUpperCase();
       const timestamp = Date.now().toString(36).toUpperCase().slice(-5); // 5 char base36 timestamp
       const unitNumber = `${driverInitials}${timestamp}`;
       
-      // Get vehicle make/model/year for title (handle "Other" options)
-      let vehMake = document.getElementById('regVehicleMake').value;
-      if (vehMake === '__other__') {
-        vehMake = document.getElementById('regVehicleMakeOther')?.value.trim() || null;
-      } else {
-        vehMake = vehMake?.trim() || null;
-      }
+      // Get vehicle make/model/year for title - handle "Other" options
+      const makeSelect = document.getElementById('regVehicleMake');
+      const makeOther = document.getElementById('regVehicleMakeOther')?.value?.trim();
+      const vehMake = (makeSelect?.value === '__other__' && makeOther) ? makeOther : (makeSelect?.value || null);
       
-      let vehModel = document.getElementById('regVehicleModel').value;
-      if (vehModel === '__other__') {
-        vehModel = document.getElementById('regVehicleModelOther')?.value.trim() || null;
-      } else {
-        vehModel = vehModel?.trim() || null;
-      }
+      const modelSelect = document.getElementById('regVehicleModel');
+      const modelOther = document.getElementById('regVehicleModelOther')?.value?.trim();
+      const vehModel = (modelSelect?.value === '__other__' && modelOther) ? modelOther : (modelSelect?.value || null);
       
       const vehYear = parseInt(document.getElementById('regVehicleYear').value) || null;
       const vehCapacity = parseInt(document.getElementById('regVehicleCapacity').value) || 4;
+      
+      // Handle vehicle type - create new or activate inactive
+      let finalVehicleTypeId = vehicleType;
+      
+      if (vehicleType === '__other__' && vehicleTypeOther) {
+        // Create a new vehicle type
+        console.log('[DriverPortal] Creating custom vehicle type:', vehicleTypeOther);
+        try {
+          const newVehicleType = await createCustomVehicleType(vehicleTypeOther, organizationId);
+          if (newVehicleType?.id) {
+            finalVehicleTypeId = newVehicleType.id;
+            console.log('[DriverPortal] ✅ Custom vehicle type created:', newVehicleType.id);
+          } else {
+            throw new Error('Failed to create vehicle type');
+          }
+        } catch (vtErr) {
+          console.error('[DriverPortal] Failed to create custom vehicle type:', vtErr);
+          showToast('Failed to create custom vehicle type: ' + vtErr.message, 'error');
+          throw vtErr;
+        }
+      } else {
+        // Check if selected type is inactive and activate it
+        const selectedType = state.inactiveVehicleTypes?.find(t => t.id === vehicleType);
+        if (selectedType) {
+          console.log('[DriverPortal] Activating inactive vehicle type:', selectedType.name);
+          try {
+            await activateVehicleType(vehicleType);
+            console.log('[DriverPortal] ✅ Vehicle type activated');
+          } catch (actErr) {
+            console.warn('[DriverPortal] Could not activate vehicle type:', actErr.message);
+            // Non-fatal - continue with registration
+          }
+        }
+      }
       
       const vehicleData = {
         // Link vehicle to the newly created driver
@@ -5301,13 +5811,13 @@ async function handleRegistration() {
         unit_number: unitNumber,
         veh_disp_name: unitNumber,
         // Vehicle type info
-        veh_type: vehicleType, // This is the vehicle_type_id
-        vehicle_type_id: vehicleType,
+        veh_type: finalVehicleTypeId,
+        vehicle_type_id: finalVehicleTypeId,
         // Vehicle details
         make: vehMake,
         model: vehModel,
         year: vehYear,
-        color: document.getElementById('regVehicleColor').value.trim() || null,
+        color: document.getElementById('regVehicleColor').value || null,
         license_plate: licensePlate,
         // Use passenger_capacity for both to keep them in sync
         passenger_capacity: vehCapacity,
@@ -5411,6 +5921,9 @@ async function loadDashboard() {
   updateDriverUI();
   await loadVehicleTypes();
   await refreshTrips();
+  
+  // Load and display company memos for driver portal
+  await loadAndDisplayDriverMemos();
 }
 
 function updateDriverUI() {
@@ -5785,9 +6298,6 @@ async function populateVehicleModelOptions() {
   // Store models globally for image lookup
   window._vehicleModels = models;
   
-  // Store models globally for image lookup
-  window._vehicleModels = models;
-  
   // Fallback to hardcoded if database empty or failed
   if (models.length === 0 && selectedMake) {
     const fallbackModelsByMake = {
@@ -6082,17 +6592,48 @@ async function refreshTrips() {
       }
     });
     
-    // Sort by date
-    state.trips.offered.sort((a, b) => new Date(a.pickup_date_time) - new Date(b.pickup_date_time));
-    state.trips.upcoming.sort((a, b) => new Date(a.pickup_date_time) - new Date(b.pickup_date_time));
+    // Sort by date chronologically (handle all date field variations)
+    const getTripDateTime = (trip) => {
+      // Try various date/time field combinations
+      if (trip.pickup_date_time) {
+        return new Date(trip.pickup_date_time);
+      }
+      if (trip.pickup_datetime) {
+        return new Date(trip.pickup_datetime);
+      }
+      if (trip.pu_date && trip.pu_time) {
+        return new Date(`${trip.pu_date}T${trip.pu_time}`);
+      }
+      if (trip.pickup_date && trip.pickup_time) {
+        return new Date(`${trip.pickup_date}T${trip.pickup_time}`);
+      }
+      if (trip.pu_date) {
+        return new Date(trip.pu_date);
+      }
+      if (trip.pickup_date) {
+        return new Date(trip.pickup_date);
+      }
+      return new Date(0); // Fallback to epoch if no date
+    };
+    
+    state.trips.offered.sort((a, b) => getTripDateTime(a) - getTripDateTime(b));
+    state.trips.upcoming.sort((a, b) => getTripDateTime(a) - getTripDateTime(b));
+    
+    console.log('[DriverPortal] Trips sorted chronologically. Upcoming order:', 
+      state.trips.upcoming.map(t => `${t.confirmation_number || t.id}: ${getTripDateTime(t).toISOString()}`).join(', '));
+    
+    // Check for new offers and show overlay for the first one
+    checkAndShowNewOfferOverlay();
     
     // Update UI
     renderTripLists();
     updateBadges();
     updateInHouseStatusWidget();
     
-    // Check for new offers and show overlay if applicable
-    checkAndShowNewOfferOverlay();
+    // Update map markers with upcoming trips
+    const allUpcomingTrips = [...state.trips.upcoming];
+    if (state.trips.active) allUpcomingTrips.unshift(state.trips.active);
+    addTripMarkersToMap(allUpcomingTrips);
     
   } catch (err) {
     console.error('[DriverPortal] Failed to refresh trips:', err);
@@ -6214,56 +6755,155 @@ function renderTripLists() {
   });
 }
 
+/**
+ * Format pickup date with day of week, date, and abbreviated month
+ * e.g., "Mon, Jan 27"
+ */
+function formatTripDate(dateTimeStr) {
+  if (!dateTimeStr) return '';
+  const dt = new Date(dateTimeStr);
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${dt.getDate()}`;
+}
+
+/**
+ * Format time from datetime string
+ */
+function formatTripTime(dateTimeStr) {
+  if (!dateTimeStr) return '';
+  const dt = new Date(dateTimeStr);
+  return dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+/**
+ * Check if address is an airport
+ */
+function isAirportAddress(address) {
+  if (!address) return false;
+  const airportPatterns = /\b(airport|MSP|ORD|JFK|LAX|SFO|LGA|ATL|DFW|DEN|SEA|BOS|PHL|FLL|MIA|SAN|PDX|STP|RST|DLH)\b/i;
+  return airportPatterns.test(address);
+}
+
+/**
+ * Render trip card for upcoming or offered trips
+ * Enhanced with full trip details, flight info, and action buttons
+ */
 function renderTripCard(trip, type) {
-  const pickupDate = formatDate(trip.pickup_date_time || trip.pickup_date);
-  const pickupTime = formatTime(trip.pickup_date_time || trip.pickup_time);
-  const passengerName = trip.passenger_name || trip.passenger_first_name || 'Passenger';
-  const passengerCount = trip.passenger_count || 1;
+  const pickupDateTime = trip.pickup_date_time || trip.pickup_datetime || `${trip.pickup_date}T${trip.pickup_time || '00:00'}`;
+  const dropoffDateTime = trip.dropoff_date_time || trip.dropoff_datetime || trip.do_time;
   
+  // Format date: Day of week, Month Day (e.g., "Mon, Jan 27")
+  const tripDate = formatTripDate(pickupDateTime);
+  const pickupTime = formatTripTime(pickupDateTime);
+  const dropoffTime = dropoffDateTime ? formatTripTime(dropoffDateTime) : '';
+  
+  const passengerName = trip.passenger_name || 
+    `${trip.passenger_first_name || ''} ${trip.passenger_last_name || ''}`.trim() || 
+    'Passenger';
+  const passengerCount = trip.passenger_count || 1;
+  const confNumber = trip.confirmation_number || trip.id?.slice(0, 8);
+  const vehicleType = trip.vehicle_type || '';
+  
+  // Check for airport trips
+  const pickupAddress = trip.pickup_address || trip.pu_address || 'Pickup location';
+  const dropoffAddress = trip.dropoff_address || trip.do_address || 'Dropoff location';
+  const isAirportPickup = isAirportAddress(pickupAddress) || trip.pickup_airport || trip.is_airport_pickup;
+  const isAirportDropoff = isAirportAddress(dropoffAddress) || trip.dropoff_airport || trip.is_airport_dropoff;
+  
+  // Flight info for airport trips
+  const flightNumber = trip.flight_number || trip.form_snapshot?.routing?.stops?.[0]?.flightNumber || '';
+  const flightAirline = trip.airline_code || trip.form_snapshot?.routing?.stops?.[0]?.airline || '';
+  
+  // Special requirements
+  const hasBabySeat = trip.baby_seat || trip.child_seat || trip.car_seat || 
+    trip.special_instructions?.toLowerCase()?.includes('baby seat') ||
+    trip.special_instructions?.toLowerCase()?.includes('car seat');
+  const hasNotes = trip.special_instructions || trip.trip_notes || trip.notes;
+  
+  // Footer buttons based on trip type
   let footerButtons = '';
   if (type === 'offered') {
     footerButtons = `
-      <button class="btn btn-success" onclick="acceptTrip('${trip.id}')">✓ Accept</button>
-      <button class="btn btn-secondary" onclick="declineTrip('${trip.id}')">✗ Decline</button>
+      <div class="trip-card-actions">
+        <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); acceptTrip('${trip.id}')">✓ Accept</button>
+        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); declineTrip('${trip.id}')">✗ Decline</button>
+      </div>
     `;
   } else if (type === 'upcoming') {
     footerButtons = `
-      <button class="btn btn-primary" onclick="startTrip('${trip.id}')">🚗 Start Trip</button>
+      <div class="trip-card-actions">
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); openStatusModal('${trip.id}')">📊 Status</button>
+        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); startTrip('${trip.id}')">🚗 Start Trip</button>
+      </div>
     `;
   }
   
+  // Build flight info display
+  let flightInfoHtml = '';
+  if (isAirportPickup && flightNumber) {
+    flightInfoHtml = `
+      <div class="trip-flight-info" data-flight="${flightNumber}" id="flight-info-${trip.id}">
+        <span class="flight-badge">✈️ ${flightAirline}${flightNumber}</span>
+        <span class="flight-status loading">Loading...</span>
+      </div>
+    `;
+    // Queue flight status update
+    setTimeout(() => updateFlightStatus(trip.id, flightNumber), 100);
+  }
+  
   return `
-    <div class="trip-card" data-trip-id="${trip.id}" onclick="openTripDetail('${trip.id}')" style="cursor: pointer;">
+    <div class="trip-card trip-card-enhanced" data-trip-id="${trip.id}">
+      <!-- Header: Date/Time and Conf # -->
       <div class="trip-card-header">
-        <div class="trip-date-time">
-          <span class="trip-date">${pickupDate}</span>
-          <span class="trip-time">${pickupTime}</span>
+        <div class="trip-datetime">
+          <div class="trip-date-display">${tripDate}</div>
+          <div class="trip-time-display">
+            <span class="time-pickup">${pickupTime}</span>
+            ${dropoffTime ? `<span class="time-separator">→</span><span class="time-dropoff">${dropoffTime}</span>` : ''}
+          </div>
         </div>
-        <span class="trip-conf">#${trip.confirmation_number || trip.id?.slice(0, 8)}</span>
+        <div class="trip-conf-badge">#${confNumber}</div>
       </div>
       
-      <div class="trip-passenger">
-        <div class="trip-passenger-avatar">👤</div>
-        <div>
-          <div class="trip-passenger-name">${passengerName}</div>
-          <div class="trip-passenger-count">${passengerCount} passenger${passengerCount > 1 ? 's' : ''}</div>
+      <!-- Customer Info -->
+      <div class="trip-customer-info">
+        <div class="customer-avatar">👤</div>
+        <div class="customer-details">
+          <div class="customer-name">${passengerName}</div>
+          <div class="customer-meta">
+            <span class="pax-count">${passengerCount} pax</span>
+            ${vehicleType ? `<span class="vehicle-badge">🚗 ${vehicleType}</span>` : ''}
+            ${hasBabySeat ? '<span class="baby-seat-badge">👶 Baby Seat</span>' : ''}
+          </div>
         </div>
+        ${hasNotes ? `<button class="btn-notes" onclick="event.stopPropagation(); showTripNotes('${trip.id}')" title="View Notes">📝</button>` : ''}
       </div>
       
-      <div class="trip-route">
-        <div class="trip-location pickup">
-          <span class="trip-location-icon">📍</span>
-          <span class="trip-location-text">${trip.pickup_address || trip.pickup_location || 'Pickup location'}</span>
+      <!-- Route: Pickup & Dropoff -->
+      <div class="trip-route-enhanced">
+        <div class="route-stop pickup">
+          <div class="stop-marker pickup-marker">📍</div>
+          <div class="stop-details">
+            <div class="stop-label">PICKUP</div>
+            <div class="stop-address">${pickupAddress}</div>
+            ${flightInfoHtml}
+          </div>
         </div>
-        <div class="trip-location dropoff">
-          <span class="trip-location-icon">🏁</span>
-          <span class="trip-location-text">${trip.dropoff_address || trip.dropoff_location || 'Dropoff location'}</span>
+        <div class="route-line"></div>
+        <div class="route-stop dropoff">
+          <div class="stop-marker dropoff-marker">🏁</div>
+          <div class="stop-details">
+            <div class="stop-label">DROP-OFF</div>
+            <div class="stop-address">${dropoffAddress}</div>
+          </div>
         </div>
       </div>
       
       ${renderFarmoutOfferDetails(trip, type)}
       
-      ${footerButtons ? `<div class="trip-card-footer" onclick="event.stopPropagation();">${footerButtons}</div>` : ''}
+      <!-- Action Buttons -->
+      ${footerButtons ? `<div class="trip-card-footer">${footerButtons}</div>` : ''}
     </div>
   `;
 }
@@ -6274,81 +6914,39 @@ function renderTripCard(trip, type) {
 let inHouseCountdownTimer = null;
 
 /**
- * Update the In-House driver status widget
+ * Update the countdown timer window with next trip info
  * Shows countdown to next trip and current driver status
  */
 function updateInHouseStatusWidget() {
-  const widget = document.getElementById('inHouseStatusWidget');
-  if (!widget) return;
+  // Get all upcoming trips for this driver
+  const upcomingTrips = state.trips.upcoming || [];
   
-  // Check if driver has In-House trips (farm_mode = 'manual' or assignment_type = 'In-House')
-  const inHouseTrips = state.trips.upcoming.filter(trip => {
-    const farmMode = trip.farm_mode || trip.farmout_mode || '';
-    const assignmentType = trip.assignment_type || '';
-    return farmMode === 'manual' || assignmentType === 'In-House';
-  });
-  
-  // If no In-House trips, hide widget
-  if (inHouseTrips.length === 0) {
-    widget.style.display = 'none';
+  // If no upcoming trips, clear timer
+  if (upcomingTrips.length === 0) {
     if (inHouseCountdownTimer) {
       clearInterval(inHouseCountdownTimer);
       inHouseCountdownTimer = null;
     }
+    // Update timer window to show no trips
+    const timerDisplay = document.getElementById('timerLargeDisplay');
+    const timerConf = document.getElementById('timerTripConf');
+    const timerDateTime = document.getElementById('timerTripDateTime');
+    
+    if (timerDisplay) timerDisplay.textContent = '--:--:--';
+    if (timerConf) timerConf.textContent = 'No upcoming trips';
+    if (timerDateTime) timerDateTime.textContent = '';
     return;
   }
   
-  // Show widget
-  widget.style.display = 'block';
+  // Get the next upcoming trip (first in sorted list)
+  const nextTrip = upcomingTrips[0];
   
-  // Get the next upcoming In-House trip
-  const nextTrip = inHouseTrips[0];
-  
-  // Update trip info
-  const confEl = document.getElementById('nextTripConf');
-  const timeEl = document.getElementById('nextTripTime');
-  if (confEl) confEl.textContent = `#${nextTrip.confirmation_number || nextTrip.id?.slice(0, 8)}`;
-  if (timeEl) {
-    const pickupTime = nextTrip.pickup_time || nextTrip.pu_time || 
-      (nextTrip.pickup_date_time ? new Date(nextTrip.pickup_date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--');
-    const pickupDate = nextTrip.pickup_date || nextTrip.pu_date ||
-      (nextTrip.pickup_date_time ? new Date(nextTrip.pickup_date_time).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '');
-    timeEl.textContent = `${pickupTime} - ${pickupDate}`;
-  }
-  
-  // Update driver status
-  const statusDot = document.getElementById('driverStatusDot');
-  const statusLabel = document.getElementById('driverStatusLabel');
-  
-  let driverStatus = 'Available';
-  let statusClass = '';
-  
-  if (state.trips.active) {
-    driverStatus = 'On Trip';
-    statusClass = 'on-trip';
-  } else if (inHouseTrips.length > 0) {
-    const nextPickup = new Date(nextTrip.pickup_date_time || `${nextTrip.pickup_date}T${nextTrip.pickup_time}`);
-    const now = new Date();
-    const minutesUntil = (nextPickup - now) / 60000;
-    
-    if (minutesUntil < 30) {
-      driverStatus = 'Trip Soon';
-      statusClass = 'busy';
-    } else {
-      driverStatus = 'Available';
-      statusClass = '';
-    }
-  }
-  
-  if (statusDot) statusDot.className = `status-dot ${statusClass}`;
-  if (statusLabel) statusLabel.textContent = driverStatus;
-  
-  // Start countdown timer
+  // Start countdown timer for the timer window
   startInHouseCountdown(nextTrip);
 }
 
 /**
- * Start/update the countdown timer for In-House widget
+ * Start/update the countdown timer for Timer Window
  */
 function startInHouseCountdown(nextTrip) {
   // Clear existing timer
@@ -6356,16 +6954,58 @@ function startInHouseCountdown(nextTrip) {
     clearInterval(inHouseCountdownTimer);
   }
   
-  const countdownEl = document.getElementById('countdownTime');
-  const countdownBar = document.getElementById('inHouseCountdownBar');
+  const timerDisplay = document.getElementById('timerLargeDisplay');
+  const timerConf = document.getElementById('timerTripConf');
+  const timerDateTime = document.getElementById('timerTripDateTime');
+  const timerProgress = document.getElementById('timerProgress');
+  const headerTimerValue = document.getElementById('headerTimerValue');
   
-  if (!countdownEl) return;
+  if (!timerDisplay) return;
   
-  // Get pickup datetime
-  const pickupDateTime = new Date(nextTrip.pickup_date_time || `${nextTrip.pickup_date}T${nextTrip.pickup_time || '00:00'}`);
+  // Get pickup datetime - handle various formats
+  let pickupDateTime;
+  if (nextTrip.pickup_date_time) {
+    pickupDateTime = new Date(nextTrip.pickup_date_time);
+  } else if (nextTrip.pickup_datetime) {
+    pickupDateTime = new Date(nextTrip.pickup_datetime);
+  } else if (nextTrip.pickup_date && nextTrip.pickup_time) {
+    pickupDateTime = new Date(`${nextTrip.pickup_date}T${nextTrip.pickup_time}`);
+  } else if (nextTrip.pu_date && nextTrip.pu_time) {
+    pickupDateTime = new Date(`${nextTrip.pu_date}T${nextTrip.pu_time}`);
+  } else {
+    // No valid datetime found - show placeholder
+    timerDisplay.textContent = '--:--:--';
+    timerDisplay.className = 'timer-large-display';
+    if (timerConf) timerConf.textContent = 'Time not set';
+    console.warn('[DriverPortal] No valid pickup time for countdown:', nextTrip);
+    return;
+  }
+  
+  // Validate the date is valid
+  if (isNaN(pickupDateTime.getTime())) {
+    timerDisplay.textContent = '--:--:--';
+    timerDisplay.className = 'timer-large-display';
+    if (timerConf) timerConf.textContent = 'Invalid time';
+    console.warn('[DriverPortal] Invalid pickup datetime for countdown:', nextTrip);
+    return;
+  }
   
   // Calculate total countdown duration for percentage (12 hours before)
   const totalDuration = 12 * 60 * 60 * 1000; // 12 hours in ms
+  
+  // Get trip info for timer window
+  const confNumber = nextTrip.confirmation_number || nextTrip.id?.slice(0, 8) || '---';
+  const tripDateTimeStr = pickupDateTime.toLocaleString('en-US', { 
+    weekday: 'short',
+    month: 'short', 
+    day: 'numeric', 
+    hour: 'numeric', 
+    minute: '2-digit' 
+  });
+  
+  // Update static info immediately
+  if (timerConf) timerConf.textContent = `Conf# ${confNumber}`;
+  if (timerDateTime) timerDateTime.textContent = tripDateTimeStr;
   
   const updateCountdown = () => {
     const now = new Date();
@@ -6373,11 +7013,15 @@ function startInHouseCountdown(nextTrip) {
     
     if (timeUntil <= 0) {
       // Trip time has arrived
-      countdownEl.textContent = 'NOW!';
-      countdownEl.className = 'countdown-time imminent';
-      if (countdownBar) {
-        countdownBar.style.width = '0%';
-        countdownBar.className = 'countdown-bar danger';
+      timerDisplay.textContent = 'NOW!';
+      timerDisplay.className = 'timer-large-display imminent';
+      if (timerProgress) {
+        timerProgress.style.width = '0%';
+        timerProgress.className = 'timer-progress imminent';
+      }
+      if (headerTimerValue) {
+        headerTimerValue.textContent = 'NOW!';
+        headerTimerValue.className = 'imminent';
       }
       return;
     }
@@ -6394,25 +7038,35 @@ function startInHouseCountdown(nextTrip) {
       displayTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
     
-    countdownEl.textContent = displayTime;
+    timerDisplay.textContent = displayTime;
     
     // Update styling based on urgency
     const minutesUntil = timeUntil / 60000;
+    let urgency = '';
     if (minutesUntil < 15) {
-      countdownEl.className = 'countdown-time imminent';
-      if (countdownBar) countdownBar.className = 'countdown-bar danger';
+      timerDisplay.className = 'timer-large-display imminent';
+      if (timerProgress) timerProgress.className = 'timer-progress imminent';
+      urgency = 'imminent';
     } else if (minutesUntil < 60) {
-      countdownEl.className = 'countdown-time urgent';
-      if (countdownBar) countdownBar.className = 'countdown-bar warning';
+      timerDisplay.className = 'timer-large-display urgent';
+      if (timerProgress) timerProgress.className = 'timer-progress urgent';
+      urgency = 'urgent';
     } else {
-      countdownEl.className = 'countdown-time';
-      if (countdownBar) countdownBar.className = 'countdown-bar';
+      timerDisplay.className = 'timer-large-display';
+      if (timerProgress) timerProgress.className = 'timer-progress';
+      urgency = '';
     }
     
     // Update progress bar (percentage of 12 hours remaining)
-    if (countdownBar) {
-      const percentage = Math.min(100, Math.max(0, (timeUntil / totalDuration) * 100));
-      countdownBar.style.width = `${percentage}%`;
+    const percentage = Math.min(100, Math.max(0, (timeUntil / totalDuration) * 100));
+    if (timerProgress) {
+      timerProgress.style.width = `${percentage}%`;
+    }
+    
+    // Update header mini timer
+    if (headerTimerValue) {
+      headerTimerValue.textContent = displayTime;
+      headerTimerValue.className = urgency;
     }
   };
   
@@ -6490,9 +7144,20 @@ function renderFarmoutOfferDetails(trip, type) {
 }
 
 function renderActiveTripCard(trip) {
-  const status = trip.driver_status || 'enroute';
-  const statusMeta = STATUS_META[status] || STATUS_META.enroute;
+  const status = trip.driver_status || 'getting_ready';
+  const statusMeta = STATUS_META[status] || STATUS_META.getting_ready;
   const passengerName = trip.passenger_name || trip.passenger_first_name || 'Passenger';
+  const passengerPhone = trip.passenger_phone || trip.passenger_cell || '';
+  
+  // Parse pickup date/time for display with validation
+  const rawDateTime = trip.pickup_date_time || trip.pickup_date || trip.pickup_datetime;
+  const pickupDateTime = rawDateTime ? new Date(rawDateTime) : null;
+  const isValidDate = pickupDateTime && !isNaN(pickupDateTime.getTime());
+  
+  const pickupDay = isValidDate ? pickupDateTime.toLocaleDateString('en-US', { weekday: 'short' }) : '--';
+  const pickupDate = isValidDate ? pickupDateTime.getDate() : '--';
+  const pickupMonth = isValidDate ? pickupDateTime.toLocaleDateString('en-US', { month: 'short' }) : '--';
+  const pickupTime = isValidDate ? pickupDateTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '--:--';
   
   // Calculate elapsed time
   const elapsed = state.timerStartTime ? formatElapsedTime(Date.now() - state.timerStartTime) : '00:00';
@@ -6500,43 +7165,120 @@ function renderActiveTripCard(trip) {
   // Next status options
   const nextStatuses = STATUS_TRANSITIONS[status] || [];
   
+  // Store base fare for post-trip calculations
+  state.activeTripBaseFare = parseFloat(trip.driver_pay) || parseFloat(trip.base_fare) || 0;
+  
+  // Create status progress bar
+  const statusFlow = ['getting_ready', 'enroute', 'arrived', 'passenger_onboard', 'done'];
+  const currentStatusIndex = statusFlow.indexOf(status);
+  
   elements.activeTripCard.innerHTML = `
+    <!-- Status Progress Bar -->
+    <div class="status-progress-bar">
+      ${statusFlow.map((s, idx) => {
+        const meta = STATUS_META[s];
+        const isActive = s === status;
+        const isComplete = idx < currentStatusIndex;
+        const stateClass = isActive ? 'active' : (isComplete ? 'complete' : 'pending');
+        return `<div class="status-step ${stateClass}" title="${meta.label}">${meta.emoji}</div>`;
+      }).join('<div class="status-connector"></div>')}
+    </div>
+    
+    <!-- Current Status Banner -->
     <div class="active-trip-status-bar ${status}">
       ${statusMeta.emoji} ${statusMeta.label}
     </div>
+    
     <div class="active-trip-body">
-      <div class="trip-card-header">
-        <div class="trip-date-time">
-          <span class="trip-date">${passengerName}</span>
-          <span class="trip-time">#${trip.confirmation_number || trip.id?.slice(0, 8)}</span>
+      <!-- Trip Info Header -->
+      <div class="active-trip-header">
+        <div class="pickup-datetime">
+          <div class="datetime-primary">
+            <span class="datetime-time">${pickupTime}</span>
+          </div>
+          <div class="datetime-secondary">
+            <span class="datetime-day">${pickupDay}</span>
+            <span class="datetime-date">${pickupMonth} ${pickupDate}</span>
+          </div>
+        </div>
+        <div class="trip-conf-badge">
+          <span class="conf-label">CONF#</span>
+          <span class="conf-number">${trip.confirmation_number || trip.id?.slice(0, 8)}</span>
         </div>
       </div>
       
-      <div class="trip-route" style="margin-bottom: var(--space-lg);">
-        <div class="trip-location pickup">
-          <span class="trip-location-icon">📍</span>
-          <span class="trip-location-text">${trip.pickup_address || trip.pickup_location || 'Pickup'}</span>
+      <!-- Passenger Info -->
+      <div class="trip-passenger-info">
+        <div class="passenger-avatar">👤</div>
+        <div class="passenger-details">
+          <div class="passenger-name">${passengerName}</div>
+          ${passengerPhone ? `<a href="tel:${passengerPhone}" class="passenger-phone">📞 ${formatPhone(passengerPhone)}</a>` : ''}
         </div>
-        <div class="trip-location dropoff">
-          <span class="trip-location-icon">🏁</span>
-          <span class="trip-location-text">${trip.dropoff_address || trip.dropoff_location || 'Dropoff'}</span>
+        <div class="passenger-count">${trip.passenger_count || 1} PAX</div>
+      </div>
+      
+      <!-- Vehicle Type -->
+      ${trip.vehicle_type ? `
+        <div class="trip-vehicle-type">
+          <span class="vehicle-icon">🚗</span>
+          <span class="vehicle-name">${trip.vehicle_type}</span>
+        </div>
+      ` : ''}
+      
+      <!-- Route with Navigate buttons -->
+      <div class="trip-route-active">
+        <div class="route-point">
+          <div class="route-marker pickup">PU</div>
+          <div class="route-address">${trip.pickup_address || trip.pickup_location || 'Pickup'}</div>
+          <button class="btn btn-sm btn-nav" onclick="event.stopPropagation(); openNavigation('${(trip.pickup_address || trip.pickup_location || '').replace(/'/g, "\\'")}')">
+            🧭
+          </button>
+        </div>
+        <div class="route-connector"></div>
+        <div class="route-point">
+          <div class="route-marker dropoff">DO</div>
+          <div class="route-address">${trip.dropoff_address || trip.dropoff_location || 'Dropoff'}</div>
+          <button class="btn btn-sm btn-nav" onclick="event.stopPropagation(); openNavigation('${(trip.dropoff_address || trip.dropoff_location || '').replace(/'/g, "\\'")}')">
+            🧭
+          </button>
         </div>
       </div>
       
+      <!-- Map Toggle Button (for mobile) -->
+      <button type="button" id="toggleMapBtn" class="btn btn-outline btn-map-toggle" onclick="toggleMapVisibility()">
+        🗺️ ${state.mapVisible ? 'Hide Map' : 'Show Map'}
+      </button>
+      
+      <!-- Status Action Buttons -->
       <div class="active-trip-actions">
         ${nextStatuses.map(nextStatus => {
           const meta = STATUS_META[nextStatus];
-          const btnClass = nextStatus === 'completed' ? 'btn-success' : 'btn-primary';
+          const btnClass = nextStatus === 'done' ? 'btn-success btn-large' : 'btn-primary';
+          const btnLabel = getStatusActionLabel(nextStatus);
           return `
-            <button class="btn ${btnClass}" onclick="updateTripStatus('${trip.id}', '${nextStatus}')">
-              ${meta.emoji} ${getStatusActionLabel(nextStatus)}
+            <button class="btn ${btnClass} status-action-btn" 
+                    data-status="${nextStatus}" 
+                    data-trip-id="${trip.id}"
+                    onclick="handleStatusButtonClick(this, '${trip.id}', '${nextStatus}')">
+              <span class="btn-content">${meta.emoji} ${btnLabel}</span>
+              <span class="btn-loading">⏳ Processing...</span>
             </button>
           `;
         }).join('')}
-        
-        <button class="btn btn-secondary" onclick="openNavigation('${trip.dropoff_address || trip.dropoff_location || ''}')">
-          🧭 Open Navigation
-        </button>
+      </div>
+      
+      <!-- Special Instructions -->
+      ${trip.special_instructions ? `
+        <div class="trip-special-instructions">
+          <div class="instructions-header">⚠️ Special Instructions</div>
+          <div class="instructions-text">${trip.special_instructions}</div>
+        </div>
+      ` : ''}
+      
+      <!-- Driver Notes Quick Add -->
+      <div class="trip-notes-quick">
+        <input type="text" id="quickNotes" placeholder="Quick note to dispatch..." class="quick-note-input">
+        <button class="btn btn-sm" onclick="sendQuickNote('${trip.id}')">📤</button>
       </div>
     </div>
   `;
@@ -6726,58 +7468,209 @@ window.startTrip = async function(tripId) {
     // Play trip start sound
     playNotificationSound('trip_start');
     
-    await updateReservationStatus(tripId, { driver_status: 'enroute' });
+    // Start with "getting_ready" status instead of immediately enroute
+    await updateReservationStatus(tripId, { driver_status: 'getting_ready' });
     
-    // Send notification to passenger
-    await sendPassengerNotification(tripId, 'on_the_way');
-    
-    showToast('Trip started! Passenger notified.', 'success');
+    showToast('Trip started! Update status as you go.', 'success');
     switchTab('active');
     await refreshTrips();
+    
+    // Check map preference on first navigation
+    if (!state.preferredMapApp) {
+      checkMapPreference();
+    }
   } catch (err) {
     console.error('[DriverPortal] Start trip error:', err);
     showToast('Failed to start trip', 'error');
   }
 };
 
-window.updateTripStatus = async function(tripId, newStatus) {
+// Handle status button click with loading state
+window.handleStatusButtonClick = async function(button, tripId, newStatus) {
+  // Prevent double-clicks
+  if (button.classList.contains('loading')) return;
+  
+  // Add loading state
+  button.classList.add('loading');
+  button.disabled = true;
+  
+  // Disable all other status buttons
+  document.querySelectorAll('.status-action-btn').forEach(btn => {
+    btn.disabled = true;
+  });
+  
   try {
+    await updateTripStatus(tripId, newStatus);
+  } catch (err) {
+    // Re-enable buttons on error
+    button.classList.remove('loading');
+    document.querySelectorAll('.status-action-btn').forEach(btn => {
+      btn.disabled = false;
+    });
+  }
+};
+
+window.updateTripStatus = async function(tripId, newStatus) {
+  console.log('[DriverPortal] updateTripStatus called:', tripId, newStatus);
+  
+  try {
+    console.log('[DriverPortal] Calling updateReservationStatus...');
     await updateReservationStatus(tripId, { driver_status: newStatus });
+    console.log('[DriverPortal] updateReservationStatus succeeded');
     
     // Send notifications for certain statuses
     if (newStatus === 'enroute') {
       await sendPassengerNotification(tripId, 'on_the_way');
-      showToast('Passenger notified you are on the way', 'success');
+      showToast('🚗 On the way! Passenger notified.', 'success');
     } else if (newStatus === 'arrived') {
       await sendPassengerNotification(tripId, 'arrived');
-      showToast('Passenger notified you have arrived', 'success');
-    } else if (newStatus === 'completed') {
-      // Play completion sound
-      playNotificationSound('trip_complete');
+      showToast('📍 Arrived! Passenger notified.', 'success');
+    } else if (newStatus === 'waiting') {
+      showToast('⏳ Waiting for passenger...', 'info');
+    } else if (newStatus === 'passenger_onboard') {
+      showToast('🚗 Customer in car! Drive safe.', 'success');
+    } else if (newStatus === 'done') {
+      console.log('[DriverPortal] Processing done status...');
+      // When driver marks as Done, show the post-trip incidentals modal
+      try {
+        playNotificationSound('trip_complete');
+      } catch (e) {
+        console.warn('[DriverPortal] Sound error:', e);
+      }
       
-      stopTripTimer();
+      try {
+        stopTripTimer();
+      } catch (e) {
+        console.warn('[DriverPortal] stopTripTimer error:', e);
+      }
+      
+      // Reset button states before opening modal
+      document.querySelectorAll('.status-action-btn').forEach(btn => {
+        btn.classList.remove('loading');
+        btn.disabled = false;
+      });
+      
+      // Check if modal exists
+      const postTripModal = document.getElementById('postTripModal');
+      if (!postTripModal) {
+        console.error('[DriverPortal] postTripModal element not found in DOM');
+        showToast('Trip completed! ✅', 'success');
+        await refreshTrips();
+        return;
+      }
+      
+      console.log('[DriverPortal] Opening postTripModal...');
+      openModal('postTripModal');
+      postTripModal.dataset.tripId = tripId;
+      
+      // Pre-fill base fare
+      const trip = state.trips.active;
+      if (trip) {
+        state.activeTripBaseFare = parseFloat(trip.driver_pay) || parseFloat(trip.base_fare) || 0;
+        updateTripTotals();
+      }
+      return; // Don't refresh yet, wait for post-trip form
+    } else if (newStatus === 'completed') {
+      console.log('[DriverPortal] Processing completed status...');
+      // Play completion sound
+      try {
+        playNotificationSound('trip_complete');
+      } catch (e) {
+        console.warn('[DriverPortal] Sound error:', e);
+      }
+      
+      try {
+        stopTripTimer();
+      } catch (e) {
+        console.warn('[DriverPortal] stopTripTimer error:', e);
+      }
+      
+      // Reset button states before opening modal
+      document.querySelectorAll('.status-action-btn').forEach(btn => {
+        btn.classList.remove('loading');
+        btn.disabled = false;
+      });
+      
+      // Check if modal exists
+      const postTripModal = document.getElementById('postTripModal');
+      if (!postTripModal) {
+        console.error('[DriverPortal] postTripModal element not found in DOM');
+        showToast('Trip completed! ✅', 'success');
+        await refreshTrips();
+        return;
+      }
+      
       openModal('postTripModal');
       // Store trip ID for post-trip form
-      elements.postTripModal.dataset.tripId = tripId;
+      postTripModal.dataset.tripId = tripId;
+      
+      // Pre-fill the base fare from trip data
+      const trip = state.trips.active;
+      if (trip) {
+        state.activeTripBaseFare = parseFloat(trip.driver_pay) || parseFloat(trip.base_fare) || 0;
+        updateTripTotals();
+      }
+      
       return; // Don't refresh yet, wait for post-trip form
     }
     
     await refreshTrips();
   } catch (err) {
     console.error('[DriverPortal] Update status error:', err);
-    showToast('Failed to update status', 'error');
+    showToast('Failed to update status. Please try again.', 'error');
+    
+    // Reset all button states
+    document.querySelectorAll('.status-action-btn').forEach(btn => {
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    });
+    
+    throw err; // Re-throw for handleStatusButtonClick
   }
+};
+
+// Update trip totals in post-trip modal
+window.updateTripTotals = function() {
+  const baseFare = state.activeTripBaseFare || 0;
+  const parking = parseFloat(document.getElementById('parkingCost')?.value) || 0;
+  const tolls = parseFloat(document.getElementById('tollsCost')?.value) || 0;
+  const otherCosts = parseFloat(document.getElementById('otherCosts')?.value) || 0;
+  const tip = parseFloat(document.getElementById('tipAmount')?.value) || 0;
+  
+  const totalIncidentals = parking + tolls + otherCosts;
+  const grandTotal = baseFare + totalIncidentals + tip;
+  
+  // Update display
+  const baseFareEl = document.getElementById('totalBaseFare');
+  const incidentalsEl = document.getElementById('totalIncidentals');
+  const tipEl = document.getElementById('totalTip');
+  const grandTotalEl = document.getElementById('grandTotal');
+  const baseFareDisplayEl = document.getElementById('baseFareDisplay');
+  
+  if (baseFareEl) baseFareEl.textContent = `$${baseFare.toFixed(2)}`;
+  if (baseFareDisplayEl) baseFareDisplayEl.textContent = `$${baseFare.toFixed(2)}`;
+  if (incidentalsEl) incidentalsEl.textContent = `$${totalIncidentals.toFixed(2)}`;
+  if (tipEl) tipEl.textContent = `$${tip.toFixed(2)}`;
+  if (grandTotalEl) grandTotalEl.textContent = `$${grandTotal.toFixed(2)}`;
 };
 
 async function handlePostTripSubmit() {
   const tripId = elements.postTripModal.dataset.tripId;
   
+  // Enhanced post-trip data with separate incidentals
   const postTripData = {
     wait_time: parseInt(document.getElementById('waitTime').value) || 0,
     extra_stops: parseInt(document.getElementById('extraStops').value) || 0,
-    tolls_parking: parseFloat(document.getElementById('tollsParking').value) || 0,
+    parking_cost: parseFloat(document.getElementById('parkingCost')?.value) || 0,
+    tolls_cost: parseFloat(document.getElementById('tollsCost')?.value) || 0,
+    other_costs: parseFloat(document.getElementById('otherCosts')?.value) || 0,
+    other_costs_description: document.getElementById('otherCostsDesc')?.value?.trim() || '',
     tip: parseFloat(document.getElementById('tipAmount').value) || 0,
-    driver_notes: document.getElementById('driverNotes').value.trim()
+    driver_notes: document.getElementById('driverNotes').value.trim(),
+    // Calculate totals
+    total_incidentals: (parseFloat(document.getElementById('parkingCost')?.value) || 0) +
+                       (parseFloat(document.getElementById('tollsCost')?.value) || 0) +
+                       (parseFloat(document.getElementById('otherCosts')?.value) || 0)
   };
   
   try {
@@ -6794,7 +7687,10 @@ async function handlePostTripSubmit() {
     // Reset post-trip form
     document.getElementById('waitTime').value = '0';
     document.getElementById('extraStops').value = '0';
-    document.getElementById('tollsParking').value = '0';
+    if (document.getElementById('parkingCost')) document.getElementById('parkingCost').value = '0';
+    if (document.getElementById('tollsCost')) document.getElementById('tollsCost').value = '0';
+    if (document.getElementById('otherCosts')) document.getElementById('otherCosts').value = '0';
+    if (document.getElementById('otherCostsDesc')) document.getElementById('otherCostsDesc').value = '';
     document.getElementById('tipAmount').value = '0';
     document.getElementById('driverNotes').value = '';
     
@@ -6808,26 +7704,112 @@ async function handlePostTripSubmit() {
   }
 }
 
-window.openNavigation = function(address) {
+// ============================================
+// Map Preference System
+// ============================================
+function checkMapPreference() {
+  // Check if map preference is set, if not show modal on first use
+  if (!state.preferredMapApp) {
+    openModal('mapPreferenceModal');
+    setupMapPreferenceHandlers();
+  }
+}
+
+function setupMapPreferenceHandlers() {
+  const options = document.querySelectorAll('.map-app-option');
+  options.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mapApp = btn.dataset.map;
+      setMapPreference(mapApp);
+      closeModal('mapPreferenceModal');
+      showToast(`${MAP_APPS[mapApp]?.name || mapApp} set as your navigation app!`, 'success');
+    });
+  });
+}
+
+function setMapPreference(mapApp) {
+  state.preferredMapApp = mapApp;
+  localStorage.setItem('driver_preferred_map', mapApp);
+  
+  // Update settings UI if visible
+  const prefSelect = document.getElementById('preferredMapApp');
+  if (prefSelect) prefSelect.value = mapApp;
+}
+
+window.openNavigation = function(address, usePickup = false) {
   if (!address) {
     showToast('No address available', 'warning');
     return;
   }
   
+  // Check if user has set a preference, if not ask first
+  if (!state.preferredMapApp) {
+    checkMapPreference();
+    // Store the address to navigate after preference is set
+    localStorage.setItem('pending_navigation_address', address);
+    return;
+  }
+  
   const encoded = encodeURIComponent(address);
-  
-  // Try to detect platform and open appropriate navigation app
   const userAgent = navigator.userAgent.toLowerCase();
+  const isIOS = /iphone|ipad|ipod/.test(userAgent);
+  const isAndroid = /android/.test(userAgent);
   
-  if (/iphone|ipad|ipod/.test(userAgent)) {
-    // iOS - Apple Maps
-    window.open(`maps://maps.google.com/maps?daddr=${encoded}`, '_blank');
-  } else if (/android/.test(userAgent)) {
-    // Android - Google Maps
-    window.open(`google.navigation:q=${encoded}`, '_blank');
-  } else {
-    // Desktop - Google Maps web
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${encoded}`, '_blank');
+  let navigationUrl = '';
+  
+  switch (state.preferredMapApp) {
+    case 'google':
+      if (isAndroid) {
+        // Deep link for Google Maps on Android - works with CarPlay/Android Auto
+        navigationUrl = `google.navigation:q=${encoded}&mode=d`;
+      } else {
+        // Universal link works on iOS and opens in Google Maps app if installed
+        navigationUrl = `https://www.google.com/maps/dir/?api=1&destination=${encoded}&travelmode=driving`;
+      }
+      break;
+      
+    case 'apple':
+      if (isIOS) {
+        // Apple Maps deep link - works great with CarPlay
+        navigationUrl = `maps://?daddr=${encoded}&dirflg=d`;
+      } else {
+        // Fallback to Google Maps on non-iOS
+        navigationUrl = `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
+      }
+      break;
+      
+    case 'waze':
+      // Waze deep link - works on both platforms and CarPlay
+      navigationUrl = `https://waze.com/ul?q=${encoded}&navigate=yes`;
+      break;
+      
+    default:
+      // Default to Google Maps web
+      navigationUrl = `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
+  }
+  
+  console.log(`[DriverPortal] Opening navigation with ${state.preferredMapApp}:`, navigationUrl);
+  window.open(navigationUrl, '_blank');
+};
+
+// Toggle map visibility for small screens
+window.toggleMapVisibility = function() {
+  state.mapVisible = !state.mapVisible;
+  const mapContainer = document.getElementById('driverViewMap');
+  const toggleBtn = document.getElementById('toggleMapBtn');
+  
+  if (mapContainer) {
+    mapContainer.style.display = state.mapVisible ? 'block' : 'none';
+  }
+  
+  if (toggleBtn) {
+    toggleBtn.textContent = state.mapVisible ? '🗺️ Hide Map' : '🗺️ Show Map';
+    toggleBtn.classList.toggle('map-hidden', !state.mapVisible);
+  }
+  
+  // Resize map when showing
+  if (state.mapVisible && driverViewMap) {
+    setTimeout(() => driverViewMap.resize(), 100);
   }
 };
 
@@ -7110,13 +8092,712 @@ function formatPhone(phone) {
 
 function getStatusActionLabel(status) {
   switch (status) {
+    case 'getting_ready': return 'Getting Ready';
     case 'enroute': return 'On the Way';
     case 'arrived': return 'Arrived';
-    case 'passenger_onboard': return 'Passenger On Board';
+    case 'waiting': return 'Waiting';
+    case 'passenger_onboard': return 'Customer in Car';
+    case 'done': return 'Done';
     case 'completed': return 'Complete Trip';
     default: return STATUS_META[status]?.label || status;
   }
 }
+
+// Send quick note to dispatch
+window.sendQuickNote = async function(tripId) {
+  const noteInput = document.getElementById('quickNotes');
+  const note = noteInput?.value?.trim();
+  
+  if (!note) {
+    showToast('Please enter a note', 'warning');
+    return;
+  }
+  
+  try {
+    // Append to existing notes
+    const existingNotes = state.trips.active?.driver_notes || '';
+    const timestamp = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const newNote = existingNotes 
+      ? `${existingNotes}\n[${timestamp}] ${note}`
+      : `[${timestamp}] ${note}`;
+    
+    await updateReservationStatus(tripId, { driver_notes: newNote });
+    
+    noteInput.value = '';
+    showToast('Note sent to dispatch! 📤', 'success');
+  } catch (err) {
+    console.error('[DriverPortal] Send note error:', err);
+    showToast('Failed to send note', 'error');
+  }
+};
+
+// ============================================
+// SMS Trip Reminder System
+// ============================================
+async function sendTripReminderSMS(trip, driverId) {
+  // Build the trip status URL for the driver
+  // Driver portal is at driver.relialimo.com/firstname_lastname
+  const driverBaseUrl = 'https://driver.relialimo.com';
+  const driverSlug = state.portalSlug || state.driver?.portal_slug || '';
+  const tripStatusUrl = `${driverBaseUrl}/${driverSlug}?trip=${trip.id}`;
+  const portalUrl = driverSlug ? `${driverBaseUrl}/${driverSlug}` : driverBaseUrl;
+  
+  // Get driver's phone number
+  const driverPhone = state.driver?.phone || state.driver?.cell_phone;
+  if (!driverPhone) {
+    console.warn('[DriverPortal] No driver phone for SMS reminder');
+    return;
+  }
+  
+  // Format pickup time
+  const pickupTime = new Date(trip.pickup_date_time || trip.pickup_date);
+  const timeStr = pickupTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const dateStr = pickupTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  
+  const message = `🚗 RELIALIMO Trip Reminder\n` +
+    `📅 ${dateStr} at ${timeStr}\n` +
+    `📍 ${(trip.pickup_address || trip.pickup_location || 'Pickup').substring(0, 50)}\n` +
+    `🏁 ${(trip.dropoff_address || trip.dropoff_location || 'Dropoff').substring(0, 50)}\n\n` +
+    `Trip Status: ${tripStatusUrl}\n` +
+    `Portal: ${portalUrl}`;
+  
+  try {
+    // Use the SMS service
+    const response = await fetch(`${baseUrl}/api/sms-send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: driverPhone,
+        body: message
+      })
+    });
+    
+    if (response.ok) {
+      console.log('[DriverPortal] Trip reminder SMS sent successfully');
+      return true;
+    } else {
+      console.warn('[DriverPortal] SMS send failed:', response.status);
+      return false;
+    }
+  } catch (err) {
+    console.error('[DriverPortal] SMS send error:', err);
+    return false;
+  }
+}
+
+// Schedule reminder SMS for upcoming trips
+function scheduleUpcomingTripReminders() {
+  const upcomingTrips = state.trips.upcoming || [];
+  
+  upcomingTrips.forEach(trip => {
+    const pickupTime = new Date(trip.pickup_date_time || trip.pickup_date);
+    const now = new Date();
+    
+    // Send reminder 60 minutes before pickup
+    const reminderTime = new Date(pickupTime.getTime() - 60 * 60 * 1000);
+    const msUntilReminder = reminderTime - now;
+    
+    // Only schedule if reminder time is in the future and within 24 hours
+    if (msUntilReminder > 0 && msUntilReminder < 24 * 60 * 60 * 1000) {
+      const reminderKey = `reminder_scheduled_${trip.id}`;
+      
+      // Check if already scheduled
+      if (!localStorage.getItem(reminderKey)) {
+        console.log(`[DriverPortal] Scheduling reminder for trip ${trip.id} in ${Math.round(msUntilReminder / 60000)} minutes`);
+        
+        setTimeout(() => {
+          sendTripReminderSMS(trip, state.driverId);
+          localStorage.removeItem(reminderKey);
+        }, msUntilReminder);
+        
+        localStorage.setItem(reminderKey, 'true');
+      }
+    }
+  });
+}
+
+// ============================================
+// Flight Status API Integration
+// ============================================
+
+// Cache for flight status to avoid excessive API calls
+const flightStatusCache = new Map();
+
+/**
+ * Update flight status for airport pickup trips
+ * Uses AeroDataBox or fallback APIs
+ */
+async function updateFlightStatus(tripId, flightNumber) {
+  const infoEl = document.getElementById(`flight-info-${tripId}`);
+  if (!infoEl) return;
+  
+  const statusEl = infoEl.querySelector('.flight-status');
+  if (!statusEl) return;
+  
+  // Check cache first (expires after 5 minutes)
+  const cacheKey = flightNumber.toUpperCase();
+  const cached = flightStatusCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+    renderFlightStatus(statusEl, cached.data);
+    return;
+  }
+  
+  try {
+    statusEl.textContent = 'Loading...';
+    statusEl.className = 'flight-status loading';
+    
+    // Try to get flight status from API
+    const flightData = await fetchFlightStatus(flightNumber);
+    
+    if (flightData) {
+      flightStatusCache.set(cacheKey, { data: flightData, timestamp: Date.now() });
+      renderFlightStatus(statusEl, flightData);
+    } else {
+      statusEl.textContent = 'Status unavailable';
+      statusEl.className = 'flight-status unknown';
+    }
+  } catch (err) {
+    console.error('[DriverPortal] Flight status error:', err);
+    statusEl.textContent = 'Status unavailable';
+    statusEl.className = 'flight-status error';
+  }
+}
+
+/**
+ * Fetch flight status from API
+ */
+async function fetchFlightStatus(flightNumber) {
+  // Extract airline code and flight number
+  const match = flightNumber.match(/^([A-Z]{2})(\d+)$/i);
+  if (!match) {
+    console.warn('[DriverPortal] Invalid flight number format:', flightNumber);
+    return null;
+  }
+  
+  const [, airlineCode, flightNum] = match;
+  
+  // Try our API endpoint first
+  try {
+    const response = await fetch(`/api/flight-status?flight=${airlineCode}${flightNum}`);
+    if (response.ok) {
+      const data = await response.json();
+      return data;
+    }
+  } catch (err) {
+    console.warn('[DriverPortal] Flight API error:', err);
+  }
+  
+  // Fallback: Return mock data for demo purposes
+  // In production, this would call AeroDataBox, FlightAware, or similar API
+  return {
+    flightNumber: `${airlineCode}${flightNum}`,
+    status: 'On Time',
+    scheduledArrival: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours from now
+    estimatedArrival: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    terminal: 'Terminal 1',
+    gate: 'Gate C12',
+    origin: 'LAX',
+    isMock: true
+  };
+}
+
+/**
+ * Render flight status with color-coded display
+ */
+function renderFlightStatus(statusEl, flightData) {
+  const status = flightData.status?.toLowerCase() || 'unknown';
+  let statusClass = 'unknown';
+  let statusText = flightData.status || 'Unknown';
+  
+  if (status.includes('on time') || status.includes('scheduled')) {
+    statusClass = 'on-time';
+  } else if (status.includes('delayed')) {
+    statusClass = 'delayed';
+  } else if (status.includes('cancelled')) {
+    statusClass = 'cancelled';
+  } else if (status.includes('landed') || status.includes('arrived')) {
+    statusClass = 'landed';
+  } else if (status.includes('boarding') || status.includes('departing')) {
+    statusClass = 'departing';
+  }
+  
+  // Add arrival time if available
+  if (flightData.estimatedArrival) {
+    const arrivalTime = new Date(flightData.estimatedArrival);
+    const timeStr = arrivalTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    statusText += ` • ETA ${timeStr}`;
+  }
+  
+  // Add terminal/gate if available
+  if (flightData.terminal || flightData.gate) {
+    statusText += ` • ${flightData.terminal || ''} ${flightData.gate || ''}`.trim();
+  }
+  
+  statusEl.textContent = statusText;
+  statusEl.className = `flight-status ${statusClass}`;
+  
+  // Add mock indicator if using demo data
+  if (flightData.isMock) {
+    statusEl.title = 'Demo data - real API integration pending';
+  }
+}
+
+/**
+ * Show trip notes modal
+ */
+window.showTripNotes = function(tripId) {
+  // Find the trip in state
+  const allTrips = [...(state.trips.offered || []), ...(state.trips.upcoming || [])];
+  if (state.trips.active) allTrips.push(state.trips.active);
+  
+  const trip = allTrips.find(t => t.id === tripId);
+  if (!trip) {
+    showToast('Trip not found', 'error');
+    return;
+  }
+  
+  const notes = trip.special_instructions || trip.trip_notes || trip.notes || 'No notes for this trip.';
+  
+  // Create modal HTML
+  const modalHtml = `
+    <div class="modal active" id="tripNotesModal" onclick="if(event.target===this) this.remove()">
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h2>📝 Trip Notes</h2>
+          <button type="button" class="modal-close" onclick="document.getElementById('tripNotesModal').remove()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="notes-text">${notes.replace(/\n/g, '<br>')}</p>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Remove existing modal if any
+  const existing = document.getElementById('tripNotesModal');
+  if (existing) existing.remove();
+  
+  // Add to DOM
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+};
+
+/**
+ * Open status change modal for a trip
+ */
+window.openStatusModal = function(tripId) {
+  // Find the trip in state
+  const allTrips = [...(state.trips.offered || []), ...(state.trips.upcoming || [])];
+  if (state.trips.active) allTrips.push(state.trips.active);
+  
+  const trip = allTrips.find(t => t.id === tripId);
+  if (!trip) {
+    showToast('Trip not found', 'error');
+    return;
+  }
+  
+  const currentStatus = trip.driver_status || 'assigned';
+  
+  // Define status options with progression
+  const statusOptions = [
+    { value: 'assigned', label: '📋 Assigned', icon: '📋' },
+    { value: 'getting_ready', label: '🔧 Getting Ready', icon: '🔧' },
+    { value: 'enroute', label: '🚗 On The Way', icon: '🚗' },
+    { value: 'arrived', label: '📍 Arrived', icon: '📍' },
+    { value: 'waiting', label: '⏳ Waiting', icon: '⏳' },
+    { value: 'passenger_onboard', label: '👥 Passenger Onboard', icon: '👥' },
+    { value: 'done', label: '✅ Trip Complete', icon: '✅' }
+  ];
+  
+  const optionsHtml = statusOptions.map(opt => `
+    <button class="status-option ${currentStatus === opt.value ? 'active' : ''}" 
+            onclick="window.updateTripStatus('${tripId}', '${opt.value}'); document.getElementById('statusChangeModal').remove();">
+      <span class="status-icon">${opt.icon}</span>
+      <span class="status-label">${opt.label}</span>
+    </button>
+  `).join('');
+  
+  const modalHtml = `
+    <div class="modal active" id="statusChangeModal" onclick="if(event.target===this) this.remove()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>📊 Update Trip Status</h2>
+          <button type="button" class="modal-close" onclick="document.getElementById('statusChangeModal').remove()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="status-grid">
+            ${optionsHtml}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Remove existing modal if any
+  const existing = document.getElementById('statusChangeModal');
+  if (existing) existing.remove();
+  
+  // Add to DOM
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+};
+
+// ============================================
+// Countdown Timer Window & Display Settings
+// ============================================
+
+let timerWindowState = {
+  minimized: false,
+  countdownEnabled: true,
+  headerDateTimeEnabled: true,
+  fullscreenMapEnabled: true,
+  timerInterval: null,
+  clockInterval: null
+};
+
+/**
+ * Initialize countdown timer window and display settings
+ */
+function initTimerWindowSystem() {
+  // Load settings from localStorage
+  loadDisplaySettings();
+  
+  // Setup minimize button
+  const minimizeBtn = document.getElementById('minimizeTimerBtn');
+  if (minimizeBtn) {
+    minimizeBtn.addEventListener('click', () => minimizeTimerWindow());
+  }
+  
+  // Setup header mini timer click to expand
+  const headerTimerMini = document.getElementById('headerMinimizedTimer');
+  if (headerTimerMini) {
+    headerTimerMini.addEventListener('click', () => expandTimerWindow());
+  }
+  
+  // Sync online toggles
+  const compactToggle = document.getElementById('onlineToggleCompact');
+  const mainToggle = document.getElementById('onlineToggle');
+  
+  if (compactToggle && mainToggle) {
+    compactToggle.addEventListener('change', (e) => {
+      mainToggle.checked = e.target.checked;
+      handleOnlineToggle.call({ checked: e.target.checked });
+    });
+    
+    mainToggle.addEventListener('change', (e) => {
+      compactToggle.checked = e.target.checked;
+    });
+    
+    // Initial sync
+    compactToggle.checked = mainToggle.checked;
+  }
+  
+  // Start clock updates
+  startClockUpdates();
+  
+  // Apply initial display settings
+  applyDisplaySettings();
+  
+  // Show timer window on start if enabled
+  if (timerWindowState.countdownEnabled) {
+    showTimerWindow();
+  }
+}
+
+/**
+ * Load display settings from localStorage
+ */
+function loadDisplaySettings() {
+  const saved = localStorage.getItem('driver_display_settings');
+  if (saved) {
+    try {
+      const settings = JSON.parse(saved);
+      timerWindowState.countdownEnabled = settings.countdownEnabled !== false;
+      timerWindowState.headerDateTimeEnabled = settings.headerDateTimeEnabled !== false;
+      timerWindowState.fullscreenMapEnabled = settings.fullscreenMapEnabled !== false;
+      timerWindowState.minimized = settings.minimized || false;
+    } catch (e) {
+      console.warn('[DriverPortal] Failed to parse display settings:', e);
+    }
+  }
+  
+  // Sync settings UI
+  const countdownToggle = document.getElementById('showCountdownTimer');
+  const dateTimeToggle = document.getElementById('showHeaderDateTime');
+  const fullscreenToggle = document.getElementById('fullscreenMapMode');
+  
+  if (countdownToggle) countdownToggle.checked = timerWindowState.countdownEnabled;
+  if (dateTimeToggle) dateTimeToggle.checked = timerWindowState.headerDateTimeEnabled;
+  if (fullscreenToggle) fullscreenToggle.checked = timerWindowState.fullscreenMapEnabled;
+  
+  // Listen for settings changes
+  countdownToggle?.addEventListener('change', (e) => {
+    timerWindowState.countdownEnabled = e.target.checked;
+    saveDisplaySettings();
+    applyDisplaySettings();
+  });
+  
+  dateTimeToggle?.addEventListener('change', (e) => {
+    timerWindowState.headerDateTimeEnabled = e.target.checked;
+    saveDisplaySettings();
+    applyDisplaySettings();
+  });
+  
+  fullscreenToggle?.addEventListener('change', (e) => {
+    timerWindowState.fullscreenMapEnabled = e.target.checked;
+    saveDisplaySettings();
+    applyDisplaySettings();
+  });
+}
+
+/**
+ * Save display settings to localStorage
+ */
+function saveDisplaySettings() {
+  localStorage.setItem('driver_display_settings', JSON.stringify({
+    countdownEnabled: timerWindowState.countdownEnabled,
+    headerDateTimeEnabled: timerWindowState.headerDateTimeEnabled,
+    fullscreenMapEnabled: timerWindowState.fullscreenMapEnabled,
+    minimized: timerWindowState.minimized
+  }));
+}
+
+/**
+ * Apply display settings to UI
+ */
+function applyDisplaySettings() {
+  const timerWindow = document.getElementById('countdownTimerWindow');
+  const headerTimer = document.getElementById('headerMinimizedTimer');
+  const headerDateTime = document.getElementById('headerDateTime');
+  const bgMap = document.getElementById('fullscreenBgMap');
+  
+  // Countdown timer visibility
+  if (!timerWindowState.countdownEnabled) {
+    if (timerWindow) timerWindow.style.display = 'none';
+    if (headerTimer) headerTimer.style.display = 'none';
+  } else {
+    if (timerWindowState.minimized) {
+      if (timerWindow) timerWindow.style.display = 'none';
+      if (headerTimer) headerTimer.style.display = 'flex';
+    } else {
+      if (timerWindow) timerWindow.style.display = 'block';
+      if (headerTimer) headerTimer.style.display = 'none';
+    }
+  }
+  
+  // Header date/time visibility
+  if (headerDateTime) {
+    headerDateTime.style.display = timerWindowState.headerDateTimeEnabled ? 'flex' : 'none';
+  }
+}
+
+/**
+ * Minimize timer window to header bar
+ */
+function minimizeTimerWindow() {
+  timerWindowState.minimized = true;
+  saveDisplaySettings();
+  
+  const timerWindow = document.getElementById('countdownTimerWindow');
+  const headerTimer = document.getElementById('headerMinimizedTimer');
+  
+  if (timerWindow) {
+    timerWindow.classList.add('minimized');
+    timerWindow.style.display = 'none';
+  }
+  
+  if (headerTimer) {
+    headerTimer.style.display = 'flex';
+  }
+}
+
+/**
+ * Expand timer window from header
+ */
+function expandTimerWindow() {
+  timerWindowState.minimized = false;
+  saveDisplaySettings();
+  
+  const timerWindow = document.getElementById('countdownTimerWindow');
+  const headerTimer = document.getElementById('headerMinimizedTimer');
+  
+  if (timerWindow) {
+    timerWindow.classList.remove('minimized');
+    timerWindow.style.display = 'block';
+  }
+  
+  if (headerTimer) {
+    headerTimer.style.display = 'none';
+  }
+}
+
+/**
+ * Show timer window
+ */
+function showTimerWindow() {
+  if (timerWindowState.minimized) {
+    const headerTimer = document.getElementById('headerMinimizedTimer');
+    if (headerTimer) headerTimer.style.display = 'flex';
+  } else {
+    const timerWindow = document.getElementById('countdownTimerWindow');
+    if (timerWindow) timerWindow.style.display = 'block';
+  }
+}
+
+/**
+ * Start real-time clock updates
+ */
+function startClockUpdates() {
+  const updateClock = () => {
+    const now = new Date();
+    
+    // Update actual time display in timer window
+    const actualTime = document.getElementById('actualTime');
+    const actualDate = document.getElementById('actualDate');
+    if (actualTime) {
+      actualTime.textContent = now.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit', 
+        second: '2-digit',
+        hour12: true 
+      });
+    }
+    if (actualDate) {
+      actualDate.textContent = now.toLocaleDateString('en-US', { 
+        weekday: 'long',
+        month: 'long', 
+        day: 'numeric', 
+        year: 'numeric' 
+      });
+    }
+    
+    // Update header time/date
+    const headerTime = document.getElementById('headerTime');
+    const headerDate = document.getElementById('headerDate');
+    if (headerTime) {
+      headerTime.textContent = now.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      });
+    }
+    if (headerDate) {
+      headerDate.textContent = now.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric'
+      });
+    }
+  };
+  
+  // Initial update
+  updateClock();
+  
+  // Update every second
+  if (timerWindowState.clockInterval) {
+    clearInterval(timerWindowState.clockInterval);
+  }
+  timerWindowState.clockInterval = setInterval(updateClock, 1000);
+}
+
+/**
+ * Update the timer window countdown (called from startInHouseCountdown)
+ */
+function updateTimerWindowCountdown(countdown, tripInfo, progress, urgency) {
+  const timerDisplay = document.getElementById('timerLargeDisplay');
+  const timerConf = document.getElementById('timerTripConf');
+  const timerDateTime = document.getElementById('timerTripDateTime');
+  const timerProgress = document.getElementById('timerProgress');
+  const headerTimerValue = document.getElementById('headerTimerValue');
+  
+  if (timerDisplay) {
+    timerDisplay.textContent = countdown;
+    timerDisplay.className = `timer-large-display ${urgency}`;
+  }
+  
+  if (timerConf && tripInfo.confNumber) {
+    timerConf.textContent = `Conf# ${tripInfo.confNumber}`;
+  }
+  
+  if (timerDateTime && tripInfo.dateTime) {
+    timerDateTime.textContent = tripInfo.dateTime;
+  }
+  
+  if (timerProgress) {
+    timerProgress.style.width = `${progress}%`;
+    timerProgress.className = `timer-progress ${urgency}`;
+  }
+  
+  // Update header mini timer
+  if (headerTimerValue) {
+    headerTimerValue.textContent = countdown;
+    headerTimerValue.className = urgency;
+  }
+}
+
+/**
+ * Start turn-by-turn navigation (embedded)
+ */
+function startEmbeddedNavigation(destination) {
+  // Create navigation overlay
+  let overlay = document.getElementById('navigationOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'navigationOverlay';
+    overlay.className = 'navigation-overlay';
+    overlay.innerHTML = `
+      <div class="nav-header">
+        <h3>🧭 Navigation</h3>
+        <button type="button" class="nav-close-btn" onclick="closeEmbeddedNavigation()">×</button>
+      </div>
+      <div class="nav-map-container" id="navMapContainer">
+        <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #888;">
+          Loading navigation...
+        </div>
+      </div>
+      <div class="nav-directions-panel" id="navDirectionsPanel"></div>
+    `;
+    document.body.appendChild(overlay);
+  }
+  
+  overlay.classList.add('active');
+  
+  // Use Google Maps Embed for directions
+  const destEncoded = encodeURIComponent(destination);
+  const mapContainer = document.getElementById('navMapContainer');
+  
+  // Get current location and create directions embed
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const origin = `${pos.coords.latitude},${pos.coords.longitude}`;
+        const embedUrl = `https://www.google.com/maps/embed/v1/directions?key=AIzaSyBHLGQGz0yjLvJpL7lFLzwNOLyIkVXgcDo&origin=${origin}&destination=${destEncoded}&mode=driving`;
+        
+        mapContainer.innerHTML = `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" allowfullscreen loading="lazy"></iframe>`;
+      },
+      () => {
+        // Fallback - just show destination
+        const embedUrl = `https://www.google.com/maps/embed/v1/place?key=AIzaSyBHLGQGz0yjLvJpL7lFLzwNOLyIkVXgcDo&q=${destEncoded}`;
+        mapContainer.innerHTML = `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" allowfullscreen loading="lazy"></iframe>`;
+      }
+    );
+  }
+}
+
+function closeEmbeddedNavigation() {
+  const overlay = document.getElementById('navigationOverlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+  }
+}
+
+// Make functions global
+window.closeEmbeddedNavigation = closeEmbeddedNavigation;
+window.startEmbeddedNavigation = startEmbeddedNavigation;
+
+// Initialize timer system when dashboard loads
+const originalLoadDashboard = loadDashboard;
+loadDashboard = async function() {
+  await originalLoadDashboard.call(this);
+  initTimerWindowSystem();
+};
 
 // ============================================
 // Service Worker Registration (PWA)

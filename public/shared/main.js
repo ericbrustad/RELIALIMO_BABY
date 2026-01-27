@@ -6,6 +6,7 @@ import { DriverTracker } from './DriverTracker.js';
 import { FarmoutAutomationService } from './FarmoutAutomationService.js';
 import supabaseDb from './supabase-db.js';
 import { createReservation as createReservationAPI } from './api-service.js';
+import realtimeService, { subscribeToReservations } from './shared/realtime-service.js';
 
 // Use Supabase-only database (no localStorage)
 const db = supabaseDb;
@@ -564,6 +565,9 @@ class LimoReservationSystem {
     // Load initial data (will use company location)
     await this.loadInitialData();
 
+    // Setup real-time subscription for instant farmout updates
+    await this.setupRealtimeSubscription();
+
     this.farmoutAutomationService.init();
     
     // Setup event listeners
@@ -716,6 +720,15 @@ class LimoReservationSystem {
         .map(segment => segment.charAt(0).toUpperCase() + segment.slice(1))
         .join(' ');
     };
+    
+    const formatPhone = (phone) => {
+      if (!phone) return '';
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length === 10) {
+        return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+      }
+      return phone;
+    };
 
     // Update list
     driverListEl.innerHTML = drivers.map(driver => {
@@ -729,6 +742,8 @@ class LimoReservationSystem {
       }[driver.status] || '🟢';
       const statusLabel = formatStatusLabel(driver.status);
       const noteLine = driver.notes ? `<div class="driver-status-note">${driver.notes}</div>` : '';
+      const phoneLine = driver.phone ? `<div class="driver-status-phone">📱 ${formatPhone(driver.phone)}</div>` : '';
+      const affiliateLine = driver.affiliate && driver.affiliate !== 'RELIA Fleet' ? `<div class="driver-status-affiliate">🏢 ${driver.affiliate}</div>` : '';
       
       return `
         <div class="driver-status-item ${driver.status}" data-driver-id="${driver.id}">
@@ -736,6 +751,8 @@ class LimoReservationSystem {
           <div class="driver-status-info">
             <div class="driver-status-name">${driver.name}</div>
             <div class="driver-status-details">${driver.vehicle} • ${statusLabel}</div>
+            ${phoneLine}
+            ${affiliateLine}
             ${noteLine}
           </div>
         </div>
@@ -831,6 +848,239 @@ class LimoReservationSystem {
     // Update all views
     this.uiManager.updateAllViews();
     this.persistFarmoutSnapshot();
+  }
+
+  async setupRealtimeSubscription() {
+    try {
+      await realtimeService.init();
+      
+      this.unsubscribeRealtime = subscribeToReservations((eventType, newRecord, oldRecord) => {
+        console.log(`[Main] Real-time ${eventType}:`, newRecord?.confirmation_number || oldRecord?.confirmation_number);
+        
+        // Check if this is a new assignment (INSERT or UPDATE with driver assigned)
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+          this.checkForNewAssignment(eventType, newRecord, oldRecord);
+        }
+        
+        // Reload all views on any change for instant updates
+        this.updateListViewsFromDb();
+      });
+      
+      console.log('[Main] Real-time subscription active for instant farmout updates');
+    } catch (err) {
+      console.error('[Main] Failed to set up real-time subscription:', err);
+    }
+  }
+
+  checkForNewAssignment(eventType, newRecord, oldRecord) {
+    if (!newRecord) return;
+    
+    const confNumber = newRecord.confirmation_number || newRecord.id;
+    const driverId = newRecord.driver_id || newRecord.form_snapshot?.details?.driverId;
+    const driverName = newRecord.driver_name || newRecord.form_snapshot?.details?.driverName;
+    const farmoutStatus = newRecord.farmout_status || '';
+    
+    // Check if this is a new assignment
+    const wasAssigned = eventType === 'UPDATE' && oldRecord && 
+                        !oldRecord.driver_id && !oldRecord.form_snapshot?.details?.driverId;
+    const isNewlyAssigned = eventType === 'INSERT' || wasAssigned;
+    const hasDriver = driverId || driverName;
+    const isAssignedStatus = farmoutStatus === 'assigned' || farmoutStatus === 'farmout_assigned';
+    
+    if (isNewlyAssigned && (hasDriver || isAssignedStatus)) {
+      // Get passenger name for display
+      const passengerFirst = newRecord.lead_passenger_first_name || 
+                             newRecord.form_snapshot?.passenger?.firstName || '';
+      const passengerLast = newRecord.lead_passenger_last_name || 
+                            newRecord.form_snapshot?.passenger?.lastName || '';
+      const passengerName = `${passengerFirst} ${passengerLast}`.trim() || 'Guest';
+      
+      // Get pickup date/time
+      const pickupDate = newRecord.form_snapshot?.details?.puDate || '';
+      const pickupTime = newRecord.form_snapshot?.details?.puTime || '';
+      
+      this.showTripAssignmentNotification({
+        confNumber,
+        passengerName,
+        driverName: driverName || 'Driver',
+        pickupDate,
+        pickupTime
+      });
+    }
+  }
+
+  showTripAssignmentNotification({ confNumber, passengerName, driverName, pickupDate, pickupTime }) {
+    // Remove any existing notification
+    const existing = document.getElementById('tripAssignmentNotification');
+    if (existing) existing.remove();
+    
+    // Create notification container
+    const notification = document.createElement('div');
+    notification.id = 'tripAssignmentNotification';
+    notification.className = 'trip-assignment-notification';
+    
+    // Format the date/time display
+    let dateTimeDisplay = '';
+    if (pickupDate) {
+      const dateObj = new Date(pickupDate + (pickupTime ? 'T' + pickupTime : ''));
+      if (!isNaN(dateObj.getTime())) {
+        dateTimeDisplay = dateObj.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        });
+      } else {
+        dateTimeDisplay = pickupDate + (pickupTime ? ' ' + pickupTime : '');
+      }
+    }
+    
+    notification.innerHTML = `
+      <div class="notification-icon">🚗</div>
+      <div class="notification-content">
+        <div class="notification-title">New Trip Assigned!</div>
+        <div class="notification-details">
+          <strong>Conf #${confNumber}</strong><br>
+          ${passengerName}${dateTimeDisplay ? ` • ${dateTimeDisplay}` : ''}
+        </div>
+      </div>
+      <div class="notification-actions">
+        <button class="btn-view-reservation" onclick="window.openReservationFromNotification('${confNumber}')">View Reservation</button>
+        <button class="btn-view-later" onclick="document.getElementById('tripAssignmentNotification').remove()">Later</button>
+      </div>
+      <button class="notification-close" onclick="document.getElementById('tripAssignmentNotification').remove()">×</button>
+    `;
+    
+    // Add styles if not already present
+    if (!document.getElementById('tripNotificationStyles')) {
+      const style = document.createElement('style');
+      style.id = 'tripNotificationStyles';
+      style.textContent = `
+        .trip-assignment-notification {
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+          border: 1px solid #00d4ff;
+          border-radius: 12px;
+          padding: 16px 20px;
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          box-shadow: 0 8px 32px rgba(0, 212, 255, 0.3), 0 0 0 1px rgba(0, 212, 255, 0.1);
+          z-index: 10000;
+          max-width: 420px;
+          animation: slideInRight 0.4s ease-out;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        @keyframes slideInRight {
+          from { transform: translateX(120%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        
+        .notification-icon {
+          font-size: 32px;
+          line-height: 1;
+        }
+        
+        .notification-content {
+          flex: 1;
+        }
+        
+        .notification-title {
+          color: #00d4ff;
+          font-weight: 600;
+          font-size: 15px;
+          margin-bottom: 6px;
+        }
+        
+        .notification-details {
+          color: #e0e0e0;
+          font-size: 13px;
+          line-height: 1.4;
+        }
+        
+        .notification-actions {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-left: 8px;
+        }
+        
+        .btn-view-reservation {
+          background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%);
+          color: #000;
+          border: none;
+          padding: 8px 14px;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: all 0.2s;
+        }
+        
+        .btn-view-reservation:hover {
+          background: linear-gradient(135deg, #33ddff 0%, #00b3e6 100%);
+          transform: translateY(-1px);
+        }
+        
+        .btn-view-later {
+          background: transparent;
+          color: #888;
+          border: 1px solid #444;
+          padding: 6px 14px;
+          border-radius: 6px;
+          font-size: 11px;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        
+        .btn-view-later:hover {
+          border-color: #666;
+          color: #aaa;
+        }
+        
+        .notification-close {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          background: none;
+          border: none;
+          color: #666;
+          font-size: 18px;
+          cursor: pointer;
+          padding: 0;
+          line-height: 1;
+          width: 20px;
+          height: 20px;
+        }
+        
+        .notification-close:hover {
+          color: #fff;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(notification);
+    
+    // Play notification sound if available
+    try {
+      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleP8Xt9T3zqpwHQNKl8jWu3gtAEqPwdfGs1oAAEOJv9nJt1cAADyFvNrLt1MAADJ/udnPt1EAADCBud3Ruks=');
+      audio.volume = 0.3;
+      audio.play().catch(() => {});
+    } catch (e) {}
+    
+    // Auto-dismiss after 15 seconds
+    setTimeout(() => {
+      const notif = document.getElementById('tripAssignmentNotification');
+      if (notif) {
+        notif.style.animation = 'slideInRight 0.3s ease-out reverse forwards';
+        setTimeout(() => notif.remove(), 300);
+      }
+    }, 15000);
   }
 
   async loadReservationsFromStorage() {
@@ -1745,6 +1995,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Expose uiManager globally for cross-frame communication
   window.uiManager = window.limoSystem?.uiManager;
 });
+
+// Open reservation from notification popup
+window.openReservationFromNotification = function(confNumber) {
+  // Close the notification
+  const notif = document.getElementById('tripAssignmentNotification');
+  if (notif) notif.remove();
+  
+  // Open reservation form
+  window.location.href = `reservation-form.html?conf=${confNumber}`;
+};
 
 // Expose utility for manual ghost purge from console
 window.purgeAllGhostReservations = function() {

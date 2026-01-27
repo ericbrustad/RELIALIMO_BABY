@@ -720,6 +720,15 @@ class LimoReservationSystem {
         .map(segment => segment.charAt(0).toUpperCase() + segment.slice(1))
         .join(' ');
     };
+    
+    const formatPhone = (phone) => {
+      if (!phone) return '';
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length === 10) {
+        return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+      }
+      return phone;
+    };
 
     // Update list
     driverListEl.innerHTML = drivers.map(driver => {
@@ -733,6 +742,8 @@ class LimoReservationSystem {
       }[driver.status] || '🟢';
       const statusLabel = formatStatusLabel(driver.status);
       const noteLine = driver.notes ? `<div class="driver-status-note">${driver.notes}</div>` : '';
+      const phoneLine = driver.phone ? `<div class="driver-status-phone">📱 ${formatPhone(driver.phone)}</div>` : '';
+      const affiliateLine = driver.affiliate && driver.affiliate !== 'RELIA Fleet' ? `<div class="driver-status-affiliate">🏢 ${driver.affiliate}</div>` : '';
       
       return `
         <div class="driver-status-item ${driver.status}" data-driver-id="${driver.id}">
@@ -740,6 +751,8 @@ class LimoReservationSystem {
           <div class="driver-status-info">
             <div class="driver-status-name">${driver.name}</div>
             <div class="driver-status-details">${driver.vehicle} • ${statusLabel}</div>
+            ${phoneLine}
+            ${affiliateLine}
             ${noteLine}
           </div>
         </div>

@@ -3267,15 +3267,32 @@ async function handleProfilePhotoUpload(event) {
 function updateDriverAvatar(photoUrl) {
   // Update all avatar elements to show the photo
   const avatars = document.querySelectorAll('.driver-avatar');
+  const driver = state.driver;
+  const initials = `${driver?.first_name?.[0] || ''}${driver?.last_name?.[0] || ''}`.toUpperCase() || '?';
+  
   avatars.forEach(avatar => {
     if (photoUrl) {
       avatar.innerHTML = `<img src="${photoUrl}" alt="Profile" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
     } else {
-      const driver = state.driver;
-      const initials = `${driver.first_name?.[0] || ''}${driver.last_name?.[0] || ''}`.toUpperCase() || '?';
       avatar.textContent = initials;
     }
   });
+  
+  // Also update the sidebar avatar specifically (with image/initials structure)
+  const sidebarAvatarImg = document.getElementById('sidebarAvatarImg');
+  const sidebarAvatarInitials = document.getElementById('sidebarAvatarInitials');
+  
+  if (sidebarAvatarImg && sidebarAvatarInitials) {
+    if (photoUrl) {
+      sidebarAvatarImg.src = photoUrl;
+      sidebarAvatarImg.style.display = 'block';
+      sidebarAvatarInitials.style.display = 'none';
+    } else {
+      sidebarAvatarImg.style.display = 'none';
+      sidebarAvatarInitials.style.display = 'block';
+      sidebarAvatarInitials.textContent = initials;
+    }
+  }
 }
 
 async function saveProfile() {
@@ -3428,6 +3445,9 @@ async function showSettingsScreen() {
     return;
   }
   
+  // Check location status
+  await checkLocationStatusForSettings();
+  
   // Load settings from driver record or local storage
   const settings = driver.settings || {};
   
@@ -3459,6 +3479,174 @@ async function showSettingsScreen() {
   if (elements.themePreference) elements.themePreference.value = settings.theme || 'dark';
   if (elements.distanceUnit) elements.distanceUnit.value = settings.distance_unit || 'miles';
   if (elements.timeFormat) elements.timeFormat.value = settings.time_format || '12h';
+}
+
+// Check location permission status for settings display
+async function checkLocationStatusForSettings() {
+  const statusIcon = document.getElementById('locationStatusIcon');
+  const statusLabel = document.getElementById('locationStatusLabel');
+  const statusHint = document.getElementById('locationStatusHint');
+  const enableBtn = document.getElementById('enableLocationSettingsBtn');
+  const deniedWarning = document.getElementById('locationDeniedWarning');
+  const deviceSettingsBtn = document.getElementById('openDeviceSettingsBtn');
+  
+  if (!statusIcon || !statusLabel) return;
+  
+  // Check if geolocation is supported
+  if (!('geolocation' in navigator)) {
+    statusIcon.textContent = '❌';
+    statusLabel.textContent = 'Not Supported';
+    statusLabel.className = 'location-status-label denied';
+    statusHint.textContent = 'Your browser does not support location services';
+    return;
+  }
+  
+  try {
+    // Check permission status using Permissions API
+    if ('permissions' in navigator) {
+      const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
+      
+      if (permissionStatus.state === 'granted') {
+        statusIcon.textContent = '✅';
+        statusLabel.textContent = 'Location Enabled';
+        statusLabel.className = 'location-status-label granted';
+        statusHint.textContent = 'Dispatch can see your position';
+        if (enableBtn) enableBtn.style.display = 'none';
+        if (deniedWarning) deniedWarning.style.display = 'none';
+      } else if (permissionStatus.state === 'denied') {
+        statusIcon.textContent = '🚫';
+        statusLabel.textContent = 'Location Denied';
+        statusLabel.className = 'location-status-label denied';
+        statusHint.textContent = 'Please enable in device settings';
+        if (enableBtn) enableBtn.style.display = 'none';
+        if (deniedWarning) deniedWarning.style.display = 'block';
+      } else {
+        // Prompt state
+        statusIcon.textContent = '📍';
+        statusLabel.textContent = 'Location Not Set';
+        statusLabel.className = 'location-status-label';
+        statusHint.textContent = 'Tap Enable to allow location access';
+        if (enableBtn) enableBtn.style.display = 'block';
+        if (deniedWarning) deniedWarning.style.display = 'none';
+      }
+      
+      // Listen for permission changes
+      permissionStatus.onchange = () => {
+        checkLocationStatusForSettings();
+      };
+    } else {
+      // Fallback: Try to get location to determine status
+      statusIcon.textContent = '📍';
+      statusLabel.textContent = 'Checking...';
+      statusLabel.className = 'location-status-label';
+      statusHint.textContent = 'Testing location access';
+      
+      navigator.geolocation.getCurrentPosition(
+        () => {
+          statusIcon.textContent = '✅';
+          statusLabel.textContent = 'Location Enabled';
+          statusLabel.className = 'location-status-label granted';
+          statusHint.textContent = 'Dispatch can see your position';
+          if (enableBtn) enableBtn.style.display = 'none';
+          if (deniedWarning) deniedWarning.style.display = 'none';
+        },
+        (error) => {
+          if (error.code === error.PERMISSION_DENIED) {
+            statusIcon.textContent = '🚫';
+            statusLabel.textContent = 'Location Denied';
+            statusLabel.className = 'location-status-label denied';
+            statusHint.textContent = 'Please enable in device settings';
+            if (enableBtn) enableBtn.style.display = 'none';
+            if (deniedWarning) deniedWarning.style.display = 'block';
+          } else {
+            statusIcon.textContent = '⚠️';
+            statusLabel.textContent = 'Location Unavailable';
+            statusLabel.className = 'location-status-label';
+            statusHint.textContent = 'Unable to get location';
+            if (enableBtn) enableBtn.style.display = 'block';
+            if (deniedWarning) deniedWarning.style.display = 'none';
+          }
+        },
+        { timeout: 5000 }
+      );
+    }
+  } catch (err) {
+    console.warn('[DriverPortal] Error checking location status:', err);
+    statusIcon.textContent = '⚠️';
+    statusLabel.textContent = 'Unknown Status';
+    statusLabel.className = 'location-status-label';
+    statusHint.textContent = 'Unable to check location permissions';
+    if (enableBtn) enableBtn.style.display = 'block';
+  }
+  
+  // Set up event listeners for buttons
+  if (enableBtn) {
+    enableBtn.onclick = async () => {
+      try {
+        await requestLocationPermission();
+        await checkLocationStatusForSettings();
+      } catch (e) {
+        console.error('[DriverPortal] Location enable error:', e);
+      }
+    };
+  }
+  
+  if (deviceSettingsBtn) {
+    deviceSettingsBtn.onclick = () => {
+      showLocationSettingsGuide();
+    };
+  }
+}
+
+// Show guide for opening device location settings
+function showLocationSettingsGuide() {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isAndroid = /Android/.test(navigator.userAgent);
+  
+  let instructions = '';
+  
+  if (isIOS) {
+    instructions = `
+      <div style="text-align:left; line-height:1.8;">
+        <strong>iPhone/iPad:</strong>
+        <ol style="margin:10px 0 0 20px;">
+          <li>Open <strong>Settings</strong></li>
+          <li>Scroll down and tap <strong>Safari</strong> (or your browser)</li>
+          <li>Tap <strong>Location</strong></li>
+          <li>Select <strong>Allow</strong></li>
+          <li>Return to this app and refresh</li>
+        </ol>
+      </div>
+    `;
+  } else if (isAndroid) {
+    instructions = `
+      <div style="text-align:left; line-height:1.8;">
+        <strong>Android:</strong>
+        <ol style="margin:10px 0 0 20px;">
+          <li>Open <strong>Settings</strong></li>
+          <li>Tap <strong>Apps</strong> or <strong>Applications</strong></li>
+          <li>Find and tap your <strong>Browser</strong></li>
+          <li>Tap <strong>Permissions</strong></li>
+          <li>Enable <strong>Location</strong></li>
+          <li>Return to this app and refresh</li>
+        </ol>
+      </div>
+    `;
+  } else {
+    instructions = `
+      <div style="text-align:left; line-height:1.8;">
+        <strong>Desktop Browser:</strong>
+        <ol style="margin:10px 0 0 20px;">
+          <li>Click the <strong>lock icon</strong> 🔒 in your address bar</li>
+          <li>Find <strong>Location</strong> settings</li>
+          <li>Change to <strong>Allow</strong></li>
+          <li>Refresh this page</li>
+        </ol>
+      </div>
+    `;
+  }
+  
+  showToast(instructions, 'info', 15000);
 }
 
 function loadPaymentSettings(payments) {

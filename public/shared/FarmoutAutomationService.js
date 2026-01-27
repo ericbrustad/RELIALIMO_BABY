@@ -1174,7 +1174,25 @@ Accept/Decline: {portal_link}`;
         await this.reservationManager.assignDriver(reservationId, driverId, vehicleId);
       }
       
-      this.logAutomationEvent(reservationId, `Driver and vehicle assigned to reservation.`);
+      // Update database with assigned status
+      if (this.reservationManager.updateReservation) {
+        await this.reservationManager.updateReservation(reservationId, {
+          assigned_driver_id: driverId,
+          assigned_driver_name: driver.name || `${driver.first_name || ''} ${driver.last_name || ''}`.trim(),
+          farmout_status: 'assigned',
+          status: 'farm_out_assigned',
+          driver_status: 'assigned'
+        });
+      }
+      
+      // Add to email queue for notification
+      const reservation = this.reservationManager.getReservationById(reservationId);
+      if (driver.email && window.driverEmailQueue && reservation) {
+        window.driverEmailQueue.addToQueue(reservation, driver, 'assignment');
+        this.logAutomationEvent(reservationId, `📧 Email queued for ${driver.name || 'driver'}`);
+      }
+      
+      this.logAutomationEvent(reservationId, `✅ Driver and vehicle assigned - trip is now UPCOMING for driver.`);
     } catch (e) {
       console.error('[FarmoutAutomation] Failed to assign driver:', e);
     }

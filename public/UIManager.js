@@ -1489,7 +1489,7 @@ export class UIManager {
     this.logFarmoutActivity(this.selectedFarmoutReservationId, `Mode set to ${canonicalMode.toUpperCase()}`);
   }
 
-  handleFarmoutAssignment() {
+  async handleFarmoutAssignment() {
     if (!this.selectedFarmoutReservationId) return;
     const select = document.getElementById('farmoutDriverSelect');
     if (!select) return;
@@ -1506,16 +1506,48 @@ export class UIManager {
       return;
     }
 
+    const reservation = this.reservationManager.getReservationById(this.selectedFarmoutReservationId);
+    if (!reservation) return;
+
+    // Assign the driver locally
     this.reservationManager.assignFarmoutDriver(this.selectedFarmoutReservationId, {
       id: driverInfo.id,
       name: driverInfo.name,
       affiliate: driverInfo.affiliate || '',
-      phone: driverInfo.phone || '',
+      phone: driverInfo.phone || driverInfo.cell_phone || '',
+      email: driverInfo.email || '',
       vehicleType: driverInfo.vehicle
     });
 
-    this.logFarmoutActivity(this.selectedFarmoutReservationId, `Assigned to ${driverInfo.name}`);
+    // Update database - set as assigned and upcoming for driver
+    try {
+      await this.reservationManager.updateReservation(this.selectedFarmoutReservationId, {
+        assigned_driver_id: driverInfo.id,
+        assigned_driver_name: driverInfo.name,
+        farmout_status: 'assigned',
+        status: 'farm_out_assigned',
+        driver_status: 'assigned'
+      });
+      console.log('[Farmout] ✅ Driver assigned and saved to database');
+    } catch (err) {
+      console.error('[Farmout] Failed to update reservation:', err);
+    }
+
+    // Add to email queue - emails sent every 30 seconds
+    if (driverInfo.email && window.driverEmailQueue) {
+      window.driverEmailQueue.addToQueue(reservation, driverInfo, 'assignment');
+      this.logFarmoutActivity(this.selectedFarmoutReservationId, `📧 Email queued for ${driverInfo.name}`);
+    }
+
+    this.logFarmoutActivity(this.selectedFarmoutReservationId, `✅ Assigned to ${driverInfo.name} - Trip is now UPCOMING`);
     this.renderActivityLog(this.selectedFarmoutReservationId);
+    
+    // Refresh the UI to show updated status
+    const updatedRes = this.reservationManager.getReservationById(this.selectedFarmoutReservationId);
+    if (updatedRes) {
+      this.updateOfferStatusIndicator(updatedRes);
+      this.updateFarmoutState(updatedRes);
+    }
   }
 
   handleFarmoutClear() {
