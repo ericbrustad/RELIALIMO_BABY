@@ -89,6 +89,57 @@
             Ticker
           </label>
 
+          <!-- Ticker Sources Multi-Select -->
+          <div class="ticker-sources-container">
+            <label class="ticker-sources-label">Ticker Sources:</label>
+            <div class="ticker-sources-dropdown" id="tickerSourcesDropdown">
+              <button type="button" class="ticker-sources-btn" id="tickerSourcesBtn">
+                <span id="tickerSourcesText">Select sources...</span>
+                <span class="dropdown-arrow">▼</span>
+              </button>
+              <div class="ticker-sources-menu" id="tickerSourcesMenu">
+                <label class="ticker-source-option">
+                  <input type="checkbox" value="holidays" checked /> 🎉 Holidays & Observances
+                </label>
+                <label class="ticker-source-option">
+                  <input type="checkbox" value="world-news" /> 🌍 World News
+                </label>
+                <label class="ticker-source-option">
+                  <input type="checkbox" value="local-news" /> 📰 Local News
+                </label>
+                <label class="ticker-source-option">
+                  <input type="checkbox" value="traffic" /> 🚗 Traffic News
+                </label>
+                <label class="ticker-source-option">
+                  <input type="checkbox" value="dot-info" /> 🚧 DOT Information
+                </label>
+                <label class="ticker-source-option">
+                  <input type="checkbox" value="weather" /> ⛅ Weather
+                </label>
+                <label class="ticker-source-option">
+                  <input type="checkbox" value="sports" checked /> 🏈 Sports & Events
+                </label>
+                <label class="ticker-source-option">
+                  <input type="checkbox" value="airport" /> ✈️ Airport Info
+                </label>
+                <label class="ticker-source-option">
+                  <input type="checkbox" value="stocks" /> 📈 Market Highlights
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Ticker Speed Control -->
+          <div class="ticker-speed-container">
+            <label for="tickerSpeed">Speed:</label>
+            <select id="tickerSpeed" class="ticker-speed-select">
+              <option value="slow">Slow</option>
+              <option value="normal" selected>Normal</option>
+              <option value="fast">Fast</option>
+              <option value="ultra">Ultra</option>
+            </select>
+          </div>
+
           <label class="toggle-label" for="showFederalHolidays">
             <input type="checkbox" id="showFederalHolidays" checked />
             <span class="toggle-ui" aria-hidden="true"></span>
@@ -151,8 +202,9 @@
         </div>
       </div>
 
-      <!-- Holidays / Observances Ticker -->
-      <div class="holiday-ticker" aria-label="Holidays ticker">
+      <!-- Enhanced Ticker with Multiple Sources -->
+      <div class="holiday-ticker" id="mainTicker" aria-label="Information ticker">
+        <div class="ticker-source-label" id="tickerSourceLabel">📢</div>
         <div class="holiday-ticker-track" id="holidayTickerTrack"></div>
       </div>
 

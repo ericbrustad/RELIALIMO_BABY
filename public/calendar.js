@@ -227,6 +227,18 @@ class Calendar {
       });
     }
 
+    // Ticker sources dropdown
+    this.setupTickerSourcesDropdown();
+
+    // Ticker speed control
+    const tickerSpeed = document.getElementById('tickerSpeed');
+    if (tickerSpeed) {
+      tickerSpeed.addEventListener('change', () => {
+        this.applyTickerSpeed();
+        this.saveSettingsFromUi();
+      });
+    }
+
     const showFederal = document.getElementById('showFederalHolidays');
     if (showFederal) {
       showFederal.addEventListener('change', () => {
@@ -819,6 +831,20 @@ class Calendar {
       setSelect('carFilter', s.carFilter);
       setSelect('vehicleTypeFilter', s.vehicleTypeFilter);
       setSelect('statusFilter', s.statusFilter);
+      setSelect('tickerSpeed', s.tickerSpeed);
+      
+      // Load ticker sources
+      if (Array.isArray(s.tickerSources)) {
+        const menu = document.getElementById('tickerSourcesMenu');
+        if (menu) {
+          menu.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.checked = s.tickerSources.includes(cb.value);
+          });
+        }
+        this.updateTickerSourcesButtonText();
+      }
+      
+      this.applyTickerSpeed();
 
       // Ensure view buttons reflect the loaded view
       document.querySelectorAll('.view-type-btn').forEach(btn => {
@@ -846,7 +872,9 @@ class Calendar {
         driverFilter: document.getElementById('driverFilter')?.value ?? '',
         carFilter: document.getElementById('carFilter')?.value ?? '',
         vehicleTypeFilter: document.getElementById('vehicleTypeFilter')?.value ?? '',
-        statusFilter: document.getElementById('statusFilter')?.value ?? ''
+        statusFilter: document.getElementById('statusFilter')?.value ?? '',
+        tickerSources: this.getSelectedTickerSources(),
+        tickerSpeed: document.getElementById('tickerSpeed')?.value ?? 'normal'
       };
       localStorage.setItem(this.settingsStorageKey, JSON.stringify(settings));
     } catch (e) {
@@ -854,9 +882,77 @@ class Calendar {
     }
   }
 
+  // Ticker sources dropdown setup
+  setupTickerSourcesDropdown() {
+    const btn = document.getElementById('tickerSourcesBtn');
+    const menu = document.getElementById('tickerSourcesMenu');
+    
+    if (!btn || !menu) return;
+    
+    // Toggle dropdown on button click
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.classList.toggle('open');
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!menu.contains(e.target) && e.target !== btn) {
+        menu.classList.remove('open');
+      }
+    });
+    
+    // Handle checkbox changes
+    menu.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+      checkbox.addEventListener('change', () => {
+        this.updateTickerSourcesButtonText();
+        this.updateHolidayTicker();
+        this.saveSettingsFromUi();
+      });
+    });
+    
+    this.updateTickerSourcesButtonText();
+  }
+  
+  getSelectedTickerSources() {
+    const menu = document.getElementById('tickerSourcesMenu');
+    if (!menu) return ['holidays'];
+    
+    const sources = [];
+    menu.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+      sources.push(cb.value);
+    });
+    return sources;
+  }
+  
+  updateTickerSourcesButtonText() {
+    const textEl = document.getElementById('tickerSourcesText');
+    if (!textEl) return;
+    
+    const sources = this.getSelectedTickerSources();
+    if (sources.length === 0) {
+      textEl.textContent = 'Select sources...';
+    } else if (sources.length === 1) {
+      textEl.textContent = sources[0].replace('-', ' ');
+    } else {
+      textEl.textContent = `${sources.length} sources`;
+    }
+  }
+  
+  applyTickerSpeed() {
+    const ticker = document.getElementById('mainTicker');
+    const speed = document.getElementById('tickerSpeed')?.value ?? 'normal';
+    
+    if (ticker) {
+      ticker.classList.remove('speed-slow', 'speed-normal', 'speed-fast', 'speed-ultra');
+      ticker.classList.add(`speed-${speed}`);
+    }
+  }
+
   applyTickerVisibilityFromUi() {
     const enabled = document.getElementById('showTicker')?.checked ?? false;
     document.body.classList.toggle('show-holiday-ticker', !!enabled);
+    this.applyTickerSpeed();
   }
 
   updateHolidayTicker() {
@@ -869,28 +965,159 @@ class Calendar {
       return;
     }
 
+    const sources = this.getSelectedTickerSources();
     const showFederal = document.getElementById('showFederalHolidays')?.checked ?? true;
     const showMajor = document.getElementById('showMajorObservances')?.checked ?? false;
 
     const now = new Date();
     const horizon = new Date(now);
     horizon.setDate(horizon.getDate() + 120);
-    const events = this.buildTickerItems({ showFederal, showMajor, now, horizon });
+    
+    // Build items from all selected sources
+    let allItems = [];
+    
+    if (sources.includes('holidays')) {
+      allItems.push(...this.buildTickerItems({ showFederal, showMajor, now, horizon }));
+    }
+    if (sources.includes('world-news')) {
+      allItems.push(...this.getWorldNewsItems());
+    }
+    if (sources.includes('local-news')) {
+      allItems.push(...this.getLocalNewsItems());
+    }
+    if (sources.includes('traffic')) {
+      allItems.push(...this.getTrafficItems());
+    }
+    if (sources.includes('dot-info')) {
+      allItems.push(...this.getDOTItems());
+    }
+    if (sources.includes('weather')) {
+      allItems.push(...this.getWeatherItems());
+    }
+    if (sources.includes('sports')) {
+      allItems.push(...this.getSportsItems(now));
+    }
+    if (sources.includes('airport')) {
+      allItems.push(...this.getAirportItems());
+    }
+    if (sources.includes('stocks')) {
+      allItems.push(...this.getStocksItems());
+    }
 
-    if (events.length === 0) {
-      track.textContent = 'No upcoming items';
+    if (allItems.length === 0) {
+      track.textContent = 'No ticker items to display';
       return;
     }
 
-    const html = events
+    // Sort by date if has date, otherwise keep order
+    allItems.sort((a, b) => {
+      if (a.date && b.date) return a.date - b.date;
+      return 0;
+    });
+
+    const html = allItems
       .map(e => {
-        const text = `${this.formatTickerDateTime(e.date)} — ${e.name}`;
-        return `<span class="holiday-ticker-item"><span class="holiday-ticker-dot"></span>${this.escapeHtml(text)}</span>`;
+        const dateStr = e.date ? `${this.formatTickerDateTime(e.date)} — ` : '';
+        const text = `${dateStr}${e.name}`;
+        const sourceClass = e.source || 'holidays';
+        return `<span class="holiday-ticker-item"><span class="holiday-ticker-dot ${sourceClass}"></span>${this.escapeHtml(text)}</span>`;
       })
       .join('');
 
     // Duplicate the content for seamless looping
     track.innerHTML = html + html;
+  }
+  
+  // World News Items (simulated - in production would fetch from API)
+  getWorldNewsItems() {
+    return [
+      { name: '🌍 Global economic summit concludes with new trade agreements', source: 'world-news' },
+      { name: '🌍 International climate accord gains 15 new signatories', source: 'world-news' },
+      { name: '🌍 UN announces new humanitarian aid initiative', source: 'world-news' },
+      { name: '🌍 Technology leaders meet to discuss AI governance', source: 'world-news' }
+    ];
+  }
+  
+  // Local News Items
+  getLocalNewsItems() {
+    const city = this.getCompanyCity() || 'Local';
+    return [
+      { name: `📰 ${city}: City council approves new infrastructure project`, source: 'local-news' },
+      { name: `📰 ${city}: Community center opens expanded facilities`, source: 'local-news' },
+      { name: `📰 ${city}: Local schools announce summer programs`, source: 'local-news' }
+    ];
+  }
+  
+  // Traffic Items
+  getTrafficItems() {
+    const city = this.getCompanyCity() || 'Local';
+    return [
+      { name: `🚗 ${city}: I-94 construction delays expected through Friday`, source: 'traffic' },
+      { name: `🚗 ${city}: Downtown traffic advisory for weekend events`, source: 'traffic' },
+      { name: `🚗 ${city}: Highway 100 lane closures overnight`, source: 'traffic' },
+      { name: '🚗 Rush hour delays averaging 15 minutes on major routes', source: 'traffic' }
+    ];
+  }
+  
+  // DOT Information Items
+  getDOTItems() {
+    return [
+      { name: '🚧 DOT: Bridge inspection scheduled for next week', source: 'dot-info' },
+      { name: '🚧 DOT: Winter road maintenance crews on standby', source: 'dot-info' },
+      { name: '🚧 DOT: New traffic signals installed at major intersection', source: 'dot-info' },
+      { name: '🚧 DOT: Road resurfacing project 75% complete', source: 'dot-info' }
+    ];
+  }
+  
+  // Weather Items
+  getWeatherItems() {
+    const city = this.getCompanyCity() || 'Local';
+    return [
+      { name: `⛅ ${city}: Partly cloudy, high 45°F, low 32°F`, source: 'weather' },
+      { name: `🌧️ ${city}: 40% chance of rain tomorrow`, source: 'weather' },
+      { name: `❄️ ${city}: Winter weather advisory in effect this weekend`, source: 'weather' },
+      { name: `☀️ ${city}: Clear skies expected mid-week`, source: 'weather' }
+    ];
+  }
+  
+  // Sports Items (with dates)
+  getSportsItems(now) {
+    const base = this.startOfDay(now);
+    return [
+      { name: '🏈 NFL: Sunday Night Football kicks off at 7:20 PM', date: this.addDays(base, 2, 19, 20), source: 'sports' },
+      { name: '🏀 NBA: Lakers vs. Celtics tonight at 8:00 PM', date: this.addDays(base, 1, 20, 0), source: 'sports' },
+      { name: '🏒 NHL: Wild host home game Friday at 7:00 PM', date: this.addDays(base, 3, 19, 0), source: 'sports' },
+      { name: '⚾ MLB Spring Training begins in 3 weeks', date: this.addDays(base, 21, 13, 0), source: 'sports' }
+    ];
+  }
+  
+  // Airport Items
+  getAirportItems() {
+    return [
+      { name: '✈️ MSP: Terminal 1 security wait times averaging 15 min', source: 'airport' },
+      { name: '✈️ MSP: Parking ramp A at 85% capacity', source: 'airport' },
+      { name: '✈️ Flight delays expected due to weather in Chicago', source: 'airport' },
+      { name: '✈️ TSA PreCheck lanes open at all terminals', source: 'airport' }
+    ];
+  }
+  
+  // Stock Market Items
+  getStocksItems() {
+    return [
+      { name: '📈 DOW +1.2% | S&P 500 +0.8% | NASDAQ +1.5%', source: 'stocks' },
+      { name: '📈 Oil prices stable at $78/barrel', source: 'stocks' },
+      { name: '📈 Tech sector leads market gains this week', source: 'stocks' },
+      { name: '📈 Gold trading at $2,050/oz, up 0.3%', source: 'stocks' }
+    ];
+  }
+  
+  getCompanyCity() {
+    try {
+      const companyInfo = JSON.parse(localStorage.getItem('companyInfo') || '{}');
+      return companyInfo.city || companyInfo.companyCity || '';
+    } catch {
+      return '';
+    }
   }
 
   startOfDay(d) {
