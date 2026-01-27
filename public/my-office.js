@@ -4811,15 +4811,22 @@ class MyOffice {
     // Status is stored in uppercase (ACTIVE/INACTIVE) in database, but HTML options are lowercase
     const statusValue = data.status ? data.status.toString().toLowerCase() : 'active';
     setSelectValue(container.querySelector('[data-vehicle-field="status"]'), statusValue, 'active');
-    setSelectValue(container.querySelector('[data-vehicle-field="pricing_basis"]'), data.pricing_basis, 'hours');
+    // pricing_basis is stored in uppercase in DB (HOURS/MILES/DAYS), but HTML select uses lowercase
+    const pricingBasisValue = data.pricing_basis ? data.pricing_basis.toString().toLowerCase() : 'hours';
+    setSelectValue(container.querySelector('[data-vehicle-field="pricing_basis"]'), pricingBasisValue, 'hours');
     setSelectValue(container.querySelector('[data-vehicle-field="passenger_capacity"]'), data.passenger_capacity, '2');
     setSelectValue(container.querySelector('[data-vehicle-field="luggage_capacity"]'), data.luggage_capacity, '6');
     
-    // Switch to the correct rate type tab based on pricing_basis
+    // Switch to the correct rate type tab based on pricing_basis (handle both upper and lowercase)
     if (data.pricing_basis) {
       const pricingBasisMap = {
         'hours': 'per-hour',
+        'HOURS': 'per-hour',
         'passengers': 'per-passenger',
+        'miles': 'distance',
+        'MILES': 'distance',
+        'days': 'per-hour',
+        'DAYS': 'per-hour',
         'distance': 'distance'
       };
       const rateType = pricingBasisMap[data.pricing_basis] || 'per-hour';
@@ -4980,7 +4987,7 @@ class MyOffice {
       id: vehicleId,
       name,
       status: 'active',
-      pricing_basis: 'hours',
+      pricing_basis: 'HOURS',
       passenger_capacity: '2',
       luggage_capacity: '2',
       color_hex: '#000000',
@@ -5031,16 +5038,17 @@ class MyOffice {
     // Capture pricing_basis from the active rate type tab
     const activeRateTab = document.querySelector('.rates-subtab.active');
     if (activeRateTab && activeRateTab.dataset.rateType) {
-      // Map rate-type values to pricing_basis values
+      // Map rate-type values to pricing_basis values (uppercase for DB constraint)
       const rateTypeMap = {
-        'per-hour': 'hours',
-        'per-passenger': 'passengers',
-        'distance': 'distance'
+        'per-hour': 'HOURS',
+        'per-passenger': 'HOURS',  // Passengers still use hourly base
+        'distance': 'MILES'
       };
-      draft.pricing_basis = rateTypeMap[activeRateTab.dataset.rateType] || 'hours';
+      draft.pricing_basis = rateTypeMap[activeRateTab.dataset.rateType] || 'HOURS';
     } else {
-      // Preserve existing pricing_basis if no tab is active
-      draft.pricing_basis = draft.pricing_basis || 'hours';
+      // Preserve existing pricing_basis if no tab is active, convert to uppercase
+      const existing = draft.pricing_basis || 'hours';
+      draft.pricing_basis = existing.toUpperCase();
     }
 
     // Handle service_type_tags multi-select
@@ -5431,7 +5439,7 @@ class MyOffice {
       id: vehicleId,
       name: 'New Vehicle Type',
       status: 'active',
-      pricing_basis: 'hours',
+      pricing_basis: 'HOURS',
       passenger_capacity: '2',
       luggage_capacity: '2',
       color_hex: '#000000',

@@ -613,8 +613,11 @@ class MyOffice {
         const btn = target instanceof Element ? target.closest('.sidebar-btn') : null;
         if (btn && btn.dataset.driverSetting) {
           const setting = btn.dataset.driverSetting;
-          console.log('Navigating to driver setting:', setting);
-          this.navigateToDriverSetting(setting);
+          console.log('Switching to driver setting:', setting);
+          this.showDriverSettingPanel(setting);
+          // Update active state
+          driverAppSettingsGroup.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
         }
       });
     }
@@ -627,8 +630,11 @@ class MyOffice {
         const btn = target instanceof Element ? target.closest('.sidebar-btn') : null;
         if (btn && btn.dataset.customerSetting) {
           const setting = btn.dataset.customerSetting;
-          console.log('Navigating to customer setting:', setting);
-          this.navigateToCustomerSetting(setting);
+          console.log('Switching to customer setting:', setting);
+          this.showCustomerSettingPanel(setting);
+          // Update active state
+          customerAccountSettingsGroup.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
         }
       });
     }
@@ -2372,6 +2378,7 @@ class MyOffice {
       'service-types': 'service-types.html',
       'partner-settings': null,
       'system-mapping': 'system-mapping.html',
+      'portal-settings': 'portal-settings.html',
       'data-reduction': null,
       'electronic-fax': null,
       'sms-provider': 'sms-provider.html',
@@ -2431,8 +2438,8 @@ class MyOffice {
     const normalLayout = document.getElementById('normalLayout');
     const resourcesContainer = document.getElementById('companyResourcesContainer');
     const customFormsSection = document.getElementById('custom-forms-section');
-    const driverAppSettingsSection = document.getElementById('driver-app-settings-section');
-    const customerAccountSettingsSection = document.getElementById('customer-account-settings-section');
+    const driverAppSection = document.getElementById('driver-app-settings-section');
+    const customerAccountSection = document.getElementById('customer-account-settings-section');
     const sidebarGroups = {
       'company-settings': document.getElementById('companySettingsGroup'),
       'rate-management': document.getElementById('rateManagementGroup'),
@@ -2445,8 +2452,8 @@ class MyOffice {
     if (normalLayout) normalLayout.style.display = 'none';
     if (resourcesContainer) resourcesContainer.style.display = 'none';
     if (customFormsSection) customFormsSection.style.display = 'none';
-    if (driverAppSettingsSection) driverAppSettingsSection.style.display = 'none';
-    if (customerAccountSettingsSection) customerAccountSettingsSection.style.display = 'none';
+    if (driverAppSection) driverAppSection.style.display = 'none';
+    if (customerAccountSection) customerAccountSection.style.display = 'none';
 
     Object.values(sidebarGroups).forEach(group => {
       if (group) group.style.display = 'none';
@@ -2477,14 +2484,14 @@ class MyOffice {
         if (sidebarGroups['custom-forms']) sidebarGroups['custom-forms'].style.display = 'block';
         break;
       case 'driver-app-settings':
-        if (driverAppSettingsSection) driverAppSettingsSection.style.display = 'block';
+        if (driverAppSection) driverAppSection.style.display = 'block';
         if (sidebarGroups['driver-app-settings']) sidebarGroups['driver-app-settings'].style.display = 'block';
-        this.navigateToDriverSetting('portal-branding');
+        this.showDriverSettingPanel('portal-branding');
         break;
       case 'customer-account-settings':
-        if (customerAccountSettingsSection) customerAccountSettingsSection.style.display = 'block';
+        if (customerAccountSection) customerAccountSection.style.display = 'block';
         if (sidebarGroups['customer-account-settings']) sidebarGroups['customer-account-settings'].style.display = 'block';
-        this.navigateToCustomerSetting('portal-branding');
+        this.showCustomerSettingPanel('portal-branding');
         break;
       default:
         if (normalLayout) normalLayout.style.display = 'block';
@@ -4804,15 +4811,22 @@ class MyOffice {
     // Status is stored in uppercase (ACTIVE/INACTIVE) in database, but HTML options are lowercase
     const statusValue = data.status ? data.status.toString().toLowerCase() : 'active';
     setSelectValue(container.querySelector('[data-vehicle-field="status"]'), statusValue, 'active');
-    setSelectValue(container.querySelector('[data-vehicle-field="pricing_basis"]'), data.pricing_basis, 'hours');
+    // pricing_basis is stored in uppercase in DB (HOURS/MILES/DAYS), but HTML select uses lowercase
+    const pricingBasisValue = data.pricing_basis ? data.pricing_basis.toString().toLowerCase() : 'hours';
+    setSelectValue(container.querySelector('[data-vehicle-field="pricing_basis"]'), pricingBasisValue, 'hours');
     setSelectValue(container.querySelector('[data-vehicle-field="passenger_capacity"]'), data.passenger_capacity, '2');
     setSelectValue(container.querySelector('[data-vehicle-field="luggage_capacity"]'), data.luggage_capacity, '6');
     
-    // Switch to the correct rate type tab based on pricing_basis
+    // Switch to the correct rate type tab based on pricing_basis (handle both upper and lowercase)
     if (data.pricing_basis) {
       const pricingBasisMap = {
         'hours': 'per-hour',
+        'HOURS': 'per-hour',
         'passengers': 'per-passenger',
+        'miles': 'distance',
+        'MILES': 'distance',
+        'days': 'per-hour',
+        'DAYS': 'per-hour',
         'distance': 'distance'
       };
       const rateType = pricingBasisMap[data.pricing_basis] || 'per-hour';
@@ -4973,7 +4987,7 @@ class MyOffice {
       id: vehicleId,
       name,
       status: 'active',
-      pricing_basis: 'hours',
+      pricing_basis: 'HOURS',
       passenger_capacity: '2',
       luggage_capacity: '2',
       color_hex: '#000000',
@@ -5024,16 +5038,17 @@ class MyOffice {
     // Capture pricing_basis from the active rate type tab
     const activeRateTab = document.querySelector('.rates-subtab.active');
     if (activeRateTab && activeRateTab.dataset.rateType) {
-      // Map rate-type values to pricing_basis values
+      // Map rate-type values to pricing_basis values (uppercase for DB constraint)
       const rateTypeMap = {
-        'per-hour': 'hours',
-        'per-passenger': 'passengers',
-        'distance': 'distance'
+        'per-hour': 'HOURS',
+        'per-passenger': 'HOURS',  // Passengers still use hourly base
+        'distance': 'MILES'
       };
-      draft.pricing_basis = rateTypeMap[activeRateTab.dataset.rateType] || 'hours';
+      draft.pricing_basis = rateTypeMap[activeRateTab.dataset.rateType] || 'HOURS';
     } else {
-      // Preserve existing pricing_basis if no tab is active
-      draft.pricing_basis = draft.pricing_basis || 'hours';
+      // Preserve existing pricing_basis if no tab is active, convert to uppercase
+      const existing = draft.pricing_basis || 'hours';
+      draft.pricing_basis = existing.toUpperCase();
     }
 
     // Handle service_type_tags multi-select
@@ -5424,7 +5439,7 @@ class MyOffice {
       id: vehicleId,
       name: 'New Vehicle Type',
       status: 'active',
-      pricing_basis: 'hours',
+      pricing_basis: 'HOURS',
       passenger_capacity: '2',
       luggage_capacity: '2',
       color_hex: '#000000',
@@ -6414,45 +6429,31 @@ class MyOffice {
     
     setValue('fleetYear', record.year || '');
     
-    // Set Make first, then populate Model options based on Make, then set Model value
+    // Handle Make dropdown - add custom option if not in list
     const makeSelect = document.getElementById('fleetMake');
-    const modelSelect = document.getElementById('fleetModel');
-    const colorSelect = document.getElementById('fleetColor');
-    
-    if (makeSelect) {
-      // Check if the make value exists in dropdown, if not add it
-      if (record.make && !makeSelect.querySelector(`option[value="${record.make}"]`)) {
+    if (makeSelect && record.make) {
+      if (!makeSelect.querySelector(`option[value="${record.make}"]`)) {
         const customOption = document.createElement('option');
         customOption.value = record.make;
         customOption.textContent = record.make;
         makeSelect.appendChild(customOption);
+        console.log('[Fleet] Added custom make option:', record.make);
       }
-      makeSelect.value = record.make || '';
+      makeSelect.value = record.make;
     }
     
-    // Populate models based on selected make
+    // Populate models based on make, then set value
     this.populateFleetModelOptions();
-    
-    if (modelSelect) {
-      // Check if the model value exists in dropdown, if not add it
-      if (record.model && !modelSelect.querySelector(`option[value="${record.model}"]`)) {
+    const modelSelect = document.getElementById('fleetModel');
+    if (modelSelect && record.model) {
+      if (!modelSelect.querySelector(`option[value="${record.model}"]`)) {
         const customOption = document.createElement('option');
         customOption.value = record.model;
         customOption.textContent = record.model;
         modelSelect.appendChild(customOption);
+        console.log('[Fleet] Added custom model option:', record.model);
       }
-      modelSelect.value = record.model || '';
-    }
-    
-    if (colorSelect) {
-      // Check if the color value exists in dropdown, if not add it
-      if (record.color && !colorSelect.querySelector(`option[value="${record.color}"]`)) {
-        const customOption = document.createElement('option');
-        customOption.value = record.color;
-        customOption.textContent = record.color;
-        colorSelect.appendChild(customOption);
-      }
-      colorSelect.value = record.color || '';
+      modelSelect.value = record.model;
     }
     
     // Auto-compute Vehicle Title from Year Make Model
@@ -6460,6 +6461,18 @@ class MyOffice {
     setValue('fleetVehTitle', computedTitle || record.veh_title || '');
     console.log('[Fleet] Set veh_title to:', computedTitle || record.veh_title);
     
+    // Handle Color dropdown - add custom option if not in list
+    const colorSelect = document.getElementById('fleetColor');
+    if (colorSelect && record.color) {
+      if (!colorSelect.querySelector(`option[value="${record.color}"]`)) {
+        const customOption = document.createElement('option');
+        customOption.value = record.color;
+        customOption.textContent = record.color;
+        colorSelect.appendChild(customOption);
+        console.log('[Fleet] Added custom color option:', record.color);
+      }
+      colorSelect.value = record.color;
+    }
     setValue('fleetPassengers', record.passenger_capacity || record.passengers || record.capacity || record.veh_pax_capacity);
     setValue('fleetVin', record.vin);
     setValue('fleetLicense', record.license_plate);
@@ -7152,587 +7165,6 @@ Would you also like to delete this driver?`
     }
   }
 
-  navigateToDriverSetting(setting) {
-    // Update sidebar button active state
-    const driverButtons = document.querySelectorAll('#driverAppSettingsGroup .sidebar-btn');
-    driverButtons.forEach(btn => {
-      btn.classList.remove('active');
-      if (btn.dataset.driverSetting === setting) {
-        btn.classList.add('active');
-      }
-    });
-
-    // Hide all driver setting panels
-    document.querySelectorAll('.driver-setting-panel').forEach(panel => {
-      panel.style.display = 'none';
-    });
-
-    // Show the appropriate panel
-    const panelId = 'driver-' + setting;
-    const panel = document.getElementById(panelId);
-    if (panel) {
-      panel.style.display = 'block';
-    }
-    
-    this.currentDriverSetting = setting;
-  }
-
-  navigateToCustomerSetting(setting) {
-    // Update sidebar button active state
-    const customerButtons = document.querySelectorAll('#customerAccountSettingsGroup .sidebar-btn');
-    customerButtons.forEach(btn => {
-      btn.classList.remove('active');
-      if (btn.dataset.customerSetting === setting) {
-        btn.classList.add('active');
-      }
-    });
-
-    // Hide all customer setting panels
-    document.querySelectorAll('.customer-setting-panel').forEach(panel => {
-      panel.style.display = 'none';
-    });
-
-    // Show the appropriate panel
-    const panelId = 'customer-' + setting;
-    const panel = document.getElementById(panelId);
-    if (panel) {
-      panel.style.display = 'block';
-    }
-    
-    this.currentCustomerSetting = setting;
-  }
-
-  // Save Driver App Settings to localStorage
-  saveDriverAppSettings() {
-    const settings = {
-      portalBranding: {
-        primaryColor: document.getElementById('driverPrimaryColor')?.value || '#d4af37',
-        welcomeMessage: document.getElementById('driverWelcomeMessage')?.value || ''
-      },
-      onboarding: {
-        requireEmailVerify: document.getElementById('driverRequireEmailVerify')?.value || 'yes',
-        requirePhoneVerify: document.getElementById('driverRequirePhoneVerify')?.value || 'yes',
-        autoApprove: document.getElementById('driverAutoApprove')?.value || 'no',
-        onboardingTemplate: document.getElementById('driverOnboardingTemplate')?.value || 'default'
-      },
-      requirements: {
-        driversLicense: document.querySelector('#driver-requirements input[type="checkbox"]:nth-of-type(1)')?.checked ?? true,
-        vehicleRegistration: document.querySelector('#driver-requirements input[type="checkbox"]:nth-of-type(2)')?.checked ?? true,
-        insuranceCertificate: document.querySelector('#driver-requirements input[type="checkbox"]:nth-of-type(3)')?.checked ?? true,
-        tcpLicense: document.querySelector('#driver-requirements input[type="checkbox"]:nth-of-type(4)')?.checked ?? false,
-        backgroundCheck: document.querySelector('#driver-requirements input[type="checkbox"]:nth-of-type(5)')?.checked ?? false,
-        drugTest: document.querySelector('#driver-requirements input[type="checkbox"]:nth-of-type(6)')?.checked ?? false
-      },
-      notifications: {
-        newTripNotify: document.getElementById('driverNewTripNotify')?.value || 'push-sms',
-        offerExpiry: document.getElementById('driverOfferExpiry')?.value || '15',
-        pickupReminder: document.getElementById('driverPickupReminder')?.value || '60',
-        dailySummary: document.getElementById('driverDailySummary')?.value || 'yes'
-      },
-      tripSettings: {
-        statusUpdates: document.getElementById('driverStatusUpdates')?.value || 'all',
-        gpsTracking: document.getElementById('driverGpsTracking')?.value || 'always',
-        incidentals: document.getElementById('driverIncidentals')?.value || 'required',
-        photoUpload: document.getElementById('driverPhotoUpload')?.value || 'optional'
-      },
-      paymentSettings: {
-        payRateType: document.getElementById('driverPayRateType')?.value || 'percentage',
-        payRate: document.getElementById('driverPayRate')?.value || '70',
-        cashCollection: document.getElementById('driverCashCollection')?.value || 'yes',
-        paySchedule: document.getElementById('driverPaySchedule')?.value || 'weekly'
-      }
-    };
-
-    localStorage.setItem('driverAppSettings', JSON.stringify(settings));
-    console.log('Driver App Settings saved:', settings);
-    alert('Driver App Settings saved successfully!');
-  }
-
-  // Load Driver App Settings from localStorage
-  loadDriverAppSettings() {
-    const saved = localStorage.getItem('driverAppSettings');
-    if (!saved) return;
-
-    try {
-      const settings = JSON.parse(saved);
-      
-      // Portal Branding
-      if (settings.portalBranding) {
-        if (document.getElementById('driverPrimaryColor')) document.getElementById('driverPrimaryColor').value = settings.portalBranding.primaryColor || '#d4af37';
-        if (document.getElementById('driverWelcomeMessage')) document.getElementById('driverWelcomeMessage').value = settings.portalBranding.welcomeMessage || '';
-      }
-
-      // Onboarding
-      if (settings.onboarding) {
-        if (document.getElementById('driverRequireEmailVerify')) document.getElementById('driverRequireEmailVerify').value = settings.onboarding.requireEmailVerify || 'yes';
-        if (document.getElementById('driverRequirePhoneVerify')) document.getElementById('driverRequirePhoneVerify').value = settings.onboarding.requirePhoneVerify || 'yes';
-        if (document.getElementById('driverAutoApprove')) document.getElementById('driverAutoApprove').value = settings.onboarding.autoApprove || 'no';
-        if (document.getElementById('driverOnboardingTemplate')) document.getElementById('driverOnboardingTemplate').value = settings.onboarding.onboardingTemplate || 'default';
-      }
-
-      // Notifications
-      if (settings.notifications) {
-        if (document.getElementById('driverNewTripNotify')) document.getElementById('driverNewTripNotify').value = settings.notifications.newTripNotify || 'push-sms';
-        if (document.getElementById('driverOfferExpiry')) document.getElementById('driverOfferExpiry').value = settings.notifications.offerExpiry || '15';
-        if (document.getElementById('driverPickupReminder')) document.getElementById('driverPickupReminder').value = settings.notifications.pickupReminder || '60';
-        if (document.getElementById('driverDailySummary')) document.getElementById('driverDailySummary').value = settings.notifications.dailySummary || 'yes';
-      }
-
-      // Trip Settings
-      if (settings.tripSettings) {
-        if (document.getElementById('driverStatusUpdates')) document.getElementById('driverStatusUpdates').value = settings.tripSettings.statusUpdates || 'all';
-        if (document.getElementById('driverGpsTracking')) document.getElementById('driverGpsTracking').value = settings.tripSettings.gpsTracking || 'always';
-        if (document.getElementById('driverIncidentals')) document.getElementById('driverIncidentals').value = settings.tripSettings.incidentals || 'required';
-        if (document.getElementById('driverPhotoUpload')) document.getElementById('driverPhotoUpload').value = settings.tripSettings.photoUpload || 'optional';
-      }
-
-      // Payment Settings
-      if (settings.paymentSettings) {
-        if (document.getElementById('driverPayRateType')) document.getElementById('driverPayRateType').value = settings.paymentSettings.payRateType || 'percentage';
-        if (document.getElementById('driverPayRate')) document.getElementById('driverPayRate').value = settings.paymentSettings.payRate || '70';
-        if (document.getElementById('driverCashCollection')) document.getElementById('driverCashCollection').value = settings.paymentSettings.cashCollection || 'yes';
-        if (document.getElementById('driverPaySchedule')) document.getElementById('driverPaySchedule').value = settings.paymentSettings.paySchedule || 'weekly';
-      }
-
-      console.log('Driver App Settings loaded:', settings);
-    } catch (e) {
-      console.error('Error loading driver app settings:', e);
-    }
-  }
-
-  // Save Customer Account Settings to localStorage
-  saveCustomerAccountSettings() {
-    const settings = {
-      portalBranding: {
-        primaryColor: document.getElementById('customerPrimaryColor')?.value || '#d4af37',
-        welcomeMessage: document.getElementById('customerWelcomeMessage')?.value || ''
-      },
-      onboarding: {
-        requireEmailVerify: document.getElementById('customerRequireEmailVerify')?.value || 'yes',
-        requirePhoneVerify: document.getElementById('customerRequirePhoneVerify')?.value || 'no',
-        collectCard: document.getElementById('customerCollectCard')?.value || 'optional',
-        welcomeTemplate: document.getElementById('customerWelcomeTemplate')?.value || 'default'
-      },
-      booking: {
-        onlineBooking: document.getElementById('customerOnlineBooking')?.value || 'yes',
-        minAdvance: document.getElementById('customerMinAdvance')?.value || '4',
-        paymentUpfront: document.getElementById('customerPaymentUpfront')?.value || 'no',
-        serviceSelection: document.getElementById('customerServiceSelection')?.value || 'all'
-      },
-      notifications: {
-        bookingConfirm: document.getElementById('customerBookingConfirm')?.value || 'email-sms',
-        pickupReminder: document.getElementById('customerPickupReminder')?.value || '24',
-        pickupReminderMethod: document.getElementById('customerPickupReminderMethod')?.value || 'email-sms',
-        driverEnRoute: document.getElementById('customerDriverEnRoute')?.value || 'email-sms',
-        tripComplete: document.getElementById('customerTripComplete')?.value || 'email-sms',
-        driverArrived: document.getElementById('customerDriverArrived')?.value || 'email-sms'
-      },
-      payment: {
-        creditCard: document.getElementById('customerCreditCard')?.value || 'yes',
-        cashPayment: document.getElementById('customerCashPayment')?.value || 'yes',
-        invoice: document.getElementById('customerInvoice')?.value || 'approved-only',
-        autoCharge: document.getElementById('customerAutoCharge')?.value || 'no'
-      },
-      loyalty: {
-        enabled: document.getElementById('customerLoyaltyEnabled')?.value || 'no',
-        pointsPerDollar: document.getElementById('customerPointsPerDollar')?.value || '1',
-        redemptionRate: document.getElementById('customerRedemptionRate')?.value || '100',
-        referralBonus: document.getElementById('customerReferralBonus')?.value || '500'
-      }
-    };
-
-    localStorage.setItem('customerAccountSettings', JSON.stringify(settings));
-    console.log('Customer Account Settings saved:', settings);
-    alert('Customer Account Settings saved successfully!');
-  }
-
-  // Load Customer Account Settings from localStorage
-  loadCustomerAccountSettings() {
-    const saved = localStorage.getItem('customerAccountSettings');
-    if (!saved) return;
-
-    try {
-      const settings = JSON.parse(saved);
-      
-      // Portal Branding
-      if (settings.portalBranding) {
-        if (document.getElementById('customerPrimaryColor')) document.getElementById('customerPrimaryColor').value = settings.portalBranding.primaryColor || '#d4af37';
-        if (document.getElementById('customerWelcomeMessage')) document.getElementById('customerWelcomeMessage').value = settings.portalBranding.welcomeMessage || '';
-      }
-
-      // Onboarding
-      if (settings.onboarding) {
-        if (document.getElementById('customerRequireEmailVerify')) document.getElementById('customerRequireEmailVerify').value = settings.onboarding.requireEmailVerify || 'yes';
-        if (document.getElementById('customerRequirePhoneVerify')) document.getElementById('customerRequirePhoneVerify').value = settings.onboarding.requirePhoneVerify || 'no';
-        if (document.getElementById('customerCollectCard')) document.getElementById('customerCollectCard').value = settings.onboarding.collectCard || 'optional';
-        if (document.getElementById('customerWelcomeTemplate')) document.getElementById('customerWelcomeTemplate').value = settings.onboarding.welcomeTemplate || 'default';
-      }
-
-      // Booking
-      if (settings.booking) {
-        if (document.getElementById('customerOnlineBooking')) document.getElementById('customerOnlineBooking').value = settings.booking.onlineBooking || 'yes';
-        if (document.getElementById('customerMinAdvance')) document.getElementById('customerMinAdvance').value = settings.booking.minAdvance || '4';
-        if (document.getElementById('customerPaymentUpfront')) document.getElementById('customerPaymentUpfront').value = settings.booking.paymentUpfront || 'no';
-        if (document.getElementById('customerServiceSelection')) document.getElementById('customerServiceSelection').value = settings.booking.serviceSelection || 'all';
-      }
-
-      // Notifications
-      if (settings.notifications) {
-        if (document.getElementById('customerBookingConfirm')) document.getElementById('customerBookingConfirm').value = settings.notifications.bookingConfirm || 'email-sms';
-        if (document.getElementById('customerPickupReminder')) document.getElementById('customerPickupReminder').value = settings.notifications.pickupReminder || '24';
-        if (document.getElementById('customerPickupReminderMethod')) document.getElementById('customerPickupReminderMethod').value = settings.notifications.pickupReminderMethod || 'email-sms';
-        if (document.getElementById('customerDriverEnRoute')) document.getElementById('customerDriverEnRoute').value = settings.notifications.driverEnRoute || 'email-sms';
-        if (document.getElementById('customerTripComplete')) document.getElementById('customerTripComplete').value = settings.notifications.tripComplete || 'email-sms';
-        if (document.getElementById('customerDriverArrived')) document.getElementById('customerDriverArrived').value = settings.notifications.driverArrived || 'email-sms';
-      }
-
-      // Payment
-      if (settings.payment) {
-        if (document.getElementById('customerCreditCard')) document.getElementById('customerCreditCard').value = settings.payment.creditCard || 'yes';
-        if (document.getElementById('customerCashPayment')) document.getElementById('customerCashPayment').value = settings.payment.cashPayment || 'yes';
-        if (document.getElementById('customerInvoice')) document.getElementById('customerInvoice').value = settings.payment.invoice || 'approved-only';
-        if (document.getElementById('customerAutoCharge')) document.getElementById('customerAutoCharge').value = settings.payment.autoCharge || 'no';
-      }
-
-      // Loyalty
-      if (settings.loyalty) {
-        if (document.getElementById('customerLoyaltyEnabled')) document.getElementById('customerLoyaltyEnabled').value = settings.loyalty.enabled || 'no';
-        if (document.getElementById('customerPointsPerDollar')) document.getElementById('customerPointsPerDollar').value = settings.loyalty.pointsPerDollar || '1';
-        if (document.getElementById('customerRedemptionRate')) document.getElementById('customerRedemptionRate').value = settings.loyalty.redemptionRate || '100';
-        if (document.getElementById('customerReferralBonus')) document.getElementById('customerReferralBonus').value = settings.loyalty.referralBonus || '500';
-      }
-
-      console.log('Customer Account Settings loaded:', settings);
-    } catch (e) {
-      console.error('Error loading customer account settings:', e);
-    }
-  }
-
-  // Show Customer Portal Preview Modal
-  showCustomerPortalPreview() {
-    const modal = document.getElementById('customerPortalPreviewModal');
-    if (modal) {
-      modal.style.display = 'block';
-      this.updateCustomerPortalPreview();
-    }
-  }
-
-  // Update Customer Portal Preview based on current settings
-  updateCustomerPortalPreview() {
-    // Get current settings from form
-    const settings = {
-      welcomeMessage: document.getElementById('customerWelcomeMessage')?.value || 'Welcome to your customer portal',
-      primaryColor: document.getElementById('customerPrimaryColor')?.value || '#d4af37',
-      requireEmailVerify: document.getElementById('customerRequireEmailVerify')?.value || 'yes',
-      requirePhoneVerify: document.getElementById('customerRequirePhoneVerify')?.value || 'no',
-      collectCard: document.getElementById('customerCollectCard')?.value || 'optional',
-      minAdvance: document.getElementById('customerMinAdvance')?.value || '4',
-      paymentUpfront: document.getElementById('customerPaymentUpfront')?.value || 'no',
-      bookingConfirm: document.getElementById('customerBookingConfirm')?.value || 'email-sms',
-      pickupReminder: document.getElementById('customerPickupReminder')?.value || '24',
-      pickupReminderMethod: document.getElementById('customerPickupReminderMethod')?.value || 'email-sms',
-      driverEnRoute: document.getElementById('customerDriverEnRoute')?.value || 'email-sms',
-      driverArrived: document.getElementById('customerDriverArrived')?.value || 'email-sms',
-      tripComplete: document.getElementById('customerTripComplete')?.value || 'email-sms',
-      creditCard: document.getElementById('customerCreditCard')?.value || 'yes',
-      cashPayment: document.getElementById('customerCashPayment')?.value || 'yes',
-      invoice: document.getElementById('customerInvoice')?.value || 'approved-only',
-      loyaltyEnabled: document.getElementById('customerLoyaltyEnabled')?.value || 'no',
-      pointsPerDollar: document.getElementById('customerPointsPerDollar')?.value || '1',
-      redemptionRate: document.getElementById('customerRedemptionRate')?.value || '100',
-      referralBonus: document.getElementById('customerReferralBonus')?.value || '500'
-    };
-
-    // Helper to format notification method
-    const formatMethod = (method) => {
-      if (method === 'email-sms') return 'Email + SMS';
-      if (method === 'email') return 'Email';
-      if (method === 'sms') return 'SMS';
-      if (method === 'none') return null;
-      return method;
-    };
-
-    // Update Welcome Message
-    const previewWelcome = document.getElementById('previewWelcome');
-    if (previewWelcome) {
-      previewWelcome.textContent = settings.welcomeMessage || 'Welcome to your customer portal';
-    }
-
-    // Update Email Verification field visibility
-    const previewEmailVerify = document.getElementById('previewEmailVerifyField');
-    if (previewEmailVerify) {
-      previewEmailVerify.style.display = settings.requireEmailVerify === 'yes' ? 'block' : 'none';
-    }
-
-    // Update Phone Verification field visibility
-    const previewPhoneVerify = document.getElementById('previewPhoneVerifyField');
-    if (previewPhoneVerify) {
-      previewPhoneVerify.style.display = settings.requirePhoneVerify === 'yes' ? 'block' : 'none';
-    }
-
-    // Update Credit Card field
-    const previewCCField = document.getElementById('previewCreditCardField');
-    const previewCardRequired = document.getElementById('previewCardRequired');
-    if (previewCCField && previewCardRequired) {
-      if (settings.collectCard === 'no') {
-        previewCCField.style.display = 'none';
-      } else {
-        previewCCField.style.display = 'block';
-        previewCardRequired.textContent = settings.collectCard === 'required' ? '(Required)' : '(Optional)';
-      }
-    }
-
-    // Update Booking info
-    const previewMinAdvance = document.getElementById('previewMinAdvance');
-    if (previewMinAdvance) {
-      previewMinAdvance.textContent = `⏰ Minimum ${settings.minAdvance} hours advance booking`;
-    }
-
-    const previewPaymentUpfront = document.getElementById('previewPaymentUpfront');
-    if (previewPaymentUpfront) {
-      if (settings.paymentUpfront === 'no') {
-        previewPaymentUpfront.textContent = '💰 Payment: Pay after trip';
-      } else if (settings.paymentUpfront === 'deposit') {
-        previewPaymentUpfront.textContent = '💰 Payment: Deposit required at booking';
-      } else {
-        previewPaymentUpfront.textContent = '💰 Payment: Full payment required at booking';
-      }
-    }
-
-    // Update Notifications
-    const previewNotifConfirm = document.getElementById('previewNotifConfirm');
-    if (previewNotifConfirm) {
-      const method = formatMethod(settings.bookingConfirm);
-      previewNotifConfirm.textContent = method ? `✓ Booking confirmation (${method})` : '';
-      previewNotifConfirm.style.display = method ? 'block' : 'none';
-    }
-
-    const previewNotifReminder = document.getElementById('previewNotifReminder');
-    if (previewNotifReminder) {
-      const method = formatMethod(settings.pickupReminderMethod);
-      previewNotifReminder.textContent = method ? `✓ Pickup reminder ${settings.pickupReminder}hrs before (${method})` : '';
-      previewNotifReminder.style.display = method ? 'block' : 'none';
-    }
-
-    const previewNotifEnRoute = document.getElementById('previewNotifEnRoute');
-    if (previewNotifEnRoute) {
-      const method = formatMethod(settings.driverEnRoute);
-      previewNotifEnRoute.textContent = method ? `✓ Driver en route alert (${method})` : '';
-      previewNotifEnRoute.style.display = method ? 'block' : 'none';
-    }
-
-    const previewNotifArrived = document.getElementById('previewNotifArrived');
-    if (previewNotifArrived) {
-      const method = formatMethod(settings.driverArrived);
-      previewNotifArrived.textContent = method ? `✓ Driver arrived alert (${method})` : '';
-      previewNotifArrived.style.display = method ? 'block' : 'none';
-    }
-
-    const previewNotifComplete = document.getElementById('previewNotifComplete');
-    if (previewNotifComplete) {
-      const method = formatMethod(settings.tripComplete);
-      previewNotifComplete.textContent = method ? `✓ Trip completed receipt (${method})` : '';
-      previewNotifComplete.style.display = method ? 'block' : 'none';
-    }
-
-    // Update Payment Options
-    const previewPayCC = document.getElementById('previewPayCC');
-    if (previewPayCC) {
-      previewPayCC.style.display = settings.creditCard === 'yes' ? 'block' : 'none';
-    }
-
-    const previewPayCash = document.getElementById('previewPayCash');
-    if (previewPayCash) {
-      previewPayCash.style.display = settings.cashPayment === 'yes' ? 'block' : 'none';
-    }
-
-    const previewPayInvoice = document.getElementById('previewPayInvoice');
-    if (previewPayInvoice) {
-      if (settings.invoice === 'no') {
-        previewPayInvoice.style.display = 'none';
-      } else {
-        previewPayInvoice.style.display = 'block';
-        previewPayInvoice.textContent = settings.invoice === 'all' ? '✓ Invoice' : '✓ Invoice (Approved Accounts)';
-      }
-    }
-
-    // Update Loyalty Program
-    const previewLoyalty = document.getElementById('previewLoyalty');
-    if (previewLoyalty) {
-      previewLoyalty.style.display = settings.loyaltyEnabled === 'yes' ? 'block' : 'none';
-    }
-
-    const previewLoyaltyPoints = document.getElementById('previewLoyaltyPoints');
-    if (previewLoyaltyPoints) {
-      previewLoyaltyPoints.textContent = `Earn ${settings.pointsPerDollar} point${settings.pointsPerDollar !== '1' ? 's' : ''} per $1 spent`;
-    }
-
-    const previewLoyaltyRedeem = document.getElementById('previewLoyaltyRedeem');
-    if (previewLoyaltyRedeem) {
-      previewLoyaltyRedeem.textContent = `Redeem ${settings.redemptionRate} points = $1 discount`;
-    }
-
-    const previewLoyaltyReferral = document.getElementById('previewLoyaltyReferral');
-    if (previewLoyaltyReferral) {
-      previewLoyaltyReferral.textContent = `Refer a friend = ${settings.referralBonus} bonus points!`;
-    }
-
-    console.log('Customer Portal Preview updated');
-  }
-
-  // Show Driver Portal Preview Modal
-  showDriverPortalPreview() {
-    const modal = document.getElementById('driverPortalPreviewModal');
-    if (modal) {
-      modal.style.display = 'block';
-      this.updateDriverPortalPreview();
-    }
-  }
-
-  // Update Driver Portal Preview based on current settings
-  updateDriverPortalPreview() {
-    // Get current settings from form
-    const settings = {
-      welcomeMessage: document.getElementById('driverWelcomeMessage')?.value || 'Welcome to your driver portal',
-      primaryColor: document.getElementById('driverPrimaryColor')?.value || '#28a745',
-      requireEmailVerify: document.getElementById('driverRequireEmailVerify')?.value || 'yes',
-      requirePhoneVerify: document.getElementById('driverRequirePhoneVerify')?.value || 'yes',
-      // Requirements
-      requireLicense: document.getElementById('driverRequireLicense')?.value || 'yes',
-      requireRegistration: document.getElementById('driverRequireRegistration')?.value || 'yes',
-      requireInsurance: document.getElementById('driverRequireInsurance')?.value || 'yes',
-      requireTCP: document.getElementById('driverRequireTCP')?.value || 'no',
-      requireBackground: document.getElementById('driverRequireBackground')?.value || 'no',
-      requireDrug: document.getElementById('driverRequireDrug')?.value || 'no',
-      // Notifications
-      notifMethod: document.getElementById('driverNotifMethod')?.value || 'push-sms',
-      offerTimeout: document.getElementById('driverOfferTimeout')?.value || '15',
-      pickupReminder: document.getElementById('driverPickupReminder')?.value || '60',
-      dailySummary: document.getElementById('driverDailySummary')?.value || 'yes',
-      // Trip settings
-      gpsTracking: document.getElementById('driverGpsTracking')?.value || 'always',
-      statusUpdates: document.getElementById('driverStatusUpdates')?.value || 'full',
-      requireIncidentals: document.getElementById('driverRequireIncidentals')?.value || 'yes',
-      allowPhotoUpload: document.getElementById('driverAllowPhotoUpload')?.value || 'yes',
-      // Payment
-      payRate: document.getElementById('driverPayRate')?.value || '70',
-      paySchedule: document.getElementById('driverPaySchedule')?.value || 'weekly',
-      allowCashCollection: document.getElementById('driverAllowCashCollection')?.value || 'yes'
-    };
-
-    // Update Welcome Message
-    const previewWelcome = document.getElementById('driverPreviewWelcome');
-    if (previewWelcome) {
-      previewWelcome.textContent = settings.welcomeMessage || 'Driver Portal';
-    }
-
-    // Update Email Verification field visibility
-    const previewEmailVerify = document.getElementById('driverPreviewEmailVerifyField');
-    if (previewEmailVerify) {
-      previewEmailVerify.style.display = settings.requireEmailVerify === 'yes' ? 'block' : 'none';
-    }
-
-    // Update Phone Verification field visibility
-    const previewPhoneVerify = document.getElementById('driverPreviewPhoneVerifyField');
-    if (previewPhoneVerify) {
-      previewPhoneVerify.style.display = settings.requirePhoneVerify === 'yes' ? 'block' : 'none';
-    }
-
-    // Update Requirements
-    const reqLicense = document.getElementById('driverPreviewReqLicense');
-    if (reqLicense) reqLicense.style.display = settings.requireLicense === 'yes' ? 'block' : 'none';
-    
-    const reqRegistration = document.getElementById('driverPreviewReqRegistration');
-    if (reqRegistration) reqRegistration.style.display = settings.requireRegistration === 'yes' ? 'block' : 'none';
-    
-    const reqInsurance = document.getElementById('driverPreviewReqInsurance');
-    if (reqInsurance) reqInsurance.style.display = settings.requireInsurance === 'yes' ? 'block' : 'none';
-    
-    const reqTCP = document.getElementById('driverPreviewReqTCP');
-    if (reqTCP) reqTCP.style.display = settings.requireTCP === 'yes' ? 'block' : 'none';
-    
-    const reqBackground = document.getElementById('driverPreviewReqBackground');
-    if (reqBackground) reqBackground.style.display = settings.requireBackground === 'yes' ? 'block' : 'none';
-    
-    const reqDrug = document.getElementById('driverPreviewReqDrug');
-    if (reqDrug) reqDrug.style.display = settings.requireDrug === 'yes' ? 'block' : 'none';
-
-    // Update Notifications
-    const previewNotifTrip = document.getElementById('driverPreviewNotifTrip');
-    if (previewNotifTrip) {
-      const methodText = settings.notifMethod === 'push-sms' ? 'Push + SMS' :
-                         settings.notifMethod === 'push' ? 'Push only' :
-                         settings.notifMethod === 'sms' ? 'SMS only' : settings.notifMethod;
-      previewNotifTrip.textContent = `✓ New trip offers (${methodText})`;
-    }
-
-    const previewNotifExpiry = document.getElementById('driverPreviewNotifExpiry');
-    if (previewNotifExpiry) {
-      previewNotifExpiry.textContent = `✓ Offers expire in ${settings.offerTimeout} minutes`;
-    }
-
-    const previewNotifReminder = document.getElementById('driverPreviewNotifReminder');
-    if (previewNotifReminder) {
-      previewNotifReminder.textContent = `✓ Pickup reminder ${settings.pickupReminder} mins before`;
-    }
-
-    const previewNotifSummary = document.getElementById('driverPreviewNotifSummary');
-    if (previewNotifSummary) {
-      previewNotifSummary.style.display = settings.dailySummary === 'yes' ? 'block' : 'none';
-    }
-
-    // Update Trip Settings
-    const previewGPS = document.getElementById('driverPreviewGPS');
-    if (previewGPS) {
-      if (settings.gpsTracking === 'always') {
-        previewGPS.textContent = '✓ GPS tracking during trips';
-      } else if (settings.gpsTracking === 'trip-only') {
-        previewGPS.textContent = '✓ GPS tracking (trip duration only)';
-      } else {
-        previewGPS.textContent = '✗ GPS tracking disabled';
-      }
-    }
-
-    const previewStatus = document.getElementById('driverPreviewStatus');
-    if (previewStatus) {
-      previewStatus.textContent = settings.statusUpdates === 'full' ? 
-        '✓ Full status updates' : '✓ Simple status updates';
-    }
-
-    const previewIncidentals = document.getElementById('driverPreviewIncidentals');
-    if (previewIncidentals) {
-      previewIncidentals.textContent = settings.requireIncidentals === 'yes' ? 
-        '✓ Post-trip incidentals required' : '✗ Post-trip incidentals optional';
-    }
-
-    const previewPhoto = document.getElementById('driverPreviewPhoto');
-    if (previewPhoto) {
-      previewPhoto.style.display = settings.allowPhotoUpload === 'yes' ? 'block' : 'none';
-    }
-
-    // Update Payment
-    const previewPayRate = document.getElementById('driverPreviewPayRate');
-    if (previewPayRate) {
-      previewPayRate.textContent = `Earn ${settings.payRate}% of fare`;
-    }
-
-    const previewPaySchedule = document.getElementById('driverPreviewPaySchedule');
-    if (previewPaySchedule) {
-      const scheduleText = settings.paySchedule === 'weekly' ? 'Paid weekly' :
-                           settings.paySchedule === 'biweekly' ? 'Paid bi-weekly' :
-                           settings.paySchedule === 'monthly' ? 'Paid monthly' : 'Paid per trip';
-      previewPaySchedule.textContent = scheduleText;
-    }
-
-    const previewCashCollection = document.getElementById('driverPreviewCashCollection');
-    if (previewCashCollection) {
-      previewCashCollection.textContent = settings.allowCashCollection === 'yes' ? 
-        '✓ Cash collection allowed' : '✗ Cash collection not allowed';
-    }
-
-    console.log('Driver Portal Preview updated');
-  }
-
   navigateToRateSection(section) {
     // Update rate section button active state
     const rateButtons = document.querySelectorAll('#rateManagementGroup .sidebar-btn');
@@ -8365,6 +7797,593 @@ Would you also like to delete this driver?`
     }
 
     console.log('Switched to custom form category:', category);
+  }
+
+  showDriverSettingPanel(panelName) {
+    // Map panel names to element IDs
+    const panelMap = {
+      'portal-branding': 'driver-portal-branding',
+      'onboarding': 'driver-onboarding-settings',
+      'requirements': 'driver-requirements',
+      'notifications': 'driver-notification-settings',
+      'trip-settings': 'driver-trip-settings',
+      'payment-settings': 'driver-payment-settings'
+    };
+
+    // Hide all driver setting panels
+    document.querySelectorAll('.driver-setting-panel').forEach(panel => {
+      panel.style.display = 'none';
+    });
+
+    // Show the selected panel
+    const panelId = panelMap[panelName];
+    if (panelId) {
+      const panel = document.getElementById(panelId);
+      if (panel) {
+        panel.style.display = 'block';
+      }
+    }
+
+    console.log('Switched to driver setting panel:', panelName);
+  }
+
+  showCustomerSettingPanel(panelName) {
+    // Map panel names to element IDs
+    const panelMap = {
+      'portal-branding': 'customer-portal-branding',
+      'onboarding': 'customer-onboarding-settings',
+      'booking': 'customer-booking-settings',
+      'payment': 'customer-payment-settings',
+      'notifications': 'customer-notification-settings',
+      'loyalty': 'customer-loyalty-program'
+    };
+
+    // Hide all customer setting panels
+    document.querySelectorAll('.customer-setting-panel').forEach(panel => {
+      panel.style.display = 'none';
+    });
+
+    // Show the selected panel
+    const panelId = panelMap[panelName];
+    if (panelId) {
+      const panel = document.getElementById(panelId);
+      if (panel) {
+        panel.style.display = 'block';
+      }
+    }
+
+    console.log('Switched to customer setting panel:', panelName);
+  }
+
+  // Save Driver App Settings to localStorage
+  saveDriverAppSettings() {
+    const settings = {
+      portalBranding: {
+        primaryColor: document.getElementById('driverPrimaryColor')?.value || '#d4af37',
+        welcomeMessage: document.getElementById('driverWelcomeMessage')?.value || ''
+      },
+      onboarding: {
+        requireEmailVerify: document.getElementById('driverRequireEmailVerify')?.value || 'yes',
+        requirePhoneVerify: document.getElementById('driverRequirePhoneVerify')?.value || 'yes',
+        autoApprove: document.getElementById('driverAutoApprove')?.value || 'no',
+        onboardingTemplate: document.getElementById('driverOnboardingTemplate')?.value || 'default'
+      },
+      requirements: {
+        driversLicense: document.querySelector('#driver-requirements input[type="checkbox"]:nth-of-type(1)')?.checked ?? true,
+        vehicleRegistration: document.querySelector('#driver-requirements input[type="checkbox"]:nth-of-type(2)')?.checked ?? true,
+        insuranceCertificate: document.querySelector('#driver-requirements input[type="checkbox"]:nth-of-type(3)')?.checked ?? true,
+        tcpLicense: document.querySelector('#driver-requirements input[type="checkbox"]:nth-of-type(4)')?.checked ?? false,
+        backgroundCheck: document.querySelector('#driver-requirements input[type="checkbox"]:nth-of-type(5)')?.checked ?? false,
+        drugTest: document.querySelector('#driver-requirements input[type="checkbox"]:nth-of-type(6)')?.checked ?? false
+      },
+      notifications: {
+        newTripNotify: document.getElementById('driverNewTripNotify')?.value || 'push-sms',
+        offerExpiry: document.getElementById('driverOfferExpiry')?.value || '15',
+        pickupReminder: document.getElementById('driverPickupReminder')?.value || '60',
+        dailySummary: document.getElementById('driverDailySummary')?.value || 'yes'
+      },
+      tripSettings: {
+        statusUpdates: document.getElementById('driverStatusUpdates')?.value || 'all',
+        gpsTracking: document.getElementById('driverGpsTracking')?.value || 'always',
+        incidentals: document.getElementById('driverIncidentals')?.value || 'required',
+        photoUpload: document.getElementById('driverPhotoUpload')?.value || 'optional'
+      },
+      paymentSettings: {
+        payRateType: document.getElementById('driverPayRateType')?.value || 'percentage',
+        payRate: document.getElementById('driverPayRate')?.value || '70',
+        cashCollection: document.getElementById('driverCashCollection')?.value || 'yes',
+        paySchedule: document.getElementById('driverPaySchedule')?.value || 'weekly'
+      }
+    };
+
+    localStorage.setItem('driverAppSettings', JSON.stringify(settings));
+    console.log('Driver App Settings saved:', settings);
+    alert('Driver App Settings saved successfully!');
+  }
+
+  // Load Driver App Settings from localStorage
+  loadDriverAppSettings() {
+    const saved = localStorage.getItem('driverAppSettings');
+    if (!saved) return;
+
+    try {
+      const settings = JSON.parse(saved);
+      
+      // Portal Branding
+      if (settings.portalBranding) {
+        if (document.getElementById('driverPrimaryColor')) document.getElementById('driverPrimaryColor').value = settings.portalBranding.primaryColor || '#d4af37';
+        if (document.getElementById('driverWelcomeMessage')) document.getElementById('driverWelcomeMessage').value = settings.portalBranding.welcomeMessage || '';
+      }
+
+      // Onboarding
+      if (settings.onboarding) {
+        if (document.getElementById('driverRequireEmailVerify')) document.getElementById('driverRequireEmailVerify').value = settings.onboarding.requireEmailVerify || 'yes';
+        if (document.getElementById('driverRequirePhoneVerify')) document.getElementById('driverRequirePhoneVerify').value = settings.onboarding.requirePhoneVerify || 'yes';
+        if (document.getElementById('driverAutoApprove')) document.getElementById('driverAutoApprove').value = settings.onboarding.autoApprove || 'no';
+        if (document.getElementById('driverOnboardingTemplate')) document.getElementById('driverOnboardingTemplate').value = settings.onboarding.onboardingTemplate || 'default';
+      }
+
+      // Notifications
+      if (settings.notifications) {
+        if (document.getElementById('driverNewTripNotify')) document.getElementById('driverNewTripNotify').value = settings.notifications.newTripNotify || 'push-sms';
+        if (document.getElementById('driverOfferExpiry')) document.getElementById('driverOfferExpiry').value = settings.notifications.offerExpiry || '15';
+        if (document.getElementById('driverPickupReminder')) document.getElementById('driverPickupReminder').value = settings.notifications.pickupReminder || '60';
+        if (document.getElementById('driverDailySummary')) document.getElementById('driverDailySummary').value = settings.notifications.dailySummary || 'yes';
+      }
+
+      // Trip Settings
+      if (settings.tripSettings) {
+        if (document.getElementById('driverStatusUpdates')) document.getElementById('driverStatusUpdates').value = settings.tripSettings.statusUpdates || 'all';
+        if (document.getElementById('driverGpsTracking')) document.getElementById('driverGpsTracking').value = settings.tripSettings.gpsTracking || 'always';
+        if (document.getElementById('driverIncidentals')) document.getElementById('driverIncidentals').value = settings.tripSettings.incidentals || 'required';
+        if (document.getElementById('driverPhotoUpload')) document.getElementById('driverPhotoUpload').value = settings.tripSettings.photoUpload || 'optional';
+      }
+
+      // Payment Settings
+      if (settings.paymentSettings) {
+        if (document.getElementById('driverPayRateType')) document.getElementById('driverPayRateType').value = settings.paymentSettings.payRateType || 'percentage';
+        if (document.getElementById('driverPayRate')) document.getElementById('driverPayRate').value = settings.paymentSettings.payRate || '70';
+        if (document.getElementById('driverCashCollection')) document.getElementById('driverCashCollection').value = settings.paymentSettings.cashCollection || 'yes';
+        if (document.getElementById('driverPaySchedule')) document.getElementById('driverPaySchedule').value = settings.paymentSettings.paySchedule || 'weekly';
+      }
+
+      console.log('Driver App Settings loaded:', settings);
+    } catch (e) {
+      console.error('Error loading driver app settings:', e);
+    }
+  }
+
+  // Save Customer Account Settings to localStorage
+  saveCustomerAccountSettings() {
+    const settings = {
+      portalBranding: {
+        primaryColor: document.getElementById('customerPrimaryColor')?.value || '#d4af37',
+        welcomeMessage: document.getElementById('customerWelcomeMessage')?.value || ''
+      },
+      onboarding: {
+        requireEmailVerify: document.getElementById('customerRequireEmailVerify')?.value || 'yes',
+        requirePhoneVerify: document.getElementById('customerRequirePhoneVerify')?.value || 'no',
+        collectCard: document.getElementById('customerCollectCard')?.value || 'optional',
+        welcomeTemplate: document.getElementById('customerWelcomeTemplate')?.value || 'default'
+      },
+      booking: {
+        onlineBooking: document.getElementById('customerOnlineBooking')?.value || 'yes',
+        minAdvance: document.getElementById('customerMinAdvance')?.value || '4',
+        paymentUpfront: document.getElementById('customerPaymentUpfront')?.value || 'no',
+        serviceSelection: document.getElementById('customerServiceSelection')?.value || 'all'
+      },
+      notifications: {
+        bookingConfirm: document.getElementById('customerBookingConfirm')?.value || 'email-sms',
+        pickupReminder: document.getElementById('customerPickupReminder')?.value || '24',
+        pickupReminderMethod: document.getElementById('customerPickupReminderMethod')?.value || 'email-sms',
+        driverEnRoute: document.getElementById('customerDriverEnRoute')?.value || 'email-sms',
+        tripComplete: document.getElementById('customerTripComplete')?.value || 'email-sms',
+        driverArrived: document.getElementById('customerDriverArrived')?.value || 'email-sms'
+      },
+      payment: {
+        creditCard: document.getElementById('customerCreditCard')?.value || 'yes',
+        cashPayment: document.getElementById('customerCashPayment')?.value || 'yes',
+        invoice: document.getElementById('customerInvoice')?.value || 'approved-only',
+        autoCharge: document.getElementById('customerAutoCharge')?.value || 'no'
+      },
+      loyalty: {
+        enabled: document.getElementById('customerLoyaltyEnabled')?.value || 'no',
+        pointsPerDollar: document.getElementById('customerPointsPerDollar')?.value || '1',
+        redemptionRate: document.getElementById('customerRedemptionRate')?.value || '100',
+        referralBonus: document.getElementById('customerReferralBonus')?.value || '500'
+      }
+    };
+
+    localStorage.setItem('customerAccountSettings', JSON.stringify(settings));
+    console.log('Customer Account Settings saved:', settings);
+    alert('Customer Account Settings saved successfully!');
+  }
+
+  // Load Customer Account Settings from localStorage
+  loadCustomerAccountSettings() {
+    const saved = localStorage.getItem('customerAccountSettings');
+    if (!saved) return;
+
+    try {
+      const settings = JSON.parse(saved);
+      
+      // Portal Branding
+      if (settings.portalBranding) {
+        if (document.getElementById('customerPrimaryColor')) document.getElementById('customerPrimaryColor').value = settings.portalBranding.primaryColor || '#d4af37';
+        if (document.getElementById('customerWelcomeMessage')) document.getElementById('customerWelcomeMessage').value = settings.portalBranding.welcomeMessage || '';
+      }
+
+      // Onboarding
+      if (settings.onboarding) {
+        if (document.getElementById('customerRequireEmailVerify')) document.getElementById('customerRequireEmailVerify').value = settings.onboarding.requireEmailVerify || 'yes';
+        if (document.getElementById('customerRequirePhoneVerify')) document.getElementById('customerRequirePhoneVerify').value = settings.onboarding.requirePhoneVerify || 'no';
+        if (document.getElementById('customerCollectCard')) document.getElementById('customerCollectCard').value = settings.onboarding.collectCard || 'optional';
+        if (document.getElementById('customerWelcomeTemplate')) document.getElementById('customerWelcomeTemplate').value = settings.onboarding.welcomeTemplate || 'default';
+      }
+
+      // Booking
+      if (settings.booking) {
+        if (document.getElementById('customerOnlineBooking')) document.getElementById('customerOnlineBooking').value = settings.booking.onlineBooking || 'yes';
+        if (document.getElementById('customerMinAdvance')) document.getElementById('customerMinAdvance').value = settings.booking.minAdvance || '4';
+        if (document.getElementById('customerPaymentUpfront')) document.getElementById('customerPaymentUpfront').value = settings.booking.paymentUpfront || 'no';
+        if (document.getElementById('customerServiceSelection')) document.getElementById('customerServiceSelection').value = settings.booking.serviceSelection || 'all';
+      }
+
+      // Notifications
+      if (settings.notifications) {
+        if (document.getElementById('customerBookingConfirm')) document.getElementById('customerBookingConfirm').value = settings.notifications.bookingConfirm || 'email-sms';
+        if (document.getElementById('customerPickupReminder')) document.getElementById('customerPickupReminder').value = settings.notifications.pickupReminder || '24';
+        if (document.getElementById('customerPickupReminderMethod')) document.getElementById('customerPickupReminderMethod').value = settings.notifications.pickupReminderMethod || 'email-sms';
+        if (document.getElementById('customerDriverEnRoute')) document.getElementById('customerDriverEnRoute').value = settings.notifications.driverEnRoute || 'email-sms';
+        if (document.getElementById('customerTripComplete')) document.getElementById('customerTripComplete').value = settings.notifications.tripComplete || 'email-sms';
+        if (document.getElementById('customerDriverArrived')) document.getElementById('customerDriverArrived').value = settings.notifications.driverArrived || 'email-sms';
+      }
+
+      // Payment
+      if (settings.payment) {
+        if (document.getElementById('customerCreditCard')) document.getElementById('customerCreditCard').value = settings.payment.creditCard || 'yes';
+        if (document.getElementById('customerCashPayment')) document.getElementById('customerCashPayment').value = settings.payment.cashPayment || 'yes';
+        if (document.getElementById('customerInvoice')) document.getElementById('customerInvoice').value = settings.payment.invoice || 'approved-only';
+        if (document.getElementById('customerAutoCharge')) document.getElementById('customerAutoCharge').value = settings.payment.autoCharge || 'no';
+      }
+
+      // Loyalty
+      if (settings.loyalty) {
+        if (document.getElementById('customerLoyaltyEnabled')) document.getElementById('customerLoyaltyEnabled').value = settings.loyalty.enabled || 'no';
+        if (document.getElementById('customerPointsPerDollar')) document.getElementById('customerPointsPerDollar').value = settings.loyalty.pointsPerDollar || '1';
+        if (document.getElementById('customerRedemptionRate')) document.getElementById('customerRedemptionRate').value = settings.loyalty.redemptionRate || '100';
+        if (document.getElementById('customerReferralBonus')) document.getElementById('customerReferralBonus').value = settings.loyalty.referralBonus || '500';
+      }
+
+      console.log('Customer Account Settings loaded:', settings);
+    } catch (e) {
+      console.error('Error loading customer account settings:', e);
+    }
+  }
+
+  // Show Customer Portal Preview Modal
+  showCustomerPortalPreview() {
+    const modal = document.getElementById('customerPortalPreviewModal');
+    if (modal) {
+      modal.style.display = 'block';
+      this.updateCustomerPortalPreview();
+    }
+  }
+
+  // Update Customer Portal Preview based on current settings
+  updateCustomerPortalPreview() {
+    // Get current settings from form
+    const settings = {
+      welcomeMessage: document.getElementById('customerWelcomeMessage')?.value || 'Welcome to your customer portal',
+      primaryColor: document.getElementById('customerPrimaryColor')?.value || '#d4af37',
+      requireEmailVerify: document.getElementById('customerRequireEmailVerify')?.value || 'yes',
+      requirePhoneVerify: document.getElementById('customerRequirePhoneVerify')?.value || 'no',
+      collectCard: document.getElementById('customerCollectCard')?.value || 'optional',
+      minAdvance: document.getElementById('customerMinAdvance')?.value || '4',
+      paymentUpfront: document.getElementById('customerPaymentUpfront')?.value || 'no',
+      bookingConfirm: document.getElementById('customerBookingConfirm')?.value || 'email-sms',
+      pickupReminder: document.getElementById('customerPickupReminder')?.value || '24',
+      pickupReminderMethod: document.getElementById('customerPickupReminderMethod')?.value || 'email-sms',
+      driverEnRoute: document.getElementById('customerDriverEnRoute')?.value || 'email-sms',
+      driverArrived: document.getElementById('customerDriverArrived')?.value || 'email-sms',
+      tripComplete: document.getElementById('customerTripComplete')?.value || 'email-sms',
+      creditCard: document.getElementById('customerCreditCard')?.value || 'yes',
+      cashPayment: document.getElementById('customerCashPayment')?.value || 'yes',
+      invoice: document.getElementById('customerInvoice')?.value || 'approved-only',
+      loyaltyEnabled: document.getElementById('customerLoyaltyEnabled')?.value || 'no',
+      pointsPerDollar: document.getElementById('customerPointsPerDollar')?.value || '1',
+      redemptionRate: document.getElementById('customerRedemptionRate')?.value || '100',
+      referralBonus: document.getElementById('customerReferralBonus')?.value || '500'
+    };
+
+    // Helper to format notification method
+    const formatMethod = (method) => {
+      if (method === 'email-sms') return 'Email + SMS';
+      if (method === 'email') return 'Email';
+      if (method === 'sms') return 'SMS';
+      if (method === 'none') return null;
+      return method;
+    };
+
+    // Update Welcome Message
+    const previewWelcome = document.getElementById('previewWelcome');
+    if (previewWelcome) {
+      previewWelcome.textContent = settings.welcomeMessage || 'Welcome to your customer portal';
+    }
+
+    // Update Email Verification field visibility
+    const previewEmailVerify = document.getElementById('previewEmailVerifyField');
+    if (previewEmailVerify) {
+      previewEmailVerify.style.display = settings.requireEmailVerify === 'yes' ? 'block' : 'none';
+    }
+
+    // Update Phone Verification field visibility
+    const previewPhoneVerify = document.getElementById('previewPhoneVerifyField');
+    if (previewPhoneVerify) {
+      previewPhoneVerify.style.display = settings.requirePhoneVerify === 'yes' ? 'block' : 'none';
+    }
+
+    // Update Credit Card field
+    const previewCCField = document.getElementById('previewCreditCardField');
+    const previewCardRequired = document.getElementById('previewCardRequired');
+    if (previewCCField && previewCardRequired) {
+      if (settings.collectCard === 'no') {
+        previewCCField.style.display = 'none';
+      } else {
+        previewCCField.style.display = 'block';
+        previewCardRequired.textContent = settings.collectCard === 'required' ? '(Required)' : '(Optional)';
+      }
+    }
+
+    // Update Booking info
+    const previewMinAdvance = document.getElementById('previewMinAdvance');
+    if (previewMinAdvance) {
+      previewMinAdvance.textContent = `⏰ Minimum ${settings.minAdvance} hours advance booking`;
+    }
+
+    const previewPaymentUpfront = document.getElementById('previewPaymentUpfront');
+    if (previewPaymentUpfront) {
+      if (settings.paymentUpfront === 'no') {
+        previewPaymentUpfront.textContent = '💰 Payment: Pay after trip';
+      } else if (settings.paymentUpfront === 'deposit') {
+        previewPaymentUpfront.textContent = '💰 Payment: Deposit required at booking';
+      } else {
+        previewPaymentUpfront.textContent = '💰 Payment: Full payment required at booking';
+      }
+    }
+
+    // Update Notifications
+    const previewNotifConfirm = document.getElementById('previewNotifConfirm');
+    if (previewNotifConfirm) {
+      const method = formatMethod(settings.bookingConfirm);
+      previewNotifConfirm.textContent = method ? `✓ Booking confirmation (${method})` : '';
+      previewNotifConfirm.style.display = method ? 'block' : 'none';
+    }
+
+    const previewNotifReminder = document.getElementById('previewNotifReminder');
+    if (previewNotifReminder) {
+      const method = formatMethod(settings.pickupReminderMethod);
+      previewNotifReminder.textContent = method ? `✓ Pickup reminder ${settings.pickupReminder}hrs before (${method})` : '';
+      previewNotifReminder.style.display = method ? 'block' : 'none';
+    }
+
+    const previewNotifEnRoute = document.getElementById('previewNotifEnRoute');
+    if (previewNotifEnRoute) {
+      const method = formatMethod(settings.driverEnRoute);
+      previewNotifEnRoute.textContent = method ? `✓ Driver en route alert (${method})` : '';
+      previewNotifEnRoute.style.display = method ? 'block' : 'none';
+    }
+
+    const previewNotifArrived = document.getElementById('previewNotifArrived');
+    if (previewNotifArrived) {
+      const method = formatMethod(settings.driverArrived);
+      previewNotifArrived.textContent = method ? `✓ Driver arrived alert (${method})` : '';
+      previewNotifArrived.style.display = method ? 'block' : 'none';
+    }
+
+    const previewNotifComplete = document.getElementById('previewNotifComplete');
+    if (previewNotifComplete) {
+      const method = formatMethod(settings.tripComplete);
+      previewNotifComplete.textContent = method ? `✓ Trip completed receipt (${method})` : '';
+      previewNotifComplete.style.display = method ? 'block' : 'none';
+    }
+
+    // Update Payment Options
+    const previewPayCC = document.getElementById('previewPayCC');
+    if (previewPayCC) {
+      previewPayCC.style.display = settings.creditCard === 'yes' ? 'block' : 'none';
+    }
+
+    const previewPayCash = document.getElementById('previewPayCash');
+    if (previewPayCash) {
+      previewPayCash.style.display = settings.cashPayment === 'yes' ? 'block' : 'none';
+    }
+
+    const previewPayInvoice = document.getElementById('previewPayInvoice');
+    if (previewPayInvoice) {
+      if (settings.invoice === 'no') {
+        previewPayInvoice.style.display = 'none';
+      } else {
+        previewPayInvoice.style.display = 'block';
+        previewPayInvoice.textContent = settings.invoice === 'all' ? '✓ Invoice' : '✓ Invoice (Approved Accounts)';
+      }
+    }
+
+    // Update Loyalty Program
+    const previewLoyalty = document.getElementById('previewLoyalty');
+    if (previewLoyalty) {
+      previewLoyalty.style.display = settings.loyaltyEnabled === 'yes' ? 'block' : 'none';
+    }
+
+    const previewLoyaltyPoints = document.getElementById('previewLoyaltyPoints');
+    if (previewLoyaltyPoints) {
+      previewLoyaltyPoints.textContent = `Earn ${settings.pointsPerDollar} point${settings.pointsPerDollar !== '1' ? 's' : ''} per $1 spent`;
+    }
+
+    const previewLoyaltyRedeem = document.getElementById('previewLoyaltyRedeem');
+    if (previewLoyaltyRedeem) {
+      previewLoyaltyRedeem.textContent = `Redeem ${settings.redemptionRate} points = $1 discount`;
+    }
+
+    const previewLoyaltyReferral = document.getElementById('previewLoyaltyReferral');
+    if (previewLoyaltyReferral) {
+      previewLoyaltyReferral.textContent = `Refer a friend = ${settings.referralBonus} bonus points!`;
+    }
+
+    console.log('Customer Portal Preview updated');
+  }
+
+  // Show Driver Portal Preview Modal
+  showDriverPortalPreview() {
+    const modal = document.getElementById('driverPortalPreviewModal');
+    if (modal) {
+      modal.style.display = 'block';
+      this.updateDriverPortalPreview();
+    }
+  }
+
+  // Update Driver Portal Preview based on current settings
+  updateDriverPortalPreview() {
+    // Get current settings from form
+    const settings = {
+      welcomeMessage: document.getElementById('driverWelcomeMessage')?.value || 'Welcome to your driver portal',
+      primaryColor: document.getElementById('driverPrimaryColor')?.value || '#28a745',
+      requireEmailVerify: document.getElementById('driverRequireEmailVerify')?.value || 'yes',
+      requirePhoneVerify: document.getElementById('driverRequirePhoneVerify')?.value || 'yes',
+      // Requirements
+      requireLicense: document.getElementById('driverRequireLicense')?.value || 'yes',
+      requireRegistration: document.getElementById('driverRequireRegistration')?.value || 'yes',
+      requireInsurance: document.getElementById('driverRequireInsurance')?.value || 'yes',
+      requireTCP: document.getElementById('driverRequireTCP')?.value || 'no',
+      requireBackground: document.getElementById('driverRequireBackground')?.value || 'no',
+      requireDrug: document.getElementById('driverRequireDrug')?.value || 'no',
+      // Notifications
+      notifMethod: document.getElementById('driverNotifMethod')?.value || 'push-sms',
+      offerTimeout: document.getElementById('driverOfferTimeout')?.value || '15',
+      pickupReminder: document.getElementById('driverPickupReminder')?.value || '60',
+      dailySummary: document.getElementById('driverDailySummary')?.value || 'yes',
+      // Trip settings
+      gpsTracking: document.getElementById('driverGpsTracking')?.value || 'always',
+      statusUpdates: document.getElementById('driverStatusUpdates')?.value || 'full',
+      requireIncidentals: document.getElementById('driverRequireIncidentals')?.value || 'yes',
+      allowPhotoUpload: document.getElementById('driverAllowPhotoUpload')?.value || 'yes',
+      // Payment
+      payRate: document.getElementById('driverPayRate')?.value || '70',
+      paySchedule: document.getElementById('driverPaySchedule')?.value || 'weekly',
+      allowCashCollection: document.getElementById('driverAllowCashCollection')?.value || 'yes'
+    };
+
+    // Update Welcome Message
+    const previewWelcome = document.getElementById('driverPreviewWelcome');
+    if (previewWelcome) {
+      previewWelcome.textContent = settings.welcomeMessage || 'Driver Portal';
+    }
+
+    // Update Email Verification field visibility
+    const previewEmailVerify = document.getElementById('driverPreviewEmailVerifyField');
+    if (previewEmailVerify) {
+      previewEmailVerify.style.display = settings.requireEmailVerify === 'yes' ? 'block' : 'none';
+    }
+
+    // Update Phone Verification field visibility
+    const previewPhoneVerify = document.getElementById('driverPreviewPhoneVerifyField');
+    if (previewPhoneVerify) {
+      previewPhoneVerify.style.display = settings.requirePhoneVerify === 'yes' ? 'block' : 'none';
+    }
+
+    // Update Requirements
+    const reqLicense = document.getElementById('driverPreviewReqLicense');
+    if (reqLicense) reqLicense.style.display = settings.requireLicense === 'yes' ? 'block' : 'none';
+    
+    const reqRegistration = document.getElementById('driverPreviewReqRegistration');
+    if (reqRegistration) reqRegistration.style.display = settings.requireRegistration === 'yes' ? 'block' : 'none';
+    
+    const reqInsurance = document.getElementById('driverPreviewReqInsurance');
+    if (reqInsurance) reqInsurance.style.display = settings.requireInsurance === 'yes' ? 'block' : 'none';
+    
+    const reqTCP = document.getElementById('driverPreviewReqTCP');
+    if (reqTCP) reqTCP.style.display = settings.requireTCP === 'yes' ? 'block' : 'none';
+    
+    const reqBackground = document.getElementById('driverPreviewReqBackground');
+    if (reqBackground) reqBackground.style.display = settings.requireBackground === 'yes' ? 'block' : 'none';
+    
+    const reqDrug = document.getElementById('driverPreviewReqDrug');
+    if (reqDrug) reqDrug.style.display = settings.requireDrug === 'yes' ? 'block' : 'none';
+
+    // Update Notifications
+    const previewNotifTrip = document.getElementById('driverPreviewNotifTrip');
+    if (previewNotifTrip) {
+      const methodText = settings.notifMethod === 'push-sms' ? 'Push + SMS' :
+                         settings.notifMethod === 'push' ? 'Push only' :
+                         settings.notifMethod === 'sms' ? 'SMS only' : settings.notifMethod;
+      previewNotifTrip.textContent = `✓ New trip offers (${methodText})`;
+    }
+
+    const previewNotifExpiry = document.getElementById('driverPreviewNotifExpiry');
+    if (previewNotifExpiry) {
+      previewNotifExpiry.textContent = `✓ Offers expire in ${settings.offerTimeout} minutes`;
+    }
+
+    const previewNotifReminder = document.getElementById('driverPreviewNotifReminder');
+    if (previewNotifReminder) {
+      previewNotifReminder.textContent = `✓ Pickup reminder ${settings.pickupReminder} mins before`;
+    }
+
+    const previewNotifSummary = document.getElementById('driverPreviewNotifSummary');
+    if (previewNotifSummary) {
+      previewNotifSummary.style.display = settings.dailySummary === 'yes' ? 'block' : 'none';
+    }
+
+    // Update Trip Settings
+    const previewGPS = document.getElementById('driverPreviewGPS');
+    if (previewGPS) {
+      if (settings.gpsTracking === 'always') {
+        previewGPS.textContent = '✓ GPS tracking during trips';
+      } else if (settings.gpsTracking === 'trip-only') {
+        previewGPS.textContent = '✓ GPS tracking (trip duration only)';
+      } else {
+        previewGPS.textContent = '✗ GPS tracking disabled';
+      }
+    }
+
+    const previewStatus = document.getElementById('driverPreviewStatus');
+    if (previewStatus) {
+      previewStatus.textContent = settings.statusUpdates === 'full' ? 
+        '✓ Full status updates' : '✓ Simple status updates';
+    }
+
+    const previewIncidentals = document.getElementById('driverPreviewIncidentals');
+    if (previewIncidentals) {
+      previewIncidentals.textContent = settings.requireIncidentals === 'yes' ? 
+        '✓ Post-trip incidentals required' : '✗ Post-trip incidentals optional';
+    }
+
+    const previewPhoto = document.getElementById('driverPreviewPhoto');
+    if (previewPhoto) {
+      previewPhoto.style.display = settings.allowPhotoUpload === 'yes' ? 'block' : 'none';
+    }
+
+    // Update Payment
+    const previewPayRate = document.getElementById('driverPreviewPayRate');
+    if (previewPayRate) {
+      previewPayRate.textContent = `Earn ${settings.payRate}% of fare`;
+    }
+
+    const previewPaySchedule = document.getElementById('driverPreviewPaySchedule');
+    if (previewPaySchedule) {
+      const scheduleText = settings.paySchedule === 'weekly' ? 'Paid weekly' :
+                           settings.paySchedule === 'biweekly' ? 'Paid bi-weekly' :
+                           settings.paySchedule === 'monthly' ? 'Paid monthly' : 'Paid per trip';
+      previewPaySchedule.textContent = scheduleText;
+    }
+
+    const previewCashCollection = document.getElementById('driverPreviewCashCollection');
+    if (previewCashCollection) {
+      previewCashCollection.textContent = settings.allowCashCollection === 'yes' ? 
+        '✓ Cash collection allowed' : '✗ Cash collection not allowed';
+    }
+
+    console.log('Driver Portal Preview updated');
   }
 
   switchCustomFormTab(formTab) {
@@ -9780,22 +9799,9 @@ Would you also like to delete this driver?`
     const affiliateIdInput = document.getElementById('driverAffiliateId');
     const affiliateOriginalInput = document.getElementById('driverAffiliateOriginal');
     
-    if (affiliateSelect && driver.affiliate_id) {
-      affiliateSelect.value = driver.affiliate_id;
-      // Verify the option exists
-      if (affiliateSelect.value !== driver.affiliate_id) {
-        console.warn('⚠️ Affiliate not found in dropdown, adding it:', driver.affiliate_id, driver.affiliate_name);
-        // Add the missing affiliate as an option
-        const option = document.createElement('option');
-        option.value = driver.affiliate_id;
-        option.textContent = driver.affiliate_name || `Affiliate ${driver.affiliate_id}`;
-        affiliateSelect.appendChild(option);
-        affiliateSelect.value = driver.affiliate_id;
-      }
-      console.log('📋 Setting affiliate dropdown to:', driver.affiliate_id, '(' + (driver.affiliate_name || 'unknown') + ')');
-    } else if (affiliateSelect) {
-      affiliateSelect.value = '';
-      console.log('📋 Driver has no affiliate association');
+    if (affiliateSelect) {
+      affiliateSelect.value = driver.affiliate_id || '';
+      console.log('📋 Setting affiliate dropdown to:', driver.affiliate_id || '(none)');
     }
     if (affiliateIdInput) {
       affiliateIdInput.value = driver.affiliate_id || '';
