@@ -314,7 +314,6 @@ class DispatchGrid {
         this.vehicleMarkers.push({ id: loc.driver_id, marker, vehicle: loc });
       });
     }
-    }
     
     // Also update main Map view with live drivers
     if (this.map) {
