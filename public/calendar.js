@@ -1317,16 +1317,73 @@ class Calendar {
     };
 
     return [
+      // January
+      fixed(0, 2, "New Year's Day (Observed)"), // When Jan 1 falls on Sun
+      // February
+      fixed(1, 2, 'Groundhog Day'),
       fixed(1, 14, "Valentine's Day"),
+      nthWeekday(1, 0, 2, 'Super Bowl Sunday'), // 2nd Sunday Feb (approximate)
+      // March
       fixed(2, 17, "St. Patrick's Day"),
+      this.getDaylightSavingStart(year), // Spring forward
+      // April
       this.getEasterSunday(year),
+      this.getGoodFriday(year),
+      fixed(3, 15, 'Tax Day'),
+      fixed(3, 22, 'Earth Day'),
+      // May
+      fixed(4, 5, 'Cinco de Mayo'),
       nthWeekday(4, 0, 2, "Mother's Day"), // 2nd Sunday May
+      // June
+      fixed(5, 14, 'Flag Day'),
       nthWeekday(5, 0, 3, "Father's Day"), // 3rd Sunday Jun
+      // September
+      nthWeekday(8, 0, 2, 'Grandparents Day'), // Sunday after Labor Day
+      fixed(8, 11, 'Patriot Day'),
+      // October
+      nthWeekday(9, 1, 2, 'Indigenous Peoples Day'), // 2nd Monday Oct (same as Columbus Day)
       fixed(9, 31, 'Halloween'),
+      // November
+      this.getDaylightSavingEnd(year), // Fall back
       this.getElectionDay(year),
+      this.getBlackFriday(year),
+      // December
+      fixed(11, 7, 'Pearl Harbor Remembrance Day'),
       fixed(11, 24, 'Christmas Eve'),
+      fixed(11, 26, 'Kwanzaa Begins'),
       fixed(11, 31, "New Year's Eve")
     ].filter(Boolean);
+  }
+
+  getGoodFriday(year) {
+    const easter = this.getEasterSunday(year);
+    const goodFriday = new Date(easter.date);
+    goodFriday.setDate(goodFriday.getDate() - 2);
+    return { name: 'Good Friday', date: goodFriday, kind: 'Major Observance' };
+  }
+
+  getBlackFriday(year) {
+    // Day after Thanksgiving (4th Thursday of November)
+    const first = new Date(year, 10, 1);
+    const offset = (4 - first.getDay() + 7) % 7; // Thursday = 4
+    const thanksgiving = 1 + offset + 3 * 7; // 4th Thursday
+    return { name: 'Black Friday', date: new Date(year, 10, thanksgiving + 1), kind: 'Major Observance' };
+  }
+
+  getDaylightSavingStart(year) {
+    // 2nd Sunday of March
+    const first = new Date(year, 2, 1);
+    const offset = (0 - first.getDay() + 7) % 7; // Sunday = 0
+    const day = 1 + offset + 7; // 2nd Sunday
+    return { name: 'Daylight Saving Time Begins', date: new Date(year, 2, day), kind: 'Major Observance' };
+  }
+
+  getDaylightSavingEnd(year) {
+    // 1st Sunday of November
+    const first = new Date(year, 10, 1);
+    const offset = (0 - first.getDay() + 7) % 7; // Sunday = 0
+    const day = 1 + offset; // 1st Sunday
+    return { name: 'Daylight Saving Time Ends', date: new Date(year, 10, day), kind: 'Major Observance' };
   }
 
   getEasterSunday(year) {
