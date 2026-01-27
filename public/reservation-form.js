@@ -3634,24 +3634,40 @@ class ReservationForm {
     // Clear cached pending number now that it has been used
     this.pendingAccountNumber = null;
 
-    // Update billing account search field with account number
+    // Update billing account search field with account number and make readonly
     const billingAccountSearch = document.getElementById('billingAccountSearch');
-    billingAccountSearch.value = nextAccountNumber.toString();
+    billingAccountSearch.value = `${nextAccountNumber} - ${company || `${firstName} ${lastName}`}`;
     billingAccountSearch.setAttribute('readonly', true);
     billingAccountSearch.style.backgroundColor = '#f5f5f5';
     billingAccountSearch.style.cursor = 'not-allowed';
 
+    // Immediately populate billing info on the reservation form
     this.setBillingAccountNumberDisplay(nextAccountNumber.toString());
+    
+    // Fill in the billing fields from the new account
+    const billingCompany = document.getElementById('billingCompany');
+    const billingFirstName = document.getElementById('billingFirstName');
+    const billingLastName = document.getElementById('billingLastName');
+    const billingPhone = document.getElementById('billingPhone');
+    const billingEmail = document.getElementById('billingEmail');
+    
+    if (billingCompany) billingCompany.value = company;
+    if (billingFirstName) billingFirstName.value = firstName;
+    if (billingLastName) billingLastName.value = lastName;
+    if (billingPhone) billingPhone.value = phone;
+    if (billingEmail) billingEmail.value = email;
 
     this.closeModal();
+    
+    // Show success message
+    this.showNotification(`✅ Account #${nextAccountNumber} created successfully`, 'success');
 
-    // Store account number for accounts page to load (use saved.account.id if available)
+    // Store account info for reference (but don't navigate away)
     const savedId = saved.account?.id || saved.id || nextAccountNumber.toString();
     localStorage.setItem('currentAccountId', savedId);
     localStorage.setItem('currentAccountNumber', nextAccountNumber.toString());
     
-    // Navigate directly to accounts page with all data
-    window.location.href = 'accounts.html';
+    console.log(`✅ Account #${nextAccountNumber} created and populated on reservation form`);
   }
 
   closeModal() {

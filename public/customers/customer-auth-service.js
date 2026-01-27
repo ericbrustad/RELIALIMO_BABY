@@ -513,6 +513,66 @@ async function fetchCustomerInfo(accessToken, email) {
 }
 
 /**
+ * Get the next available account number
+ * Uses accountStartNumber from company settings for first account, then increments from max
+ */
+async function getNextAccountNumber(accessToken) {
+  try {
+    const creds = getSupabaseCredentials();
+    
+    // Get company settings to find accountStartNumber
+    let accountStartNumber = 30000; // Default
+    try {
+      const settingsRaw = localStorage.getItem('relia_company_settings');
+      if (settingsRaw) {
+        const settings = JSON.parse(settingsRaw);
+        accountStartNumber = parseInt(settings.accountStartNumber, 10) || 30000;
+      }
+    } catch (e) {
+      console.warn('[AuthService] Could not read company settings, using default start number');
+    }
+    
+    // Query for max account number from all accounts
+    const response = await fetch(
+      `${creds.url}/rest/v1/accounts?select=account_number&order=account_number.desc&limit=100`,
+      {
+        method: 'GET',
+        headers: {
+          'apikey': creds.anonKey,
+          'Authorization': `Bearer ${accessToken}`
+        }
+      }
+    );
+    
+    if (response.ok) {
+      const accounts = await response.json();
+      if (accounts && accounts.length > 0) {
+        // Find max numeric account number
+        const accountNumbers = accounts
+          .map(a => parseInt(a.account_number, 10))
+          .filter(n => !isNaN(n));
+        
+        if (accountNumbers.length > 0) {
+          const maxNum = Math.max(...accountNumbers);
+          const nextNum = maxNum + 1;
+          console.log('[AuthService] getNextAccountNumber: max is', maxNum, '→ next:', nextNum);
+          return nextNum;
+        }
+      }
+      // No existing accounts with numbers - use start number
+      console.log('[AuthService] getNextAccountNumber: No accounts, starting at:', accountStartNumber);
+      return accountStartNumber;
+    }
+    
+    console.warn('[AuthService] Failed to query accounts, using start number');
+    return accountStartNumber;
+  } catch (err) {
+    console.error('[AuthService] Error getting next account number:', err);
+    return 30000; // Fallback
+  }
+}
+
+/**
  * Auto-create an account record for a user who authenticated but has no account
  */
 async function createAccountRecord(accessToken, email) {
@@ -521,6 +581,9 @@ async function createAccountRecord(accessToken, email) {
     
     // Customer organization ID for all customer accounts
     const CUSTOMER_ORG_ID = 'c0000000-0000-0000-0000-000000000001';
+    
+    // Get the next account number (uses accountStartNumber from settings for first account)
+    const nextAccountNumber = await getNextAccountNumber(accessToken);
     
     // Try to get user metadata from auth session (may have first_name, last_name)
     const userMetadata = authState.session?.user?.user_metadata || {};
@@ -534,11 +597,12 @@ async function createAccountRecord(accessToken, email) {
       portalSlug = `${firstName}_${lastName}_${randomId}`.toLowerCase().replace(/[^a-z0-9_]/g, '');
     }
     
-    console.log('[AuthService] Auto-creating account for:', email, { firstName, lastName });
+    console.log('[AuthService] Auto-creating account for:', email, { firstName, lastName, accountNumber: nextAccountNumber });
     
     // Only include columns that exist in the accounts table
     const accountData = {
       organization_id: CUSTOMER_ORG_ID,
+      account_number: nextAccountNumber.toString(),
       email: email.toLowerCase(),
       first_name: firstName,
       last_name: lastName,
