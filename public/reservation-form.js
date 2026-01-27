@@ -983,8 +983,11 @@ class ReservationForm {
         const rates = opt.raw?.rates || opt.raw?.metadata?.rates || null;
         if (opt.value && rates && Object.keys(rates).length > 0) {
           this.vehicleTypeRates[opt.value] = rates;
+          console.log('[ReservationForm] Stored rates for vehicle', opt.value, ':', rates);
         }
       });
+      
+      console.log('[ReservationForm] All vehicleTypeRates:', this.vehicleTypeRates);
 
       const typeOptions = mergedOptions.map(({ value, label }) => ({ value, label }));
 
@@ -5755,12 +5758,20 @@ class ReservationForm {
   applyVehicleTypePricing() {
     try {
       const vehicleTypeId = document.getElementById('vehicleTypeRes')?.value || '';
+      const serviceType = document.getElementById('serviceType')?.value || '';
+      
+      console.log('[ReservationForm] applyVehicleTypePricing called:', { vehicleTypeId, serviceType });
+      
       if (!vehicleTypeId) {
+        console.log('[ReservationForm] No vehicle type selected');
         return;
       }
 
       const rates = this.vehicleTypeRates?.[vehicleTypeId];
+      console.log('[ReservationForm] Vehicle rates for', vehicleTypeId, ':', rates);
+      
       if (!rates) {
+        console.log('[ReservationForm] No rates found for vehicle type');
         this.calculateCosts();
         return;
       }
@@ -5842,15 +5853,19 @@ class ReservationForm {
       }
 
       if (rates.distance) {
+        console.log('[ReservationForm] Processing distance rates:', rates.distance);
         const miles = this.latestRouteSummary?.miles;
+        console.log('[ReservationForm] Route miles:', miles, 'from latestRouteSummary:', this.latestRouteSummary);
         const includedMiles = getNum(rates.distance.includedMiles);
         const billableMiles = miles !== undefined && miles !== null
           ? Math.max(0, miles - includedMiles)
           : null;
+        console.log('[ReservationForm] Billable miles:', billableMiles, '(miles:', miles, '- included:', includedMiles, ')');
 
         const mileRate = getNum(rates.distance.ratePerMile)
           || getNum(rates.distance.basePerMile)
           || getNum(rates.distance.tiers && rates.distance.tiers[0]?.rate);
+        console.log('[ReservationForm] Mile rate:', mileRate);
         if (mileRate) {
           setIfEmpty('mileRate', mileRate.toString());
         }
@@ -5859,7 +5874,10 @@ class ReservationForm {
           const mileQtyEl = document.getElementById('mileQty');
           if (mileQtyEl) {
             mileQtyEl.value = billableMiles.toFixed(1);
+            console.log('[ReservationForm] Set mileQty to:', billableMiles.toFixed(1));
           }
+        } else {
+          console.log('[ReservationForm] No billable miles - route may not be calculated yet');
         }
 
         const minimumFare = getNum(rates.distance.minimumFare);
@@ -5882,7 +5900,7 @@ class ReservationForm {
         }
         
         // Apply airport parking fee only for from-airport pickups
-        const currentServiceType = document.getElementById('serviceTypeRes')?.value || '';
+        const currentServiceType = document.getElementById('serviceType')?.value || '';
         if (currentServiceType === 'from-airport') {
           const airportParkingFee = getNum(rates.distance.airportParkingFee);
           if (airportParkingFee > 0) {
@@ -6187,6 +6205,8 @@ class ReservationForm {
 
     const serviceTypeCode = serviceTypeEl?.value || '';
     const vehicleTypeId = vehicleTypeEl?.value || '';
+    
+    console.log('[ReservationForm] updateRateConfigDisplay called:', { serviceTypeCode, vehicleTypeId, forceReset });
 
     // Track service type changes and clear rates when it changes
     const previousServiceType = this._lastServiceTypeForRates || '';
@@ -6200,8 +6220,11 @@ class ReservationForm {
     let allowedPricingTypes = ['DISTANCE']; // Default
     let primaryPricingBasis = 'Distance';
     
+    console.log('[ReservationForm] Service types list:', this._serviceTypesList);
+    
     if (this._serviceTypesList) {
       const serviceType = this._serviceTypesList.find(st => st.code === serviceTypeCode);
+      console.log('[ReservationForm] Found service type:', serviceType);
       if (serviceType) {
         // Get allowed pricing types (array or single value)
         if (Array.isArray(serviceType.pricing_types) && serviceType.pricing_types.length > 0) {
@@ -6230,6 +6253,8 @@ class ReservationForm {
         allowedPricingTypes = ['DISTANCE'];
       }
     }
+    
+    console.log('[ReservationForm] Pricing config:', { primaryPricingBasis, allowedPricingTypes });
 
     // Helper to check if a pricing type is allowed
     const isAllowed = (type) => {
@@ -6294,6 +6319,8 @@ class ReservationForm {
     };
     
     const relevantRates = getRatesForPricingBasis(allRates, primaryPricingBasis);
+    console.log('[ReservationForm] relevantRates for', primaryPricingBasis, ':', relevantRates);
+    console.log('[ReservationForm] allRates:', allRates);
     
     // Extract rates from nested structure (perHour, distance, etc.) or flat structure
     const getNum = (val) => {
@@ -6327,6 +6354,8 @@ class ReservationForm {
       || getNum(allRates.distance?.basePerMile)
       || getNum(allRates.distance?.tiers?.[0]?.rate) || 0
     ) : 0;
+    
+    console.log('[ReservationForm] Extracted perMile:', perMile, 'baseRate:', baseRate);
     
     // Min hours - only include if HOURS pricing type is allowed
     const minHours = isAllowed('HOURS') ? (
@@ -6374,6 +6403,8 @@ class ReservationForm {
    */
   autoApplyRatesToCosts(rateConfig) {
     const { baseRate, perHour, perMile, perPassenger, minHours, gratuity, pricingBasis, allowedPricingTypes, tieredFormula } = rateConfig;
+    
+    console.log('[ReservationForm] autoApplyRatesToCosts called:', rateConfig);
     
     // Helper to check if a pricing type is allowed
     const isAllowed = (type) => {

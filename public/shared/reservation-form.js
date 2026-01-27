@@ -5719,12 +5719,20 @@ class ReservationForm {
   applyVehicleTypePricing() {
     try {
       const vehicleTypeId = document.getElementById('vehicleTypeRes')?.value || '';
+      const serviceType = document.getElementById('serviceType')?.value || '';
+      
+      console.log('[ReservationForm] applyVehicleTypePricing called:', { vehicleTypeId, serviceType });
+      
       if (!vehicleTypeId) {
+        console.log('[ReservationForm] No vehicle type selected');
         return;
       }
 
       const rates = this.vehicleTypeRates?.[vehicleTypeId];
+      console.log('[ReservationForm] Vehicle rates for', vehicleTypeId, ':', rates);
+      
       if (!rates) {
+        console.log('[ReservationForm] No rates found for vehicle type');
         this.calculateCosts();
         return;
       }
@@ -5846,7 +5854,7 @@ class ReservationForm {
         }
         
         // Apply airport parking fee only for from-airport pickups
-        const currentServiceType = document.getElementById('serviceTypeRes')?.value || '';
+        const currentServiceType = document.getElementById('serviceType')?.value || '';
         if (currentServiceType === 'from-airport') {
           const airportParkingFee = getNum(rates.distance.airportParkingFee);
           if (airportParkingFee > 0) {
