@@ -83,7 +83,6 @@ class Calendar {
     this.render();
     console.log('📅 Navigated to today:', today.toDateString());
   }
-  }
 
   // Auto-refresh calendar every 60 seconds to keep data current
   startAutoRefresh() {
