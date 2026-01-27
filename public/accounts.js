@@ -2001,8 +2001,7 @@ class Accounts {
         email_rules_enabled: document.getElementById('emailRulesEnabled')?.checked ?? true,
         sms_rules_enabled: document.getElementById('smsRulesEnabled')?.checked ?? false,
         
-        // Provider Type (for admin/driver accounts)
-        provider_type: document.getElementById('acctProviderType')?.value || null,
+        // Note: provider_type field removed - column doesn't exist in accounts table
         
         type: 'individual',
         updated_at: new Date().toISOString()
