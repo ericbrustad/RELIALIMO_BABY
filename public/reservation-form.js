@@ -3581,13 +3581,23 @@ class ReservationForm {
   }
 
   async createNewAccount(passengerInfo) {
+    console.log('🆕 createNewAccount called');
+    
     // Get data from modal form fields
     const modal = document.getElementById('accountModal');
+    if (!modal) {
+      console.error('❌ Account modal not found');
+      alert('Error: Account modal not found');
+      return;
+    }
+    
     const firstName = modal.querySelector('#accountFirstName')?.value?.trim() || '';
     const lastName = modal.querySelector('#accountLastName')?.value?.trim() || '';
     const company = modal.querySelector('#accountCompany')?.value?.trim() || '';
     const phone = modal.querySelector('#accountPhone')?.value?.trim() || '';
     const email = modal.querySelector('#accountEmail')?.value?.trim() || '';
+
+    console.log('📝 Form data:', { firstName, lastName, company, phone, email });
 
     // Validate required fields
     if (!firstName || !lastName || !email) {
@@ -3596,7 +3606,10 @@ class ReservationForm {
     }
 
     // Get next account number using db module (use cached value when available)
+    console.log('📊 Getting next account number, pendingAccountNumber:', this.pendingAccountNumber);
     const nextAccountNumber = this.pendingAccountNumber || await db.getNextAccountNumber();
+    console.log('📊 Next account number:', nextAccountNumber);
+    
     if (!nextAccountNumber) {
       alert('Unable to determine the next account number. Please try again.');
       return;
@@ -3604,6 +3617,7 @@ class ReservationForm {
     
     // Get organization_id for multi-tenant support
     const organizationId = window.ENV?.ORGANIZATION_ID || localStorage.getItem('relia_organization_id') || null;
+    console.log('🏢 Organization ID:', organizationId);
     
     // Prepare account data for db module with proper field mappings
     // Note: Do NOT set 'id' - Supabase auto-generates UUIDs for new accounts
@@ -3621,11 +3635,15 @@ class ReservationForm {
       created_at: new Date().toISOString()
     };
 
+    console.log('💾 Saving account:', accountData);
+
     // Save account using db module (now syncs to Supabase)
     const saved = await db.saveAccount(accountData);
+    console.log('💾 Save result:', saved);
     
-    if (!saved) {
-      alert('Error saving account. Please try again.');
+    if (!saved || !saved.success) {
+      console.error('❌ Failed to save account:', saved);
+      alert('Error saving account: ' + (saved?.error || 'Unknown error'));
       return;
     }
 
@@ -3660,7 +3678,7 @@ class ReservationForm {
     this.closeModal();
     
     // Show success message
-    this.showNotification(`✅ Account #${nextAccountNumber} created successfully`, 'success');
+    alert(`✅ Account #${nextAccountNumber} created successfully!\n\nBilling information has been populated on the form.`);
 
     // Store account info for reference (but don't navigate away)
     const savedId = saved.account?.id || saved.id || nextAccountNumber.toString();
