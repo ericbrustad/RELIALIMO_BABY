@@ -310,5 +310,3 @@ class DriverEmailQueueService {
 
 // Create global singleton
 window.driverEmailQueue = new DriverEmailQueueService();
-
-export default window.driverEmailQueue;

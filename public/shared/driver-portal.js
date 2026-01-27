@@ -1776,12 +1776,22 @@ async function initOfferRouteMap(pickupAddress, dropoffAddress) {
   const mapContainer = document.getElementById('offerRouteMap');
   if (!mapContainer) return;
   
+  // Get company location from settings
+  let companyLat = 44.9778, companyLng = -93.2650; // Default fallback
+  try {
+    const companyInfo = JSON.parse(localStorage.getItem('companyInfo') || '{}');
+    if (companyInfo.latitude && companyInfo.longitude) {
+      companyLat = parseFloat(companyInfo.latitude);
+      companyLng = parseFloat(companyInfo.longitude);
+    }
+  } catch (e) { /* Use defaults */ }
+  
   // Try to use Google Maps if available
   if (typeof google !== 'undefined' && google.maps) {
     try {
       const map = new google.maps.Map(mapContainer, {
         zoom: 10,
-        center: { lat: 44.9778, lng: -93.2650 }, // Default to Minneapolis
+        center: { lat: companyLat, lng: companyLng }, // Use company location
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: false,

@@ -1798,7 +1798,16 @@ function initializeDriversMap() {
     mapboxgl.accessToken = token;
     console.log('[CustomerOnboarding] Initializing map with token:', token.substring(0, 20) + '...');
     
-    const center = state.homeCoordinates || { lng: -93.2650, lat: 44.9778 }; // Default to Minneapolis
+    // Get company location from settings
+    let defaultCenter = { lng: -93.2650, lat: 44.9778 };
+    try {
+      const companyInfo = JSON.parse(localStorage.getItem('companyInfo') || '{}');
+      if (companyInfo.latitude && companyInfo.longitude) {
+        defaultCenter = { lat: parseFloat(companyInfo.latitude), lng: parseFloat(companyInfo.longitude) };
+      }
+    } catch (e) { /* Use defaults */ }
+    
+    const center = state.homeCoordinates || defaultCenter;
     console.log('[CustomerOnboarding] Map center:', center);
     
     state.map = new mapboxgl.Map({

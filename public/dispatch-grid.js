@@ -20,7 +20,33 @@ class DispatchGrid {
       farmOut: true,
       quotes: false
     };
+    // Company location from settings (default to Minneapolis if not set)
+    this.companyLat = 44.9778;
+    this.companyLng = -93.2650;
+    this.loadCompanyLocation();
     this.init();
+  }
+
+  // Load company location from office/company settings
+  loadCompanyLocation() {
+    try {
+      const companyInfo = JSON.parse(localStorage.getItem('companyInfo') || '{}');
+      if (companyInfo.latitude && companyInfo.longitude) {
+        this.companyLat = parseFloat(companyInfo.latitude);
+        this.companyLng = parseFloat(companyInfo.longitude);
+        console.log('[DispatchGrid] Company location loaded:', this.companyLat, this.companyLng);
+      } else {
+        // Try to geocode from city/state/zip
+        const city = companyInfo.city || '';
+        const state = companyInfo.state || '';
+        const zip = companyInfo.postal_code || '';
+        if (city || state || zip) {
+          console.log('[DispatchGrid] Company address found but no coordinates. Using default location. Recommend setting lat/lng in Company Settings.');
+        }
+      }
+    } catch (e) {
+      console.warn('[DispatchGrid] Could not load company location from settings:', e);
+    }
   }
 
   init() {
@@ -101,11 +127,15 @@ class DispatchGrid {
 
   // Initialize simulated/rendered driver positions
   initRenderedDrivers() {
+    // Use company location as base for simulated positions
+    const baseLat = this.companyLat;
+    const baseLng = this.companyLng;
+    
     this.renderedDrivers = [
       {
         id: 'car-suv',
-        lat: 44.9778,
-        lng: -93.2650,
+        lat: baseLat,
+        lng: baseLng,
         name: '7 Passenger Suv',
         driver: 'Eric Brustad',
         status: 'available',
@@ -114,8 +144,8 @@ class DispatchGrid {
       },
       {
         id: 'black-suv',
-        lat: 44.9500,
-        lng: -93.2200,
+        lat: baseLat - 0.0278,
+        lng: baseLng + 0.045,
         name: 'BLACK_SUV',
         driver: 'Eric B',
         status: 'busy',
@@ -124,8 +154,8 @@ class DispatchGrid {
       },
       {
         id: 'sedan',
-        lat: 45.0000,
-        lng: -93.2900,
+        lat: baseLat + 0.0222,
+        lng: baseLng - 0.025,
         name: 'Sedan',
         driver: 'Tony Arroyo',
         status: 'available',
@@ -145,8 +175,8 @@ class DispatchGrid {
 
   // Simulate rendered driver movement
   updateRenderedDriverPositions() {
-    const baseLat = 44.9778;
-    const baseLng = -93.2650;
+    const baseLat = this.companyLat;
+    const baseLng = this.companyLng;
     const bounds = { north: baseLat + 0.15, south: baseLat - 0.15, east: baseLng + 0.2, west: baseLng - 0.2 };
     
     this.renderedDrivers.forEach(driver => {
@@ -178,8 +208,11 @@ class DispatchGrid {
   startLiveLocationTracking() {
     this.fetchLiveDriverLocations();
     this.liveLocationInterval = setInterval(() => {
-      this.fetchLiveDriverLocations();
-    }, 5000); // Poll every 5 seconds
+      // Don't keep polling if table doesn't exist
+      if (!this.liveLocationTableMissing) {
+        this.fetchLiveDriverLocations();
+      }
+    }, 30000); // Poll every 30 seconds (was 5 seconds - too aggressive)
   }
 
   stopLiveLocationTracking() {
@@ -199,20 +232,20 @@ class DispatchGrid {
         return;
       }
       
-      // Fetch locations with driver info joined
+      // Try simple query first (without join) to check if table exists
       const { data, error } = await window.supabaseClient
         .from('driver_locations')
-        .select(`
-          id, driver_id, latitude, longitude, heading, speed, accuracy, is_moving, battery_level, updated_at,
-          drivers:driver_id (id, first_name, last_name, email, home_phone, driver_status, driver_type, affiliated_company)
-        `)
+        .select('id, driver_id, latitude, longitude, heading, speed, accuracy, is_moving, battery_level, updated_at')
         .order('updated_at', { ascending: false })
         .limit(50);
       
       if (error) {
-        // Table might not exist yet
-        if (error.code === '42P01' || error.message?.includes('does not exist')) {
-          console.warn('[DispatchGrid] driver_locations table not set up yet');
+        // Table might not exist yet - stop polling to avoid console spam
+        if (error.code === '42P01' || error.message?.includes('does not exist') || error.code === 'PGRST200') {
+          if (!this.liveLocationTableMissing) {
+            console.warn('[DispatchGrid] driver_locations table not set up yet. Run driver-locations-setup.sql in Supabase.');
+            this.liveLocationTableMissing = true;
+          }
           this.showNoLiveDataMessage('Table not configured. Run driver-locations-setup.sql in Supabase.');
         } else {
           console.error('[DispatchGrid] Error fetching live locations:', error);
@@ -221,8 +254,13 @@ class DispatchGrid {
         return;
       }
       
+      // Table exists, clear the missing flag
+      this.liveLocationTableMissing = false;
+      
       if (data && data.length > 0) {
         console.log(`[DispatchGrid] Received ${data.length} live driver locations`);
+        // Fetch driver info separately to avoid join issues
+        await this.enrichLocationsWithDriverInfo(data);
         this.updateLiveVehicleMarkers(data);
       } else {
         console.log('[DispatchGrid] No live driver locations available');
@@ -231,6 +269,41 @@ class DispatchGrid {
     } catch (err) {
       console.error('[DispatchGrid] Failed to fetch live locations:', err);
       this.showNoLiveDataMessage('Connection error');
+    }
+  }
+
+  // Enrich location data with driver info from drivers table
+  async enrichLocationsWithDriverInfo(locations) {
+    if (!locations || locations.length === 0) return;
+    
+    try {
+      const driverIds = locations.map(loc => loc.driver_id).filter(id => id);
+      if (driverIds.length === 0) return;
+      
+      const { data: drivers, error } = await window.supabaseClient
+        .from('drivers')
+        .select('id, first_name, last_name, email, home_phone, driver_status, driver_type, affiliated_company')
+        .in('id', driverIds);
+      
+      if (error) {
+        console.warn('[DispatchGrid] Could not fetch driver info:', error);
+        return;
+      }
+      
+      // Create a lookup map
+      const driverMap = {};
+      (drivers || []).forEach(d => {
+        driverMap[d.id] = d;
+      });
+      
+      // Attach driver info to each location
+      locations.forEach(loc => {
+        loc.drivers = driverMap[loc.driver_id] || null;
+      });
+      
+      console.log(`[DispatchGrid] Enriched ${Object.keys(driverMap).length} drivers`);
+    } catch (err) {
+      console.warn('[DispatchGrid] Error enriching driver info:', err);
     }
   }
 
@@ -245,7 +318,7 @@ class DispatchGrid {
     
     // Show centered popup with message
     this.noDataPopup = L.popup()
-      .setLatLng([44.9778, -93.2650])
+      .setLatLng([this.companyLat, this.companyLng])
       .setContent(`<div style="text-align:center;padding:10px;"><strong>🔴 Live Mode</strong><br>${message}</div>`)
       .openOn(this.gpsMap);
   }
@@ -1080,8 +1153,8 @@ class DispatchGrid {
       return;
     }
 
-    // Initialize Leaflet map centered on Minneapolis
-    this.map = L.map('dispatchMap').setView([44.9778, -93.2650], 11);
+    // Initialize Leaflet map centered on company location
+    this.map = L.map('dispatchMap').setView([this.companyLat, this.companyLng], 11);
 
     // Add OpenStreetMap tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -1196,7 +1269,7 @@ class DispatchGrid {
       // Show info popup on map
       if (this.map && !this.noLiveDataPopup) {
         this.noLiveDataPopup = L.popup()
-          .setLatLng([44.9778, -93.2650])
+          .setLatLng([this.companyLat, this.companyLng])
           .setContent(`
             <div style="text-align:center;padding:10px;">
               <strong>📡 Live GPS Mode Enabled</strong><br>
@@ -1371,7 +1444,7 @@ class DispatchGrid {
   setupMapControls() {
     // Recenter button
     document.getElementById('recenterBtn')?.addEventListener('click', () => {
-      this.map.setView([44.9778, -93.2650], 11);
+      this.map.setView([this.companyLat, this.companyLng], 11);
     });
 
     // Zoom in button
@@ -1409,7 +1482,7 @@ class DispatchGrid {
         } else {
           // No driver - show popup for unassigned
           L.popup()
-            .setLatLng([44.9778, -93.2650])
+            .setLatLng([this.companyLat, this.companyLng])
             .setContent(`<div style="text-align:center;padding:10px;"><strong>🔴 UNASSIGNED</strong><br>Conf# ${conf} has no driver assigned</div>`)
             .openOn(this.map);
         }
@@ -1433,8 +1506,8 @@ class DispatchGrid {
       return;
     }
 
-    // Initialize Leaflet map centered on Minneapolis
-    this.gpsMap = L.map('gpsMap').setView([44.9778, -93.2650], 12);
+    // Initialize Leaflet map centered on company location
+    this.gpsMap = L.map('gpsMap').setView([this.companyLat, this.companyLng], 12);
 
     // Add OpenStreetMap tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -1493,7 +1566,7 @@ class DispatchGrid {
   setupGPSControls() {
     // Recenter button
     document.getElementById('gpsRecenterBtn')?.addEventListener('click', () => {
-      this.gpsMap.setView([44.9778, -93.2650], 12);
+      this.gpsMap.setView([this.companyLat, this.companyLng], 12);
     });
 
     // Zoom in button
