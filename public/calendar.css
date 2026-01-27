@@ -531,6 +531,8 @@ body.show-holiday-ticker .holiday-ticker {
   position: sticky;
   top: 0;
   z-index: 10;
+  box-shadow: 0 -7px 0 0 #000; /* 7px solid black bar above header */
+  margin-top: 7px; /* Make room for the black bar */
 }
 
 .calendar-header-cell {
