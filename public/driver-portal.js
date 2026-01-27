@@ -2600,7 +2600,13 @@ function setupEventListeners() {
   
   // Login
   elements.loginBtn?.addEventListener('click', handleLogin);
-  elements.googleLoginBtn?.addEventListener('click', handleGoogleAuth);
+  console.log('[DriverPortal] googleLoginBtn element:', elements.googleLoginBtn);
+  if (elements.googleLoginBtn) {
+    elements.googleLoginBtn.addEventListener('click', handleGoogleAuth);
+    console.log('[DriverPortal] Google login button listener attached');
+  } else {
+    console.warn('[DriverPortal] googleLoginBtn not found in DOM!');
+  }
   
   // Registration navigation - updated for new inline OTP flow
   elements.regNextStep1?.addEventListener('click', handleStep1Continue);
