@@ -230,6 +230,16 @@ class Accounts {
       return;
     }
 
+    // IMMEDIATELY remove from the UI (don't wait for refresh)
+    const listbox = document.getElementById('accountsListbox');
+    if (listbox) {
+      const selectedOption = listbox.querySelector(`option[value="${accountId}"]`);
+      if (selectedOption) {
+        selectedOption.remove();
+        console.log('🗑️ Removed account from list immediately:', accountId);
+      }
+    }
+
     // Also remove locally stored addresses for this account
     try {
       localStorage.removeItem(`relia_account_${accountId}_addresses`);
@@ -244,6 +254,7 @@ class Accounts {
       // no-op
     }
 
+    // Also refresh the list from database to ensure consistency
     await this.loadAccountsList();
     alert('Account deleted.');
   }
