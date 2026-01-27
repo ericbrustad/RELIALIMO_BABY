@@ -1382,6 +1382,13 @@ async function init() {
   console.log('[DriverPortal] Initializing...');
   
   try {
+    // Check for OAuth callback first (returning from Google sign-in)
+    const handledOAuth = await handleOAuthCallback();
+    if (handledOAuth) {
+      console.log('[DriverPortal] OAuth callback handled, skipping normal init');
+      return;
+    }
+    
     // Check and request required permissions first (location & notifications)
     await ensureRequiredPermissions();
     
@@ -2592,6 +2599,7 @@ function setupEventListeners() {
   
   // Login
   elements.loginBtn?.addEventListener('click', handleLogin);
+  elements.googleLoginBtn?.addEventListener('click', handleGoogleAuth);
   
   // Registration navigation - updated for new inline OTP flow
   elements.regNextStep1?.addEventListener('click', handleStep1Continue);
@@ -4357,6 +4365,130 @@ async function fetchVehicles() {
 // ============================================
 // Authentication
 // ============================================
+
+// Google OAuth handler
+async function handleGoogleAuth() {
+  const supabaseUrl = window.ENV?.SUPABASE_URL || '';
+  const redirectUrl = `${window.location.origin}/driver-portal.html?oauth_callback=true`;
+  
+  console.log('[DriverPortal] Starting Google OAuth with redirect:', redirectUrl);
+  
+  try {
+    // Use Supabase Auth OAuth flow
+    const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
+    window.location.href = authUrl;
+  } catch (err) {
+    console.error('[DriverPortal] Google OAuth error:', err);
+    showToast('Failed to start Google sign-in', 'error');
+  }
+}
+
+// Handle OAuth callback - called when returning from Google
+async function handleOAuthCallback() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+  
+  // Check if this is an OAuth callback
+  const isCallback = urlParams.get('oauth_callback') === 'true';
+  const accessToken = hashParams.get('access_token');
+  
+  if (!isCallback && !accessToken) {
+    return false;
+  }
+  
+  console.log('[DriverPortal] Processing OAuth callback...');
+  
+  try {
+    const supabaseUrl = window.ENV?.SUPABASE_URL || '';
+    const supabaseKey = window.ENV?.SUPABASE_ANON_KEY || '';
+    
+    // If we have an access token in the hash, use it to get the user
+    if (accessToken) {
+      const userResp = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'apikey': supabaseKey
+        }
+      });
+      
+      if (!userResp.ok) {
+        throw new Error('Failed to get user from access token');
+      }
+      
+      const user = await userResp.json();
+      console.log('[DriverPortal] OAuth user:', user.email);
+      
+      // Find driver by email
+      const drivers = await fetchDrivers();
+      const driver = drivers.find(d => d.email?.toLowerCase() === user.email?.toLowerCase());
+      
+      if (!driver) {
+        // Clear URL parameters
+        window.history.replaceState({}, document.title, window.location.pathname);
+        showToast('No driver account found for this email. Please register first.', 'error');
+        showScreen('auth');
+        return true;
+      }
+      
+      // Link auth user to driver if not already linked
+      if (!driver.user_id) {
+        try {
+          await fetch(`${supabaseUrl}/rest/v1/drivers?id=eq.${driver.id}`, {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'apikey': supabaseKey,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({ user_id: user.id })
+          });
+          console.log('[DriverPortal] Linked auth user to driver');
+        } catch (e) {
+          console.warn('[DriverPortal] Could not link user_id:', e);
+        }
+      }
+      
+      // Log in the driver
+      state.driver = driver;
+      state.driverId = driver.id;
+      localStorage.setItem('driver_portal_id', driver.id);
+      
+      // Set driver status to 'available' on login
+      if (driver.driver_status === 'offline' || !driver.driver_status) {
+        try {
+          await updateDriverStatus('available');
+          state.driver.driver_status = 'available';
+        } catch (e) {
+          console.warn('[DriverPortal] Could not update status on login:', e);
+        }
+      }
+      
+      // Clear URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      await loadDashboard();
+      showScreen('dashboard');
+      showToast('Welcome back, ' + (driver.first_name || 'Driver') + '!', 'success');
+      
+      // Start location broadcast if driver is online
+      if (state.driver.driver_status !== 'offline') {
+        startLocationBroadcast();
+      }
+      
+      return true;
+    }
+  } catch (err) {
+    console.error('[DriverPortal] OAuth callback error:', err);
+    showToast('Sign-in failed. Please try again.', 'error');
+    window.history.replaceState({}, document.title, window.location.pathname);
+    showScreen('auth');
+    return true;
+  }
+  
+  return false;
+}
+
 async function handleLogin() {
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;

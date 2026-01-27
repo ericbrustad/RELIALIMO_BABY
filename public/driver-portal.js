@@ -1383,6 +1383,13 @@ async function init() {
   console.log('[DriverPortal] Initializing...');
   
   try {
+    // Check for OAuth callback first (returning from Google sign-in)
+    const handledOAuth = await handleOAuthCallback();
+    if (handledOAuth) {
+      console.log('[DriverPortal] OAuth callback handled, skipping normal init');
+      return;
+    }
+    
     // Check and request required permissions first (location & notifications)
     await ensureRequiredPermissions();
     
@@ -2593,6 +2600,7 @@ function setupEventListeners() {
   
   // Login
   elements.loginBtn?.addEventListener('click', handleLogin);
+  elements.googleLoginBtn?.addEventListener('click', handleGoogleAuth);
   
   // Registration navigation - updated for new inline OTP flow
   elements.regNextStep1?.addEventListener('click', handleStep1Continue);
