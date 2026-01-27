@@ -802,9 +802,68 @@ export class FarmoutAutomationService {
     const vehicleType = reservation.vehicleType || reservation.vehicle_type || '';
     const duration = reservation.duration || reservation.estimatedDuration || '';
     const distance = reservation.distance || reservation.estimatedDistance || '';
-    const grandTotal = parseFloat(reservation.grandTotal || reservation.grand_total || 0);
     
-    // Calculate driver pay (70% of total)
+    // Try multiple sources for grand total - reservation field, then form_snapshot costs
+    let grandTotal = parseFloat(reservation.grandTotal || reservation.grand_total || 0);
+    
+    // If grandTotal is 0, try to calculate from form_snapshot costs
+    if (grandTotal === 0 && reservation.form_snapshot) {
+      const snapshot = typeof reservation.form_snapshot === 'string' 
+        ? JSON.parse(reservation.form_snapshot) 
+        : reservation.form_snapshot;
+      const costs = snapshot?.costs || {};
+      
+      // Flat rate
+      const flatRate = parseFloat(costs.flat?.rate) || 0;
+      const flatQty = parseFloat(costs.flat?.qty) || 1;
+      
+      // Hourly
+      const hourRate = parseFloat(costs.hour?.rate) || 0;
+      const hourQty = parseFloat(costs.hour?.qty) || 0;
+      
+      // Base rate
+      const baseRate = parseFloat(costs.baseRate) || 0;
+      
+      // Mile
+      const mileRate = parseFloat(costs.mile?.rate) || 0;
+      const mileQty = parseFloat(costs.mile?.qty) || 0;
+      
+      // Stops
+      const stopsRate = parseFloat(costs.stops?.rate) || 0;
+      const stopsQty = parseFloat(costs.stops?.qty) || 0;
+      
+      // Calculate total from costs
+      if (flatRate > 0) {
+        grandTotal = flatRate * flatQty;
+      } else if (hourRate > 0) {
+        grandTotal = hourRate * hourQty;
+      } else if (mileRate > 0) {
+        grandTotal = mileRate * mileQty;
+      } else if (baseRate > 0) {
+        grandTotal = baseRate;
+      }
+      
+      // Add stops
+      grandTotal += (stopsRate * stopsQty);
+      
+      // Add gratuity
+      grandTotal += parseFloat(costs.gratuity) || 0;
+      
+      // Add fuel
+      grandTotal += parseFloat(costs.fuel) || 0;
+      
+      // Subtract discount
+      grandTotal -= parseFloat(costs.discount) || 0;
+      
+      console.log('[FarmoutAutomation] Calculated grandTotal from form_snapshot costs:', grandTotal, costs);
+    }
+    
+    // Also check base_fare / base_price as fallback
+    if (grandTotal === 0) {
+      grandTotal = parseFloat(reservation.base_fare) || parseFloat(reservation.base_price) || parseFloat(reservation.rate_amount) || 0;
+    }
+    
+    // Calculate driver pay from grand total
     const driverPay = (grandTotal * (this.settings.driverPayPercentage / 100)).toFixed(2);
     
     // Extract cities only (not full addresses)
