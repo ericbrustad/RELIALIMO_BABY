@@ -286,6 +286,7 @@
                             <button type="button" class="tag" data-tag="{vehicle_type}">{vehicle_type}</button>
                             <button type="button" class="tag" data-tag="{reservation_id}">{reservation_id}</button>
                             <button type="button" class="tag" data-tag="{trip_notes}">{trip_notes}</button>
+                            <button type="button" class="tag" data-tag="{trip_request_url}">{trip_request_url}</button>
                         </div>
                     </div>
                     
@@ -294,7 +295,7 @@
                             <span class="template-label">Trip Offer</span>
                             <span class="char-count" id="offerCharCount">0/160</span>
                         </label>
-                        <textarea id="smsOfferTemplate" rows="4" maxlength="480">Hi {driver_first_name}, new trip available! {pickup_city} to {dropoff_city} on {pickup_date} at {pickup_time}. Pay: ${pay_amount}. Reply Y to accept or N to decline. Expires in {timeout_minutes} min.</textarea>
+                        <textarea id="smsOfferTemplate" rows="4" maxlength="480">Hi {driver_first_name}, new trip available! {pickup_city} to {dropoff_city} on {pickup_date} at {pickup_time}. Pay: ${pay_amount}. Reply Y to accept or N to decline. Details: {trip_request_url} - Expires in {timeout_minutes} min.</textarea>
                     </div>
                     
                     <div class="template-group">
