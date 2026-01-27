@@ -1170,11 +1170,11 @@ class DispatchGrid {
     let drivers = this.useLiveLocations ? (this.liveDrivers || []) : this.renderedDrivers;
     let showingFallback = false;
     
+    // When Live GPS is enabled, do NOT fallback to simulated drivers
+    // Only show actual live GPS data (or nothing if no drivers have shared location)
     if (this.useLiveLocations && (!this.liveDrivers || this.liveDrivers.length === 0)) {
-      // Show fallback rendered drivers with DEMO label when no live data
-      console.log('[DispatchGrid] No live drivers available, showing simulated as fallback');
-      drivers = this.renderedDrivers;
-      showingFallback = true;
+      console.log('[DispatchGrid] Live GPS mode - no live drivers available, showing empty (no simulated fallback)');
+      drivers = []; // Empty - don't show simulated
       
       // Show info popup on map
       if (this.map && !this.noLiveDataPopup) {
@@ -1182,10 +1182,9 @@ class DispatchGrid {
           .setLatLng([44.9778, -93.2650])
           .setContent(`
             <div style="text-align:center;padding:10px;">
-              <strong>📡 Live Mode Enabled</strong><br>
+              <strong>📡 Live GPS Mode Enabled</strong><br>
               <span style="color:#666;">No live driver GPS data available yet.</span><br>
-              <small>Showing simulated positions as fallback.</small><br>
-              <small style="color:#888;">Drivers must share location from Driver Portal.</small>
+              <small style="color:#888;">Drivers must share location from Driver Portal to appear here.</small>
             </div>
           `)
           .openOn(this.map);
