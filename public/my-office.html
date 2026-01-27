@@ -52,7 +52,6 @@
               <div class="sidebar-subgroup" id="systemSettingsSubnav" style="display: none;">
                 <button class="sidebar-subbtn active" data-system-setting="service-types">Service Types</button>
                 <button class="sidebar-subbtn" data-system-setting="system-mapping">System Mapping</button>
-                <button class="sidebar-subbtn" data-system-setting="portal-settings">Portal Settings</button>
                 <button class="sidebar-subbtn" data-system-setting="sms-provider">Sms Provider</button>
                 <button class="sidebar-subbtn" data-system-setting="email-settings">Email Settings</button>
                 <button class="sidebar-subbtn" data-system-setting="farmout-automation">Farmout Automation</button>
@@ -100,9 +99,9 @@
             <!-- Driver App Settings Tab Items (hidden by default) -->
             <div class="sidebar-group" id="driverAppSettingsGroup" style="display: none;">
               <button class="sidebar-btn active" data-driver-setting="portal-branding">Portal Branding</button>
-              <button class="sidebar-btn" data-driver-setting="onboarding">Onboarding Settings</button>
-              <button class="sidebar-btn" data-driver-setting="requirements">Requirements</button>
-              <button class="sidebar-btn" data-driver-setting="notifications">Notifications</button>
+              <button class="sidebar-btn" data-driver-setting="onboarding-settings">Onboarding Settings</button>
+              <button class="sidebar-btn" data-driver-setting="driver-requirements">Driver Requirements</button>
+              <button class="sidebar-btn" data-driver-setting="notification-settings">Notification Settings</button>
               <button class="sidebar-btn" data-driver-setting="trip-settings">Trip Settings</button>
               <button class="sidebar-btn" data-driver-setting="payment-settings">Payment Settings</button>
             </div>
@@ -110,11 +109,11 @@
             <!-- Customer Account Settings Tab Items (hidden by default) -->
             <div class="sidebar-group" id="customerAccountSettingsGroup" style="display: none;">
               <button class="sidebar-btn active" data-customer-setting="portal-branding">Portal Branding</button>
-              <button class="sidebar-btn" data-customer-setting="onboarding">Onboarding Settings</button>
-              <button class="sidebar-btn" data-customer-setting="booking">Booking Settings</button>
-              <button class="sidebar-btn" data-customer-setting="payment">Payment Settings</button>
-              <button class="sidebar-btn" data-customer-setting="notifications">Notifications</button>
-              <button class="sidebar-btn" data-customer-setting="loyalty">Loyalty Program</button>
+              <button class="sidebar-btn" data-customer-setting="onboarding-settings">Onboarding Settings</button>
+              <button class="sidebar-btn" data-customer-setting="booking-settings">Booking Settings</button>
+              <button class="sidebar-btn" data-customer-setting="notification-settings">Notification Settings</button>
+              <button class="sidebar-btn" data-customer-setting="payment-settings">Payment Settings</button>
+              <button class="sidebar-btn" data-customer-setting="loyalty-program">Loyalty Program</button>
             </div>
         </aside>
 
@@ -1378,7 +1377,7 @@ Bloomington MN 55431
 
                         <div class="setting-row">
                           <label class="setting-label">Alternate Contact Email:</label>
-                          <input type="email" class="form-control setting-control" value="" placeholder="Enter alternate email" style="width: 300px;" />
+                          <input type="email" class="form-control setting-control" value="" placeholder="alternate@email.com" style="width: 300px;" />
                         </div>
 
                         <div class="setting-row" style="margin-top: 30px;">
@@ -7700,14 +7699,38 @@ further assistance.</textarea>
     </style>
 
     <script src="env.js"></script>
-    <script src="CompanySettingsManager.js"></script>
-    <script src="CompanySettingsUI.js"></script>
-    <script src="PreferencesFormHandler.js"></script>
-    <script src="triptag-selector.js"></script>
-    <script src="ratetag-selector.js"></script>
-    <script src="drag-drop-handler.js"></script>
-    <script src="html-editor-view-switcher.js"></script>
-    <script src="email-settings.js"></script>
+    <script>
+      // Load Google Maps Places API dynamically using key from env.js
+      (function loadGoogleMapsPlaces() {
+        const apiKey = window.ENV?.GOOGLE_MAPS_API_KEY;
+        if (!apiKey) {
+          console.warn('[MyOffice] Google Maps API key not found in env.js');
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=googleMapsReady`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+      })();
+      
+      // Callback when Google Maps is ready
+      window.googleMapsReady = function() {
+        console.log('[MyOffice] Google Maps Places API loaded');
+        // Re-initialize address lookup if my-office.js already loaded
+        if (window.myOfficeInstance && typeof window.myOfficeInstance.setupCompanyAddressLookup === 'function') {
+          window.myOfficeInstance.setupCompanyAddressLookup();
+        }
+      };
+    </script>
+    <script src="../CompanySettingsManager.js"></script>
+    <script src="../CompanySettingsUI.js"></script>
+    <script src="../PreferencesFormHandler.js"></script>
+    <script src="../triptag-selector.js"></script>
+    <script src="../ratetag-selector.js"></script>
+    <script src="../drag-drop-handler.js"></script>
+    <script src="../html-editor-view-switcher.js"></script>
+    <script src="../email-settings.js"></script>
     <script type="module" src="my-office.js"></script>
   </body>
 </html>

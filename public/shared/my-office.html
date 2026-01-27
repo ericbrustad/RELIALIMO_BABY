@@ -7699,6 +7699,30 @@ further assistance.</textarea>
     </style>
 
     <script src="env.js"></script>
+    <script>
+      // Load Google Maps Places API dynamically using key from env.js
+      (function loadGoogleMapsPlaces() {
+        const apiKey = window.ENV?.GOOGLE_MAPS_API_KEY;
+        if (!apiKey) {
+          console.warn('[MyOffice] Google Maps API key not found in env.js');
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=googleMapsReady`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+      })();
+      
+      // Callback when Google Maps is ready
+      window.googleMapsReady = function() {
+        console.log('[MyOffice] Google Maps Places API loaded');
+        // Re-initialize address lookup if my-office.js already loaded
+        if (window.myOfficeInstance && typeof window.myOfficeInstance.setupCompanyAddressLookup === 'function') {
+          window.myOfficeInstance.setupCompanyAddressLookup();
+        }
+      };
+    </script>
     <script src="../CompanySettingsManager.js"></script>
     <script src="../CompanySettingsUI.js"></script>
     <script src="../PreferencesFormHandler.js"></script>

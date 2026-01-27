@@ -1227,14 +1227,23 @@ class MyOffice {
     // Moved to logo-management.html
   }
   loadSavedLogo() {
-    // Legacy support - load from old format
+    // Load saved logo and display it
     const savedLogo = localStorage.getItem('companyLogo');
-    if (savedLogo) {
+    const logoPreviewImg = document.getElementById('logoPreviewImg');
+    const logoFileName = document.getElementById('logoFileName');
+    
+    if (savedLogo && logoPreviewImg) {
       try {
         const logoData = JSON.parse(savedLogo);
-        console.log('Legacy logo found:', logoData.name);
+        if (logoData.data) {
+          logoPreviewImg.src = logoData.data;
+          if (logoFileName) {
+            logoFileName.textContent = logoData.name || 'Saved logo';
+          }
+          console.log('[MyOffice] Loaded saved logo:', logoData.name);
+        }
       } catch (e) {
-        console.error('Error loading saved logo:', e);
+        console.error('[MyOffice] Error loading saved logo:', e);
       }
     }
   }
@@ -11749,6 +11758,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Expose instance globally so child iframes can access vehicle types, drivers, etc.
   window.myOffice = new MyOffice();
+  window.myOfficeInstance = window.myOffice; // Alias for Google Maps callback
   
   // Initialize airports from localStorage into office.Airports
   window.myOffice.initializeOfficeAirports();
