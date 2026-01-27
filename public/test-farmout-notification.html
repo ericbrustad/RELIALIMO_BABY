@@ -74,6 +74,20 @@
         </div>
         
         <div id="log" class="log"></div>
+        
+        <h3 style="margin-top: 25px;">📱 Trip Request Page Preview (Driver View)</h3>
+        <div style="border: 3px solid #333; border-radius: 20px; overflow: hidden; max-width: 375px; margin: 0 auto; background: #000;">
+            <div style="background: #333; color: white; text-align: center; padding: 5px; font-size: 12px;">iPhone Preview</div>
+            <iframe 
+                id="tripRequestPreview" 
+                src="trip-request.html?id=TEST123&driver_id=test" 
+                style="width: 375px; height: 700px; border: none;"
+            ></iframe>
+        </div>
+        <div style="text-align: center; margin-top: 10px;">
+            <button onclick="reloadPreview()" style="background: #6c757d;">🔄 Reload Preview</button>
+            <button onclick="openInNewTab()" style="background: #17a2b8;">🔗 Open in New Tab</button>
+        </div>
     </div>
 
     <script>
@@ -298,6 +312,18 @@
         
         function sleep(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        
+        // Iframe preview controls
+        function reloadPreview() {
+            const iframe = document.getElementById('tripRequestPreview');
+            iframe.src = iframe.src;
+            log('🔄 Preview reloaded', 'info');
+        }
+        
+        function openInNewTab() {
+            window.open('trip-request.html?id=TEST123&driver_id=test', '_blank');
+            log('🔗 Opened trip request page in new tab', 'info');
         }
         
         // Initialize
