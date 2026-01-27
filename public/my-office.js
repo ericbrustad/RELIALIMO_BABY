@@ -8,6 +8,11 @@ import { MapboxService } from './MapboxService.js';
 import { googleMapsService } from './GoogleMapsService.js';
 import { setupPhoneEmailValidation, validateAllFields, isValidPhone, isValidEmail, formatPhone } from './validation-utils.js';
 
+// Realtime service for live updates
+let realtimeServiceModule = null;
+let unsubscribeDriversRealtime = null;
+let unsubscribeAccountsRealtime = null;
+
 class MyOffice {
   constructor() {
     // Diagnostics: status indicator + global error handlers
@@ -125,6 +130,117 @@ class MyOffice {
     this.setupAllPhoneEmailValidation();
     // Initialize API
     this.initializeAPI();
+    // Setup realtime subscriptions for drivers/accounts
+    this.setupRealtimeSubscriptions();
+  }
+
+  // Set up real-time subscriptions for drivers and accounts
+  async setupRealtimeSubscriptions() {
+    try {
+      // Dynamic import of realtime service
+      realtimeServiceModule = await import('./shared/realtime-service.js');
+      const { default: realtimeService, subscribeToDrivers, subscribeToAccounts } = realtimeServiceModule;
+      
+      await realtimeService.init();
+      
+      // Subscribe to driver changes
+      unsubscribeDriversRealtime = subscribeToDrivers((eventType, newData, oldData) => {
+        console.log('[MyOffice] Realtime driver update:', eventType, newData?.id || oldData?.id);
+        
+        // Reload drivers list if we're on that tab
+        if (this.currentSection === 'drivers' || this.currentResource === 'drivers') {
+          this.loadDrivers();
+        }
+        
+        // Update localStorage cache for other pages
+        this.updateDriverCache(eventType, newData, oldData);
+        
+        // Show notification
+        const name = newData ? [newData.first_name, newData.last_name].filter(Boolean).join(' ') : 
+                     oldData ? [oldData.first_name, oldData.last_name].filter(Boolean).join(' ') : 'Driver';
+        if (eventType === 'INSERT') {
+          this.showRealtimeNotification(`New driver added: ${name}`);
+        } else if (eventType === 'UPDATE' && newData?.driver_status !== oldData?.driver_status) {
+          this.showRealtimeNotification(`${name} is now ${newData.driver_status}`);
+        } else if (eventType === 'DELETE') {
+          this.showRealtimeNotification(`Driver removed: ${name}`);
+        }
+      });
+      
+      // Subscribe to account changes
+      unsubscribeAccountsRealtime = subscribeToAccounts((eventType, newData, oldData) => {
+        console.log('[MyOffice] Realtime account update:', eventType, newData?.id || oldData?.id);
+        
+        // Update localStorage cache for other pages
+        this.updateAccountCache(eventType, newData, oldData);
+      });
+      
+      console.log('[MyOffice] Realtime subscriptions active');
+    } catch (err) {
+      console.warn('[MyOffice] Could not set up realtime subscriptions:', err);
+    }
+  }
+
+  // Update driver cache in localStorage when realtime updates come in
+  updateDriverCache(eventType, newData, oldData) {
+    try {
+      const cacheKey = 'relia_driver_directory';
+      const cached = JSON.parse(localStorage.getItem(cacheKey) || '[]');
+      
+      if (eventType === 'INSERT' && newData) {
+        cached.push(newData);
+        localStorage.setItem(cacheKey, JSON.stringify(cached));
+      } else if (eventType === 'UPDATE' && newData) {
+        const idx = cached.findIndex(d => d.id === newData.id);
+        if (idx !== -1) {
+          cached[idx] = { ...cached[idx], ...newData };
+          localStorage.setItem(cacheKey, JSON.stringify(cached));
+        }
+      } else if (eventType === 'DELETE' && oldData) {
+        const filtered = cached.filter(d => d.id !== oldData.id);
+        localStorage.setItem(cacheKey, JSON.stringify(filtered));
+      }
+    } catch (e) {
+      console.warn('[MyOffice] Could not update driver cache:', e);
+    }
+  }
+
+  // Update account cache in localStorage when realtime updates come in
+  updateAccountCache(eventType, newData, oldData) {
+    try {
+      const cacheKey = 'relia_accounts';
+      const cached = JSON.parse(localStorage.getItem(cacheKey) || '[]');
+      
+      if (eventType === 'INSERT' && newData) {
+        cached.push(newData);
+        localStorage.setItem(cacheKey, JSON.stringify(cached));
+      } else if (eventType === 'UPDATE' && newData) {
+        const idx = cached.findIndex(a => a.id === newData.id);
+        if (idx !== -1) {
+          cached[idx] = { ...cached[idx], ...newData };
+          localStorage.setItem(cacheKey, JSON.stringify(cached));
+        }
+      } else if (eventType === 'DELETE' && oldData) {
+        const filtered = cached.filter(a => a.id !== oldData.id);
+        localStorage.setItem(cacheKey, JSON.stringify(filtered));
+      }
+    } catch (e) {
+      console.warn('[MyOffice] Could not update account cache:', e);
+    }
+  }
+
+  // Show a notification toast for realtime updates
+  showRealtimeNotification(message) {
+    let toast = document.getElementById('myOfficeRealtimeToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'myOfficeRealtimeToast';
+      toast.style.cssText = 'position:fixed;bottom:20px;right:20px;padding:12px 20px;border-radius:4px;background:#3b82f6;color:white;font-weight:500;z-index:9999;opacity:0;transition:opacity 0.3s;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
+      document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.style.opacity = '1';
+    setTimeout(() => { toast.style.opacity = '0'; }, 4000);
   }
 
   async initializeAPI() {
@@ -11781,4 +11897,16 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   
   console.log('Office airports system initialized - each airport stored in its own cell in office.Airports');
+  
+  // Cleanup realtime subscriptions on page unload
+  window.addEventListener('beforeunload', () => {
+    if (unsubscribeDriversRealtime) {
+      unsubscribeDriversRealtime();
+      unsubscribeDriversRealtime = null;
+    }
+    if (unsubscribeAccountsRealtime) {
+      unsubscribeAccountsRealtime();
+      unsubscribeAccountsRealtime = null;
+    }
+  });
 });

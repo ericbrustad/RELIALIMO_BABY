@@ -23,6 +23,10 @@ class DispatchGrid {
     // Company location from settings (default to Minneapolis if not set)
     this.companyLat = 44.9778;
     this.companyLng = -93.2650;
+    // Realtime subscriptions
+    this.realtimeService = null;
+    this.unsubscribeDrivers = null;
+    this.unsubscribeReservations = null;
     this.loadCompanyLocation();
     this.init();
   }
@@ -56,6 +60,122 @@ class DispatchGrid {
     this.initRenderedDrivers();
     this.initReservationPanel(); // Initialize sliding panel handlers
     this.loadGridData(); // Load grid reservations
+    this.setupRealtimeSubscriptions(); // Subscribe to real-time updates
+  }
+
+  // Set up real-time subscriptions for drivers and reservations
+  async setupRealtimeSubscriptions() {
+    try {
+      // Dynamic import of realtime service
+      const { default: realtimeService, subscribeToDrivers, subscribeToReservations } = await import('./shared/realtime-service.js');
+      this.realtimeService = realtimeService;
+      
+      await realtimeService.init();
+      
+      // Subscribe to driver changes (status, location, login/logout)
+      this.unsubscribeDrivers = subscribeToDrivers((eventType, newData, oldData) => {
+        console.log('[DispatchGrid] Realtime driver update:', eventType, newData?.id || oldData?.id);
+        
+        // Refresh driver markers on the GPS map
+        if (this.useLiveLocations) {
+          this.loadLiveLocations();
+        }
+        
+        // Update any driver-related UI
+        this.onDriverUpdate(eventType, newData, oldData);
+      });
+      
+      // Subscribe to reservation changes
+      this.unsubscribeReservations = subscribeToReservations((eventType, newData, oldData) => {
+        console.log('[DispatchGrid] Realtime reservation update:', eventType, newData?.id || oldData?.id);
+        
+        // Refresh the grid with new data
+        this.onReservationUpdate(eventType, newData, oldData);
+      });
+      
+      console.log('[DispatchGrid] Realtime subscriptions active');
+    } catch (err) {
+      console.warn('[DispatchGrid] Could not set up realtime subscriptions:', err);
+    }
+  }
+
+  // Handle real-time driver updates
+  onDriverUpdate(eventType, newData, oldData) {
+    // Show notification for driver status changes
+    if (eventType === 'UPDATE' && newData && oldData) {
+      if (newData.driver_status !== oldData.driver_status) {
+        const name = [newData.first_name, newData.last_name].filter(Boolean).join(' ') || 'Driver';
+        this.showNotification(`${name} is now ${newData.driver_status}`, 'info');
+      }
+    }
+    
+    // If a driver comes online, refresh the GPS map
+    if (this.gpsMap && this.useLiveLocations) {
+      this.loadLiveLocations();
+    }
+  }
+
+  // Handle real-time reservation updates
+  onReservationUpdate(eventType, newData, oldData) {
+    // Reload grid data to show the update
+    this.loadGridData();
+    
+    // Show notification
+    if (eventType === 'INSERT' && newData) {
+      this.showNotification(`New reservation #${newData.confirmation_number || newData.id}`, 'success');
+    } else if (eventType === 'UPDATE' && newData) {
+      // Only notify on significant changes
+      const statusChanged = oldData && newData.status !== oldData.status;
+      if (statusChanged) {
+        this.showNotification(`Reservation #${newData.confirmation_number || newData.id} → ${newData.status}`, 'info');
+      }
+    } else if (eventType === 'DELETE' && oldData) {
+      this.showNotification(`Reservation #${oldData.confirmation_number || oldData.id} deleted`, 'warning');
+    }
+  }
+
+  // Show a notification toast
+  showNotification(message, type = 'info') {
+    // Look for existing toast element or create one
+    let toast = document.getElementById('dispatchToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'dispatchToast';
+      toast.style.cssText = 'position:fixed;bottom:20px;right:20px;padding:12px 20px;border-radius:4px;color:white;font-weight:500;z-index:9999;opacity:0;transition:opacity 0.3s;';
+      document.body.appendChild(toast);
+    }
+    
+    // Set color based on type
+    const colors = {
+      success: '#22c55e',
+      info: '#3b82f6',
+      warning: '#f59e0b',
+      error: '#ef4444'
+    };
+    toast.style.background = colors[type] || colors.info;
+    toast.textContent = message;
+    toast.style.opacity = '1';
+    
+    // Hide after 3 seconds
+    setTimeout(() => {
+      toast.style.opacity = '0';
+    }, 3000);
+  }
+
+  // Cleanup subscriptions when leaving page
+  cleanup() {
+    if (this.unsubscribeDrivers) {
+      this.unsubscribeDrivers();
+      this.unsubscribeDrivers = null;
+    }
+    if (this.unsubscribeReservations) {
+      this.unsubscribeReservations();
+      this.unsubscribeReservations = null;
+    }
+    if (this.liveLocationInterval) {
+      clearInterval(this.liveLocationInterval);
+      this.liveLocationInterval = null;
+    }
   }
 
   // Initialize the Live/Rendered mode from settings
@@ -1634,5 +1754,10 @@ class DispatchGrid {
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  new DispatchGrid();
+  const grid = new DispatchGrid();
+  
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    grid.cleanup();
+  });
 });

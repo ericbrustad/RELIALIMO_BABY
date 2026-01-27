@@ -1,3 +1,9 @@
+import { supabase, getSupabaseClient } from './config.js';
+import realtimeService, { subscribeToDrivers } from './shared/realtime-service.js';
+
+// Realtime subscription cleanup
+let unsubscribeDrivers = null;
+
 const STATUS_OPTIONS = [
 	{ value: 'available', label: 'Available', hint: 'Ready for new trips' },
 	{ value: 'enroute', label: 'En Route', hint: 'Heading to the pickup location' },
@@ -7,36 +13,98 @@ const STATUS_OPTIONS = [
 	{ value: 'offline', label: 'Offline', hint: 'Off shift / not taking trips' }
 ];
 
-function getDrivers() {
+// Cache for drivers loaded from Supabase
+let cachedDrivers = null;
+
+async function fetchDriversFromSupabase() {
+	try {
+		const client = getSupabaseClient();
+		if (!client) {
+			console.warn('[driver-availability] Supabase client not available');
+			return null;
+		}
+		
+		const { data, error } = await client
+			.from('drivers')
+			.select('id, first_name, last_name, cell_phone, mobile_phone, phone, driver_status, status, is_active, driver_level, vehicle_type, affiliate_id')
+			.order('last_name', { ascending: true });
+		
+		if (error) {
+			console.error('[driver-availability] Error fetching drivers:', error);
+			return null;
+		}
+		
+		return data;
+	} catch (e) {
+		console.error('[driver-availability] Failed to fetch drivers:', e);
+		return null;
+	}
+}
+
+function getDriversFromCache() {
 	try {
 		const raw = localStorage.getItem('relia_driver_directory');
 		if (raw) {
 			const parsed = JSON.parse(raw);
 			if (Array.isArray(parsed) && parsed.length) {
-				return parsed.map((d, idx) => {
-					const first = d.first_name || d.first || '';
-					const last = d.last_name || d.last || '';
-					const name = [first, last].filter(Boolean).join(' ').trim() || d.name || `Driver ${idx + 1}`;
-					const status = (d.driver_status || d.status || 'available').toString().toLowerCase();
-					return {
-						id: d.id || idx + 1,
-						name,
-						vehicle: d.vehicle_type || d.vehicle || d.car_type || 'Vehicle',
-						affiliate: d.affiliate || d.affiliate_name || d.company || 'Fleet',
-						phone: d.cell_phone || d.mobile_phone || d.phone || d.phone_number || d.primary_phone || '',
-						driver_status: STATUS_OPTIONS.some(s => s.value === status) ? status : 'available',
-						driver_level: d.driver_level || d.level || null
-					};
-				});
+				return parsed;
 			}
 		}
 	} catch (e) {
 		console.warn('Unable to read driver directory:', e.message);
 	}
+	return null;
+}
 
-	// No cached drivers - return empty array
-	// Real drivers should be loaded from Supabase via the driver directory
-	console.warn('[driver-availability] No driver directory found. Load drivers from My Office → Drivers.');
+function normalizeDrivers(drivers) {
+	if (!Array.isArray(drivers)) return [];
+	
+	return drivers.map((d, idx) => {
+		const first = d.first_name || d.first || '';
+		const last = d.last_name || d.last || '';
+		const name = [first, last].filter(Boolean).join(' ').trim() || d.name || `Driver ${idx + 1}`;
+		const status = (d.driver_status || d.status || 'available').toString().toLowerCase();
+		// Check employment status - filter out INACTIVE drivers
+		const employmentStatus = (d.status || 'ACTIVE').toString().toUpperCase();
+		const isActive = d.is_active !== false && employmentStatus !== 'INACTIVE';
+		
+		return {
+			id: d.id || idx + 1,
+			name,
+			vehicle: d.vehicle_type || d.vehicle || d.car_type || 'Vehicle',
+			affiliate: d.affiliate || d.affiliate_name || d.company || 'Fleet',
+			phone: d.cell_phone || d.mobile_phone || d.phone || d.phone_number || d.primary_phone || '',
+			driver_status: STATUS_OPTIONS.some(s => s.value === status) ? status : 'available',
+			driver_level: d.driver_level || d.level || null,
+			is_active: isActive
+		};
+	}).filter(d => d.is_active); // Only show active drivers
+}
+
+async function getDrivers() {
+	// Try cache first
+	const cached = getDriversFromCache();
+	if (cached && cached.length > 0) {
+		console.log('[driver-availability] Using cached drivers:', cached.length);
+		cachedDrivers = normalizeDrivers(cached);
+		return cachedDrivers;
+	}
+	
+	// Fetch from Supabase if no cache
+	console.log('[driver-availability] Cache empty, fetching from Supabase...');
+	const fromDb = await fetchDriversFromSupabase();
+	if (fromDb && fromDb.length > 0) {
+		// Update cache for next time
+		try {
+			localStorage.setItem('relia_driver_directory', JSON.stringify(fromDb));
+		} catch (e) {
+			console.warn('[driver-availability] Could not cache drivers:', e);
+		}
+		cachedDrivers = normalizeDrivers(fromDb);
+		return cachedDrivers;
+	}
+	
+	console.warn('[driver-availability] No drivers found. Add drivers in My Office → Drivers.');
 	return [];
 }
 
@@ -86,7 +154,8 @@ function findOverride(driverId) {
 function ensureOverride(driverId) {
 	let override = findOverride(driverId);
 	if (!override) {
-		const baseDriver = getDrivers().find(d => normalizeId(d.id) === normalizeId(driverId));
+		// Use cached drivers if available (async version already called)
+		const baseDriver = cachedDrivers?.find(d => normalizeId(d.id) === normalizeId(driverId));
 		override = { id: normalizeId(driverId), status: baseDriver?.driver_status || 'available', notes: '' };
 		overrides.push(override);
 	}
@@ -102,10 +171,13 @@ function getDriverState(driver) {
 	};
 }
 
-function renderDrivers() {
+async function renderDrivers() {
 	if (!driverGrid) return;
 
-	const drivers = getDrivers();
+	// Show loading state
+	driverGrid.innerHTML = '<div class="loading">Loading drivers...</div>';
+
+	const drivers = await getDrivers();
 
 	if (!drivers.length) {
 		driverGrid.innerHTML = '<div class="empty">No drivers found. Add drivers in My Office and refresh.</div>';
@@ -176,7 +248,7 @@ function renderDrivers() {
 	}
 }
 
-function updateOverride(driverId, changes) {
+async function updateOverride(driverId, changes) {
 	if (!driverId) return;
 
 	if (changes?.status && !STATUS_OPTIONS.some(option => option.value === changes.status)) {
@@ -187,8 +259,86 @@ function updateOverride(driverId, changes) {
 	if (changes) Object.assign(override, changes);
 	override.updatedAt = new Date().toISOString();
 	saveOverrides();
+	
+	// Also update local driver directory cache
+	if (changes?.status) {
+		updateLocalDriverDirectory(driverId, changes.status);
+	}
+	
 	renderDrivers();
-	showToast('Status updated.');
+	showToast('Updating...');
+	
+	// Sync to Supabase
+	if (changes?.status) {
+		const success = await syncStatusToSupabase(driverId, changes.status);
+		if (success) {
+			showToast('Status saved to database ✓');
+		} else {
+			showToast('Saved locally (sync pending)');
+		}
+	} else {
+		showToast('Notes updated.');
+	}
+}
+
+// Update the local relia_driver_directory cache
+function updateLocalDriverDirectory(driverId, newStatus) {
+	try {
+		const raw = localStorage.getItem('relia_driver_directory');
+		if (!raw) return;
+		
+		const drivers = JSON.parse(raw);
+		if (!Array.isArray(drivers)) return;
+		
+		const normalizedId = String(driverId);
+		const updated = drivers.map(d => {
+			if (String(d.id) === normalizedId) {
+				return {
+					...d,
+					driver_status: newStatus,
+					status: newStatus.toUpperCase()
+				};
+			}
+			return d;
+		});
+		
+		localStorage.setItem('relia_driver_directory', JSON.stringify(updated));
+		console.log('[driver-availability] Updated local driver directory for', driverId, 'to', newStatus);
+	} catch (e) {
+		console.warn('[driver-availability] Could not update local driver directory:', e);
+	}
+}
+
+// Sync status change to Supabase drivers table
+async function syncStatusToSupabase(driverId, newStatus) {
+	try {
+		const client = getSupabaseClient ? getSupabaseClient() : supabase;
+		if (!client) {
+			console.warn('[driver-availability] No Supabase client available');
+			return false;
+		}
+		
+		// Map availability status to driver_status field in Supabase
+		// The drivers table has 'driver_status' column
+		const { error } = await client
+			.from('drivers')
+			.update({ 
+				driver_status: newStatus,
+				updated_at: new Date().toISOString()
+			})
+			.eq('id', driverId);
+		
+		if (error) {
+			console.error('[driver-availability] Supabase update failed:', error);
+			return false;
+		}
+		
+		console.log('[driver-availability] Synced driver', driverId, 'status to Supabase:', newStatus);
+		return true;
+	} catch (e) {
+		console.error('[driver-availability] Error syncing to Supabase:', e);
+		return false;
+	}
 }
 
 function updateNotes(driverId, notes) {
@@ -212,13 +362,13 @@ function saveOverrides() {
 function resetOverrides() {
 	overrides = [];
 	saveOverrides();
-	renderDrivers();
+	renderDrivers(); // async but no need to await for UI update
 	showToast('All statuses reset.');
 }
 
 function refreshFromStorage() {
 	loadOverrides();
-	renderDrivers();
+	renderDrivers(); // async but no need to await for UI update
 	showToast('Availability refreshed.');
 }
 
@@ -302,12 +452,108 @@ function attachEvents() {
 	}
 }
 
-function init() {
-	loadOverrides();
-	renderDrivers();
-	updateLastSync();
-	attachEvents();
+// Load drivers fresh from Supabase and update local cache
+async function refreshDriversFromSupabase() {
+	try {
+		const client = getSupabaseClient ? getSupabaseClient() : supabase;
+		if (!client) {
+			console.warn('[driver-availability] No Supabase client for refresh');
+			return false;
+		}
+		
+		const { data, error } = await client
+			.from('drivers')
+			.select('*')
+			.order('last_name', { ascending: true });
+		
+		if (error) {
+			console.error('[driver-availability] Failed to load drivers from Supabase:', error);
+			return false;
+		}
+		
+		if (data && data.length > 0) {
+			localStorage.setItem('relia_driver_directory', JSON.stringify(data));
+			console.log('[driver-availability] Refreshed', data.length, 'drivers from Supabase');
+			return true;
+		}
+		
+		return false;
+	} catch (e) {
+		console.error('[driver-availability] Error refreshing from Supabase:', e);
+		return false;
+	}
 }
 
-init();
+async function init() {
+	loadOverrides();
+	await renderDrivers();
+	updateLastSync();
+	attachEvents();
+	
+	// Set up realtime subscription for driver changes
+	setupRealtimeSubscription();
+	
+	// Try to refresh drivers from Supabase in background
+	const refreshed = await refreshDriversFromSupabase();
+	if (refreshed) {
+		// Re-normalize with fresh data
+		cachedDrivers = null;
+		await renderDrivers();
+		showToast('Drivers synced from database');
+	}
+}
 
+// Subscribe to realtime driver changes from Supabase
+function setupRealtimeSubscription() {
+	// Clean up any existing subscription
+	if (unsubscribeDrivers) {
+		unsubscribeDrivers();
+		unsubscribeDrivers = null;
+	}
+	
+	// Initialize realtime service and subscribe
+	realtimeService.init().then(() => {
+		unsubscribeDrivers = subscribeToDrivers((eventType, newData, oldData) => {
+			console.log('[driver-availability] Realtime driver update:', eventType, newData?.id || oldData?.id);
+			
+			// Handle different event types
+			if (eventType === 'INSERT' || eventType === 'UPDATE' || eventType === 'DELETE') {
+				// Invalidate cache and re-render
+				cachedDrivers = null;
+				
+				// Update local cache
+				refreshDriversFromSupabase().then(() => {
+					renderDrivers();
+					updateLastSync();
+					
+					// Show toast for status changes
+					if (eventType === 'UPDATE' && newData) {
+						const statusChanged = oldData && newData.driver_status !== oldData.driver_status;
+						const name = [newData.first_name, newData.last_name].filter(Boolean).join(' ');
+						if (statusChanged) {
+							showToast(`${name} is now ${newData.driver_status}`);
+						}
+					} else if (eventType === 'INSERT' && newData) {
+						const name = [newData.first_name, newData.last_name].filter(Boolean).join(' ');
+						showToast(`New driver: ${name}`);
+					} else if (eventType === 'DELETE' && oldData) {
+						const name = [oldData.first_name, oldData.last_name].filter(Boolean).join(' ');
+						showToast(`Driver removed: ${name}`);
+					}
+				});
+			}
+		});
+		console.log('[driver-availability] Realtime subscription active');
+	}).catch(err => {
+		console.warn('[driver-availability] Could not set up realtime:', err);
+	});
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+	if (unsubscribeDrivers) {
+		unsubscribeDrivers();
+	}
+});
+
+init();

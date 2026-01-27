@@ -1,4 +1,8 @@
 import { supabase, getSupabaseClient } from './config.js';
+import realtimeService, { subscribeToDrivers } from './shared/realtime-service.js';
+
+// Realtime subscription cleanup
+let unsubscribeDrivers = null;
 
 const STATUS_OPTIONS = [
 	{ value: 'available', label: 'Available', hint: 'Ready for new trips' },
@@ -486,6 +490,9 @@ async function init() {
 	updateLastSync();
 	attachEvents();
 	
+	// Set up realtime subscription for driver changes
+	setupRealtimeSubscription();
+	
 	// Try to refresh drivers from Supabase in background
 	const refreshed = await refreshDriversFromSupabase();
 	if (refreshed) {
@@ -495,5 +502,58 @@ async function init() {
 		showToast('Drivers synced from database');
 	}
 }
+
+// Subscribe to realtime driver changes from Supabase
+function setupRealtimeSubscription() {
+	// Clean up any existing subscription
+	if (unsubscribeDrivers) {
+		unsubscribeDrivers();
+		unsubscribeDrivers = null;
+	}
+	
+	// Initialize realtime service and subscribe
+	realtimeService.init().then(() => {
+		unsubscribeDrivers = subscribeToDrivers((eventType, newData, oldData) => {
+			console.log('[driver-availability] Realtime driver update:', eventType, newData?.id || oldData?.id);
+			
+			// Handle different event types
+			if (eventType === 'INSERT' || eventType === 'UPDATE' || eventType === 'DELETE') {
+				// Invalidate cache and re-render
+				cachedDrivers = null;
+				
+				// Update local cache
+				refreshDriversFromSupabase().then(() => {
+					renderDrivers();
+					updateLastSync();
+					
+					// Show toast for status changes
+					if (eventType === 'UPDATE' && newData) {
+						const statusChanged = oldData && newData.driver_status !== oldData.driver_status;
+						const name = [newData.first_name, newData.last_name].filter(Boolean).join(' ');
+						if (statusChanged) {
+							showToast(`${name} is now ${newData.driver_status}`);
+						}
+					} else if (eventType === 'INSERT' && newData) {
+						const name = [newData.first_name, newData.last_name].filter(Boolean).join(' ');
+						showToast(`New driver: ${name}`);
+					} else if (eventType === 'DELETE' && oldData) {
+						const name = [oldData.first_name, oldData.last_name].filter(Boolean).join(' ');
+						showToast(`Driver removed: ${name}`);
+					}
+				});
+			}
+		});
+		console.log('[driver-availability] Realtime subscription active');
+	}).catch(err => {
+		console.warn('[driver-availability] Could not set up realtime:', err);
+	});
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+	if (unsubscribeDrivers) {
+		unsubscribeDrivers();
+	}
+});
 
 init();

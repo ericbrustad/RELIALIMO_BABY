@@ -4385,12 +4385,22 @@ async function handleLogin() {
     state.driverId = driver.id;
     localStorage.setItem('driver_portal_id', driver.id);
     
+    // Set driver status to 'available' on login (updates database for realtime sync)
+    if (driver.driver_status === 'offline' || !driver.driver_status) {
+      try {
+        await updateDriverStatus('available');
+        state.driver.driver_status = 'available';
+      } catch (e) {
+        console.warn('[DriverPortal] Could not update status on login:', e);
+      }
+    }
+    
     await loadDashboard();
     showScreen('dashboard');
     showToast('Welcome back, ' + (driver.first_name || 'Driver') + '!', 'success');
     
     // Start location broadcast if driver is online
-    if (driver.driver_status !== 'offline') {
+    if (state.driver.driver_status !== 'offline') {
       startLocationBroadcast();
     }
     
@@ -4408,6 +4418,15 @@ async function handleLogin() {
 
 async function handleLogout(e) {
   e?.preventDefault();
+  
+  // Set driver status to offline before logging out (updates database for realtime sync)
+  if (state.driverId) {
+    try {
+      await updateDriverStatus('offline');
+    } catch (e) {
+      console.warn('[DriverPortal] Could not update status on logout:', e);
+    }
+  }
   
   // Stop location broadcasting when logging out
   stopLocationBroadcast();
