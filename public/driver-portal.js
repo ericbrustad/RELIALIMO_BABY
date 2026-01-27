@@ -4816,8 +4816,16 @@ async function sendOtpToEmail(email) {
  * Show fallback code prominently when email fails
  */
 function showFallbackCode(code, reason) {
+  // Make the reason more user-friendly
+  let userReason = reason;
+  if (reason.includes('Failed to fetch') || reason.includes('network')) {
+    userReason = 'Network error - check your connection';
+  } else if (reason.includes('not configured')) {
+    userReason = 'Email service temporarily unavailable';
+  }
+  
   // Show persistent toast with the code
-  showToast(`Your code: ${code}`, 'warning', 30000); // 30 second toast
+  showToast(`📧 Email couldn't be sent. Your code: ${code}`, 'warning', 30000); // 30 second toast
   
   // Also show in the OTP section if visible
   const otpSection = document.getElementById('emailOtpSection');
@@ -4863,6 +4871,8 @@ async function sendOTPEmail(to, code) {
   
   // Use server-side API endpoint (Resend) - this is the only reliable method
   try {
+    console.log('[DriverPortal] Attempting to send email to:', to);
+    
     const apiResponse = await fetch('/api/email-send', {
       method: 'POST',
       headers: {
@@ -4875,17 +4885,29 @@ async function sendOTPEmail(to, code) {
       })
     });
     
+    console.log('[DriverPortal] Email API response status:', apiResponse.status);
+    
     if (apiResponse.ok) {
       const result = await apiResponse.json();
       console.log('[DriverPortal] ✅ Email sent via Resend API:', result);
       return true;
     } else {
-      const error = await apiResponse.json();
-      console.error('[DriverPortal] ❌ Resend API failed:', error);
-      throw new Error(error.error || 'Failed to send email');
+      let error = {};
+      try {
+        error = await apiResponse.json();
+      } catch (e) {
+        error = { error: `HTTP ${apiResponse.status}` };
+      }
+      console.error('[DriverPortal] ❌ Resend API failed:', apiResponse.status, error);
+      throw new Error(error.error || `Failed to send email (${apiResponse.status})`);
     }
   } catch (apiError) {
-    console.error('[DriverPortal] ❌ Email send error:', apiError.message);
+    console.error('[DriverPortal] ❌ Email send error:', apiError.message || apiError);
+    
+    // Check if it's a network error (common on mobile)
+    if (apiError.name === 'TypeError' && apiError.message.includes('Failed to fetch')) {
+      console.error('[DriverPortal] Network error - possibly offline or CORS issue');
+    }
     
     // Fallback: Log to console for development/debugging
     console.log('[DriverPortal] ========== EMAIL OTP (Console Fallback) ==========');
@@ -4893,9 +4915,7 @@ async function sendOTPEmail(to, code) {
     console.log('[DriverPortal] SUBJECT:', `Your ${fromName} Verification Code`);
     console.log('[DriverPortal] CODE:', code);
     console.log('[DriverPortal] ====================================================');
-    console.log('[DriverPortal] Email failed. Ensure RESEND_API_KEY is set in Vercel.');
-    console.log('[DriverPortal] ====================================================');
-    
+
     throw apiError; // Re-throw so caller knows email failed
   }
 }
