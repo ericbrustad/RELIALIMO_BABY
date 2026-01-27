@@ -4693,6 +4693,15 @@ class MyOffice {
         unit: 'dead_mile',
         sort_order: sortOrder++
       });
+      // Airport parking fee (for from-airport pickups)
+      entries.push({
+        scheme_id: schemeId,
+        from_quantity: 0,
+        to_quantity: 0,
+        rate: rates.distance.airportParkingFee || 0,
+        unit: 'airport_parking',
+        sort_order: sortOrder++
+      });
       // Tiered formula config (store as JSON in rate field won't work, use separate entries)
       if (rates.distance.tieredFormula) {
         const tf = rates.distance.tieredFormula;
@@ -5066,6 +5075,8 @@ class MyOffice {
           rates.distance.gratuity = entry.rate;
         } else if (entry.unit === 'dead_mile') {
           rates.distance.deadMileRate = entry.rate;
+        } else if (entry.unit === 'airport_parking') {
+          rates.distance.airportParkingFee = entry.rate;
         } else if (entry.unit === 'tiered_config') {
           rates.distance.tieredFormula.enabled = entry.from_quantity === 1;
           rates.distance.tieredFormula.multiplier = entry.to_quantity;
@@ -5270,6 +5281,7 @@ class MyOffice {
       setFieldValue(distanceContainer, 'dist-base-fare', distance.baseFare || 0);
       setFieldValue(distanceContainer, 'dist-gratuity', distance.gratuity || 20);
       setFieldValue(distanceContainer, 'dist-dead-mile', distance.deadMileRate || 0);
+      setFieldValue(distanceContainer, 'dist-airport-parking', distance.airportParkingFee || 0);
     }
 
     // Tiered Distance Formula
@@ -5462,6 +5474,7 @@ class MyOffice {
       distance.baseFare = parseNumber(getFieldValue(distanceContainer, 'dist-base-fare'));
       distance.gratuity = parseNumber(getFieldValue(distanceContainer, 'dist-gratuity'));
       distance.deadMileRate = parseNumber(getFieldValue(distanceContainer, 'dist-dead-mile'));
+      distance.airportParkingFee = parseNumber(getFieldValue(distanceContainer, 'dist-airport-parking'));
       
       // Include tiered formula config
       distance.tieredFormula = this.getTieredFormulaConfig();

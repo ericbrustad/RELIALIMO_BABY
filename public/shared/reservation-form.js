@@ -5844,6 +5844,16 @@ class ReservationForm {
         if (deadMileRate) {
           setIfEmpty('deadMileRate', deadMileRate.toString());
         }
+        
+        // Apply airport parking fee only for from-airport pickups
+        const currentServiceType = document.getElementById('serviceTypeRes')?.value || '';
+        if (currentServiceType === 'from-airport') {
+          const airportParkingFee = getNum(rates.distance.airportParkingFee);
+          if (airportParkingFee > 0) {
+            setIfEmpty('surfaceQty', airportParkingFee.toString());
+            console.log('[ReservationForm] Applied airport parking fee:', airportParkingFee);
+          }
+        }
       }
 
       this.calculateCosts();
