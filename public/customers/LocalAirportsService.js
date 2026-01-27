@@ -12,7 +12,7 @@
  *   const airports = await LocalAirportsService.searchAirports('MSP', organizationId);
  */
 
-import supabaseDb from './supabase-db.js';
+import supabaseDb from '/shared/supabase-db.js';
 
 class LocalAirportsServiceClass {
   constructor() {
