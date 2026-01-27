@@ -26,7 +26,21 @@ export class DriverTracker {
     const vehicle = d.vehicle || d.vehicle_type || d.car_type || 'Not Assigned';
     const phone = d.cell_phone || d.mobile_phone || d.phone || d.phone_number || '';
     const affiliate = d.affiliate || d.affiliate_name || d.company || 'RELIA Fleet';
-    const isActive = d.is_active !== false && d.status !== 'INACTIVE';
+    
+    // Use actual driver_status from database, fallback to is_active check
+    const isActive = d.is_active !== false;
+    const dbStatus = (d.driver_status || d.status || '').toLowerCase(); // Check both fields
+    // Normalize status: 'online' maps to 'available', 'offline' stays 'offline'
+    let driverStatus;
+    if (dbStatus === 'online' || dbStatus === 'available') {
+      driverStatus = 'available';
+    } else if (dbStatus === 'offline') {
+      driverStatus = 'offline';
+    } else if (dbStatus === 'on_trip' || dbStatus === 'enroute' || dbStatus === 'busy') {
+      driverStatus = dbStatus;
+    } else {
+      driverStatus = isActive ? 'available' : 'offline';
+    }
 
     // Check if we already have a tracked driver with this ID to preserve position
     const existingDriver = this.drivers.find(existing => existing.id === d.id);
@@ -37,7 +51,7 @@ export class DriverTracker {
       first_name: first,
       last_name: last,
       email: d.email || '',
-      status: existingDriver?.status || (isActive ? 'available' : 'offline'),
+      status: existingDriver?.status || driverStatus,
       vehicle,
       affiliate,
       phone,
@@ -280,7 +294,8 @@ export class DriverTracker {
   }
 
   getAvailableDrivers() {
-    return this.drivers.filter(d => d.status === 'available');
+    // Accept both 'available' and 'online' as available statuses
+    return this.drivers.filter(d => d.status === 'available' || d.status === 'online');
   }
 
   getAllDrivers() {
