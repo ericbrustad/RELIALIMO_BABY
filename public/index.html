@@ -1,56 +1,25 @@
 <!DOCTYPE html>
 <html lang="en" data-layout="vertical">
   <head>
-    <script>
+    <!-- <script>
       // INSTANT startup page redirect - must be first script
       (function() {
         try {
-          // Check for startup page setting
-          var startupPage = localStorage.getItem('startupPage');
-          if (!startupPage) {
-            // Also check company_settings for backward compatibility
-            var s = localStorage.getItem('company_settings');
-            if (s) {
-              var parsed = JSON.parse(s);
-              startupPage = parsed.defaultStartPage || parsed.startupPage;
-            }
-          }
-          
-          // Map page keys to actual HTML files
-          var routes = {
-            'reservation-form': 'reservation-form.html',
-            'reservations': 'reservations.html',
-            'farmout-dashboard': 'dashboard.html',
-            'my-office': 'my-office.html',
-            'accounts': 'accounts.html',
-            'passengers': 'passengers.html',
-            'drivers': 'my-office.html#drivers',
-            'calendar': 'calendar.html',
-            'quotes': 'quotes.html',
-            'dispatch': 'dispatch-grid.html',
-            'network': 'network.html',
-            'settle': 'settle.html',
-            'receivables': 'receivables.html',
-            'payables': 'payables.html',
-            'memos': 'memos.html',
-            'files': 'files.html',
-            'reports': 'reports.html'
-          };
-          
-          if (startupPage && routes[startupPage]) {
-            var targetPage = routes[startupPage];
-            // Only redirect if we're on index.html
-            if (window.location.pathname === '/' || window.location.pathname.endsWith('/index.html') || window.location.pathname.endsWith('/')) {
-              window.location.replace(targetPage);
+          var s = localStorage.getItem('company_settings');
+          if (s) {
+            var p = JSON.parse(s).defaultStartPage;
+            var r = {'new-reservation':'reservation-form.html','farmout-dashboard':'dashboard.html','office':'my-office.html','accounts':'accounts.html','calendar':'calendar.html','quotes':'quotes.html','dispatch':'dispatch-grid.html','network':'network.html','settle':'settle.html','receivables':'receivables.html','payables':'payables.html','memos':'memos.html','files':'files.html','tools':'tools.html','reports':'reports.html'};
+            if (r[p] && window.location.pathname.indexOf(r[p]) === -1) {
+              window.location.replace(r[p]);
               return;
             }
           }
         } catch(e) {
-          console.error('Startup redirect failed:', e);
+          console.error('Startup script failed:', e);
         }
         document.documentElement.style.visibility = 'visible';
       })();
-    </script>
+    </script> -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RELIA LIMO™</title>
