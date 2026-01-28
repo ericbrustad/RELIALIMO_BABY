@@ -1,25 +1,56 @@
 <!DOCTYPE html>
 <html lang="en" data-layout="vertical">
   <head>
-    <!-- <script>
+    <script>
       // INSTANT startup page redirect - must be first script
       (function() {
         try {
-          var s = localStorage.getItem('company_settings');
-          if (s) {
-            var p = JSON.parse(s).defaultStartPage;
-            var r = {'new-reservation':'reservation-form.html','farmout-dashboard':'dashboard.html','office':'my-office.html','accounts':'accounts.html','calendar':'calendar.html','quotes':'quotes.html','dispatch':'dispatch-grid.html','network':'network.html','settle':'settle.html','receivables':'receivables.html','payables':'payables.html','memos':'memos.html','files':'files.html','tools':'tools.html','reports':'reports.html'};
-            if (r[p] && window.location.pathname.indexOf(r[p]) === -1) {
-              window.location.replace(r[p]);
+          // Check for startup page setting
+          var startupPage = localStorage.getItem('startupPage');
+          if (!startupPage) {
+            // Also check company_settings for backward compatibility
+            var s = localStorage.getItem('company_settings');
+            if (s) {
+              var parsed = JSON.parse(s);
+              startupPage = parsed.defaultStartPage || parsed.startupPage;
+            }
+          }
+          
+          // Map page keys to actual HTML files
+          var routes = {
+            'reservation-form': 'reservation-form.html',
+            'reservations': 'reservations.html',
+            'farmout-dashboard': 'dashboard.html',
+            'my-office': 'my-office.html',
+            'accounts': 'accounts.html',
+            'passengers': 'passengers.html',
+            'drivers': 'my-office.html#drivers',
+            'calendar': 'calendar.html',
+            'quotes': 'quotes.html',
+            'dispatch': 'dispatch-grid.html',
+            'network': 'network.html',
+            'settle': 'settle.html',
+            'receivables': 'receivables.html',
+            'payables': 'payables.html',
+            'memos': 'memos.html',
+            'files': 'files.html',
+            'reports': 'reports.html'
+          };
+          
+          if (startupPage && routes[startupPage]) {
+            var targetPage = routes[startupPage];
+            // Only redirect if we're on index.html
+            if (window.location.pathname === '/' || window.location.pathname.endsWith('/index.html') || window.location.pathname.endsWith('/')) {
+              window.location.replace(targetPage);
               return;
             }
           }
         } catch(e) {
-          console.error('Startup script failed:', e);
+          console.error('Startup redirect failed:', e);
         }
         document.documentElement.style.visibility = 'visible';
       })();
-    </script> -->
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RELIA LIMO™</title>
@@ -619,18 +650,15 @@
         }
       });
       
-      // Fallback: If no auth event after 5 seconds, hide splash anyway
-      // This handles cases where auth-guard might not be loaded
+      // Fallback: If no auth event after 8 seconds, redirect to login
+      // This prevents content from being visible if auth-guard fails
       setTimeout(function() {
         const splash = document.getElementById('splashScreen');
         if (splash && !splash.classList.contains('fade-out')) {
-          console.log('[Splash] Timeout fallback, hiding splash');
-          splash.classList.add('fade-out');
-          setTimeout(() => splash.remove(), 600);
-          const app = document.getElementById('app');
-          if (app) app.classList.add('authenticated');
+          console.log('[Splash] Auth timeout - redirecting to login');
+          window.location.replace('/auth.html');
         }
-      }, 5000);
+      }, 8000);
     </script>
   </head>
   <body>
@@ -699,7 +727,6 @@
             <button class="nav-btn" data-section="payables"><span>Payables</span><span style="font-size: 24px;">💳</span></button>
             <button class="nav-btn" data-section="memos"><span>Memos</span><span style="font-size: 24px;">📝</span></button>
             <button class="nav-btn" data-section="files"><span>Files</span><span style="font-size: 24px;">📁</span></button>
-            <button class="nav-btn" data-section="tools"><span>Tools</span><span style="font-size: 24px;">🔧</span></button>
             <button class="nav-btn" data-section="reports"><span>Reports</span><span style="font-size: 24px;">📈</span></button>
           </div>
         </div>
@@ -778,11 +805,6 @@
       <!-- FILES SECTION -->
       <div id="filesSection" class="app-main-section">
         <iframe src="files.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
-      </div>
-
-      <!-- TOOLS SECTION -->
-      <div id="toolsSection" class="app-main-section">
-        <iframe src="tools.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
       </div>
 
       <!-- REPORTS SECTION -->

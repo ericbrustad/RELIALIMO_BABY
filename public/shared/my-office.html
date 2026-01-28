@@ -2503,6 +2503,29 @@ Bloomington MN 55431
                       <h3 class="online-res-section-title">General Settings</h3>
 
                       <div class="online-res-row">
+                        <label class="online-res-label">Startup Page: (?)</label>
+                        <select id="startupPageSelect" class="form-control online-res-select">
+                          <option value="reservation-form">➕ New Reservation</option>
+                          <option value="reservations">📋 Reservations</option>
+                          <option value="farmout-dashboard">🏠 Farmout Dashboard</option>
+                          <option value="my-office" selected>🏢 Office</option>
+                          <option value="accounts">👤 Accounts</option>
+                          <option value="passengers">🧳 Passengers</option>
+                          <option value="drivers">🚗 Drivers</option>
+                          <option value="calendar">📅 Calendar</option>
+                          <option value="quotes">💬 Quotes</option>
+                          <option value="dispatch">🚙 Dispatch</option>
+                          <option value="network">🌐 Network</option>
+                          <option value="settle">💰 Settle</option>
+                          <option value="receivables">📊 Receivables</option>
+                          <option value="payables">💳 Payables</option>
+                          <option value="memos">📝 Memos</option>
+                          <option value="files">📁 Files</option>
+                          <option value="reports">📈 Reports</option>
+                        </select>
+                      </div>
+
+                      <div class="online-res-row">
                         <label class="online-res-label">Enable Website Logo: (?)</label>
                         <select class="form-control online-res-select">
                           <option value="no" selected>No</option>
@@ -2790,7 +2813,7 @@ further assistance.</textarea>
 
                     <!-- Save Button -->
                     <div style="margin-top: 30px;">
-                      <button class="btn btn-primary btn-large">SAVE SETTINGS</button>
+                      <button id="saveOnlineResSettings" class="btn btn-primary btn-large">SAVE SETTINGS</button>
                     </div>
               </div>
             </section>
@@ -7747,5 +7770,51 @@ further assistance.</textarea>
     <script src="../html-editor-view-switcher.js"></script>
     <script src="../email-settings.js"></script>
     <script type="module" src="my-office.js"></script>
+    
+    <script>
+      // Startup Page Settings Management
+      document.addEventListener('DOMContentLoaded', function() {
+        const startupPageSelect = document.getElementById('startupPageSelect');
+        const saveBtn = document.getElementById('saveOnlineResSettings');
+        
+        // Load saved startup page on page load
+        if (startupPageSelect) {
+          const savedStartupPage = localStorage.getItem('startupPage');
+          if (savedStartupPage) {
+            startupPageSelect.value = savedStartupPage;
+          }
+        }
+        
+        // Save startup page when button is clicked
+        if (saveBtn) {
+          saveBtn.addEventListener('click', function() {
+            if (startupPageSelect) {
+              const selectedPage = startupPageSelect.value;
+              localStorage.setItem('startupPage', selectedPage);
+              
+              // Show success notification
+              const notification = document.createElement('div');
+              notification.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #4CAF50; color: white; padding: 12px 24px; border-radius: 4px; z-index: 10000; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);';
+              notification.textContent = 'Settings saved successfully!';
+              document.body.appendChild(notification);
+              
+              setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transition = 'opacity 0.3s';
+                setTimeout(() => notification.remove(), 300);
+              }, 2000);
+            }
+          });
+        }
+        
+        // Also save on change for instant feedback
+        if (startupPageSelect) {
+          startupPageSelect.addEventListener('change', function() {
+            localStorage.setItem('startupPage', this.value);
+            console.log('[Settings] Startup page set to:', this.value);
+          });
+        }
+      });
+    </script>
   </body>
 </html>

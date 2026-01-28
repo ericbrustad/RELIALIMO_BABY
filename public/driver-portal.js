@@ -3067,6 +3067,13 @@ const NavigationModule = {
         Math.round(this.routeData.duration / 60) + ' min';
     }
     
+    // Calculate driver payout
+    const driverPayout = this.calculateDriverPayout();
+    const payoutEl = document.getElementById('completedPayout');
+    if (payoutEl) {
+      payoutEl.textContent = '$' + driverPayout.toFixed(2);
+    }
+    
     modal.style.display = 'flex';
     
     // Play completion sound
@@ -3084,8 +3091,14 @@ const NavigationModule = {
     document.getElementById('finishTripBtn').onclick = async () => {
       modal.style.display = 'none';
       
-      // Update trip status to done
-      await updateReservationStatus(this.currentTrip.id, { driver_status: 'done' });
+      // Update trip status to done and save driver payout
+      await updateReservationStatus(this.currentTrip.id, { 
+        driver_status: 'done',
+        driver_payout: driverPayout
+      });
+      
+      // Save to daily payout tracking
+      this.recordDailyPayout(driverPayout);
       
       // Stop navigation
       this.stopNavigation();
@@ -3094,8 +3107,63 @@ const NavigationModule = {
       showScreen('dashboard');
       await refreshTrips();
       
-      showToast('🎉 Trip completed!', 'success');
+      showToast('🎉 Trip completed! Payout: $' + driverPayout.toFixed(2), 'success');
     };
+  },
+  
+  // Calculate driver payout based on farmout settings percentage
+  calculateDriverPayout() {
+    if (!this.currentTrip) return 0;
+    
+    // Get total trip amount
+    const tripTotal = parseFloat(this.currentTrip.total_amount) || 
+                      parseFloat(this.currentTrip.total) || 
+                      parseFloat(this.currentTrip.quoted_price) ||
+                      parseFloat(this.currentTrip.base_rate) || 0;
+    
+    // Get driver pay percentage from settings
+    let payPercentage = 70; // default 70%
+    try {
+      const stored = localStorage.getItem('farmout_settings');
+      if (stored) {
+        const settings = JSON.parse(stored);
+        payPercentage = settings.driver_pay_percentage || 70;
+      }
+    } catch (e) {
+      console.warn('[Navigation] Failed to load driver pay percentage:', e);
+    }
+    
+    const payout = (tripTotal * payPercentage) / 100;
+    console.log('[Navigation] Driver payout calculation:', tripTotal, 'x', payPercentage + '%', '=', payout);
+    return payout;
+  },
+  
+  // Record payout to daily tracking for end-of-day processing
+  recordDailyPayout(amount) {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const key = `driver_payouts_${today}`;
+      
+      // Get existing payouts for today
+      const existing = JSON.parse(localStorage.getItem(key) || '[]');
+      
+      // Add this payout
+      existing.push({
+        tripId: this.currentTrip?.id,
+        amount: amount,
+        timestamp: new Date().toISOString(),
+        confirmationNumber: this.currentTrip?.confirmation_number
+      });
+      
+      // Save back
+      localStorage.setItem(key, JSON.stringify(existing));
+      
+      // Calculate total for today
+      const total = existing.reduce((sum, p) => sum + p.amount, 0);
+      console.log('[Navigation] Daily payout total:', total.toFixed(2), '(', existing.length, 'trips)');
+    } catch (e) {
+      console.warn('[Navigation] Failed to record daily payout:', e);
+    }
   },
   
   // Update the route from current position to current destination
@@ -3264,7 +3332,8 @@ const NavigationModule = {
   
   // Complete the trip
   async completeTrip() {
-    const dropoffStop = this.stops[1];
+    // Find and mark the dropoff stop as completed
+    const dropoffStop = this.stops.find(s => s.type === 'dropoff');
     if (dropoffStop) {
       dropoffStop.completed = true;
     }
@@ -8264,66 +8333,98 @@ function startInHouseCountdown(nextTrip) {
  * Render farmout offer details (pay, duration, expiry countdown) for offered trips
  */
 function renderFarmoutOfferDetails(trip, type) {
-  if (type !== 'offered') return '';
-  
   let detailsHtml = '';
   
-  // Show driver pay if available
-  if (trip.driver_pay) {
+  // Calculate driver payout based on trip total and percentage
+  const driverPayout = calculateDriverPayoutForTrip(trip);
+  
+  // Always show driver payout if we have one
+  if (driverPayout > 0 || trip.driver_pay) {
+    const payAmount = trip.driver_pay || driverPayout;
     detailsHtml += `
       <div class="offer-pay">
-        <span class="offer-pay-label">💰 Your Pay:</span>
-        <span class="offer-pay-amount">$${trip.driver_pay}</span>
+        <span class="offer-pay-label">💰 Your Payout:</span>
+        <span class="offer-pay-amount">$${parseFloat(payAmount).toFixed(2)}</span>
       </div>
     `;
   }
   
-  // Show duration/distance if available
-  if (trip.duration || trip.distance) {
-    detailsHtml += `
-      <div class="offer-details">
-        ${trip.duration ? `<span class="offer-detail">⏱️ ${trip.duration}</span>` : ''}
-        ${trip.distance ? `<span class="offer-detail">📏 ${trip.distance}</span>` : ''}
-        ${trip.vehicle_type ? `<span class="offer-detail">🚗 ${trip.vehicle_type}</span>` : ''}
-      </div>
-    `;
-  }
-  
-  // Show expiry countdown for farmout offers
-  if (trip.expires_at && trip.is_farmout_offer) {
-    const expiresAt = new Date(trip.expires_at);
-    const now = new Date();
-    const msRemaining = expiresAt - now;
-    
-    if (msRemaining > 0) {
-      const minsRemaining = Math.ceil(msRemaining / 60000);
+  // For offered trips, show additional details
+  if (type === 'offered') {
+    // Show duration/distance if available
+    if (trip.duration || trip.distance) {
       detailsHtml += `
-        <div class="offer-expiry">
-          <span class="offer-expiry-icon">⏰</span>
-          <span class="offer-expiry-text">Expires in ${minsRemaining} min</span>
+        <div class="offer-details">
+          ${trip.duration ? `<span class="offer-detail">⏱️ ${trip.duration}</span>` : ''}
+          ${trip.distance ? `<span class="offer-detail">📏 ${trip.distance}</span>` : ''}
+          ${trip.vehicle_type ? `<span class="offer-detail">🚗 ${trip.vehicle_type}</span>` : ''}
         </div>
       `;
-    } else {
+    }
+    
+    // Show expiry countdown for farmout offers
+    if (trip.expires_at && trip.is_farmout_offer) {
+      const expiresAt = new Date(trip.expires_at);
+      const now = new Date();
+      const msRemaining = expiresAt - now;
+      
+      if (msRemaining > 0) {
+        const minsRemaining = Math.ceil(msRemaining / 60000);
+        detailsHtml += `
+          <div class="offer-expiry">
+            <span class="offer-expiry-icon">⏰</span>
+            <span class="offer-expiry-text">Expires in ${minsRemaining} min</span>
+          </div>
+        `;
+      } else {
+        detailsHtml += `
+          <div class="offer-expiry expired">
+            <span class="offer-expiry-icon">⚠️</span>
+            <span class="offer-expiry-text">Offer expired</span>
+          </div>
+        `;
+      }
+    }
+    
+    // Show notes if available
+    if (trip.notes) {
       detailsHtml += `
-        <div class="offer-expiry expired">
-          <span class="offer-expiry-icon">⚠️</span>
-          <span class="offer-expiry-text">Offer expired</span>
+        <div class="offer-notes">
+          <span class="offer-notes-icon">📝</span>
+          <span class="offer-notes-text">${trip.notes}</span>
         </div>
       `;
     }
   }
   
-  // Show notes if available
-  if (trip.notes) {
-    detailsHtml += `
-      <div class="offer-notes">
-        <span class="offer-notes-icon">📝</span>
-        <span class="offer-notes-text">${trip.notes}</span>
-      </div>
-    `;
+  return detailsHtml ? `<div class="offer-info-section">${detailsHtml}</div>` : '';
+}
+
+// Calculate driver payout for any trip based on farmout settings
+function calculateDriverPayoutForTrip(trip) {
+  if (!trip) return 0;
+  
+  // Get total trip amount
+  const tripTotal = parseFloat(trip.total_amount) || 
+                    parseFloat(trip.total) || 
+                    parseFloat(trip.quoted_price) ||
+                    parseFloat(trip.base_rate) || 0;
+  
+  if (tripTotal === 0) return 0;
+  
+  // Get driver pay percentage from settings
+  let payPercentage = 70; // default 70%
+  try {
+    const stored = localStorage.getItem('farmout_settings');
+    if (stored) {
+      const settings = JSON.parse(stored);
+      payPercentage = settings.driver_pay_percentage || 70;
+    }
+  } catch (e) {
+    console.warn('[DriverPortal] Failed to load driver pay percentage:', e);
   }
   
-  return detailsHtml ? `<div class="offer-info-section">${detailsHtml}</div>` : '';
+  return (tripTotal * payPercentage) / 100;
 }
 
 function renderActiveTripCard(trip) {

@@ -1066,23 +1066,28 @@
 
       <!-- Trip Completed Modal -->
       <div id="tripCompletedModal" class="nav-modal" style="display: none;">
-        <div class="nav-modal-content trip-completed">
-          <div class="nav-modal-icon">🎉</div>
+        <div class="nav-modal-content trip-complete">
+          <div class="completion-icon">🎉</div>
           <h2>Trip Completed!</h2>
-          <p>You have successfully dropped off the passenger.</p>
-          <div class="trip-stats">
-            <div class="trip-stat">
-              <span class="stat-label">Distance</span>
-              <span class="stat-value" id="completedDistance">--</span>
+          <p class="completion-message">Great job! The passenger has been delivered safely.</p>
+          <div class="trip-summary" id="tripCompleteSummary">
+            <div class="summary-row">
+              <span>Distance:</span>
+              <span id="completedDistance">-- mi</span>
             </div>
-            <div class="trip-stat">
-              <span class="stat-label">Duration</span>
-              <span class="stat-value" id="completedDuration">--</span>
+            <div class="summary-row">
+              <span>Duration:</span>
+              <span id="completedDuration">-- min</span>
+            </div>
+            <div class="summary-row payout-row">
+              <span>Your Payout:</span>
+              <span id="completedPayout" class="payout-amount">$0.00</span>
             </div>
           </div>
-          <div class="nav-modal-actions">
-            <button type="button" id="finishTripBtn" class="btn-primary btn-success">Finish Trip</button>
-          </div>
+          <p class="payout-note">Payouts processed daily after 5 PM</p>
+          <button type="button" id="finishTripBtn" class="btn btn-success btn-large">
+            ✓ Finish Trip
+          </button>
         </div>
       </div>
     </div>

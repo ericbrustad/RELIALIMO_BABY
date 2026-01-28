@@ -5281,6 +5281,46 @@ body {
   font-weight: 600;
 }
 
+.summary-row.payout-row {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 2px solid var(--success);
+  border-bottom: none;
+}
+
+.payout-amount {
+  color: var(--success) !important;
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+}
+
+.payout-note {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+/* Button highlight pulse for Done button */
+.btn-done-highlight {
+  background: var(--success) !important;
+  color: white !important;
+  font-size: 1.2rem !important;
+  padding: 16px 32px !important;
+  animation: pulse-glow 1s ease-in-out infinite !important;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px var(--success), 0 0 10px var(--success);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 20px var(--success), 0 0 40px var(--success);
+    transform: scale(1.02);
+  }
+}
+
 /* Driver Arrow Indicator on Map */
 .nav-driver-indicator {
   position: absolute;
