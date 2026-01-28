@@ -7740,7 +7740,13 @@ async function refreshTrips() {
     state.trips.active = null;
     
     myTrips.forEach(trip => {
-      const tripDate = new Date(trip.pickup_date_time || trip.pickup_datetime || trip.pickup_date);
+      // Handle multiple possible date/time field names
+      const puDate = trip.pu_date || trip.pickup_date || '';
+      const puTime = trip.pu_time || trip.pickup_time || '00:00';
+      const dateTimeStr = trip.pickup_date_time || trip.pickup_datetime || 
+        (puDate ? `${puDate}T${puTime}` : null);
+      const tripDate = dateTimeStr ? new Date(dateTimeStr) : new Date(0);
+      
       const driverStatus = trip.driver_status || 'assigned';
       const farmoutStatus = trip.farmout_status || '';
       
@@ -8043,8 +8049,16 @@ function isAirportAddress(address) {
  * Enhanced with full trip details, flight info, and action buttons
  */
 function renderTripCard(trip, type) {
-  const pickupDateTime = trip.pickup_date_time || trip.pickup_datetime || `${trip.pickup_date}T${trip.pickup_time || '00:00'}`;
-  const dropoffDateTime = trip.dropoff_date_time || trip.dropoff_datetime || trip.do_time;
+  // Handle multiple possible date/time field names from database
+  const puDate = trip.pu_date || trip.pickup_date || '';
+  const puTime = trip.pu_time || trip.pickup_time || '00:00';
+  const pickupDateTime = trip.pickup_date_time || trip.pickup_datetime || 
+    (puDate ? `${puDate}T${puTime}` : null);
+  
+  const doDate = trip.do_date || trip.dropoff_date || '';
+  const doTime = trip.do_time || trip.dropoff_time || '';
+  const dropoffDateTime = trip.dropoff_date_time || trip.dropoff_datetime || 
+    (doDate && doTime ? `${doDate}T${doTime}` : doTime);
   
   // Format date: Day of week, Month Day (e.g., "Mon, Jan 27")
   const tripDate = formatTripDate(pickupDateTime);
