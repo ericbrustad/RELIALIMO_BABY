@@ -3292,7 +3292,7 @@ async function loadTrips() {
   try {
     const creds = getSupabaseCredentials();
     const response = await fetch(
-      `${creds.url}/rest/v1/reservations?account_id=eq.${state.customer?.id}&select=*&order=pu_date.desc,pu_time.desc`,
+      `${creds.url}/rest/v1/reservations?account_id=eq.${state.customer?.id}&select=*&order=pickup_datetime.desc`,
       {
         headers: {
           'apikey': creds.anonKey,
@@ -3303,7 +3303,18 @@ async function loadTrips() {
     
     if (response.ok) {
       state.trips = await response.json();
+      console.log('[CustomerPortal] Loaded trips:', state.trips.length, 'trips');
+      if (state.trips.length > 0) {
+        console.log('[CustomerPortal] Sample trip date fields:', { 
+          pickup_datetime: state.trips[0].pickup_datetime,
+          pu_date: state.trips[0].pu_date, 
+          pu_time: state.trips[0].pu_time,
+          pickup_date_time: state.trips[0].pickup_date_time
+        });
+      }
       renderTrips('upcoming');
+    } else {
+      console.error('[CustomerPortal] Failed to load trips, status:', response.status);
     }
   } catch (err) {
     console.error('[CustomerPortal] Failed to load trips:', err);
@@ -3312,30 +3323,48 @@ async function loadTrips() {
 
 // Helper to get pickup datetime from trip (handles multiple field name formats)
 function getTripPickupDateTime(trip) {
-  // Try pickup_date_time first, then construct from pu_date + pu_time
+  // Try different field names used across the app
+  if (trip.pickup_datetime) {
+    return new Date(trip.pickup_datetime);
+  }
   if (trip.pickup_date_time) {
     return new Date(trip.pickup_date_time);
   }
+  // Try pu_date + pu_time (alternate schema)
   const puDate = trip.pu_date || trip.pickup_date || '';
   const puTime = trip.pu_time || trip.pickup_time || '00:00';
   if (puDate) {
     return new Date(`${puDate}T${puTime}`);
   }
-  return new Date(0); // Fallback to epoch
+  // If no date fields, return far future date so trip shows as upcoming
+  return new Date('2099-12-31');
 }
 
 function renderTrips(filter = 'upcoming') {
   const container = document.getElementById('tripsList');
   if (!container) return;
   
+  console.log('[CustomerPortal] renderTrips called with filter:', filter, 'total trips:', state.trips?.length || 0);
+  
   const now = new Date();
-  let filteredTrips = state.trips;
+  let filteredTrips = state.trips || [];
   
   if (filter === 'upcoming') {
-    filteredTrips = state.trips.filter(t => getTripPickupDateTime(t) >= now && t.status !== 'cancelled' && t.status !== 'completed');
+    filteredTrips = (state.trips || []).filter(t => {
+      const tripDate = getTripPickupDateTime(t);
+      const isUpcoming = tripDate >= now && t.status !== 'cancelled' && t.status !== 'completed';
+      return isUpcoming;
+    });
   } else if (filter === 'past') {
-    filteredTrips = state.trips.filter(t => getTripPickupDateTime(t) < now || t.status === 'completed');
+    filteredTrips = (state.trips || []).filter(t => {
+      const tripDate = getTripPickupDateTime(t);
+      return tripDate < now || t.status === 'completed';
+    });
+  } else if (filter === 'all') {
+    filteredTrips = state.trips || [];
   }
+  
+  console.log('[CustomerPortal] Filtered to', filteredTrips.length, filter, 'trips');
   
   if (filteredTrips.length === 0) {
     container.innerHTML = `

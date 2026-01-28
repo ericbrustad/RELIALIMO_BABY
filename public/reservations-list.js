@@ -1,39 +1,77 @@
 import { wireMainNav } from './navigation.js';
-import realtimeService, { subscribeToReservations } from './shared/realtime-service.js';
 
 class ReservationsList {
   constructor() {
-    this.unsubscribeRealtime = null;
+    this.sortBy = 'date';     // Default sort column
+    this.sortOrder = 'desc';  // Default sort direction
     this.init();
   }
 
   async init() {
     await this.loadDbModule();
+    this.loadSortSettings();
     this.setupEventListeners();
     this.setupTabSwitching();
     this.setupMessageListener();
     await this.loadReservations();
     this.handleOpenConfFromCalendar();
-    
-    // Set up real-time subscription for reservations
-    await this.setupRealtimeSubscription();
   }
   
-  async setupRealtimeSubscription() {
+  /**
+   * Load sort settings from CompanySettingsManager
+   */
+  loadSortSettings() {
     try {
-      await realtimeService.init();
-      
-      this.unsubscribeRealtime = subscribeToReservations((eventType, newRecord, oldRecord) => {
-        console.log(`[ReservationsList] Real-time ${eventType}:`, newRecord?.confirmation_number || oldRecord?.confirmation_number);
-        
-        // Reload the list on any change
-        this.loadReservations();
-      });
-      
-      console.log('[ReservationsList] Real-time subscription active');
-    } catch (err) {
-      console.error('[ReservationsList] Failed to set up real-time subscription:', err);
+      if (window.CompanySettingsManager) {
+        const settingsManager = new window.CompanySettingsManager();
+        this.sortBy = settingsManager.getSetting('defaultReservationSortBy') || 'date';
+        this.sortOrder = settingsManager.getSetting('defaultReservationSortOrder') || 'desc';
+        console.log(`📊 Loaded sort settings: sortBy=${this.sortBy}, sortOrder=${this.sortOrder}`);
+      }
+    } catch (e) {
+      console.warn('⚠️ Could not load sort settings:', e);
     }
+  }
+  
+  /**
+   * Sort reservations based on current sort settings
+   */
+  sortReservations(reservations) {
+    if (!reservations || reservations.length === 0) return reservations;
+    
+    const sorted = [...reservations].sort((a, b) => {
+      let comparison = 0;
+      
+      switch (this.sortBy) {
+        case 'confirmation_number':
+          // Sort by confirmation number numerically
+          const confA = parseInt(a.confirmation_number) || 0;
+          const confB = parseInt(b.confirmation_number) || 0;
+          comparison = confA - confB;
+          break;
+          
+        case 'price':
+          // Sort by grand_total
+          const priceA = parseFloat(a.grand_total) || 0;
+          const priceB = parseFloat(b.grand_total) || 0;
+          comparison = priceA - priceB;
+          break;
+          
+        case 'date':
+        default:
+          // Sort by pickup_datetime (default)
+          const dateA = new Date(a.pickup_datetime || a.pickup_at || 0);
+          const dateB = new Date(b.pickup_datetime || b.pickup_at || 0);
+          comparison = dateA - dateB;
+          break;
+      }
+      
+      // Apply sort order (ascending or descending)
+      return this.sortOrder === 'asc' ? comparison : -comparison;
+    });
+    
+    console.log(`📊 Sorted ${sorted.length} reservations by ${this.sortBy} (${this.sortOrder})`);
+    return sorted;
   }
   
   setupMessageListener() {
@@ -215,10 +253,13 @@ class ReservationsList {
     tableBody.innerHTML = '';
 
     // Drop settled trips from the visible list
-    const filtered = (reservations || []).filter(res => {
+    let filtered = (reservations || []).filter(res => {
       const status = (res.status || '').toString().toLowerCase();
       return status !== 'settled';
     });
+    
+    // Apply sorting based on company settings
+    filtered = this.sortReservations(filtered);
     
     if (filtered.length === 0) {
       // Show empty state message

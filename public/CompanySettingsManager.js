@@ -57,6 +57,8 @@ class CompanySettingsManager {
       maxPassengersPerVehicle: 6,
       confirmationStartNumber: 100000,
       lastUsedConfirmationNumber: null,
+      defaultReservationSortBy: 'date', // date, confirmation_number, price
+      defaultReservationSortOrder: 'desc', // asc, desc
       
       // Account Settings
       accountStartNumber: 30000,
@@ -344,6 +346,27 @@ class CompanySettingsManager {
             default: 5000, 
             min: 1,
             description: 'Starting number for new customer account numbers'
+          },
+          defaultReservationSortBy: {
+            label: 'Default Sort Reservations By',
+            type: 'select',
+            default: 'date',
+            description: 'Default column to sort reservations list by',
+            options: [
+              { value: 'date', label: 'Date' },
+              { value: 'confirmation_number', label: 'Confirmation Number' },
+              { value: 'price', label: 'Price' }
+            ]
+          },
+          defaultReservationSortOrder: {
+            label: 'Default Sort Order',
+            type: 'select',
+            default: 'desc',
+            description: 'Default sort direction for reservations list',
+            options: [
+              { value: 'asc', label: 'Ascending (oldest/lowest first)' },
+              { value: 'desc', label: 'Descending (newest/highest first)' }
+            ]
           },
           enableReservationViewMode: {
             label: 'Enable View Mode for current reservations',
