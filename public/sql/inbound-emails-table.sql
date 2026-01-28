@@ -1,6 +1,18 @@
 -- Inbound Emails Table
 -- Stores emails received via Resend webhook
 
+-- First, add 'owner' to user_role enum if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'owner' AND enumtypid = 'user_role'::regtype) THEN
+    ALTER TYPE user_role ADD VALUE 'owner';
+  END IF;
+EXCEPTION
+  WHEN undefined_object THEN
+    -- user_role type doesn't exist, that's fine
+    NULL;
+END $$;
+
 CREATE TABLE IF NOT EXISTS public.inbound_emails (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   from_email text NOT NULL,
