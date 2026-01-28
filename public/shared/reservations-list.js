@@ -526,6 +526,12 @@ class ReservationsList {
       // Use pickup_datetime (database column) with fallback to pickup_at for compatibility
       const pickupDateTime = res.pickup_datetime || res.pickup_at;
       
+      // Get driver name from various possible sources
+      const driverName = res.driver_name || res.driverName || 
+                         res.form_snapshot?.driver?.name || 
+                         res.form_snapshot?.details?.driverName || 
+                         (res.assigned_driver_id ? 'Assigned' : 'N/A');
+      
       const row = document.createElement('tr');
       row.innerHTML = `
         <td><a href="#" class="conf-link" data-conf="${res.confirmation_number || ''}">${res.confirmation_number || 'N/A'}</a></td>
@@ -537,7 +543,7 @@ class ReservationsList {
         <td>$${Number(res.grand_total || 0).toFixed(2)}</td>
         <td>${res.payment_type || ''}</td>
         <td><span class="status-badge ${displayStatus.class}">${displayStatus.label}</span>${modeIndicator}</td>
-        <td>${res.group_name || ''}</td>
+        <td>${driverName}</td>
         <td><a href="#" class="select-link">Select >></a></td>
       `;
       tableBody.appendChild(row);
