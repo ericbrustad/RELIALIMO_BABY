@@ -274,51 +274,137 @@
         background: white;
         color: #667eea;
       }
-      .quick-settings-dropdown {
-        position: absolute;
-        top: 100%;
+      
+      /* Startup Page Modal */
+      .startup-modal-overlay {
+        position: fixed;
+        top: 0;
         left: 0;
-        width: 280px;
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
         display: none;
-        z-index: 9999;
-        margin-top: 8px;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
       }
-      .quick-settings-dropdown.active {
-        display: block;
+      .startup-modal-overlay.active {
+        display: flex;
       }
-      .quick-settings-header {
-        padding: 12px 16px;
+      .startup-modal {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        width: 420px;
+        max-height: 80vh;
+        overflow: hidden;
+        animation: modalSlideIn 0.2s ease-out;
+      }
+      @keyframes modalSlideIn {
+        from { transform: translateY(-20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+      .startup-modal-header {
+        padding: 20px 24px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .startup-modal-header h3 {
+        margin: 0;
+        font-size: 18px;
         font-weight: 600;
-        color: #333;
-        border-bottom: 1px solid #eee;
-        font-size: 14px;
       }
-      .quick-settings-row {
-        padding: 12px 16px;
+      .startup-modal-close {
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 18px;
         display: flex;
         align-items: center;
-        gap: 10px;
+        justify-content: center;
+        transition: background 0.2s;
       }
-      .quick-settings-row label {
-        font-size: 13px;
-        color: #555;
-        white-space: nowrap;
+      .startup-modal-close:hover {
+        background: rgba(255,255,255,0.3);
       }
-      .quick-settings-select {
-        flex: 1;
-        padding: 6px 10px;
-        border: 1px solid #ddd;
-        border-radius: 6px;
+      .startup-modal-body {
+        padding: 16px;
+        max-height: 60vh;
+        overflow-y: auto;
+      }
+      .startup-modal-subtitle {
+        color: #666;
         font-size: 13px;
-        background: white;
+        margin-bottom: 16px;
+        padding: 0 8px;
+      }
+      .startup-page-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+      .startup-page-option {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 16px 8px;
+        border: 2px solid #eee;
+        border-radius: 12px;
         cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+        color: inherit;
       }
-      .quick-settings-select:focus {
-        outline: none;
+      .startup-page-option:hover {
         border-color: #667eea;
+        background: #f8f9ff;
+        transform: translateY(-2px);
+      }
+      .startup-page-option.selected {
+        border-color: #667eea;
+        background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+      }
+      .startup-page-option .emoji {
+        font-size: 32px;
+        margin-bottom: 8px;
+      }
+      .startup-page-option .label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #333;
+        text-align: center;
+      }
+      .startup-page-option.selected .label {
+        color: #667eea;
+        font-weight: 600;
+      }
+      .startup-page-option .check {
+        display: none;
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        background: #667eea;
+        color: white;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        font-size: 12px;
+        align-items: center;
+        justify-content: center;
+      }
+      .startup-page-option.selected .check {
+        display: flex;
+      }
+      .startup-page-option {
+        position: relative;
       }
       
       .global-search-box {
@@ -744,31 +830,6 @@
             <!-- Quick Settings -->
             <div class="quick-settings-container">
               <button class="quick-settings-toggle" id="quickSettingsToggle" title="Quick Settings">⚙️</button>
-              <div class="quick-settings-dropdown" id="quickSettingsDropdown">
-                <div class="quick-settings-header">Quick Settings</div>
-                <div class="quick-settings-row">
-                  <label>Startup Page:</label>
-                  <select id="startupPageSelect" class="quick-settings-select">
-                    <option value="new-reservation">➕ New Reservation</option>
-                    <option value="reservations">📋 Reservations</option>
-                    <option value="dashboard">🏠 Farmout Dashboard</option>
-                    <option value="office">🏢 Office</option>
-                    <option value="accounts">👤 Accounts</option>
-                    <option value="passengers">🧳 Passengers</option>
-                    <option value="drivers">🚗 Drivers</option>
-                    <option value="calendar">📅 Calendar</option>
-                    <option value="quotes">💬 Quotes</option>
-                    <option value="dispatch" selected>🚙 Dispatch</option>
-                    <option value="network">🌐 Network</option>
-                    <option value="settle">💰 Settle</option>
-                    <option value="receivables">📊 Receivables</option>
-                    <option value="payables">💳 Payables</option>
-                    <option value="memos">📝 Memos</option>
-                    <option value="files">📁 Files</option>
-                    <option value="reports">📈 Reports</option>
-                  </select>
-                </div>
-              </div>
             </div>
             <!-- System Status Indicators -->
             <div class="system-status-bar">
@@ -1649,68 +1710,106 @@
         }
       };
       
-      // Quick Settings Manager
+      // Quick Settings Manager with Modal
       const QuickSettings = {
+        pages: [
+          { id: 'new-reservation', emoji: '➕', label: 'New Reservation' },
+          { id: 'reservations', emoji: '📋', label: 'Reservations' },
+          { id: 'dashboard', emoji: '🏠', label: 'Farmout' },
+          { id: 'office', emoji: '🏢', label: 'Office' },
+          { id: 'accounts', emoji: '👤', label: 'Accounts' },
+          { id: 'passengers', emoji: '🧳', label: 'Passengers' },
+          { id: 'drivers', emoji: '🚗', label: 'Drivers' },
+          { id: 'calendar', emoji: '📅', label: 'Calendar' },
+          { id: 'quotes', emoji: '💬', label: 'Quotes' },
+          { id: 'dispatch', emoji: '🚙', label: 'Dispatch' },
+          { id: 'network', emoji: '🌐', label: 'Network' },
+          { id: 'settle', emoji: '💰', label: 'Settle' },
+          { id: 'receivables', emoji: '📊', label: 'Receivables' },
+          { id: 'payables', emoji: '💳', label: 'Payables' },
+          { id: 'memos', emoji: '📝', label: 'Memos' },
+          { id: 'files', emoji: '📁', label: 'Files' },
+          { id: 'reports', emoji: '📈', label: 'Reports' }
+        ],
+        
         init() {
+          this.createModal();
+          
           const toggle = document.getElementById('quickSettingsToggle');
-          const dropdown = document.getElementById('quickSettingsDropdown');
-          const startupSelect = document.getElementById('startupPageSelect');
-          
-          // Load saved startup page
-          if (startupSelect) {
-            const savedPage = localStorage.getItem('startup_page') || 'dispatch';
-            startupSelect.value = savedPage;
-            
-            // Save on change
-            startupSelect.addEventListener('change', (e) => {
-              const page = e.target.value;
-              localStorage.setItem('startup_page', page);
-              console.log('[Settings] Startup page set to:', page);
-              // Show toast if available
-              if (window.showToast) {
-                window.showToast(`Startup page set to: ${e.target.options[e.target.selectedIndex].text}`, 'success');
-              }
-            });
-          }
-          
-          // Toggle dropdown
           if (toggle) {
             toggle.addEventListener('click', (e) => {
               e.stopPropagation();
-              this.toggle();
+              this.open();
             });
           }
+        },
+        
+        createModal() {
+          const savedPage = localStorage.getItem('startup_page') || 'dispatch';
           
-          // Close on click outside
-          document.addEventListener('click', (e) => {
-            const container = document.querySelector('.quick-settings-container');
-            if (container && !container.contains(e.target)) {
-              this.close();
-            }
+          const modal = document.createElement('div');
+          modal.className = 'startup-modal-overlay';
+          modal.id = 'startupPageModal';
+          modal.innerHTML = `
+            <div class="startup-modal">
+              <div class="startup-modal-header">
+                <h3>⚙️ Select Startup Page</h3>
+                <button class="startup-modal-close" onclick="QuickSettings.close()">✕</button>
+              </div>
+              <div class="startup-modal-body">
+                <p class="startup-modal-subtitle">Choose which page opens when you log in:</p>
+                <div class="startup-page-grid">
+                  ${this.pages.map(p => `
+                    <div class="startup-page-option ${p.id === savedPage ? 'selected' : ''}" data-page="${p.id}" onclick="QuickSettings.selectPage('${p.id}')">
+                      <span class="check">✓</span>
+                      <span class="emoji">${p.emoji}</span>
+                      <span class="label">${p.label}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+          `;
+          
+          // Close on overlay click
+          modal.addEventListener('click', (e) => {
+            if (e.target === modal) this.close();
           });
+          
+          document.body.appendChild(modal);
+        },
+        
+        selectPage(pageId) {
+          localStorage.setItem('startup_page', pageId);
+          
+          // Update UI
+          document.querySelectorAll('.startup-page-option').forEach(opt => {
+            opt.classList.toggle('selected', opt.dataset.page === pageId);
+          });
+          
+          const page = this.pages.find(p => p.id === pageId);
+          console.log('[Settings] Startup page set to:', pageId);
+          
+          // Show toast and close after brief delay
+          if (window.showToast) {
+            window.showToast(`Startup page: ${page.emoji} ${page.label}`, 'success');
+          }
+          
+          setTimeout(() => this.close(), 300);
         },
         
         open() {
+          const modal = document.getElementById('startupPageModal');
           const toggle = document.getElementById('quickSettingsToggle');
-          const dropdown = document.getElementById('quickSettingsDropdown');
+          if (modal) modal.classList.add('active');
           if (toggle) toggle.classList.add('active');
-          if (dropdown) dropdown.classList.add('active');
         },
         
         close() {
+          const modal = document.getElementById('startupPageModal');
           const toggle = document.getElementById('quickSettingsToggle');
-          const dropdown = document.getElementById('quickSettingsDropdown');
+          if (modal) modal.classList.remove('active');
           if (toggle) toggle.classList.remove('active');
-          if (dropdown) dropdown.classList.remove('active');
-        },
-        
-        toggle() {
-          const dropdown = document.getElementById('quickSettingsDropdown');
-          if (dropdown?.classList.contains('active')) {
-            this.close();
-          } else {
-            this.open();
-          }
         }
       };
       
