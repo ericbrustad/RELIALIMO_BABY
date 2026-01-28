@@ -434,6 +434,162 @@
     .direction-icon.outbound {
       color: #60a5fa;
     }
+    
+    /* Compose Modal Styles */
+    .compose-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .compose-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+    }
+    
+    .compose-container {
+      position: relative;
+      width: 90%;
+      max-width: 700px;
+      max-height: 90vh;
+      background: #1a1a1a;
+      border: 1px solid #2e2e2e;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    .compose-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #e53935 0%, #c62828 100%);
+      color: white;
+    }
+    
+    .compose-header h3 {
+      margin: 0;
+      font-size: 18px;
+    }
+    
+    .compose-body {
+      padding: 20px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    
+    .compose-field {
+      margin-bottom: 16px;
+    }
+    
+    .compose-field label {
+      display: block;
+      margin-bottom: 6px;
+      color: #b0b0b0;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    
+    .compose-input {
+      width: 100%;
+      padding: 10px 12px;
+      background: #0f0f0f;
+      border: 1px solid #2e2e2e;
+      border-radius: 6px;
+      color: #ffffff;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    
+    .compose-input:focus {
+      outline: none;
+      border-color: #e53935;
+    }
+    
+    .compose-textarea {
+      width: 100%;
+      padding: 12px;
+      background: #0f0f0f;
+      border: 1px solid #2e2e2e;
+      border-radius: 6px;
+      color: #ffffff;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 200px;
+      box-sizing: border-box;
+    }
+    
+    .compose-textarea:focus {
+      outline: none;
+      border-color: #e53935;
+    }
+    
+    .compose-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      padding: 16px 20px;
+      background: #0f0f0f;
+      border-top: 1px solid #2e2e2e;
+    }
+    
+    .btn-compose {
+      background: #4caf50;
+      color: white;
+    }
+    
+    .btn-compose:hover {
+      background: #388e3c;
+    }
+    
+    .sending {
+      opacity: 0.7;
+      pointer-events: none;
+    }
+    
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      z-index: 3000;
+      animation: slideIn 0.3s ease;
+    }
+    
+    .toast.success {
+      background: #4caf50;
+    }
+    
+    .toast.error {
+      background: #e53935;
+    }
+    
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
   </style>
 </head>
 <body>
@@ -513,6 +669,7 @@
     <button onclick="loadEmails()" class="btn btn-primary">🔍 Search</button>
     <button onclick="clearFilters()" class="btn btn-secondary">Clear</button>
     <button onclick="refreshEmails()" class="btn btn-secondary">🔄 Refresh</button>
+    <button onclick="openCompose()" class="btn btn-compose">✉️ Compose</button>
   </div>
   
   <div class="email-list" id="emailList">
@@ -520,6 +677,45 @@
   </div>
   
   <div class="pagination" id="pagination"></div>
+  
+  <!-- Compose Email Modal -->
+  <div class="compose-modal" id="composeModal" style="display: none;">
+    <div class="compose-overlay" onclick="closeCompose()"></div>
+    <div class="compose-container">
+      <div class="compose-header">
+        <h3>✉️ Compose Email</h3>
+        <button class="detail-close" onclick="closeCompose()">×</button>
+      </div>
+      <div class="compose-body">
+        <div class="compose-field">
+          <label>To:</label>
+          <input type="email" id="composeTo" placeholder="recipient@example.com" class="compose-input">
+        </div>
+        <div class="compose-field">
+          <label>Subject:</label>
+          <input type="text" id="composeSubject" placeholder="Email subject" class="compose-input">
+        </div>
+        <div class="compose-field">
+          <label>Type:</label>
+          <select id="composeType" class="compose-input">
+            <option value="notification">Notification</option>
+            <option value="confirmation">Confirmation</option>
+            <option value="invoice">Invoice</option>
+            <option value="marketing">Marketing</option>
+            <option value="support">Support</option>
+          </select>
+        </div>
+        <div class="compose-field">
+          <label>Message:</label>
+          <textarea id="composeBody" placeholder="Write your message here..." class="compose-textarea" rows="12"></textarea>
+        </div>
+      </div>
+      <div class="compose-footer">
+        <button onclick="closeCompose()" class="btn btn-secondary">Cancel</button>
+        <button onclick="sendEmail()" class="btn btn-primary" id="sendBtn">📤 Send Email</button>
+      </div>
+    </div>
+  </div>
   
   <!-- Email Detail Panel -->
   <div class="email-detail" id="emailDetail">
@@ -871,9 +1067,116 @@
       return str.charAt(0).toUpperCase() + str.slice(1);
     }
     
-    // Close detail panel on escape
+    // Compose email functions
+    window.openCompose = function() {
+      document.getElementById('composeModal').style.display = 'flex';
+      document.getElementById('composeTo').value = '';
+      document.getElementById('composeSubject').value = '';
+      document.getElementById('composeBody').value = '';
+      document.getElementById('composeType').value = 'notification';
+      document.getElementById('composeTo').focus();
+    }
+    
+    window.closeCompose = function() {
+      document.getElementById('composeModal').style.display = 'none';
+    }
+    
+    window.sendEmail = async function() {
+      const to = document.getElementById('composeTo').value.trim();
+      const subject = document.getElementById('composeSubject').value.trim();
+      const body = document.getElementById('composeBody').value.trim();
+      const emailType = document.getElementById('composeType').value;
+      
+      // Validation
+      if (!to) {
+        showToast('Please enter a recipient email', 'error');
+        document.getElementById('composeTo').focus();
+        return;
+      }
+      
+      if (!to.includes('@')) {
+        showToast('Please enter a valid email address', 'error');
+        document.getElementById('composeTo').focus();
+        return;
+      }
+      
+      if (!subject) {
+        showToast('Please enter a subject', 'error');
+        document.getElementById('composeSubject').focus();
+        return;
+      }
+      
+      if (!body) {
+        showToast('Please enter a message', 'error');
+        document.getElementById('composeBody').focus();
+        return;
+      }
+      
+      const sendBtn = document.getElementById('sendBtn');
+      sendBtn.classList.add('sending');
+      sendBtn.textContent = '⏳ Sending...';
+      
+      try {
+        // Convert plain text to simple HTML
+        const htmlBody = `
+          <div style="font-family: Arial, sans-serif; padding: 20px;">
+            <p>${body.replace(/\n/g, '<br>')}</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+            <p style="color: #888; font-size: 12px;">Sent from RELIALIMO Email Center</p>
+          </div>
+        `;
+        
+        const response = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to,
+            subject,
+            html: htmlBody,
+            text: body,
+            emailType
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to send email');
+        }
+        
+        showToast('✅ Email sent successfully!', 'success');
+        closeCompose();
+        
+        // Switch to outbound tab and refresh
+        switchTab('outbound');
+        
+      } catch (err) {
+        console.error('Send email error:', err);
+        showToast('❌ ' + err.message, 'error');
+      } finally {
+        sendBtn.classList.remove('sending');
+        sendBtn.textContent = '📤 Send Email';
+      }
+    }
+    
+    function showToast(message, type = 'success') {
+      // Remove existing toasts
+      document.querySelectorAll('.toast').forEach(t => t.remove());
+      
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => toast.remove(), 4000);
+    }
+    
+    // Close modals on escape
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeDetail();
+      if (e.key === 'Escape') {
+        closeDetail();
+        closeCompose();
+      }
     });
     
     init();
