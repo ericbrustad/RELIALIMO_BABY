@@ -532,6 +532,9 @@ class ReservationsList {
                          res.form_snapshot?.details?.driverName || 
                          (res.assigned_driver_id ? 'Assigned' : 'N/A');
       
+      // Get driver status
+      const driverStatusInfo = this.resolveDriverStatus(res);
+      
       const row = document.createElement('tr');
       row.innerHTML = `
         <td><a href="#" class="conf-link" data-conf="${res.confirmation_number || ''}">${res.confirmation_number || 'N/A'}</a></td>
@@ -544,6 +547,7 @@ class ReservationsList {
         <td>${res.payment_type || ''}</td>
         <td><span class="status-badge ${displayStatus.class}">${displayStatus.label}</span>${modeIndicator}</td>
         <td>${driverName}</td>
+        <td><span class="driver-status-badge ${driverStatusInfo.class}">${driverStatusInfo.label}</span></td>
         <td><a href="#" class="select-link">Select >></a></td>
       `;
       tableBody.appendChild(row);
@@ -695,6 +699,36 @@ class ReservationsList {
     if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  resolveDriverStatus(res) {
+    const status = res.driver_status || res.driverStatus || 
+                   res.form_snapshot?.driver?.status || 
+                   res.form_snapshot?.details?.driverStatus || '';
+    
+    const statusMap = {
+      'getting_ready': { label: 'Getting Ready', class: 'status-getting-ready' },
+      'on_the_way': { label: 'On The Way', class: 'status-on-the-way' },
+      'arrived': { label: 'Arrived', class: 'status-arrived' },
+      'waiting': { label: 'Waiting', class: 'status-waiting' },
+      'passenger_onboard': { label: 'Passenger Onboard', class: 'status-onboard' },
+      'in_progress': { label: 'In Progress', class: 'status-in-progress' },
+      'completed': { label: 'Completed', class: 'status-completed' },
+      'cancelled': { label: 'Cancelled', class: 'status-cancelled' },
+      'no_show': { label: 'No Show', class: 'status-no-show' },
+      'assigned': { label: 'Assigned', class: 'status-assigned' }
+    };
+    
+    if (statusMap[status]) {
+      return statusMap[status];
+    }
+    
+    // Check if driver is assigned but no status
+    if (res.assigned_driver_id || res.driver_name || res.driverName) {
+      return { label: 'Assigned', class: 'status-assigned' };
+    }
+    
+    return { label: 'N/A', class: 'status-none' };
   }
 
   setupTabSwitching() {

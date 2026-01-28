@@ -541,6 +541,7 @@ export class UIManager {
         <div class="table-cell">Payout</div>
         <div class="table-cell">Mode</div>
         <div class="table-cell">Driver</div>
+        <div class="table-cell">Driver Status</div>
       </div>
     `;
 
@@ -555,6 +556,7 @@ export class UIManager {
       const pickupLabel = this.resolveLocation(reservation, 'pickup');
       const dropoffLabel = this.resolveLocation(reservation, 'dropoff');
       const driverLabel = this.resolveDriverName(reservation);
+      const driverStatusInfo = this.resolveDriverStatus(reservation);
       const payoutValue = this.resolveFarmoutPayout(reservation);
       const payoutLabel = this.formatCurrencyDisplay(payoutValue);
       const modeCanonical = normalizeFarmoutKey(reservation.farmout_mode || reservation.farmoutMode || 'manual') || 'manual';
@@ -586,6 +588,7 @@ export class UIManager {
           <div class="table-cell">${payoutLabel}</div>
           <div class="table-cell"><span class="mode-badge ${modeCanonical}">${modeLabel}</span></div>
           <div class="table-cell">${driverLabel}</div>
+          <div class="table-cell"><span class="driver-status-badge ${driverStatusInfo.class}">${driverStatusInfo.label}</span></div>
         </div>
       `;
     });
@@ -1339,6 +1342,69 @@ export class UIManager {
     ];
     const value = this.pickFirstStringValue(candidates);
     return value || '—';
+  }
+
+  /**
+   * Resolve driver status for a reservation (trip status from driver app)
+   */
+  resolveDriverStatus(reservation) {
+    const raw = this.getUnderlyingReservation(reservation);
+    
+    // Check multiple sources for driver/trip status
+    const statusCandidates = [
+      reservation?.driver_status,
+      reservation?.driverStatus,
+      reservation?.trip_status,
+      reservation?.tripStatus,
+      reservation?.status_detail_code,
+      reservation?.statusDetailCode,
+      raw?.driver_status,
+      raw?.driverStatus,
+      raw?.trip_status,
+      raw?.tripStatus,
+      raw?.status_detail_code,
+      raw?.statusDetailCode,
+      raw?.form_snapshot?.details?.driverStatus,
+      raw?.form_snapshot?.details?.tripStatus
+    ];
+    
+    let status = '';
+    for (const candidate of statusCandidates) {
+      if (candidate && typeof candidate === 'string' && candidate.trim()) {
+        status = candidate.trim().toLowerCase();
+        break;
+      }
+    }
+    
+    // Map status to display info
+    const statusMap = {
+      'getting_ready': { label: 'Getting Ready', class: 'status-getting-ready' },
+      'on_the_way': { label: 'On The Way', class: 'status-on-the-way' },
+      'enroute': { label: 'En Route', class: 'status-on-the-way' },
+      'arrived': { label: 'Arrived', class: 'status-arrived' },
+      'waiting': { label: 'Waiting', class: 'status-waiting' },
+      'passenger_onboard': { label: 'Passenger Onboard', class: 'status-onboard' },
+      'in_progress': { label: 'In Progress', class: 'status-in-progress' },
+      'completed': { label: 'Completed', class: 'status-completed' },
+      'done': { label: 'Completed', class: 'status-completed' },
+      'cancelled': { label: 'Cancelled', class: 'status-cancelled' },
+      'no_show': { label: 'No Show', class: 'status-no-show' }
+    };
+    
+    // Normalize status key
+    const normalizedStatus = status.replace(/[\s-]/g, '_');
+    
+    if (statusMap[normalizedStatus]) {
+      return statusMap[normalizedStatus];
+    }
+    
+    // Check if driver is assigned but no status yet
+    const hasDriver = this.resolveDriverName(reservation) !== '—';
+    if (hasDriver) {
+      return { label: 'Assigned', class: 'status-assigned' };
+    }
+    
+    return { label: '—', class: 'status-none' };
   }
 
   resolveFarmoutPayout(reservation) {
