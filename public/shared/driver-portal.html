@@ -841,7 +841,7 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" id="submitPostTrip" class="btn btn-success btn-large">
+          <button type="button" id="submitPostTrip" class="btn btn-success btn-large" onclick="handlePostTripSubmit()">
             ✅ Complete Trip
           </button>
         </div>
@@ -993,7 +993,7 @@
           <span id="navETA" class="nav-eta">Calculating...</span>
           <span id="navDistance" class="nav-distance"></span>
         </div>
-        <button type="button" id="navEndBtn" class="nav-header-btn nav-end-btn" aria-label="End Navigation">
+        <button type="button" id="navEndBtn" class="nav-header-btn nav-end-btn" aria-label="End Navigation" onclick="if(confirm('End navigation?')) endNavigation();">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M18 6L6 18M6 6l12 12"/>
           </svg>

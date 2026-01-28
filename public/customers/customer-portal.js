@@ -1805,10 +1805,36 @@ function selectSavedAddress(id, address, type) {
     document.getElementById('dropoffAddressInput').value = address;
   }
   
-  // Highlight selected
-  document.querySelectorAll(`#saved${type.charAt(0).toUpperCase() + type.slice(1)}Addresses .saved-address-item`).forEach(item => {
-    item.classList.toggle('selected', item.dataset.id === id);
-  });
+  // Get the container
+  const containerId = `saved${type.charAt(0).toUpperCase() + type.slice(1)}Addresses`;
+  const container = document.getElementById(containerId);
+  
+  // Collapse non-selected addresses and highlight selected
+  if (container) {
+    container.querySelectorAll('.saved-address-item').forEach(item => {
+      const isSelected = item.dataset.id === id;
+      item.classList.toggle('selected', isSelected);
+      item.classList.toggle('collapsed', !isSelected);
+    });
+    
+    // Add a "change" button to allow re-selecting
+    let changeBtn = container.querySelector('.change-address-btn');
+    if (!changeBtn) {
+      changeBtn = document.createElement('button');
+      changeBtn.type = 'button';
+      changeBtn.className = 'change-address-btn';
+      changeBtn.textContent = '↻ Change Address';
+      changeBtn.style.cssText = 'margin-top: 10px; padding: 8px 16px; font-size: 13px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 6px; cursor: pointer; color: #1565c0; width: 100%;';
+      changeBtn.addEventListener('click', () => {
+        // Expand all addresses again
+        container.querySelectorAll('.saved-address-item').forEach(item => {
+          item.classList.remove('collapsed', 'selected');
+        });
+        changeBtn.remove();
+      });
+      container.appendChild(changeBtn);
+    }
+  }
   
   // Increment usage count
   incrementAddressUsage(id);
@@ -3304,12 +3330,19 @@ async function loadTrips() {
     if (response.ok) {
       state.trips = await response.json();
       console.log('[CustomerPortal] Loaded trips:', state.trips.length, 'trips');
+      
+      // Fetch driver info for trips with assigned drivers
+      await enrichTripsWithDriverInfo(state.trips);
+      
+      // Fetch fleet vehicle info for trips with assigned vehicles
+      await enrichTripsWithVehicleInfo(state.trips);
+      
       if (state.trips.length > 0) {
-        console.log('[CustomerPortal] Sample trip date fields:', { 
+        console.log('[CustomerPortal] Sample trip data:', { 
           pickup_datetime: state.trips[0].pickup_datetime,
-          pu_date: state.trips[0].pu_date, 
-          pu_time: state.trips[0].pu_time,
-          pickup_date_time: state.trips[0].pickup_date_time
+          assigned_driver_name: state.trips[0].assigned_driver_name,
+          vehicle_type: state.trips[0].vehicle_type,
+          confirmation_number: state.trips[0].confirmation_number
         });
       }
       renderTrips('upcoming');
@@ -3318,6 +3351,99 @@ async function loadTrips() {
     }
   } catch (err) {
     console.error('[CustomerPortal] Failed to load trips:', err);
+  }
+}
+
+// Fetch driver info for trips that have assigned_driver_id
+async function enrichTripsWithDriverInfo(trips) {
+  try {
+    const creds = getSupabaseCredentials();
+    const driverIds = [...new Set(trips.filter(t => t.assigned_driver_id).map(t => t.assigned_driver_id))];
+    
+    if (driverIds.length === 0) return;
+    
+    const response = await fetch(
+      `${creds.url}/rest/v1/drivers?id=in.(${driverIds.join(',')})&select=id,first_name,last_name,profile_photo,vehicle_type,assigned_vehicle_id`,
+      {
+        headers: {
+          'apikey': creds.anonKey,
+          'Authorization': `Bearer ${state.session?.access_token}`
+        }
+      }
+    );
+    
+    if (response.ok) {
+      const drivers = await response.json();
+      const driverMap = {};
+      drivers.forEach(d => {
+        driverMap[d.id] = d;
+      });
+      
+      trips.forEach(trip => {
+        if (trip.assigned_driver_id && driverMap[trip.assigned_driver_id]) {
+          const driver = driverMap[trip.assigned_driver_id];
+          trip.driverInfo = {
+            name: `${driver.first_name || ''} ${driver.last_name || ''}`.trim() || trip.assigned_driver_name,
+            profilePhoto: driver.profile_photo,
+            vehicleType: driver.vehicle_type,
+            assignedVehicleId: driver.assigned_vehicle_id
+          };
+        }
+      });
+    }
+  } catch (err) {
+    console.error('[CustomerPortal] Failed to enrich trips with driver info:', err);
+  }
+}
+
+// Fetch fleet vehicle info for trips that have fleet_vehicle_id
+async function enrichTripsWithVehicleInfo(trips) {
+  try {
+    const creds = getSupabaseCredentials();
+    // Get vehicle IDs from fleet_vehicle_id or driver's assigned_vehicle_id
+    const vehicleIds = [...new Set(trips
+      .filter(t => t.fleet_vehicle_id || t.driverInfo?.assignedVehicleId)
+      .map(t => t.fleet_vehicle_id || t.driverInfo?.assignedVehicleId)
+      .filter(Boolean)
+    )];
+    
+    if (vehicleIds.length === 0) return;
+    
+    const response = await fetch(
+      `${creds.url}/rest/v1/fleet_vehicles?id=in.(${vehicleIds.join(',')})&select=id,make,model,year,color,license_plate,vehicle_type`,
+      {
+        headers: {
+          'apikey': creds.anonKey,
+          'Authorization': `Bearer ${state.session?.access_token}`
+        }
+      }
+    );
+    
+    if (response.ok) {
+      const vehicles = await response.json();
+      const vehicleMap = {};
+      vehicles.forEach(v => {
+        vehicleMap[v.id] = v;
+      });
+      
+      trips.forEach(trip => {
+        const vehicleId = trip.fleet_vehicle_id || trip.driverInfo?.assignedVehicleId;
+        if (vehicleId && vehicleMap[vehicleId]) {
+          const vehicle = vehicleMap[vehicleId];
+          trip.fleetVehicleInfo = {
+            make: vehicle.make,
+            model: vehicle.model,
+            year: vehicle.year,
+            color: vehicle.color,
+            licensePlate: vehicle.license_plate,
+            vehicleType: vehicle.vehicle_type,
+            displayName: `${vehicle.year || ''} ${vehicle.color || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim()
+          };
+        }
+      });
+    }
+  } catch (err) {
+    console.error('[CustomerPortal] Failed to enrich trips with vehicle info:', err);
   }
 }
 
@@ -3381,15 +3507,54 @@ function renderTrips(filter = 'upcoming') {
     const dateStr = pickupDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     const timeStr = pickupDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     
+    // Get driver info
+    const driverName = trip.driverInfo?.name || trip.assigned_driver_name || null;
+    const driverPhoto = trip.driverInfo?.profilePhoto || null;
+    
+    // Get vehicle info
+    const vehicleType = trip.vehicle_type || trip.driverInfo?.vehicleType || null;
+    const fleetVehicle = trip.fleetVehicleInfo?.displayName || null;
+    
+    // Get price
+    const price = trip.grand_total || trip.rate_amount || null;
+    const priceDisplay = price ? `$${parseFloat(price).toFixed(2)}` : null;
+    
     return `
       <div class="trip-card" data-id="${trip.id}">
         <div class="trip-header">
-          <div>
+          <div class="trip-header-left">
+            <div class="trip-confirmation">#${trip.confirmation_number || trip.id}</div>
             <div class="trip-date">${dateStr}</div>
             <div class="trip-time">${timeStr}</div>
           </div>
-          <span class="trip-status ${trip.status}">${formatStatus(trip.status)}</span>
+          <div class="trip-header-right">
+            <span class="trip-status ${trip.status}">${formatStatus(trip.status)}</span>
+            ${priceDisplay ? `<div class="trip-price">${priceDisplay}</div>` : ''}
+          </div>
         </div>
+        
+        ${driverName ? `
+        <div class="trip-driver-info">
+          <div class="driver-avatar">
+            ${driverPhoto 
+              ? `<img src="${driverPhoto}" alt="${driverName}" class="driver-photo" onerror="this.parentElement.innerHTML='<span class=\\'driver-initials\\'>${getInitials(driverName)}</span>'">`
+              : `<span class="driver-initials">${getInitials(driverName)}</span>`
+            }
+          </div>
+          <div class="driver-details">
+            <div class="driver-name">${driverName}</div>
+            ${vehicleType ? `<div class="driver-vehicle-type">${vehicleType}</div>` : ''}
+            ${fleetVehicle ? `<div class="driver-fleet-vehicle">${fleetVehicle}</div>` : ''}
+          </div>
+        </div>
+        ` : vehicleType ? `
+        <div class="trip-vehicle-info">
+          <span class="vehicle-icon">🚗</span>
+          <span class="vehicle-type">${vehicleType}</span>
+          ${fleetVehicle ? `<span class="fleet-vehicle"> • ${fleetVehicle}</span>` : ''}
+        </div>
+        ` : ''}
+        
         <div class="trip-route">
           <div class="route-point">
             <span class="route-marker pickup">P</span>
@@ -3436,6 +3601,14 @@ function canTrack(trip) {
 function truncateAddress(address, maxLength = 40) {
   if (!address) return 'N/A';
   return address.length > maxLength ? address.substring(0, maxLength) + '...' : address;
+}
+
+// Get initials from a name
+function getInitials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
 
 // ============================================
@@ -4236,6 +4409,11 @@ function setupEventListeners() {
       state.selectedPickupAddress = null;
     }
     
+    // Repopulate saved addresses when "saved" is selected to ensure they appear
+    if (val === 'saved') {
+      populateAddressDropdowns();
+    }
+    
     // Auto-select trip type based on airport selection
     updateTripTypeFromAddresses();
   });
@@ -4248,6 +4426,11 @@ function setupEventListeners() {
     
     if (!val || val === 'airport' || val === 'new') {
       state.selectedDropoffAddress = null;
+    }
+    
+    // Repopulate saved addresses when "saved" is selected to ensure they appear
+    if (val === 'saved') {
+      populateAddressDropdowns();
     }
     
     // Auto-select trip type based on airport selection

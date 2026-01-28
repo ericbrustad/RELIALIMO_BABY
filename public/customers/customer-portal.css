@@ -1024,6 +1024,19 @@ body {
 .saved-address-item.selected {
   border-color: var(--primary);
   background: var(--bg-card-hover);
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.saved-address-item.collapsed {
+  display: none;
+}
+
+.saved-address-item.selected::after {
+  content: '✓';
+  margin-left: auto;
+  color: var(--primary);
+  font-weight: bold;
+  font-size: 1.2rem;
 }
 
 .address-icon {
@@ -1398,13 +1411,6 @@ body {
   border-color: var(--primary-light);
 }
 
-.trip-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: var(--space-md);
-}
-
 .trip-date {
   font-weight: 600;
 }
@@ -1438,6 +1444,22 @@ body {
 
 .trip-status.cancelled {
   background: var(--danger);
+  color: white;
+}
+
+.trip-status.assigned {
+  background: #3b82f6;
+  color: white;
+}
+
+.trip-status.enroute,
+.trip-status.in_progress {
+  background: #8b5cf6;
+  color: white;
+}
+
+.trip-status.arrived {
+  background: #10b981;
   color: white;
 }
 
@@ -1485,6 +1507,123 @@ body {
   margin-top: var(--space-md);
   padding-top: var(--space-md);
   border-top: 1px solid var(--border);
+}
+
+/* Trip Card Enhanced Styles */
+.trip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-md);
+}
+
+.trip-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trip-header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-xs);
+}
+
+.trip-confirmation {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.trip-price {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--primary-light);
+}
+
+/* Driver Info Section */
+.trip-driver-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-md);
+}
+
+.driver-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.driver-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.driver-initials {
+  color: white;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.driver-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.driver-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.driver-vehicle-type {
+  font-size: 0.85rem;
+  color: var(--primary-light);
+  font-weight: 500;
+}
+
+.driver-fleet-vehicle {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Vehicle Info (no driver assigned) */
+.trip-vehicle-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-md);
+  font-size: 0.9rem;
+}
+
+.vehicle-icon {
+  font-size: 1.2rem;
+}
+
+.vehicle-type {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.fleet-vehicle {
+  color: var(--text-muted);
 }
 
 /* ============================================

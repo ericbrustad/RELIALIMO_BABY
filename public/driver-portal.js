@@ -2783,16 +2783,30 @@ const NavigationModule = {
     
     if (!mapboxToken) {
       console.error('[Navigation] No Mapbox token available');
+      showToast('Map unavailable - no access token', 'error');
       return;
     }
     
     try {
-      await loadMapboxGL();
+      console.log('[Navigation] Waiting for Mapbox GL to load...');
+      await waitForMapbox(10000); // Wait up to 10 seconds
+      console.log('[Navigation] Mapbox GL loaded, initializing map...');
+      
       mapboxgl.accessToken = mapboxToken;
       
       // Get current position for initial center
+      console.log('[Navigation] Getting current position...');
       const position = await this.getCurrentPosition();
       this.currentPosition = position;
+      console.log('[Navigation] Current position:', position.lat, position.lng);
+      
+      // Check if map container exists
+      const mapContainer = document.getElementById('navigationMap');
+      if (!mapContainer) {
+        console.error('[Navigation] navigationMap container not found');
+        showToast('Navigation map container not found', 'error');
+        return;
+      }
       
       this.map = new mapboxgl.Map({
         container: 'navigationMap',
@@ -2804,7 +2818,10 @@ const NavigationModule = {
       });
       
       this.map.on('load', () => {
-        console.log('[Navigation] Map loaded');
+        console.log('[Navigation] Map loaded successfully');
+        
+        // Update instruction text
+        document.getElementById('navInstruction').textContent = 'Route loaded';
         
         // Add route layer
         this.map.addSource('route', {
@@ -2834,8 +2851,16 @@ const NavigationModule = {
         this.addDestinationMarker();
       });
       
+      // Handle map error
+      this.map.on('error', (e) => {
+        console.error('[Navigation] Map error:', e);
+        document.getElementById('navInstruction').textContent = 'Map error - try again';
+      });
+      
     } catch (err) {
       console.error('[Navigation] Map init error:', err);
+      document.getElementById('navInstruction').textContent = 'Failed to load map';
+      showToast('Navigation map failed to load: ' + err.message, 'error');
     }
   },
   
@@ -3426,16 +3451,34 @@ const NavigationModule = {
 // Make NavigationModule available globally
 window.NavigationModule = NavigationModule;
 
+// End navigation function (can be called from HTML onclick)
+window.endNavigation = function() {
+  console.log('[Navigation] endNavigation called');
+  try {
+    NavigationModule.stopNavigation();
+    showScreen('dashboard');
+    showToast('Navigation ended', 'info');
+  } catch (err) {
+    console.error('[Navigation] Error ending navigation:', err);
+    // Force return to dashboard even on error
+    showScreen('dashboard');
+  }
+};
+
 // Event listeners for navigation controls
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('navBackBtn')?.addEventListener('click', () => {
+    console.log('[Navigation] Back button clicked');
     NavigationModule.minimizeNavigation();
   });
   
   document.getElementById('navEndBtn')?.addEventListener('click', () => {
-    if (confirm('End navigation and return to dashboard?')) {
-      NavigationModule.stopNavigation();
-      showScreen('dashboard');
+    console.log('[Navigation] End button clicked');
+    // Use a simpler approach - just end directly or use a custom confirm
+    const shouldEnd = window.confirm('End navigation and return to dashboard?');
+    console.log('[Navigation] Confirm result:', shouldEnd);
+    if (shouldEnd) {
+      endNavigation();
     }
   });
   
@@ -9129,47 +9172,69 @@ window.updateTripTotals = function() {
 };
 
 async function handlePostTripSubmit() {
-  const tripId = elements.postTripModal.dataset.tripId;
+  console.log('[DriverPortal] handlePostTripSubmit called');
+  
+  // Get tripId from either elements cache or fresh DOM query
+  const postTripModal = elements.postTripModal || document.getElementById('postTripModal');
+  if (!postTripModal) {
+    console.error('[DriverPortal] postTripModal element not found');
+    showToast('Error: Modal not found', 'error');
+    return;
+  }
+  
+  const tripId = postTripModal.dataset.tripId;
+  console.log('[DriverPortal] Trip ID from modal:', tripId);
+  
+  if (!tripId) {
+    console.error('[DriverPortal] No trip ID found in modal dataset');
+    showToast('Error: Trip ID not found', 'error');
+    return;
+  }
   
   // Enhanced post-trip data with separate incidentals
   const postTripData = {
-    wait_time: parseInt(document.getElementById('waitTime').value) || 0,
-    extra_stops: parseInt(document.getElementById('extraStops').value) || 0,
+    wait_time: parseInt(document.getElementById('waitTime')?.value) || 0,
+    extra_stops: parseInt(document.getElementById('extraStops')?.value) || 0,
     parking_cost: parseFloat(document.getElementById('parkingCost')?.value) || 0,
     tolls_cost: parseFloat(document.getElementById('tollsCost')?.value) || 0,
     other_costs: parseFloat(document.getElementById('otherCosts')?.value) || 0,
     other_costs_description: document.getElementById('otherCostsDesc')?.value?.trim() || '',
-    tip: parseFloat(document.getElementById('tipAmount').value) || 0,
-    driver_notes: document.getElementById('driverNotes').value.trim(),
+    tip: parseFloat(document.getElementById('tipAmount')?.value) || 0,
+    driver_notes: document.getElementById('driverNotes')?.value?.trim() || '',
     // Calculate totals
     total_incidentals: (parseFloat(document.getElementById('parkingCost')?.value) || 0) +
                        (parseFloat(document.getElementById('tollsCost')?.value) || 0) +
                        (parseFloat(document.getElementById('otherCosts')?.value) || 0)
   };
   
+  console.log('[DriverPortal] Post-trip data:', postTripData);
+  
   try {
     // Update reservation with post-trip data
+    console.log('[DriverPortal] Updating reservation status to completed...');
     await updateReservationStatus(tripId, {
       driver_status: 'completed',
       status: 'COMPLETED',
       ...postTripData
     });
+    console.log('[DriverPortal] Reservation updated successfully');
     
     closeModal('postTripModal');
     showToast('Trip completed successfully! 🎉', 'success');
     
     // Reset post-trip form
-    document.getElementById('waitTime').value = '0';
-    document.getElementById('extraStops').value = '0';
-    if (document.getElementById('parkingCost')) document.getElementById('parkingCost').value = '0';
-    if (document.getElementById('tollsCost')) document.getElementById('tollsCost').value = '0';
-    if (document.getElementById('otherCosts')) document.getElementById('otherCosts').value = '0';
-    if (document.getElementById('otherCostsDesc')) document.getElementById('otherCostsDesc').value = '';
-    document.getElementById('tipAmount').value = '0';
-    document.getElementById('driverNotes').value = '';
+    const resetElements = ['waitTime', 'extraStops', 'parkingCost', 'tollsCost', 'otherCosts', 'otherCostsDesc', 'tipAmount', 'driverNotes'];
+    resetElements.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = id === 'driverNotes' || id === 'otherCostsDesc' ? '' : '0';
+    });
     
     // Update driver status back to available
-    await updateDriverStatus('available');
+    try {
+      await updateDriverStatus('available');
+    } catch (err) {
+      console.warn('[DriverPortal] Failed to update driver status:', err);
+    }
     
     await refreshTrips();
   } catch (err) {
