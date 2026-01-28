@@ -59,6 +59,18 @@ class ReservationsList {
         this.sortBy = settingsManager.getSetting('defaultReservationSortBy') || 'date';
         this.sortOrder = settingsManager.getSetting('defaultReservationSortOrder') || 'desc';
         console.log(`📊 Loaded sort settings: sortBy=${this.sortBy}, sortOrder=${this.sortOrder}`);
+        
+        // Listen for settings changes to apply instantly
+        window.addEventListener('companySettingsChanged', (e) => {
+          const { settings, changedKeys } = e.detail || {};
+          if (changedKeys.includes('defaultReservationSortBy') || changedKeys.includes('defaultReservationSortOrder')) {
+            console.log('📊 Sort settings changed, reapplying...');
+            this.sortBy = settings.defaultReservationSortBy || 'date';
+            this.sortOrder = settings.defaultReservationSortOrder || 'desc';
+            // Re-display with new sort
+            this.loadReservations();
+          }
+        });
       }
     } catch (e) {
       console.warn('⚠️ Could not load sort settings:', e);
