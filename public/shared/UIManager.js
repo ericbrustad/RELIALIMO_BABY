@@ -507,10 +507,15 @@ export class UIManager {
       // Automatic first
       if (modeA === 'automatic' && modeB !== 'automatic') return -1;
       if (modeB === 'automatic' && modeA !== 'automatic') return 1;
-      // Then by pickup date/time
-      const dateA = a.pickupDate || a.pickup_date || '';
-      const dateB = b.pickupDate || b.pickup_date || '';
-      return dateA.localeCompare(dateB);
+      // Then by pickup date/time - use pickup_datetime (canonical) first
+      const rawA = a.raw || a;
+      const rawB = b.raw || b;
+      const dateTimeA = rawA.pickup_datetime || rawA.pickup_at || a.pickupDate || a.pickup_date || '';
+      const dateTimeB = rawB.pickup_datetime || rawB.pickup_at || b.pickupDate || b.pickup_date || '';
+      // Parse as dates for accurate comparison
+      const timeA = new Date(dateTimeA).getTime() || 0;
+      const timeB = new Date(dateTimeB).getTime() || 0;
+      return timeA - timeB;
     });
 
     // Find which reservation is actively being offered and which is next
@@ -1202,7 +1207,10 @@ export class UIManager {
   resolvePickupTime(reservation) {
     const raw = this.getUnderlyingReservation(reservation);
     const snapshotDetails = raw?.form_snapshot?.details || {};
+    // Priority: pickup_datetime (canonical DB column) first, then other sources
     const candidates = [
+      reservation?.pickup_datetime,
+      raw?.pickup_datetime,
       reservation?.pickupTime,
       reservation?.pickup_time,
       raw?.pickupTime,
@@ -1224,7 +1232,10 @@ export class UIManager {
   resolveTripDate(reservation) {
     const raw = this.getUnderlyingReservation(reservation);
     const snapshotDetails = raw?.form_snapshot?.details || {};
+    // Priority: pickup_datetime (canonical DB column) first, then other sources
     const candidates = [
+      reservation?.pickup_datetime,
+      raw?.pickup_datetime,
       reservation?.pickupDate,
       reservation?.pickup_date,
       reservation?.tripDate,
