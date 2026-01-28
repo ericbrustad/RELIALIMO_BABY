@@ -1812,6 +1812,9 @@ function selectSavedAddress(id, address, type) {
   
   // Increment usage count
   incrementAddressUsage(id);
+  
+  // Trigger route/price calculation
+  calculateRouteAndPrice();
 }
 
 async function incrementAddressUsage(addressId) {
@@ -3218,7 +3221,7 @@ async function sendBookingConfirmationSMS(reservation) {
     const phone = reservation.passenger_phone || state.customer?.phone;
     if (!phone) return;
     
-    const pickupTime = new Date(reservation.pickup_date_time);
+    const pickupTime = getTripPickupDateTime(reservation);
     const timeStr = pickupTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     const dateStr = pickupTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     
@@ -3289,7 +3292,7 @@ async function loadTrips() {
   try {
     const creds = getSupabaseCredentials();
     const response = await fetch(
-      `${creds.url}/rest/v1/reservations?account_id=eq.${state.customer?.id}&select=*&order=pickup_datetime.desc`,
+      `${creds.url}/rest/v1/reservations?account_id=eq.${state.customer?.id}&select=*&order=pu_date.desc,pu_time.desc`,
       {
         headers: {
           'apikey': creds.anonKey,
@@ -3307,6 +3310,20 @@ async function loadTrips() {
   }
 }
 
+// Helper to get pickup datetime from trip (handles multiple field name formats)
+function getTripPickupDateTime(trip) {
+  // Try pickup_date_time first, then construct from pu_date + pu_time
+  if (trip.pickup_date_time) {
+    return new Date(trip.pickup_date_time);
+  }
+  const puDate = trip.pu_date || trip.pickup_date || '';
+  const puTime = trip.pu_time || trip.pickup_time || '00:00';
+  if (puDate) {
+    return new Date(`${puDate}T${puTime}`);
+  }
+  return new Date(0); // Fallback to epoch
+}
+
 function renderTrips(filter = 'upcoming') {
   const container = document.getElementById('tripsList');
   if (!container) return;
@@ -3315,9 +3332,9 @@ function renderTrips(filter = 'upcoming') {
   let filteredTrips = state.trips;
   
   if (filter === 'upcoming') {
-    filteredTrips = state.trips.filter(t => new Date(t.pickup_date_time) >= now && t.status !== 'cancelled' && t.status !== 'completed');
+    filteredTrips = state.trips.filter(t => getTripPickupDateTime(t) >= now && t.status !== 'cancelled' && t.status !== 'completed');
   } else if (filter === 'past') {
-    filteredTrips = state.trips.filter(t => new Date(t.pickup_date_time) < now || t.status === 'completed');
+    filteredTrips = state.trips.filter(t => getTripPickupDateTime(t) < now || t.status === 'completed');
   }
   
   if (filteredTrips.length === 0) {
@@ -3331,7 +3348,7 @@ function renderTrips(filter = 'upcoming') {
   }
   
   container.innerHTML = filteredTrips.map(trip => {
-    const pickupDate = new Date(trip.pickup_date_time);
+    const pickupDate = getTripPickupDateTime(trip);
     const dateStr = pickupDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     const timeStr = pickupDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     
@@ -3398,7 +3415,7 @@ function truncateAddress(address, maxLength = 40) {
 function checkForActiveTrip() {
   const now = new Date();
   const activeTrip = state.trips.find(t => {
-    const pickupDate = new Date(t.pickup_date_time);
+    const pickupDate = getTripPickupDateTime(t);
     const hoursDiff = (pickupDate - now) / (1000 * 60 * 60);
     return hoursDiff <= 2 && hoursDiff >= -2 && canTrack(t);
   });
@@ -4206,6 +4223,31 @@ function setupEventListeners() {
     
     // Auto-select trip type based on airport selection
     updateTripTypeFromAddresses();
+  });
+  
+  // Airport dropdown selection - triggers route/price calculation
+  document.getElementById('pickupAirport')?.addEventListener('change', (e) => {
+    if (e.target.value) {
+      // Get the full airport address from the data attribute
+      const selectedOption = e.target.options[e.target.selectedIndex];
+      const airportAddress = selectedOption?.dataset?.address || e.target.value;
+      state.selectedPickupAddress = airportAddress;
+      console.log('[CustomerPortal] Pickup airport selected:', e.target.value, 'Address:', airportAddress);
+      updateTripTypeFromAddresses();
+      calculateRouteAndPrice();
+    }
+  });
+  
+  document.getElementById('dropoffAirport')?.addEventListener('change', (e) => {
+    if (e.target.value) {
+      // Get the full airport address from the data attribute
+      const selectedOption = e.target.options[e.target.selectedIndex];
+      const airportAddress = selectedOption?.dataset?.address || e.target.value;
+      state.selectedDropoffAddress = airportAddress;
+      console.log('[CustomerPortal] Dropoff airport selected:', e.target.value, 'Address:', airportAddress);
+      updateTripTypeFromAddresses();
+      calculateRouteAndPrice();
+    }
   });
   
   // Map buttons
