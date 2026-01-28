@@ -1,9 +1,11 @@
 import { wireMainNav } from './navigation.js';
+import realtimeService, { subscribeToReservations } from './realtime-service.js';
 
 class ReservationsList {
   constructor() {
     this.sortBy = 'date';     // Default sort column
     this.sortOrder = 'desc';  // Default sort direction
+    this.unsubscribeRealtime = null;
     this.init();
   }
 
@@ -15,6 +17,27 @@ class ReservationsList {
     this.setupMessageListener();
     await this.loadReservations();
     this.handleOpenConfFromCalendar();
+    await this.setupRealtimeSubscription();
+  }
+  
+  /**
+   * Setup real-time subscription for instant updates
+   */
+  async setupRealtimeSubscription() {
+    try {
+      await realtimeService.init();
+      
+      this.unsubscribeRealtime = subscribeToReservations((eventType, newRecord, oldRecord) => {
+        console.log(`[ReservationsList] Real-time ${eventType}:`, newRecord?.confirmation_number || oldRecord?.confirmation_number);
+        
+        // Reload reservations on any change for instant sync
+        this.loadReservations();
+      });
+      
+      console.log('[ReservationsList] Real-time subscription active for instant updates');
+    } catch (err) {
+      console.error('[ReservationsList] Failed to set up real-time subscription:', err);
+    }
   }
   
   /**
@@ -109,6 +132,8 @@ class ReservationsList {
     }
     
     try {
+      console.log('🔄 Loading reservations from database...');
+      
       // Load all data in parallel for efficiency
       const [reservations, accounts, vehicleTypes] = await Promise.all([
         this.db.getAllReservations(),
@@ -119,6 +144,16 @@ class ReservationsList {
       console.log('📋 Loaded reservations:', reservations?.length || 0);
       console.log('👥 Loaded accounts:', accounts?.length || 0);
       console.log('🚗 Loaded vehicle types:', vehicleTypes?.length || 0);
+      
+      // Debug: log first few reservations
+      if (reservations && reservations.length > 0) {
+        console.log('📋 First 3 reservations:', reservations.slice(0, 3).map(r => ({
+          id: r.id,
+          conf: r.confirmation_number,
+          status: r.status,
+          pickup: r.pickup_datetime
+        })));
+      }
       
       // Create lookup maps for fast access
       this.accountsMap = new Map();
@@ -140,11 +175,11 @@ class ReservationsList {
         }
       });
       
-      if (reservations && reservations.length > 0) {
-        this.displayReservations(reservations);
-      } else {
-        this.displayReservations([]);
-        console.log('📭 No reservations found');
+      // Always call displayReservations, even with empty array
+      this.displayReservations(reservations || []);
+      
+      if (!reservations || reservations.length === 0) {
+        console.log('📭 No reservations found in database');
       }
     } catch (error) {
       console.error('❌ Error loading reservations:', error);
@@ -251,25 +286,36 @@ class ReservationsList {
     
     // Clear existing rows
     tableBody.innerHTML = '';
+    
+    // Log total reservations received
+    console.log(`📋 displayReservations received ${(reservations || []).length} reservations`);
 
-    // Drop settled trips from the visible list
+    // Drop settled trips from the visible list (all other statuses are shown)
+    const totalReceived = (reservations || []).length;
     let filtered = (reservations || []).filter(res => {
       const status = (res.status || '').toString().toLowerCase();
       return status !== 'settled';
     });
     
+    const settledCount = totalReceived - filtered.length;
+    if (settledCount > 0) {
+      console.log(`📊 Hiding ${settledCount} settled reservations, showing ${filtered.length}`);
+    }
+    
     // Apply sorting based on company settings
     filtered = this.sortReservations(filtered);
+    console.log(`📊 After sorting: ${filtered.length} reservations (sortBy=${this.sortBy}, sortOrder=${this.sortOrder})`);
     
     if (filtered.length === 0) {
-      // Show empty state message
+      // Show empty state message with more details
       const emptyRow = document.createElement('tr');
       emptyRow.innerHTML = `
         <td colspan="11" style="text-align: center; padding: 40px; color: #666;">
           <div>
             <h3>📭 No Reservations Found</h3>
-            <p>The reservations database is empty or no reservations match the current filter.</p>
+            <p>Total from database: ${totalReceived} | Settled (hidden): ${settledCount}</p>
             <p>Try creating a new reservation or check your database connection.</p>
+            <button onclick="location.reload()" class="btn btn-primary" style="margin-top: 10px;">🔄 Refresh</button>
           </div>
         </td>
       `;

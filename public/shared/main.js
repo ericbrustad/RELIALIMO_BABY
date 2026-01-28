@@ -1540,14 +1540,19 @@ class LimoReservationSystem {
 
     let pickupDate = '';
     let pickupTime = '';
-    if (reservation.pickup_at) {
-      const pickupDateObj = new Date(reservation.pickup_at);
+    // Use pickup_datetime (canonical DB column) first, then pickup_at, then form_snapshot
+    const pickupDateTimeSource = reservation.pickup_datetime || reservation.pickup_at;
+    if (pickupDateTimeSource) {
+      const pickupDateObj = new Date(pickupDateTimeSource);
       if (!Number.isNaN(pickupDateObj.getTime())) {
         pickupDate = pickupDateObj.toLocaleDateString('en-US');
         pickupTime = pickupDateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
       }
     } else if (reservation.form_snapshot?.details?.puDate) {
       pickupDate = reservation.form_snapshot.details.puDate;
+      if (reservation.form_snapshot?.details?.puTime) {
+        pickupTime = reservation.form_snapshot.details.puTime;
+      }
     }
 
     const snapshotPassenger = reservation.form_snapshot?.passenger || {};
