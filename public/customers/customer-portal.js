@@ -2148,8 +2148,9 @@ async function checkDriverConflict(driverId, pickupDateTime) {
     const pickupDate = pickupDateTime.split('T')[0];
     
     // Get all reservations for this driver on the same day
+    // Use pu_date field which is the actual column name
     const response = await fetch(
-      `${creds.url}/rest/v1/reservations?assigned_driver_id=eq.${driverId}&pickup_datetime=gte.${pickupDate}T00:00:00&pickup_datetime=lte.${pickupDate}T23:59:59&select=id,pickup_datetime,garage_out_time,garage_in_time,status`,
+      `${creds.url}/rest/v1/reservations?assigned_driver_id=eq.${driverId}&pu_date=eq.${pickupDate}&select=id,pu_date,pu_time,pickup_date_time,garage_out_time,garage_in_time,status`,
       {
         headers: {
           'apikey': creds.anonKey
@@ -4488,24 +4489,32 @@ async function calculateRouteAndPrice() {
   const pickupType = document.getElementById('pickupAddressSelect')?.value;
   const dropoffType = document.getElementById('dropoffAddressSelect')?.value;
   
-  // Get pickup address
-  let pickupAddress = null;
-  if (pickupType === 'airport') {
-    const airportSelect = document.getElementById('pickupAirport');
-    const selectedOption = airportSelect?.options[airportSelect.selectedIndex];
-    pickupAddress = selectedOption?.dataset?.address || airportSelect?.value;
-  } else if (pickupType === 'new' || pickupType === 'saved') {
-    pickupAddress = state.selectedPickupAddress;
+  // Get pickup address - check state first, then form elements
+  let pickupAddress = state.selectedPickupAddress || null;
+  if (!pickupAddress) {
+    if (pickupType === 'airport') {
+      const airportSelect = document.getElementById('pickupAirport');
+      const selectedOption = airportSelect?.options[airportSelect.selectedIndex];
+      pickupAddress = selectedOption?.dataset?.address || airportSelect?.value;
+    } else {
+      // Try to get from input field
+      const pickupInput = document.getElementById('pickupAddress');
+      if (pickupInput?.value) pickupAddress = pickupInput.value;
+    }
   }
   
-  // Get dropoff address
-  let dropoffAddress = null;
-  if (dropoffType === 'airport') {
-    const airportSelect = document.getElementById('dropoffAirport');
-    const selectedOption = airportSelect?.options[airportSelect.selectedIndex];
-    dropoffAddress = selectedOption?.dataset?.address || airportSelect?.value;
-  } else if (dropoffType === 'new' || dropoffType === 'saved') {
-    dropoffAddress = state.selectedDropoffAddress;
+  // Get dropoff address - check state first, then form elements
+  let dropoffAddress = state.selectedDropoffAddress || null;
+  if (!dropoffAddress) {
+    if (dropoffType === 'airport') {
+      const airportSelect = document.getElementById('dropoffAirport');
+      const selectedOption = airportSelect?.options[airportSelect.selectedIndex];
+      dropoffAddress = selectedOption?.dataset?.address || airportSelect?.value;
+    } else {
+      // Try to get from input field
+      const dropoffInput = document.getElementById('dropoffAddress');
+      if (dropoffInput?.value) dropoffAddress = dropoffInput.value;
+    }
   }
   
   if (!pickupAddress || !dropoffAddress) {
@@ -4672,6 +4681,9 @@ function calculatePrice() {
   // Update price display
   if (priceDisplay) {
     priceDisplay.textContent = `$${state.estimatedPrice.toFixed(2)}`;
+    console.log('[CustomerPortal] Price display updated to:', priceDisplay.textContent);
+  } else {
+    console.warn('[CustomerPortal] ⚠️ Price display element not found! Cannot show price.');
   }
   
   // Update route info display
