@@ -21,15 +21,16 @@ export async function POST(request: NextRequest) {
     // Normalize phone number (remove +1 prefix for matching)
     const normalizedPhone = from.replace(/^\+1/, '').replace(/\D/g, '');
     
-    // Find the driver by phone number
+    // Find the driver by phone number - using cell_phone column
     const { data: driver, error: driverError } = await supabase
       .from('drivers')
-      .select('id, first_name, last_name, phone')
-      .or(`phone.eq.${normalizedPhone},phone.eq.+1${normalizedPhone},phone.eq.${from}`)
-      .single();
+      .select('id, first_name, last_name, cell_phone, email')
+      .or(`cell_phone.eq.${normalizedPhone},cell_phone.eq.+1${normalizedPhone},cell_phone.eq.${from},cell_phone.ilike.%${normalizedPhone}%`)
+      .limit(1)
+      .maybeSingle();
     
     if (driverError || !driver) {
-      console.log(`❌ No driver found for phone: ${from}`);
+      console.log(`❌ No driver found for phone: ${from} (normalized: ${normalizedPhone})`);
       return createTwimlResponse("We couldn't find your driver account. Please contact dispatch.");
     }
     
