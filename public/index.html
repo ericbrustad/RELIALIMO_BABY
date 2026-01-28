@@ -1357,8 +1357,78 @@
               }, '*');
             }
           }, 100);
+        } else if (event.data.action === 'navigateToWidgetSettings') {
+          // Switch to Office section and navigate to Widget Settings
+          switchMainSection('office');
+          setTimeout(() => {
+            const officeIframe = document.querySelector('#officeSection iframe');
+            if (officeIframe && officeIframe.contentWindow) {
+              officeIframe.contentWindow.postMessage({
+                action: 'navigateToSystemSettings',
+                page: 'widget-settings'
+              }, '*');
+            }
+          }, 100);
+        } else if (event.data.action === 'navigateToSystemSettingsPage') {
+          // Switch to Office section and navigate to specified system settings page
+          switchMainSection('office');
+          setTimeout(() => {
+            const officeIframe = document.querySelector('#officeSection iframe');
+            if (officeIframe && officeIframe.contentWindow) {
+              officeIframe.contentWindow.postMessage({
+                action: 'navigateToSystemSettings',
+                page: event.data.page || 'service-types'
+              }, '*');
+            }
+          }, 100);
         }
       });
+      
+      // Global function for user-menu to navigate to settings pages within the Office iframe
+      window.navigateToSettings = function(page) {
+        console.log('[Navigation] navigateToSettings called with page:', page);
+        // Close user menu dropdown first
+        const dropdown = document.getElementById('userMenuDropdown');
+        if (dropdown) dropdown.style.display = 'none';
+        
+        if (page === 'widget-settings') {
+          // Switch to Office section and navigate to Widget Settings
+          switchMainSection('office');
+          setTimeout(() => {
+            const officeIframe = document.querySelector('#officeSection iframe');
+            if (officeIframe && officeIframe.contentWindow) {
+              officeIframe.contentWindow.postMessage({
+                action: 'navigateToSystemSettings',
+                page: 'widget-settings'
+              }, '*');
+            }
+          }, 100);
+        } else if (page === 'system-settings') {
+          // Switch to Office section and navigate to System Settings (first sub-item)
+          switchMainSection('office');
+          setTimeout(() => {
+            const officeIframe = document.querySelector('#officeSection iframe');
+            if (officeIframe && officeIframe.contentWindow) {
+              officeIframe.contentWindow.postMessage({
+                action: 'navigateToSystemSettings',
+                page: 'service-types'
+              }, '*');
+            }
+          }, 100);
+        } else {
+          // For any other page, try to navigate directly
+          switchMainSection('office');
+          setTimeout(() => {
+            const officeIframe = document.querySelector('#officeSection iframe');
+            if (officeIframe && officeIframe.contentWindow) {
+              officeIframe.contentWindow.postMessage({
+                action: 'navigateToSystemSettings',
+                page: page
+              }, '*');
+            }
+          }, 100);
+        }
+      };
       
       // Utility to purge ghost reservations from localStorage
       window.purgeAllGhostReservations = function() {

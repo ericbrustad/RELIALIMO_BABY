@@ -560,12 +560,12 @@ function renderSkeleton(container) {
 
           <div class="menu-divider"></div>
 
-          <button type="button" class="menu-item" id="userMenuWidgetSettings" onclick="window.location.href='widget-settings.html'">
+          <button type="button" class="menu-item" id="userMenuWidgetSettings" onclick="window.navigateToSettings && window.navigateToSettings('widget-settings')">
             <span class="menu-icon">🎛️</span>
             <span>Widget Settings</span>
           </button>
 
-          <button type="button" class="menu-item" id="userMenuSystemSettings" onclick="window.location.href='system-settings.html'">
+          <button type="button" class="menu-item" id="userMenuSystemSettings" onclick="window.navigateToSettings && window.navigateToSettings('system-settings')">
             <span class="menu-icon">⚙️</span>
             <span>System Settings</span>
           </button>
