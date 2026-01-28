@@ -755,7 +755,7 @@
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     import { getSupabaseCredentials } from './supabase-config.js';
     
-    const { url: supabaseUrl, key: supabaseKey } = getSupabaseCredentials();
+    const { url: supabaseUrl, anonKey: supabaseKey } = getSupabaseCredentials();
     
     let supabase = null;
     let emails = [];
