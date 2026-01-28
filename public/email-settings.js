@@ -633,7 +633,50 @@ const DEFAULT_TEMPLATES = [
 
 function $(id) { return document.getElementById(id); }
 
-function loadSettings() {
+async function loadSettings() {
+  // Try to load from Supabase first
+  try {
+    const { getSupabaseCredentials } = await import('./supabase-config.js');
+    const { url: supabaseUrl, anonKey } = getSupabaseCredentials();
+    
+    if (supabaseUrl && anonKey) {
+      // Get auth token
+      let authToken = anonKey;
+      if (window.authState?.session?.access_token) {
+        authToken = window.authState.session.access_token;
+      } else if (localStorage.getItem('supabase_access_token')) {
+        authToken = localStorage.getItem('supabase_access_token');
+      }
+      
+      const resp = await fetch(`${supabaseUrl}/rest/v1/portal_settings?setting_key=eq.email_settings&select=*`, {
+        headers: {
+          'apikey': anonKey,
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.length > 0 && data[0].setting_value) {
+          const cfg = JSON.parse(data[0].setting_value);
+          $('fromNameInput').value = cfg.fromName || '';
+          $('fromEmailInput').value = cfg.fromEmail || '';
+          $('replyToInput').value = cfg.replyTo || '';
+          $('smtpHostInput').value = cfg.smtpHost || '';
+          $('smtpPortInput').value = cfg.smtpPort || '';
+          $('smtpUserInput').value = cfg.smtpUser || '';
+          $('smtpPassInput').value = cfg.smtpPass || '';
+          $('tlsInput').checked = !!cfg.tls;
+          console.log('✅ Email settings loaded from Supabase');
+          return;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Could not load from Supabase, falling back to localStorage:', e);
+  }
+  
+  // Fallback to localStorage
   const raw = localStorage.getItem(STORAGE_SETTINGS_KEY);
   if (!raw) return;
   try {
@@ -649,7 +692,7 @@ function loadSettings() {
   } catch (e) {}
 }
 
-function saveSettings() {
+async function saveSettings() {
   const cfg = {
     fromName: $('fromNameInput').value.trim(),
     fromEmail: $('fromEmailInput').value.trim(),
@@ -660,8 +703,55 @@ function saveSettings() {
     smtpPass: $('smtpPassInput').value,
     tls: $('tlsInput').checked
   };
+  
+  // Save to localStorage as backup
   localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(cfg));
-  alert('Email settings saved locally. Connect to your backend to send for real.');
+  
+  // Try to save to Supabase
+  try {
+    const { getSupabaseCredentials } = await import('./supabase-config.js');
+    const { url: supabaseUrl, anonKey } = getSupabaseCredentials();
+    
+    if (supabaseUrl && anonKey) {
+      // Get auth token
+      let authToken = anonKey;
+      if (window.authState?.session?.access_token) {
+        authToken = window.authState.session.access_token;
+      } else if (localStorage.getItem('supabase_access_token')) {
+        authToken = localStorage.getItem('supabase_access_token');
+      }
+      
+      // Upsert to portal_settings table
+      const resp = await fetch(`${supabaseUrl}/rest/v1/portal_settings`, {
+        method: 'POST',
+        headers: {
+          'apikey': anonKey,
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({
+          setting_key: 'email_settings',
+          setting_value: JSON.stringify(cfg),
+          setting_type: 'json',
+          portal_type: 'system'
+        })
+      });
+      
+      if (resp.ok) {
+        alert('✅ Email settings saved to database!');
+        console.log('✅ Email settings saved to Supabase');
+        return;
+      } else {
+        const error = await resp.text();
+        console.warn('Supabase save failed:', error);
+      }
+    }
+  } catch (e) {
+    console.warn('Could not save to Supabase:', e);
+  }
+  
+  alert('Email settings saved locally (database save failed - check console).');
 }
 
 function initTagSelects() {
@@ -714,6 +804,44 @@ function setupToolbar() {
   });
 }
 
+// Load templates from Supabase (async version for initial load)
+async function loadTemplatesFromSupabase() {
+  try {
+    const { getSupabaseCredentials } = await import('./supabase-config.js');
+    const { url: supabaseUrl, anonKey } = getSupabaseCredentials();
+    
+    if (supabaseUrl && anonKey) {
+      let authToken = anonKey;
+      if (window.authState?.session?.access_token) {
+        authToken = window.authState.session.access_token;
+      } else if (localStorage.getItem('supabase_access_token')) {
+        authToken = localStorage.getItem('supabase_access_token');
+      }
+      
+      const resp = await fetch(`${supabaseUrl}/rest/v1/portal_settings?setting_key=eq.email_templates&select=*`, {
+        headers: {
+          'apikey': anonKey,
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.length > 0 && data[0].setting_value) {
+          const templates = JSON.parse(data[0].setting_value);
+          // Also update localStorage
+          localStorage.setItem(STORAGE_TEMPLATES_KEY, JSON.stringify(templates));
+          console.log('✅ Email templates loaded from Supabase');
+          return templates;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Could not load templates from Supabase:', e);
+  }
+  return null;
+}
+
 function loadTemplates() {
   const raw = localStorage.getItem(STORAGE_TEMPLATES_KEY);
   let templates = [];
@@ -739,8 +867,46 @@ function loadTemplates() {
   return templates;
 }
 
-function saveTemplates(list) {
+async function saveTemplates(list) {
+  // Save to localStorage first
   localStorage.setItem(STORAGE_TEMPLATES_KEY, JSON.stringify(list));
+  
+  // Try to save to Supabase
+  try {
+    const { getSupabaseCredentials } = await import('./supabase-config.js');
+    const { url: supabaseUrl, anonKey } = getSupabaseCredentials();
+    
+    if (supabaseUrl && anonKey) {
+      let authToken = anonKey;
+      if (window.authState?.session?.access_token) {
+        authToken = window.authState.session.access_token;
+      } else if (localStorage.getItem('supabase_access_token')) {
+        authToken = localStorage.getItem('supabase_access_token');
+      }
+      
+      const resp = await fetch(`${supabaseUrl}/rest/v1/portal_settings`, {
+        method: 'POST',
+        headers: {
+          'apikey': anonKey,
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({
+          setting_key: 'email_templates',
+          setting_value: JSON.stringify(list),
+          setting_type: 'json',
+          portal_type: 'system'
+        })
+      });
+      
+      if (resp.ok) {
+        console.log('✅ Email templates saved to Supabase');
+      }
+    }
+  } catch (e) {
+    console.warn('Could not save templates to Supabase:', e);
+  }
 }
 
 function renderTemplateList() {
@@ -1423,13 +1589,22 @@ const ImageUploader = {
   }
 };
 
-function initEmailSettings() {
+async function initEmailSettings() {
   // Only run if we're on the email settings page
   if (!$('saveSettingsBtn') && !$('saveTemplateBtn')) {
     return;
   }
   
-  loadSettings();
+  // Load from Supabase first, then fall back to localStorage
+  await loadSettings();
+  
+  // Try to load templates from Supabase
+  const supabaseTemplates = await loadTemplatesFromSupabase();
+  if (supabaseTemplates) {
+    // Templates loaded from Supabase, save to localStorage
+    localStorage.setItem(STORAGE_TEMPLATES_KEY, JSON.stringify(supabaseTemplates));
+  }
+  
   initTagSelects();
   setupToolbar();
   renderTagReference();
