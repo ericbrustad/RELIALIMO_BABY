@@ -2591,14 +2591,76 @@ const NavigationModule = {
   map: null,
   routeData: null,
   currentTrip: null,
-  currentStopIndex: 0, // 0 = going to pickup, 1 = going to dropoff
-  stops: [], // [{lat, lng, type: 'pickup'|'dropoff', address, completed}]
+  currentStopIndex: 0, // 0 = going to pickup, 1+ = going to stops/dropoff
+  stops: [], // [{lat, lng, type: 'pickup'|'stop1'|'stop2'|'stop3'|'dropoff', address, completed, geofenceRadius, cooldown}]
   watchId: null,
   currentPosition: null,
   isNavigating: false,
   
-  // Geofence radius in meters
-  GEOFENCE_RADIUS: 100, // 100 meters = ~330 feet
+  // Default geofence settings (will be overridden by farmout settings)
+  geofenceSettings: {
+    pickup: { radius: 100, cooldown: 30 },
+    stop1: { radius: 75, cooldown: 15 },
+    stop2: { radius: 75, cooldown: 15 },
+    stop3: { radius: 75, cooldown: 15 },
+    dropoff: { radius: 100, cooldown: 30 }
+  },
+  
+  // Track if driver is at dropoff location
+  atDropoff: false,
+  dropoffReminderShown: false,
+  lastGeofenceTrigger: {}, // Track cooldowns per stop
+  
+  // Load geofence settings from farmout settings
+  loadGeofenceSettings() {
+    try {
+      const stored = localStorage.getItem('farmout_settings');
+      if (stored) {
+        const settings = JSON.parse(stored);
+        this.geofenceSettings = {
+          pickup: { 
+            radius: settings.geofence_pickup_radius || 100, 
+            cooldown: settings.geofence_pickup_cooldown || 30 
+          },
+          stop1: { 
+            radius: settings.geofence_stop1_radius || 75, 
+            cooldown: settings.geofence_stop1_cooldown || 15 
+          },
+          stop2: { 
+            radius: settings.geofence_stop2_radius || 75, 
+            cooldown: settings.geofence_stop2_cooldown || 15 
+          },
+          stop3: { 
+            radius: settings.geofence_stop3_radius || 75, 
+            cooldown: settings.geofence_stop3_cooldown || 15 
+          },
+          dropoff: { 
+            radius: settings.geofence_dropoff_radius || 100, 
+            cooldown: settings.geofence_dropoff_cooldown || 30 
+          }
+        };
+        console.log('[Navigation] Loaded geofence settings:', this.geofenceSettings);
+      }
+    } catch (e) {
+      console.warn('[Navigation] Failed to load geofence settings:', e);
+    }
+  },
+  
+  // Get geofence radius for a stop type
+  getGeofenceRadius(stopType) {
+    const settings = this.geofenceSettings[stopType] || this.geofenceSettings.dropoff;
+    return settings.radius;
+  },
+  
+  // Check if cooldown has passed for a stop
+  isCooldownPassed(stopType) {
+    const settings = this.geofenceSettings[stopType] || this.geofenceSettings.dropoff;
+    const lastTrigger = this.lastGeofenceTrigger[stopType];
+    if (!lastTrigger) return true;
+    
+    const elapsed = (Date.now() - lastTrigger) / 1000; // seconds
+    return elapsed >= settings.cooldown;
+  },
   
   // Start navigation for a trip
   async startNavigation(trip) {
@@ -2606,8 +2668,14 @@ const NavigationModule = {
     this.currentTrip = trip;
     this.currentStopIndex = 0;
     this.isNavigating = true;
+    this.lastGeofenceTrigger = {};
+    this.atDropoff = false;
+    this.dropoffReminderShown = false;
     
-    // Build stops array
+    // Load geofence settings from farmout settings
+    this.loadGeofenceSettings();
+    
+    // Build stops array - pickup first
     this.stops = [
       {
         type: 'pickup',
@@ -2615,15 +2683,48 @@ const NavigationModule = {
         lat: null,
         lng: null,
         completed: false
-      },
-      {
-        type: 'dropoff',
-        address: trip.dropoff_address || trip.dropoff_location || 'Dropoff',
+      }
+    ];
+    
+    // Add intermediate stops if they exist
+    if (trip.stop1_address || trip.stop_1_address) {
+      this.stops.push({
+        type: 'stop1',
+        address: trip.stop1_address || trip.stop_1_address,
         lat: null,
         lng: null,
         completed: false
-      }
-    ];
+      });
+    }
+    if (trip.stop2_address || trip.stop_2_address) {
+      this.stops.push({
+        type: 'stop2',
+        address: trip.stop2_address || trip.stop_2_address,
+        lat: null,
+        lng: null,
+        completed: false
+      });
+    }
+    if (trip.stop3_address || trip.stop_3_address) {
+      this.stops.push({
+        type: 'stop3',
+        address: trip.stop3_address || trip.stop_3_address,
+        lat: null,
+        lng: null,
+        completed: false
+      });
+    }
+    
+    // Add dropoff last
+    this.stops.push({
+      type: 'dropoff',
+      address: trip.dropoff_address || trip.dropoff_location || 'Dropoff',
+      lat: null,
+      lng: null,
+      completed: false
+    });
+    
+    console.log('[Navigation] Built stops array:', this.stops.map(s => s.type));
     
     // Geocode addresses to get coordinates
     await this.geocodeStops();
@@ -2804,45 +2905,139 @@ const NavigationModule = {
   // Check if driver is within geofence of current stop
   checkGeofence(lat, lng) {
     const currentStop = this.stops[this.currentStopIndex];
-    if (!currentStop || currentStop.completed || !currentStop.lat) return;
+    if (!currentStop || !currentStop.lat) return;
     
     const distance = this.calculateDistance(lat, lng, currentStop.lat, currentStop.lng);
     const distanceMeters = distance * 1000; // km to meters
+    const geofenceRadius = this.getGeofenceRadius(currentStop.type);
     
-    console.log('[Navigation] Distance to', currentStop.type, ':', Math.round(distanceMeters), 'm');
+    console.log('[Navigation] Distance to', currentStop.type, ':', Math.round(distanceMeters), 'm (radius:', geofenceRadius, 'm)');
     
-    if (distanceMeters <= this.GEOFENCE_RADIUS) {
+    // Find the dropoff stop (last stop in array)
+    const dropoffStop = this.stops.find(s => s.type === 'dropoff');
+    
+    // Check for dropoff geofence tracking (even if we're not there yet)
+    if (dropoffStop && dropoffStop.lat) {
+      const dropoffDistance = this.calculateDistance(lat, lng, dropoffStop.lat, dropoffStop.lng);
+      const dropoffMeters = dropoffDistance * 1000;
+      const dropoffRadius = this.getGeofenceRadius('dropoff');
+      
+      const wasAtDropoff = this.atDropoff;
+      this.atDropoff = dropoffMeters <= dropoffRadius;
+      
+      // Driver just left dropoff without completing trip
+      if (wasAtDropoff && !this.atDropoff && !dropoffStop.completed && !this.dropoffReminderShown) {
+        console.log('[Navigation] ⚠️ Driver left dropoff without completing trip!');
+        this.showDropoffReminder();
+      }
+    }
+    
+    // Skip if stop already completed
+    if (currentStop.completed) return;
+    
+    // Check if within geofence and cooldown has passed
+    if (distanceMeters <= geofenceRadius && this.isCooldownPassed(currentStop.type)) {
       console.log('[Navigation] 🎯 Arrived at', currentStop.type, '!');
+      this.lastGeofenceTrigger[currentStop.type] = Date.now();
       this.handleGeofenceArrival(currentStop);
     }
   },
   
+  // Show reminder to complete trip when leaving dropoff
+  showDropoffReminder() {
+    this.dropoffReminderShown = true;
+    
+    // Play alert sound
+    try {
+      playNotificationSound('chime');
+    } catch (e) {}
+    
+    // Show toast reminder
+    showToast('⚠️ Don\'t forget to complete the trip!', 'warning', 8000);
+    
+    // Highlight the Done button
+    this.highlightDoneButton(true);
+    
+    // Reset reminder flag after 60 seconds so it can show again
+    setTimeout(() => {
+      this.dropoffReminderShown = false;
+    }, 60000);
+  },
+  
+  // Highlight the Done/Complete Trip button
+  highlightDoneButton(highlight) {
+    const btn = document.getElementById('navActionBtn');
+    if (!btn) return;
+    
+    if (highlight) {
+      btn.classList.add('btn-highlight-pulse');
+      btn.style.animation = 'pulse-glow 1s ease-in-out infinite';
+    } else {
+      btn.classList.remove('btn-highlight-pulse');
+      btn.style.animation = '';
+    }
+  },
+
   // Handle arrival at geofence
   handleGeofenceArrival(stop) {
-    // Mark stop as completed
-    stop.completed = true;
-    
     // Update stop panel UI
     this.updateStopPanelUI();
     
-    // Play arrival sound
-    try {
-      playNotificationSound('trip_start');
-    } catch (e) {}
-    
     if (stop.type === 'pickup') {
+      // Mark stop as completed
+      stop.completed = true;
+      
+      // Play arrival sound
+      try {
+        playNotificationSound('trip_start');
+      } catch (e) {}
+      
       // Show arrival modal for pickup
       this.showArrivalModal('Arrived at Pickup!', 'The passenger is nearby. Proceed when ready.', () => {
-        this.currentStopIndex = 1;
+        this.currentStopIndex++;
         this.updateRoute();
         this.updateActionButton();
+        this.addDestinationMarker();
         
         // Update trip status
         updateReservationStatus(this.currentTrip.id, { driver_status: 'arrived' });
       });
+    } else if (stop.type.startsWith('stop')) {
+      // Intermediate stop (stop1, stop2, stop3)
+      stop.completed = true;
+      
+      // Play arrival chime
+      try {
+        playNotificationSound('chime');
+      } catch (e) {}
+      
+      const stopNumber = stop.type.replace('stop', '');
+      
+      // Show arrival modal for intermediate stop
+      this.showArrivalModal(`Arrived at Stop ${stopNumber}!`, 'Continue to next destination when ready.', () => {
+        this.currentStopIndex++;
+        this.updateRoute();
+        this.updateActionButton();
+        this.addDestinationMarker();
+      });
     } else if (stop.type === 'dropoff') {
-      // Trip completed!
-      this.showTripCompletedModal();
+      // Arrived at dropoff - play chime and highlight Done button
+      // DON'T mark as completed until driver taps Done
+      this.atDropoff = true;
+      
+      // Play arrival chime
+      try {
+        playNotificationSound('chime');
+      } catch (e) {}
+      
+      // Highlight the Done button
+      this.highlightDoneButton(true);
+      
+      // Update action button to be prominent
+      this.updateActionButton();
+      
+      // Show toast notification
+      showToast('🏁 Arrived at destination! Tap Done when complete.', 'success', 5000);
     }
   },
   
@@ -3052,11 +3247,34 @@ const NavigationModule = {
     
     if (currentStop.type === 'pickup') {
       btn.textContent = '📍 Arrived at Pickup';
+      btn.className = 'nav-action-btn';
       btn.onclick = () => this.manualArrival('pickup');
     } else {
-      btn.textContent = '🏁 Complete Trip';
-      btn.onclick = () => this.manualArrival('dropoff');
+      // At dropoff - show Done button
+      if (this.atDropoff) {
+        btn.textContent = '✅ DONE';
+        btn.className = 'nav-action-btn btn-done-highlight';
+      } else {
+        btn.textContent = '🏁 Complete Trip';
+        btn.className = 'nav-action-btn';
+      }
+      btn.onclick = () => this.completeTrip();
     }
+  },
+  
+  // Complete the trip
+  async completeTrip() {
+    const dropoffStop = this.stops[1];
+    if (dropoffStop) {
+      dropoffStop.completed = true;
+    }
+    
+    // Remove button highlight
+    this.highlightDoneButton(false);
+    this.atDropoff = false;
+    
+    // Show trip completed modal
+    this.showTripCompletedModal();
   },
   
   // Manual arrival (in case geofence doesn't trigger)
@@ -3691,8 +3909,8 @@ async function broadcastCurrentLocation() {
     
     console.log('[GPS] Broadcasting location:', locationData.latitude, locationData.longitude);
     
-    // Use upsert (POST with Prefer: resolution=merge-duplicates)
-    const response = await fetch(`${supabaseUrl}/rest/v1/driver_locations`, {
+    // Use upsert with on_conflict for driver_id unique constraint
+    const response = await fetch(`${supabaseUrl}/rest/v1/driver_locations?on_conflict=driver_id`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -7800,7 +8018,6 @@ function renderTripCard(trip, type) {
     footerButtons = `
       <div class="trip-card-actions">
         <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); openStatusModal('${trip.id}')">📊 Status</button>
-        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); startTrip('${trip.id}')">🚗 Start Trip</button>
       </div>
     `;
   }
@@ -8593,7 +8810,8 @@ window.startTrip = async function(tripId) {
     showToast('Trip started! Loading navigation...', 'success');
     
     // Fetch full trip data for navigation
-    const { data: tripData, error: tripError } = await supabase
+    const client = getSupabaseClient();
+    const { data: tripData, error: tripError } = await client
       .from('reservations')
       .select('*')
       .eq('id', tripId)
@@ -9042,8 +9260,8 @@ function openTripDetail(tripId) {
     `;
   } else if (isUpcoming) {
     elements.tripDetailFooter.innerHTML = `
-      <button class="btn btn-primary btn-large" onclick="startTrip('${tripId}'); closeModal('tripDetailModal');">
-        🚗 Start Trip
+      <button class="btn btn-outline" onclick="closeModal('tripDetailModal');">
+        Close
       </button>
     `;
   }
@@ -9105,8 +9323,14 @@ async function sendPassengerNotification(reservationId, notificationType) {
   console.log(`[DriverPortal] Sending ${notificationType} notification for reservation ${reservationId}`);
   
   try {
+    const client = getSupabaseClient();
+    if (!client) {
+      console.warn('[DriverPortal] Supabase client not available for notifications');
+      return;
+    }
+    
     // Get reservation details to find passenger info
-    const { data: reservation, error: reservationError } = await supabase
+    const { data: reservation, error: reservationError } = await client
       .from('reservations')
       .select('passenger_first_name, passenger_last_name, passenger_email, passenger_cell, account_id, confirmation_number, pickup_location, dropoff_location')
       .eq('id', reservationId)
@@ -9143,7 +9367,7 @@ async function sendPassengerNotification(reservationId, notificationType) {
     };
     
     // Insert notification into database for real-time updates to customer portal
-    const { error: notifyError } = await supabase
+    const { error: notifyError } = await client
       .from('passenger_notifications')
       .insert({
         reservation_id: reservationId,

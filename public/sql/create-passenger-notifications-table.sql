@@ -3,8 +3,8 @@
 
 CREATE TABLE IF NOT EXISTS passenger_notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    reservation_id BIGINT REFERENCES reservations(id) ON DELETE CASCADE,
-    account_id BIGINT REFERENCES accounts(id) ON DELETE CASCADE,
+    reservation_id UUID REFERENCES reservations(id) ON DELETE CASCADE,
+    account_id UUID REFERENCES accounts(id) ON DELETE CASCADE,
     notification_type VARCHAR(50) NOT NULL, -- 'on_the_way', 'arrived', 'trip_complete'
     title VARCHAR(255) NOT NULL,
     message TEXT,
@@ -31,45 +31,45 @@ CREATE INDEX IF NOT EXISTS idx_passenger_notifications_unread
 -- Enable Row Level Security
 ALTER TABLE passenger_notifications ENABLE ROW LEVEL SECURITY;
 
--- Policy: Authenticated users can view their own notifications
-CREATE POLICY "Users can view their own notifications"
-    ON passenger_notifications FOR SELECT
-    USING (
-        -- Match by account_id if user is associated with an account
-        account_id IN (
-            SELECT id FROM accounts 
-            WHERE email = auth.email()
-        )
-        OR
-        -- Or match by passenger email
-        passenger_email = auth.email()
-    );
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view their own notifications" ON passenger_notifications;
+DROP POLICY IF EXISTS "Service role can insert notifications" ON passenger_notifications;
+DROP POLICY IF EXISTS "Users can mark notifications as read" ON passenger_notifications;
+DROP POLICY IF EXISTS "Allow all operations on passenger_notifications" ON passenger_notifications;
 
--- Policy: Service role can insert notifications (from driver portal)
-CREATE POLICY "Service role can insert notifications"
-    ON passenger_notifications FOR INSERT
+-- Create permissive policy for all operations (matching your other tables)
+CREATE POLICY "Allow all operations on passenger_notifications"
+    ON passenger_notifications FOR ALL
+    USING (true)
     WITH CHECK (true);
 
--- Policy: Users can mark their notifications as read
-CREATE POLICY "Users can mark notifications as read"
-    ON passenger_notifications FOR UPDATE
-    USING (
-        account_id IN (
-            SELECT id FROM accounts 
-            WHERE email = auth.email()
-        )
-        OR passenger_email = auth.email()
-    )
-    WITH CHECK (
-        account_id IN (
-            SELECT id FROM accounts 
-            WHERE email = auth.email()
-        )
-        OR passenger_email = auth.email()
-    );
+-- ============================================
+-- ENABLE REALTIME
+-- ============================================
+-- First, check if realtime is already enabled and add if not
+DO $$
+BEGIN
+    -- Try to add table to realtime publication
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables 
+        WHERE pubname = 'supabase_realtime' 
+        AND schemaname = 'public' 
+        AND tablename = 'passenger_notifications'
+    ) THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE passenger_notifications;
+        RAISE NOTICE 'Added passenger_notifications to supabase_realtime publication';
+    ELSE
+        RAISE NOTICE 'passenger_notifications already in supabase_realtime publication';
+    END IF;
+EXCEPTION
+    WHEN undefined_object THEN
+        -- Publication doesn't exist, create it
+        CREATE PUBLICATION supabase_realtime FOR TABLE passenger_notifications;
+        RAISE NOTICE 'Created supabase_realtime publication with passenger_notifications';
+END $$;
 
--- Enable realtime for this table so customer portal gets live updates
-ALTER PUBLICATION supabase_realtime ADD TABLE passenger_notifications;
+-- Enable replica identity for realtime (required for UPDATE/DELETE events)
+ALTER TABLE passenger_notifications REPLICA IDENTITY FULL;
 
 -- Add comment
 COMMENT ON TABLE passenger_notifications IS 'Real-time notifications sent from drivers to passengers during trips';

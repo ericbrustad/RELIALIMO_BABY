@@ -169,6 +169,127 @@
                     </div>
                 </section>
 
+                <!-- Geofence Settings Section -->
+                <section class="settings-section">
+                    <h2 class="section-title">
+                        <span class="section-icon">📍</span>
+                        Geofence Settings
+                    </h2>
+                    <p class="section-desc">Configure geofence radius and cooldown for driver arrival detection at each stop.</p>
+                    
+                    <div class="geofence-grid">
+                        <!-- Pickup Geofence -->
+                        <div class="geofence-group">
+                            <h4 class="geofence-label">🟢 Pickup Location</h4>
+                            <div class="input-row">
+                                <div class="input-group">
+                                    <label for="geofencePickupRadius">Radius</label>
+                                    <div class="input-with-suffix">
+                                        <input type="number" id="geofencePickupRadius" value="100" min="25" max="500" step="25">
+                                        <span class="input-suffix">meters</span>
+                                    </div>
+                                </div>
+                                <div class="input-group">
+                                    <label for="geofencePickupCooldown">Cooldown</label>
+                                    <div class="input-with-suffix">
+                                        <input type="number" id="geofencePickupCooldown" value="30" min="0" max="300">
+                                        <span class="input-suffix">seconds</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Stop 1 Geofence -->
+                        <div class="geofence-group">
+                            <h4 class="geofence-label">🔵 Stop 1</h4>
+                            <div class="input-row">
+                                <div class="input-group">
+                                    <label for="geofenceStop1Radius">Radius</label>
+                                    <div class="input-with-suffix">
+                                        <input type="number" id="geofenceStop1Radius" value="75" min="25" max="500" step="25">
+                                        <span class="input-suffix">meters</span>
+                                    </div>
+                                </div>
+                                <div class="input-group">
+                                    <label for="geofenceStop1Cooldown">Cooldown</label>
+                                    <div class="input-with-suffix">
+                                        <input type="number" id="geofenceStop1Cooldown" value="15" min="0" max="300">
+                                        <span class="input-suffix">seconds</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Stop 2 Geofence -->
+                        <div class="geofence-group">
+                            <h4 class="geofence-label">🟣 Stop 2</h4>
+                            <div class="input-row">
+                                <div class="input-group">
+                                    <label for="geofenceStop2Radius">Radius</label>
+                                    <div class="input-with-suffix">
+                                        <input type="number" id="geofenceStop2Radius" value="75" min="25" max="500" step="25">
+                                        <span class="input-suffix">meters</span>
+                                    </div>
+                                </div>
+                                <div class="input-group">
+                                    <label for="geofenceStop2Cooldown">Cooldown</label>
+                                    <div class="input-with-suffix">
+                                        <input type="number" id="geofenceStop2Cooldown" value="15" min="0" max="300">
+                                        <span class="input-suffix">seconds</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Stop 3 Geofence -->
+                        <div class="geofence-group">
+                            <h4 class="geofence-label">🟠 Stop 3</h4>
+                            <div class="input-row">
+                                <div class="input-group">
+                                    <label for="geofenceStop3Radius">Radius</label>
+                                    <div class="input-with-suffix">
+                                        <input type="number" id="geofenceStop3Radius" value="75" min="25" max="500" step="25">
+                                        <span class="input-suffix">meters</span>
+                                    </div>
+                                </div>
+                                <div class="input-group">
+                                    <label for="geofenceStop3Cooldown">Cooldown</label>
+                                    <div class="input-with-suffix">
+                                        <input type="number" id="geofenceStop3Cooldown" value="15" min="0" max="300">
+                                        <span class="input-suffix">seconds</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Dropoff Geofence -->
+                        <div class="geofence-group">
+                            <h4 class="geofence-label">🔴 Dropoff Location</h4>
+                            <div class="input-row">
+                                <div class="input-group">
+                                    <label for="geofenceDropoffRadius">Radius</label>
+                                    <div class="input-with-suffix">
+                                        <input type="number" id="geofenceDropoffRadius" value="100" min="25" max="500" step="25">
+                                        <span class="input-suffix">meters</span>
+                                    </div>
+                                </div>
+                                <div class="input-group">
+                                    <label for="geofenceDropoffCooldown">Cooldown</label>
+                                    <div class="input-with-suffix">
+                                        <input type="number" id="geofenceDropoffCooldown" value="30" min="0" max="300">
+                                        <span class="input-suffix">seconds</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="geofence-info">
+                        <span class="info-icon">ℹ️</span>
+                        <span class="info-text">Driver apps will use these settings to detect arrival at each location. Cooldown prevents duplicate triggers.</span>
+                    </div>
+                </section>
+
                 <!-- Offer Window Section -->
                 <section class="settings-section">
                     <h2 class="section-title">

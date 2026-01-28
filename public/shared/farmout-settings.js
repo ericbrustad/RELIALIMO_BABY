@@ -89,6 +89,18 @@ class FarmoutSettingsManager {
         this.setValue('offerWindowStart', this.formatTimeForInput(settings.offer_window_start));
         this.setValue('offerWindowEnd', this.formatTimeForInput(settings.offer_window_end));
 
+        // Geofence settings
+        this.setValue('geofencePickupRadius', settings.geofence_pickup_radius || 100);
+        this.setValue('geofencePickupCooldown', settings.geofence_pickup_cooldown || 30);
+        this.setValue('geofenceStop1Radius', settings.geofence_stop1_radius || 75);
+        this.setValue('geofenceStop1Cooldown', settings.geofence_stop1_cooldown || 15);
+        this.setValue('geofenceStop2Radius', settings.geofence_stop2_radius || 75);
+        this.setValue('geofenceStop2Cooldown', settings.geofence_stop2_cooldown || 15);
+        this.setValue('geofenceStop3Radius', settings.geofence_stop3_radius || 75);
+        this.setValue('geofenceStop3Cooldown', settings.geofence_stop3_cooldown || 15);
+        this.setValue('geofenceDropoffRadius', settings.geofence_dropoff_radius || 100);
+        this.setValue('geofenceDropoffCooldown', settings.geofence_dropoff_cooldown || 30);
+
         // Pay settings
         this.setValue('driverPayPercentage', settings.driver_pay_percentage);
 
@@ -133,6 +145,18 @@ class FarmoutSettingsManager {
             // Time window
             offer_window_start: this.getValue('offerWindowStart') || '08:00',
             offer_window_end: this.getValue('offerWindowEnd') || '21:00',
+
+            // Geofence settings
+            geofence_pickup_radius: parseInt(this.getValue('geofencePickupRadius')) || 100,
+            geofence_pickup_cooldown: parseInt(this.getValue('geofencePickupCooldown')) || 30,
+            geofence_stop1_radius: parseInt(this.getValue('geofenceStop1Radius')) || 75,
+            geofence_stop1_cooldown: parseInt(this.getValue('geofenceStop1Cooldown')) || 15,
+            geofence_stop2_radius: parseInt(this.getValue('geofenceStop2Radius')) || 75,
+            geofence_stop2_cooldown: parseInt(this.getValue('geofenceStop2Cooldown')) || 15,
+            geofence_stop3_radius: parseInt(this.getValue('geofenceStop3Radius')) || 75,
+            geofence_stop3_cooldown: parseInt(this.getValue('geofenceStop3Cooldown')) || 15,
+            geofence_dropoff_radius: parseInt(this.getValue('geofenceDropoffRadius')) || 100,
+            geofence_dropoff_cooldown: parseInt(this.getValue('geofenceDropoffCooldown')) || 30,
 
             // Pay settings
             driver_pay_percentage: parseFloat(this.getValue('driverPayPercentage')) || 70,
