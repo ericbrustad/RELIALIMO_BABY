@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Center - RELIALIMO</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #2e2e2e;
+    }
+    
+    .page-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .back-link {
+      color: #8d8d8d;
+      text-decoration: none;
+      font-size: 14px;
+    }
+    
+    .back-link:hover {
+      color: #e53935;
+    }
+    
+    /* Tab Navigation */
+    .email-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 24px;
+      border-bottom: 2px solid #2e2e2e;
+    }
+    
+    .email-tab {
+      padding: 12px 24px;
+      background: transparent;
+      border: none;
+      color: #8d8d8d;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: color 0.2s;
+    }
+    
+    .email-tab:hover {
+      color: #e0e0e0;
+    }
+    
+    .email-tab.active {
+      color: #e53935;
+    }
+    
+    .email-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #e53935;
+    }
+    
+    .tab-badge {
+      background: #e53935;
+      color: white;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+    
+    .tab-badge.outbound {
+      background: #2196f3;
+    }
+    
+    .email-stats {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+    
+    .stat-card {
+      background: #1a1a1a;
+      border: 1px solid #2e2e2e;
+      border-radius: 8px;
+      padding: 16px 24px;
+      text-align: center;
+      min-width: 120px;
+    }
+    
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #e53935;
+    }
+    
+    .stat-value.outbound {
+      color: #2196f3;
+    }
+    
+    .stat-label {
+      font-size: 12px;
+      color: #8d8d8d;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+    
+    .email-filters {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    
+    .filter-input {
+      padding: 8px 12px;
+      background: #1a1a1a;
+      border: 1px solid #2e2e2e;
+      border-radius: 6px;
+      color: #ffffff;
+      font-size: 13px;
+    }
+    
+    .filter-input:focus {
+      outline: none;
+      border-color: #e53935;
+    }
+    
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: #e53935;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #c62828;
+    }
+    
+    .btn-secondary {
+      background: #2e2e2e;
+      color: #e0e0e0;
+    }
+    
+    .btn-secondary:hover {
+      background: #3e3e3e;
+    }
+    
+    .btn-compose {
+      background: #4caf50;
+      color: white;
+    }
+    
+    .btn-compose:hover {
+      background: #388e3c;
+    }
+    
+    .email-list {
+      background: #1a1a1a;
+      border: 1px solid #2e2e2e;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    .email-item {
+      display: grid;
+      grid-template-columns: 40px 200px 1fr 120px 100px;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #2e2e2e;
+      cursor: pointer;
+      transition: background 0.2s;
+      align-items: center;
+    }
+    
+    .email-item:hover {
+      background: #252525;
+    }
+    
+    .email-item.unread {
+      background: #1f1f1f;
+      font-weight: 500;
+    }
+    
+    .email-item.selected {
+      background: #2a2020;
+      border-left: 3px solid #e53935;
+    }
+    
+    .email-checkbox {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+    
+    .email-address {
+      color: #ffffff;
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .email-subject {
+      color: #b0b0b0;
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .email-date {
+      color: #8d8d8d;
+      font-size: 12px;
+      text-align: right;
+    }
+    
+    .email-status {
+      text-align: center;
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    
+    .status-new {
+      background: #1e3a5f;
+      color: #60a5fa;
+    }
+    
+    .status-processed {
+      background: #1a3a1a;
+      color: #4ade80;
+    }
+    
+    .status-sent {
+      background: #1e3a5f;
+      color: #60a5fa;
+    }
+    
+    .status-delivered {
+      background: #1a3a1a;
+      color: #4ade80;
+    }
+    
+    .status-failed {
+      background: #3a1a1a;
+      color: #f87171;
+    }
+    
+    .status-bounced {
+      background: #3a2a1a;
+      color: #fbbf24;
+    }
+    
+    .email-type-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      background: #2e2e2e;
+      color: #b0b0b0;
+      margin-left: 8px;
+    }
+    
+    .email-detail {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 50%;
+      height: 100vh;
+      background: #0f0f0f;
+      border-left: 1px solid #2e2e2e;
+      transform: translateX(100%);
+      transition: transform 0.3s;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .email-detail.open {
+      transform: translateX(0);
+    }
+    
+    .detail-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #2e2e2e;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .detail-close {
+      background: none;
+      border: none;
+      color: #8d8d8d;
+      font-size: 24px;
+      cursor: pointer;
+    }
+    
+    .detail-close:hover {
+      color: #ffffff;
+    }
+    
+    .detail-meta {
+      padding: 16px 20px;
+      background: #1a1a1a;
+      border-bottom: 1px solid #2e2e2e;
+    }
+    
+    .meta-row {
+      display: flex;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    
+    .meta-label {
+      color: #8d8d8d;
+      width: 80px;
+      flex-shrink: 0;
+    }
+    
+    .meta-value {
+      color: #ffffff;
+    }
+    
+    .detail-body {
+      flex: 1;
+      padding: 20px;
+      overflow: auto;
+    }
+    
+    .detail-body-content {
+      background: #1a1a1a;
+      border-radius: 8px;
+      padding: 16px;
+      white-space: pre-wrap;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #8d8d8d;
+    }
+    
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #8d8d8d;
+    }
+    
+    .pagination {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      padding: 16px;
+    }
+    
+    .page-btn {
+      padding: 6px 12px;
+      background: #2e2e2e;
+      border: none;
+      border-radius: 4px;
+      color: #e0e0e0;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    
+    .page-btn:hover {
+      background: #3e3e3e;
+    }
+    
+    .page-btn.active {
+      background: #e53935;
+      color: white;
+    }
+    
+    .page-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .direction-icon {
+      font-size: 16px;
+    }
+    
+    .direction-icon.inbound {
+      color: #4ade80;
+    }
+    
+    .direction-icon.outbound {
+      color: #60a5fa;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <div class="page-title">
+      <span>📧</span>
+      <span>Email Center</span>
+    </div>
+    <a href="index.html" class="back-link">← Back to Dashboard</a>
+  </div>
+  
+  <!-- Tab Navigation -->
+  <div class="email-tabs">
+    <button class="email-tab active" data-tab="inbound" onclick="switchTab('inbound')">
+      <span>📥</span>
+      <span>Inbound</span>
+      <span class="tab-badge" id="inboundBadge">0</span>
+    </button>
+    <button class="email-tab" data-tab="outbound" onclick="switchTab('outbound')">
+      <span>📤</span>
+      <span>Outbound</span>
+      <span class="tab-badge outbound" id="outboundBadge">0</span>
+    </button>
+  </div>
+  
+  <!-- Stats -->
+  <div class="email-stats" id="inboundStats">
+    <div class="stat-card">
+      <div class="stat-value" id="inboundTotal">-</div>
+      <div class="stat-label">Total Received</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="inboundUnprocessed">-</div>
+      <div class="stat-label">Unprocessed</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="inboundToday">-</div>
+      <div class="stat-label">Today</div>
+    </div>
+  </div>
+  
+  <div class="email-stats" id="outboundStats" style="display: none;">
+    <div class="stat-card">
+      <div class="stat-value outbound" id="outboundTotal">-</div>
+      <div class="stat-label">Total Sent</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value outbound" id="outboundDelivered">-</div>
+      <div class="stat-label">Delivered</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value outbound" id="outboundFailed">-</div>
+      <div class="stat-label">Failed</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value outbound" id="outboundToday">-</div>
+      <div class="stat-label">Today</div>
+    </div>
+  </div>
+  
+  <!-- Filters -->
+  <div class="email-filters">
+    <input type="text" id="searchInput" class="filter-input" placeholder="Search emails..." style="width: 250px;">
+    <select id="statusFilter" class="filter-input">
+      <option value="all">All Status</option>
+      <option value="unprocessed">Unprocessed</option>
+      <option value="processed">Processed</option>
+    </select>
+    <select id="typeFilter" class="filter-input" style="display: none;">
+      <option value="all">All Types</option>
+      <option value="confirmation">Confirmation</option>
+      <option value="invoice">Invoice</option>
+      <option value="notification">Notification</option>
+      <option value="marketing">Marketing</option>
+    </select>
+    <input type="date" id="dateFilter" class="filter-input">
+    <button onclick="loadEmails()" class="btn btn-primary">🔍 Search</button>
+    <button onclick="clearFilters()" class="btn btn-secondary">Clear</button>
+    <button onclick="refreshEmails()" class="btn btn-secondary">🔄 Refresh</button>
+  </div>
+  
+  <div class="email-list" id="emailList">
+    <div class="loading">Loading emails...</div>
+  </div>
+  
+  <div class="pagination" id="pagination"></div>
+  
+  <!-- Email Detail Panel -->
+  <div class="email-detail" id="emailDetail">
+    <div class="detail-header">
+      <h3 id="detailSubject">Email Subject</h3>
+      <button class="detail-close" onclick="closeDetail()">×</button>
+    </div>
+    <div class="detail-meta">
+      <div class="meta-row">
+        <span class="meta-label">From:</span>
+        <span class="meta-value" id="detailFrom">-</span>
+      </div>
+      <div class="meta-row">
+        <span class="meta-label">To:</span>
+        <span class="meta-value" id="detailTo">-</span>
+      </div>
+      <div class="meta-row">
+        <span class="meta-label">Date:</span>
+        <span class="meta-value" id="detailDate">-</span>
+      </div>
+      <div class="meta-row">
+        <span class="meta-label">Status:</span>
+        <span class="meta-value" id="detailStatus">-</span>
+      </div>
+      <div class="meta-row" id="detailTypeRow" style="display: none;">
+        <span class="meta-label">Type:</span>
+        <span class="meta-value" id="detailType">-</span>
+      </div>
+    </div>
+    <div class="detail-body">
+      <div class="detail-body-content" id="detailBody">-</div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    import { getSupabaseCredentials } from './supabase-config.js';
+    
+    const { url: supabaseUrl, key: supabaseKey } = getSupabaseCredentials();
+    
+    let supabase = null;
+    let emails = [];
+    let currentTab = 'inbound';
+    let currentPage = 1;
+    const pageSize = 25;
+    
+    async function init() {
+      if (!supabaseUrl || !supabaseKey) {
+        document.getElementById('emailList').innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">⚠️</div>
+            <div>Supabase not configured. Check your settings.</div>
+          </div>
+        `;
+        return;
+      }
+      
+      supabase = createClient(supabaseUrl, supabaseKey);
+      await loadStats();
+      await loadEmails();
+    }
+    
+    window.switchTab = function(tab) {
+      currentTab = tab;
+      currentPage = 1;
+      
+      // Update tab UI
+      document.querySelectorAll('.email-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === tab);
+      });
+      
+      // Show/hide appropriate stats
+      document.getElementById('inboundStats').style.display = tab === 'inbound' ? 'flex' : 'none';
+      document.getElementById('outboundStats').style.display = tab === 'outbound' ? 'flex' : 'none';
+      
+      // Update filter options
+      const statusFilter = document.getElementById('statusFilter');
+      const typeFilter = document.getElementById('typeFilter');
+      
+      if (tab === 'inbound') {
+        statusFilter.innerHTML = `
+          <option value="all">All Status</option>
+          <option value="unprocessed">Unprocessed</option>
+          <option value="processed">Processed</option>
+        `;
+        typeFilter.style.display = 'none';
+      } else {
+        statusFilter.innerHTML = `
+          <option value="all">All Status</option>
+          <option value="sent">Sent</option>
+          <option value="delivered">Delivered</option>
+          <option value="failed">Failed</option>
+          <option value="bounced">Bounced</option>
+        `;
+        typeFilter.style.display = 'block';
+      }
+      
+      loadEmails();
+    }
+    
+    async function loadStats() {
+      try {
+        // Inbound stats
+        const { count: inboundTotal } = await supabase
+          .from('inbound_emails')
+          .select('*', { count: 'exact', head: true });
+        
+        const { count: inboundUnprocessed } = await supabase
+          .from('inbound_emails')
+          .select('*', { count: 'exact', head: true })
+          .eq('processed', false);
+        
+        const today = new Date().toISOString().split('T')[0];
+        const { count: inboundToday } = await supabase
+          .from('inbound_emails')
+          .select('*', { count: 'exact', head: true })
+          .gte('received_at', today);
+        
+        document.getElementById('inboundTotal').textContent = inboundTotal || 0;
+        document.getElementById('inboundUnprocessed').textContent = inboundUnprocessed || 0;
+        document.getElementById('inboundToday').textContent = inboundToday || 0;
+        document.getElementById('inboundBadge').textContent = inboundUnprocessed || 0;
+        
+        // Outbound stats
+        const { count: outboundTotal } = await supabase
+          .from('outbound_emails')
+          .select('*', { count: 'exact', head: true });
+        
+        const { count: outboundDelivered } = await supabase
+          .from('outbound_emails')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'delivered');
+        
+        const { count: outboundFailed } = await supabase
+          .from('outbound_emails')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'failed');
+        
+        const { count: outboundToday } = await supabase
+          .from('outbound_emails')
+          .select('*', { count: 'exact', head: true })
+          .gte('sent_at', today);
+        
+        document.getElementById('outboundTotal').textContent = outboundTotal || 0;
+        document.getElementById('outboundDelivered').textContent = outboundDelivered || 0;
+        document.getElementById('outboundFailed').textContent = outboundFailed || 0;
+        document.getElementById('outboundToday').textContent = outboundToday || 0;
+        document.getElementById('outboundBadge').textContent = outboundToday || 0;
+        
+      } catch (err) {
+        console.error('Failed to load stats:', err);
+      }
+    }
+    
+    window.loadEmails = async function() {
+      const listEl = document.getElementById('emailList');
+      listEl.innerHTML = '<div class="loading">Loading...</div>';
+      
+      try {
+        const tableName = currentTab === 'inbound' ? 'inbound_emails' : 'outbound_emails';
+        const dateField = currentTab === 'inbound' ? 'received_at' : 'sent_at';
+        
+        let query = supabase
+          .from(tableName)
+          .select('*')
+          .order(dateField, { ascending: false })
+          .range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
+        
+        // Apply filters
+        const search = document.getElementById('searchInput').value;
+        const status = document.getElementById('statusFilter').value;
+        const date = document.getElementById('dateFilter').value;
+        const type = document.getElementById('typeFilter').value;
+        
+        if (search) {
+          if (currentTab === 'inbound') {
+            query = query.or(`from_email.ilike.%${search}%,subject.ilike.%${search}%,body_text.ilike.%${search}%`);
+          } else {
+            query = query.or(`to_email.ilike.%${search}%,subject.ilike.%${search}%,body_text.ilike.%${search}%`);
+          }
+        }
+        
+        if (status !== 'all') {
+          if (currentTab === 'inbound') {
+            query = query.eq('processed', status === 'processed');
+          } else {
+            query = query.eq('status', status);
+          }
+        }
+        
+        if (currentTab === 'outbound' && type !== 'all') {
+          query = query.eq('email_type', type);
+        }
+        
+        if (date) {
+          query = query.gte(dateField, date).lt(dateField, date + 'T23:59:59');
+        }
+        
+        const { data, error } = await query;
+        
+        if (error) throw error;
+        
+        emails = data || [];
+        renderEmails();
+      } catch (err) {
+        console.error('Failed to load emails:', err);
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">❌</div>
+            <div>Failed to load emails: ${err.message}</div>
+          </div>
+        `;
+      }
+    }
+    
+    function renderEmails() {
+      const listEl = document.getElementById('emailList');
+      
+      if (!emails.length) {
+        const emptyMsg = currentTab === 'inbound' 
+          ? 'Configure Resend webhooks to receive emails here.'
+          : 'Sent emails will appear here.';
+        
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <div>No emails found</div>
+            <p style="margin-top: 8px; font-size: 13px;">${emptyMsg}</p>
+          </div>
+        `;
+        return;
+      }
+      
+      if (currentTab === 'inbound') {
+        listEl.innerHTML = emails.map(email => `
+          <div class="email-item ${email.processed ? '' : 'unread'}" onclick="showDetail('${email.id}')">
+            <span class="direction-icon inbound">📥</span>
+            <div class="email-address">${escapeHtml(email.from_email)}</div>
+            <div class="email-subject">${escapeHtml(email.subject || '(No Subject)')}</div>
+            <div class="email-date">${formatDate(email.received_at)}</div>
+            <div class="email-status">
+              <span class="status-badge ${email.processed ? 'status-processed' : 'status-new'}">
+                ${email.processed ? 'Processed' : 'New'}
+              </span>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        listEl.innerHTML = emails.map(email => `
+          <div class="email-item" onclick="showDetail('${email.id}')">
+            <span class="direction-icon outbound">📤</span>
+            <div class="email-address">${escapeHtml(email.to_email)}</div>
+            <div class="email-subject">
+              ${escapeHtml(email.subject || '(No Subject)')}
+              ${email.email_type ? `<span class="email-type-badge">${email.email_type}</span>` : ''}
+            </div>
+            <div class="email-date">${formatDate(email.sent_at)}</div>
+            <div class="email-status">
+              <span class="status-badge status-${email.status || 'sent'}">
+                ${capitalizeFirst(email.status || 'sent')}
+              </span>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+    
+    window.showDetail = function(id) {
+      const email = emails.find(e => e.id === id);
+      if (!email) return;
+      
+      document.getElementById('detailSubject').textContent = email.subject || '(No Subject)';
+      document.getElementById('detailFrom').textContent = email.from_email || '-';
+      document.getElementById('detailTo').textContent = email.to_email || '-';
+      
+      const dateField = currentTab === 'inbound' ? email.received_at : email.sent_at;
+      document.getElementById('detailDate').textContent = new Date(dateField).toLocaleString();
+      
+      if (currentTab === 'inbound') {
+        document.getElementById('detailStatus').textContent = email.processed ? 'Processed' : 'Unprocessed';
+        document.getElementById('detailTypeRow').style.display = 'none';
+      } else {
+        document.getElementById('detailStatus').textContent = capitalizeFirst(email.status || 'sent');
+        document.getElementById('detailTypeRow').style.display = 'flex';
+        document.getElementById('detailType').textContent = email.email_type || '-';
+      }
+      
+      document.getElementById('detailBody').innerHTML = email.body_html || escapeHtml(email.body_text || 'No content');
+      
+      document.getElementById('emailDetail').classList.add('open');
+      
+      // Mark inbound as processed if not already
+      if (currentTab === 'inbound' && !email.processed) {
+        markAsProcessed(id);
+      }
+    }
+    
+    window.closeDetail = function() {
+      document.getElementById('emailDetail').classList.remove('open');
+    }
+    
+    async function markAsProcessed(id) {
+      await supabase
+        .from('inbound_emails')
+        .update({ processed: true })
+        .eq('id', id);
+      
+      const email = emails.find(e => e.id === id);
+      if (email) email.processed = true;
+      
+      renderEmails();
+      loadStats();
+    }
+    
+    window.clearFilters = function() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('statusFilter').value = 'all';
+      document.getElementById('typeFilter').value = 'all';
+      document.getElementById('dateFilter').value = '';
+      loadEmails();
+    }
+    
+    window.refreshEmails = function() {
+      loadEmails();
+      loadStats();
+    }
+    
+    function formatDate(dateStr) {
+      const date = new Date(dateStr);
+      const today = new Date();
+      
+      if (date.toDateString() === today.toDateString()) {
+        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      }
+      
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+    }
+    
+    function capitalizeFirst(str) {
+      if (!str) return '';
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+    
+    // Close detail panel on escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeDetail();
+    });
+    
+    init();
+  </script>
+</body>
+</html>
