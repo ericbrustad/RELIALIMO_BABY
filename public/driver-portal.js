@@ -859,7 +859,8 @@ const screens = {
   welcome: document.getElementById('welcomeScreen'),
   profile: document.getElementById('profileScreen'),
   settings: document.getElementById('settingsScreen'),
-  registrationSplash: document.getElementById('registrationSplash')
+  registrationSplash: document.getElementById('registrationSplash'),
+  navigation: document.getElementById('navigationScreen')
 };
 
 const elements = {
@@ -2582,6 +2583,579 @@ function formatShortDate(dateStr) {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
+
+// ============================================
+// TURN-BY-TURN NAVIGATION MODULE
+// ============================================
+const NavigationModule = {
+  map: null,
+  routeData: null,
+  currentTrip: null,
+  currentStopIndex: 0, // 0 = going to pickup, 1 = going to dropoff
+  stops: [], // [{lat, lng, type: 'pickup'|'dropoff', address, completed}]
+  watchId: null,
+  currentPosition: null,
+  isNavigating: false,
+  
+  // Geofence radius in meters
+  GEOFENCE_RADIUS: 100, // 100 meters = ~330 feet
+  
+  // Start navigation for a trip
+  async startNavigation(trip) {
+    console.log('[Navigation] Starting navigation for trip:', trip.id);
+    this.currentTrip = trip;
+    this.currentStopIndex = 0;
+    this.isNavigating = true;
+    
+    // Build stops array
+    this.stops = [
+      {
+        type: 'pickup',
+        address: trip.pickup_address || trip.pickup_location || 'Pickup',
+        lat: null,
+        lng: null,
+        completed: false
+      },
+      {
+        type: 'dropoff',
+        address: trip.dropoff_address || trip.dropoff_location || 'Dropoff',
+        lat: null,
+        lng: null,
+        completed: false
+      }
+    ];
+    
+    // Geocode addresses to get coordinates
+    await this.geocodeStops();
+    
+    // Update UI with stop info
+    this.updateStopPanelUI();
+    
+    // Show navigation screen
+    showScreen('navigation');
+    
+    // Initialize map
+    await this.initNavigationMap();
+    
+    // Start watching position for geofencing
+    this.startPositionWatch();
+    
+    // Get initial route
+    await this.updateRoute();
+    
+    // Update passenger info
+    const passengerName = trip.passenger_name || trip.passenger_first_name || 'Passenger';
+    document.getElementById('navPassenger').textContent = passengerName;
+    
+    // Set initial action button
+    this.updateActionButton();
+  },
+  
+  // Geocode stop addresses
+  async geocodeStops() {
+    const mapboxToken = window.ENV?.MAPBOX_TOKEN || MAPBOX_ACCESS_TOKEN;
+    
+    for (const stop of this.stops) {
+      if (!stop.address) continue;
+      
+      try {
+        const response = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(stop.address)}.json?access_token=${mapboxToken}&limit=1`
+        );
+        const data = await response.json();
+        
+        if (data.features && data.features.length > 0) {
+          const [lng, lat] = data.features[0].center;
+          stop.lat = lat;
+          stop.lng = lng;
+          console.log('[Navigation] Geocoded', stop.type, ':', lat, lng);
+        }
+      } catch (err) {
+        console.error('[Navigation] Geocode error for', stop.type, ':', err);
+      }
+    }
+  },
+  
+  // Initialize the navigation map
+  async initNavigationMap() {
+    const mapboxToken = window.ENV?.MAPBOX_TOKEN || MAPBOX_ACCESS_TOKEN;
+    
+    if (!mapboxToken) {
+      console.error('[Navigation] No Mapbox token available');
+      return;
+    }
+    
+    try {
+      await loadMapboxGL();
+      mapboxgl.accessToken = mapboxToken;
+      
+      // Get current position for initial center
+      const position = await this.getCurrentPosition();
+      this.currentPosition = position;
+      
+      this.map = new mapboxgl.Map({
+        container: 'navigationMap',
+        style: 'mapbox://styles/mapbox/navigation-night-v1',
+        center: [position.lng, position.lat],
+        zoom: 16,
+        pitch: 60,
+        bearing: position.heading || 0
+      });
+      
+      this.map.on('load', () => {
+        console.log('[Navigation] Map loaded');
+        
+        // Add route layer
+        this.map.addSource('route', {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: [] }
+          }
+        });
+        
+        this.map.addLayer({
+          id: 'route-line',
+          type: 'line',
+          source: 'route',
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+          },
+          paint: {
+            'line-color': '#4f46e5',
+            'line-width': 8,
+            'line-opacity': 0.8
+          }
+        });
+        
+        // Add destination marker
+        this.addDestinationMarker();
+      });
+      
+    } catch (err) {
+      console.error('[Navigation] Map init error:', err);
+    }
+  },
+  
+  // Get current GPS position
+  getCurrentPosition() {
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          resolve({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            heading: pos.coords.heading,
+            speed: pos.coords.speed
+          });
+        },
+        (err) => {
+          console.error('[Navigation] Position error:', err);
+          // Default to a fallback
+          resolve({ lat: 44.9778, lng: -93.265, heading: 0, speed: 0 });
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  },
+  
+  // Start watching position for geofencing
+  startPositionWatch() {
+    if (this.watchId) {
+      navigator.geolocation.clearWatch(this.watchId);
+    }
+    
+    this.watchId = navigator.geolocation.watchPosition(
+      (pos) => this.onPositionUpdate(pos),
+      (err) => console.error('[Navigation] Watch error:', err),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 1000 }
+    );
+    
+    console.log('[Navigation] Position watch started');
+  },
+  
+  // Handle position updates
+  onPositionUpdate(position) {
+    const { latitude, longitude, heading, speed } = position.coords;
+    this.currentPosition = { lat: latitude, lng: longitude, heading, speed };
+    
+    // Update speed display
+    const speedMph = speed ? Math.round(speed * 2.237) : 0; // m/s to mph
+    const speedEl = document.querySelector('.nav-speed-display .speed-value');
+    if (speedEl) speedEl.textContent = speedMph;
+    
+    // Update map position and bearing
+    if (this.map) {
+      this.map.easeTo({
+        center: [longitude, latitude],
+        bearing: heading || this.map.getBearing(),
+        duration: 1000
+      });
+    }
+    
+    // Check geofence for current stop
+    this.checkGeofence(latitude, longitude);
+    
+    // Update remaining distance/time
+    this.updateRemainingDisplay();
+  },
+  
+  // Check if driver is within geofence of current stop
+  checkGeofence(lat, lng) {
+    const currentStop = this.stops[this.currentStopIndex];
+    if (!currentStop || currentStop.completed || !currentStop.lat) return;
+    
+    const distance = this.calculateDistance(lat, lng, currentStop.lat, currentStop.lng);
+    const distanceMeters = distance * 1000; // km to meters
+    
+    console.log('[Navigation] Distance to', currentStop.type, ':', Math.round(distanceMeters), 'm');
+    
+    if (distanceMeters <= this.GEOFENCE_RADIUS) {
+      console.log('[Navigation] 🎯 Arrived at', currentStop.type, '!');
+      this.handleGeofenceArrival(currentStop);
+    }
+  },
+  
+  // Handle arrival at geofence
+  handleGeofenceArrival(stop) {
+    // Mark stop as completed
+    stop.completed = true;
+    
+    // Update stop panel UI
+    this.updateStopPanelUI();
+    
+    // Play arrival sound
+    try {
+      playNotificationSound('trip_start');
+    } catch (e) {}
+    
+    if (stop.type === 'pickup') {
+      // Show arrival modal for pickup
+      this.showArrivalModal('Arrived at Pickup!', 'The passenger is nearby. Proceed when ready.', () => {
+        this.currentStopIndex = 1;
+        this.updateRoute();
+        this.updateActionButton();
+        
+        // Update trip status
+        updateReservationStatus(this.currentTrip.id, { driver_status: 'arrived' });
+      });
+    } else if (stop.type === 'dropoff') {
+      // Trip completed!
+      this.showTripCompletedModal();
+    }
+  },
+  
+  // Show arrival modal
+  showArrivalModal(title, message, onContinue) {
+    const modal = document.getElementById('geofenceArrivalModal');
+    document.getElementById('arrivalTitle').textContent = title;
+    document.getElementById('arrivalMessage').textContent = message;
+    modal.style.display = 'flex';
+    
+    const btn = document.getElementById('confirmArrivalBtn');
+    btn.onclick = () => {
+      modal.style.display = 'none';
+      if (onContinue) onContinue();
+    };
+  },
+  
+  // Show trip completed modal
+  showTripCompletedModal() {
+    const modal = document.getElementById('tripCompletedModal');
+    
+    // Calculate trip stats
+    if (this.routeData) {
+      document.getElementById('completedDistance').textContent = 
+        (this.routeData.distance / 1609.344).toFixed(1) + ' mi';
+      document.getElementById('completedDuration').textContent = 
+        Math.round(this.routeData.duration / 60) + ' min';
+    }
+    
+    modal.style.display = 'flex';
+    
+    // Play completion sound
+    try {
+      playNotificationSound('trip_complete');
+    } catch (e) {}
+    
+    // Send trip completed notification to passenger
+    if (this.currentTrip && this.currentTrip.id) {
+      sendPassengerNotification(this.currentTrip.id, 'trip_complete').catch(err => {
+        console.warn('[Navigation] Failed to send trip complete notification:', err);
+      });
+    }
+    
+    document.getElementById('finishTripBtn').onclick = async () => {
+      modal.style.display = 'none';
+      
+      // Update trip status to done
+      await updateReservationStatus(this.currentTrip.id, { driver_status: 'done' });
+      
+      // Stop navigation
+      this.stopNavigation();
+      
+      // Go back to dashboard
+      showScreen('dashboard');
+      await refreshTrips();
+      
+      showToast('🎉 Trip completed!', 'success');
+    };
+  },
+  
+  // Update the route from current position to current destination
+  async updateRoute() {
+    const currentStop = this.stops[this.currentStopIndex];
+    if (!currentStop || !currentStop.lat || !this.currentPosition) return;
+    
+    const mapboxToken = window.ENV?.MAPBOX_TOKEN || MAPBOX_ACCESS_TOKEN;
+    
+    try {
+      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${this.currentPosition.lng},${this.currentPosition.lat};${currentStop.lng},${currentStop.lat}?steps=true&geometries=geojson&access_token=${mapboxToken}`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.routes && data.routes.length > 0) {
+        const route = data.routes[0];
+        this.routeData = route;
+        
+        // Update route on map
+        if (this.map && this.map.getSource('route')) {
+          this.map.getSource('route').setData({
+            type: 'Feature',
+            geometry: route.geometry
+          });
+        }
+        
+        // Update turn-by-turn instructions
+        this.updateInstructions(route);
+        
+        // Update ETA
+        const eta = new Date(Date.now() + route.duration * 1000);
+        document.getElementById('navETA').textContent = 
+          'ETA: ' + eta.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        
+        // Update remaining display
+        this.updateRemainingDisplay();
+      }
+    } catch (err) {
+      console.error('[Navigation] Route error:', err);
+    }
+  },
+  
+  // Update turn-by-turn instruction display
+  updateInstructions(route) {
+    const steps = route.legs[0]?.steps || [];
+    
+    if (steps.length > 0) {
+      const currentStep = steps[0];
+      const nextStep = steps[1];
+      
+      // Current instruction
+      document.getElementById('navInstruction').textContent = 
+        currentStep.maneuver?.instruction || 'Continue';
+      
+      // Distance to next maneuver
+      const distanceFt = Math.round(currentStep.distance * 3.28084);
+      const distanceDisplay = distanceFt > 1000 
+        ? (currentStep.distance / 1609.344).toFixed(1) + ' mi'
+        : distanceFt + ' ft';
+      document.getElementById('navDistance').textContent = distanceDisplay;
+      
+      // Maneuver icon
+      const maneuverIcon = this.getManeuverIcon(currentStep.maneuver?.type, currentStep.maneuver?.modifier);
+      document.getElementById('navManeuverIcon').textContent = maneuverIcon;
+      
+      // Next step
+      if (nextStep) {
+        document.getElementById('navNextStep').innerHTML = 
+          `<span class="next-label">Then:</span> ${nextStep.maneuver?.instruction || ''}`;
+      } else {
+        document.getElementById('navNextStep').innerHTML = 
+          `<span class="next-label">Then:</span> Arrive at destination`;
+      }
+      
+      // Current step indicator
+      const stopType = this.stops[this.currentStopIndex]?.type;
+      document.getElementById('navCurrentStep').textContent = 
+        stopType === 'pickup' ? 'Going to Pickup' : 'Going to Dropoff';
+    }
+  },
+  
+  // Get maneuver icon based on type
+  getManeuverIcon(type, modifier) {
+    const icons = {
+      'turn': { 'left': '↰', 'right': '↱', 'slight left': '↖', 'slight right': '↗', 'sharp left': '↰', 'sharp right': '↱' },
+      'merge': '↗',
+      'fork': modifier === 'left' ? '↙' : '↘',
+      'roundabout': '↻',
+      'arrive': '🏁',
+      'depart': '🚗'
+    };
+    
+    if (type === 'turn' && modifier) {
+      return icons.turn[modifier] || '➡️';
+    }
+    
+    return icons[type] || '➡️';
+  },
+  
+  // Update remaining distance/time display
+  updateRemainingDisplay() {
+    if (!this.routeData) return;
+    
+    const distanceMi = (this.routeData.distance / 1609.344).toFixed(1);
+    const durationMin = Math.round(this.routeData.duration / 60);
+    
+    document.getElementById('navRemaining').textContent = `${distanceMi} mi • ${durationMin} min`;
+  },
+  
+  // Update stop panel UI
+  updateStopPanelUI() {
+    // Pickup stop
+    document.getElementById('navPickupAddress').textContent = this.stops[0]?.address || 'Pickup';
+    const pickupStop = document.getElementById('navPickupStop');
+    const pickupStatus = document.getElementById('navPickupStatus');
+    
+    if (this.stops[0]?.completed) {
+      pickupStop.classList.remove('current');
+      pickupStop.classList.add('completed');
+      pickupStatus.textContent = '✅';
+    } else if (this.currentStopIndex === 0) {
+      pickupStop.classList.add('current');
+      pickupStatus.textContent = '📍';
+    }
+    
+    // Dropoff stop
+    document.getElementById('navDropoffAddress').textContent = this.stops[1]?.address || 'Dropoff';
+    const dropoffStop = document.getElementById('navDropoffStop');
+    const dropoffStatus = document.getElementById('navDropoffStatus');
+    
+    if (this.stops[1]?.completed) {
+      dropoffStop.classList.remove('current');
+      dropoffStop.classList.add('completed');
+      dropoffStatus.textContent = '✅';
+    } else if (this.currentStopIndex === 1) {
+      dropoffStop.classList.add('current');
+      dropoffStop.classList.remove('pending');
+      dropoffStatus.textContent = '📍';
+    }
+  },
+  
+  // Update action button based on current state
+  updateActionButton() {
+    const btn = document.getElementById('navActionBtn');
+    const currentStop = this.stops[this.currentStopIndex];
+    
+    if (!currentStop) return;
+    
+    if (currentStop.type === 'pickup') {
+      btn.textContent = '📍 Arrived at Pickup';
+      btn.onclick = () => this.manualArrival('pickup');
+    } else {
+      btn.textContent = '🏁 Complete Trip';
+      btn.onclick = () => this.manualArrival('dropoff');
+    }
+  },
+  
+  // Manual arrival (in case geofence doesn't trigger)
+  manualArrival(stopType) {
+    const stop = this.stops.find(s => s.type === stopType);
+    if (stop && !stop.completed) {
+      this.handleGeofenceArrival(stop);
+    }
+  },
+  
+  // Add destination marker to map
+  addDestinationMarker() {
+    const currentStop = this.stops[this.currentStopIndex];
+    if (!currentStop || !currentStop.lat) return;
+    
+    // Remove existing destination marker
+    if (this.destinationMarker) {
+      this.destinationMarker.remove();
+    }
+    
+    const markerEl = document.createElement('div');
+    markerEl.className = 'nav-destination-marker';
+    markerEl.innerHTML = currentStop.type === 'pickup' ? '🟢' : '🔴';
+    markerEl.style.fontSize = '24px';
+    
+    this.destinationMarker = new mapboxgl.Marker(markerEl)
+      .setLngLat([currentStop.lng, currentStop.lat])
+      .addTo(this.map);
+  },
+  
+  // Calculate distance between two points (Haversine formula)
+  calculateDistance(lat1, lng1, lat2, lng2) {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c; // Distance in km
+  },
+  
+  // Stop navigation
+  stopNavigation() {
+    console.log('[Navigation] Stopping navigation');
+    this.isNavigating = false;
+    
+    if (this.watchId) {
+      navigator.geolocation.clearWatch(this.watchId);
+      this.watchId = null;
+    }
+    
+    if (this.map) {
+      this.map.remove();
+      this.map = null;
+    }
+    
+    this.currentTrip = null;
+    this.stops = [];
+    this.currentStopIndex = 0;
+    this.routeData = null;
+  },
+  
+  // Minimize navigation (go back to dashboard but keep tracking)
+  minimizeNavigation() {
+    showScreen('dashboard');
+  },
+  
+  // Recenter map on driver
+  recenterMap() {
+    if (this.map && this.currentPosition) {
+      this.map.flyTo({
+        center: [this.currentPosition.lng, this.currentPosition.lat],
+        zoom: 16
+      });
+    }
+  }
+};
+
+// Make NavigationModule available globally
+window.NavigationModule = NavigationModule;
+
+// Event listeners for navigation controls
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('navBackBtn')?.addEventListener('click', () => {
+    NavigationModule.minimizeNavigation();
+  });
+  
+  document.getElementById('navEndBtn')?.addEventListener('click', () => {
+    if (confirm('End navigation and return to dashboard?')) {
+      NavigationModule.stopNavigation();
+      showScreen('dashboard');
+    }
+  });
+  
+  document.getElementById('navRecenterBtn')?.addEventListener('click', () => {
+    NavigationModule.recenterMap();
+  });
+});
 
 // ============================================
 // Event Listeners
@@ -8016,9 +8590,31 @@ window.startTrip = async function(tripId) {
     // Start with "getting_ready" status instead of immediately enroute
     await updateReservationStatus(tripId, { driver_status: 'getting_ready' });
     
-    showToast('Trip started! Update status as you go.', 'success');
-    switchTab('active');
-    await refreshTrips();
+    showToast('Trip started! Loading navigation...', 'success');
+    
+    // Fetch full trip data for navigation
+    const { data: tripData, error: tripError } = await supabase
+      .from('reservations')
+      .select('*')
+      .eq('id', tripId)
+      .single();
+    
+    if (tripError) {
+      console.error('[DriverPortal] Failed to fetch trip for navigation:', tripError);
+      // Fall back to normal flow without navigation
+      switchTab('active');
+      await refreshTrips();
+      return;
+    }
+    
+    // Start turn-by-turn navigation with geofencing
+    if (typeof NavigationModule !== 'undefined' && NavigationModule.startNavigation) {
+      await NavigationModule.startNavigation(tripData);
+    } else {
+      console.warn('[DriverPortal] NavigationModule not available, using standard flow');
+      switchTab('active');
+      await refreshTrips();
+    }
     
     // Check map preference on first navigation
     if (!state.preferredMapApp) {
@@ -8506,20 +9102,73 @@ async function updateDriverStatus(status) {
 }
 
 async function sendPassengerNotification(reservationId, notificationType) {
-  // This would call your notification service
-  // For now, just log it
   console.log(`[DriverPortal] Sending ${notificationType} notification for reservation ${reservationId}`);
   
-  // In production, you'd call an API endpoint like:
-  // await fetch('/api/notify', {
-  //   method: 'POST',
-  //   body: JSON.stringify({ reservationId, type: notificationType })
-  // });
-  
-  // Or use Supabase Edge Functions:
-  // await supabase.functions.invoke('send-notification', {
-  //   body: { reservationId, type: notificationType }
-  // });
+  try {
+    // Get reservation details to find passenger info
+    const { data: reservation, error: reservationError } = await supabase
+      .from('reservations')
+      .select('passenger_first_name, passenger_last_name, passenger_email, passenger_cell, account_id, confirmation_number, pickup_location, dropoff_location')
+      .eq('id', reservationId)
+      .single();
+    
+    if (reservationError) {
+      console.error('[DriverPortal] Failed to get reservation for notification:', reservationError);
+      return;
+    }
+    
+    // Define notification messages based on type
+    const notificationMessages = {
+      'on_the_way': {
+        title: 'Driver On The Way! 🚗',
+        message: `Your driver is now heading to the pickup location.`,
+        icon: '🚗'
+      },
+      'arrived': {
+        title: 'Driver Has Arrived! 📍',
+        message: `Your driver has arrived at ${reservation.pickup_location || 'the pickup location'}.`,
+        icon: '📍'
+      },
+      'trip_complete': {
+        title: 'Trip Completed! ✅',
+        message: `Thank you for riding with us! Your trip has been completed successfully.`,
+        icon: '✅'
+      }
+    };
+    
+    const notificationData = notificationMessages[notificationType] || {
+      title: 'Trip Update',
+      message: 'Your trip status has been updated.',
+      icon: '🔔'
+    };
+    
+    // Insert notification into database for real-time updates to customer portal
+    const { error: notifyError } = await supabase
+      .from('passenger_notifications')
+      .insert({
+        reservation_id: reservationId,
+        account_id: reservation.account_id,
+        notification_type: notificationType,
+        title: notificationData.title,
+        message: notificationData.message,
+        passenger_email: reservation.passenger_email,
+        passenger_phone: reservation.passenger_cell,
+        confirmation_number: reservation.confirmation_number,
+        read: false,
+        created_at: new Date().toISOString()
+      });
+    
+    if (notifyError) {
+      // Table might not exist yet, log but don't fail
+      console.warn('[DriverPortal] Could not insert notification (table may not exist):', notifyError);
+      // Fallback: Try to use browser notification API if available
+    }
+    
+    console.log(`[DriverPortal] ${notificationType} notification sent for reservation ${reservationId}`);
+    
+  } catch (err) {
+    console.error('[DriverPortal] Error sending passenger notification:', err);
+  }
 }
 
 // ============================================

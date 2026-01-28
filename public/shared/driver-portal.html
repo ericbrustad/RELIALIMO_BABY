@@ -980,6 +980,113 @@
       </main>
     </div>
 
+    <!-- Navigation Screen - Turn-by-Turn with Geofencing -->
+    <div id="navigationScreen" class="screen navigation-screen">
+      <!-- Navigation Header -->
+      <header class="nav-header">
+        <button type="button" id="navMinimizeBtn" class="nav-header-btn" aria-label="Minimize">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5"/>
+          </svg>
+        </button>
+        <div class="nav-header-info">
+          <span id="navETA" class="nav-eta">Calculating...</span>
+          <span id="navDistance" class="nav-distance"></span>
+        </div>
+        <button type="button" id="navEndBtn" class="nav-header-btn nav-end-btn" aria-label="End Navigation">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </header>
+
+      <!-- Turn-by-Turn Instruction Panel -->
+      <div id="navInstructionPanel" class="nav-instruction-panel">
+        <div class="nav-instruction-icon" id="navManeuverIcon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2L4 14h6v8l8-12h-6V2z"/>
+          </svg>
+        </div>
+        <div class="nav-instruction-text">
+          <div class="nav-instruction-distance" id="navStepDistance">--</div>
+          <div class="nav-instruction-street" id="navStepInstruction">Calculating route...</div>
+        </div>
+      </div>
+
+      <!-- Map Container -->
+      <div id="navigationMap" class="nav-map-container"></div>
+
+      <!-- Stop Progress Panel -->
+      <div id="navStopPanel" class="nav-stop-panel">
+        <div class="nav-stop-header">
+          <span class="nav-stop-type" id="navStopType">PICKUP</span>
+          <span class="nav-stop-progress" id="navStopProgress">Stop 1 of 2</span>
+        </div>
+        <div class="nav-stop-address" id="navStopAddress">Loading address...</div>
+        <div class="nav-stop-passenger" id="navPassengerInfo"></div>
+      </div>
+
+      <!-- Navigation Action Bar -->
+      <div class="nav-action-bar">
+        <button type="button" id="navRecenterBtn" class="nav-action-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 2v4m0 12v4m-10-10h4m12 0h4"/>
+          </svg>
+          <span>Recenter</span>
+        </button>
+        <button type="button" id="navArriveBtn" class="nav-action-btn nav-arrive-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/>
+            <circle cx="12" cy="10" r="3"/>
+          </svg>
+          <span id="navArriveBtnText">I've Arrived</span>
+        </button>
+        <button type="button" id="navExternalBtn" class="nav-action-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+            <polyline points="15 3 21 3 21 9"/>
+            <line x1="10" y1="14" x2="21" y2="3"/>
+          </svg>
+          <span>Open Maps</span>
+        </button>
+      </div>
+
+      <!-- Geofence Arrival Modal -->
+      <div id="geofenceArrivalModal" class="nav-modal" style="display: none;">
+        <div class="nav-modal-content">
+          <div class="nav-modal-icon">📍</div>
+          <h2 id="arrivalModalTitle">You've Arrived!</h2>
+          <p id="arrivalModalMessage">You have reached the pickup location.</p>
+          <div class="nav-modal-actions">
+            <button type="button" id="confirmArrivalBtn" class="btn-primary">Confirm Arrival</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Trip Completed Modal -->
+      <div id="tripCompletedModal" class="nav-modal" style="display: none;">
+        <div class="nav-modal-content trip-completed">
+          <div class="nav-modal-icon">🎉</div>
+          <h2>Trip Completed!</h2>
+          <p>You have successfully dropped off the passenger.</p>
+          <div class="trip-stats">
+            <div class="trip-stat">
+              <span class="stat-label">Distance</span>
+              <span class="stat-value" id="completedDistance">--</span>
+            </div>
+            <div class="trip-stat">
+              <span class="stat-label">Duration</span>
+              <span class="stat-value" id="completedDuration">--</span>
+            </div>
+          </div>
+          <div class="nav-modal-actions">
+            <button type="button" id="finishTripBtn" class="btn-primary btn-success">Finish Trip</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- My Profile Screen -->
     <div id="profileScreen" class="screen">
       <header class="screen-header">

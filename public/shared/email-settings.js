@@ -284,6 +284,211 @@ const DEFAULT_TEMPLATES = [
     category: 'driver',
     isSystem: true,
     updatedAt: new Date().toISOString()
+  },
+  // ========== PASSENGER NOTIFICATION TEMPLATES ==========
+  {
+    id: 'passenger-driver-on-way',
+    name: 'Driver On The Way Notification',
+    subject: '🚗 Your Driver is On The Way - #TRIP_CONFNUM#',
+    category: 'passenger-notification',
+    isSystem: true,
+    sendRules: {
+      enabled: true,
+      triggers: ['driver_enroute'],
+      channels: ['email', 'sms'],
+      recipients: ['passenger']
+    },
+    html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f4f4;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); padding: 25px 40px; border-radius: 12px 12px 0 0; text-align: center;">
+              <img src="#COMP_LOGO#" alt="#COMP_NAME#" style="max-height: 60px; max-width: 200px; width: auto;">
+            </td>
+          </tr>
+          <tr>
+            <td style="background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%); padding: 20px 40px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px;">🚗 Your Driver is On The Way!</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 35px 40px;">
+              <p style="font-size: 17px; color: #333;">Hello <strong>#TRIP_PAX_NAME#</strong>,</p>
+              <p style="font-size: 15px; color: #555; line-height: 1.7;">Great news! Your driver is now heading to your pickup location.</p>
+              
+              <div style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 10px; padding: 25px; margin: 25px 0;">
+                <h3 style="margin: 0 0 15px 0; color: #1565c0; font-size: 16px;">📍 Pickup Details</h3>
+                <p style="margin: 5px 0; color: #333;"><strong>Confirmation:</strong> #TRIP_CONFNUM#</p>
+                <p style="margin: 5px 0; color: #333;"><strong>Pickup Time:</strong> #TRIP_TIME#</p>
+                <p style="margin: 5px 0; color: #333;"><strong>Location:</strong> #TRIP_PICKUP#</p>
+                <p style="margin: 5px 0; color: #333;"><strong>Driver:</strong> #TRIP_DRIVER1_FNAME#</p>
+                <p style="margin: 5px 0; color: #333;"><strong>Vehicle:</strong> #TRIP_VEHICLE_TYPE#</p>
+              </div>
+              
+              <p style="font-size: 14px; color: #666; text-align: center; margin-top: 25px;">
+                Please be ready at the pickup location. Your driver will arrive shortly!
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #263238; padding: 25px 40px; border-radius: 0 0 12px 12px; color: #90a4ae; font-size: 13px; text-align: center;">
+              <strong style="color: #ffffff;">#COMP_NAME#</strong><br>© #CURRENT_YEAR#
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+    smsTemplate: '🚗 #COMP_NAME#: Your driver #TRIP_DRIVER1_FNAME# is on the way to pick you up at #TRIP_TIME#. Conf: #TRIP_CONFNUM#',
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'passenger-driver-arrived',
+    name: 'Driver Has Arrived Notification',
+    subject: '📍 Your Driver Has Arrived - #TRIP_CONFNUM#',
+    category: 'passenger-notification',
+    isSystem: true,
+    sendRules: {
+      enabled: true,
+      triggers: ['driver_arrived'],
+      channels: ['email', 'sms'],
+      recipients: ['passenger']
+    },
+    html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f4f4;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); padding: 25px 40px; border-radius: 12px 12px 0 0; text-align: center;">
+              <img src="#COMP_LOGO#" alt="#COMP_NAME#" style="max-height: 60px; max-width: 200px; width: auto;">
+            </td>
+          </tr>
+          <tr>
+            <td style="background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%); padding: 20px 40px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px;">📍 Your Driver Has Arrived!</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 35px 40px;">
+              <p style="font-size: 17px; color: #333;">Hello <strong>#TRIP_PAX_NAME#</strong>,</p>
+              <p style="font-size: 15px; color: #555; line-height: 1.7;">Your driver has arrived at the pickup location and is waiting for you.</p>
+              
+              <div style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-radius: 10px; padding: 25px; margin: 25px 0; text-align: center;">
+                <div style="font-size: 48px; margin-bottom: 10px;">🚘</div>
+                <h3 style="margin: 0 0 10px 0; color: #2e7d32; font-size: 18px;">Your Ride is Here!</h3>
+                <p style="margin: 5px 0; color: #333; font-size: 16px;"><strong>#TRIP_DRIVER1_FNAME#</strong> is waiting in a <strong>#TRIP_VEHICLE_TYPE#</strong></p>
+              </div>
+              
+              <div style="background: #f5f5f5; border-radius: 10px; padding: 20px; margin: 20px 0;">
+                <p style="margin: 5px 0; color: #333;"><strong>📍 Location:</strong> #TRIP_PICKUP#</p>
+                <p style="margin: 5px 0; color: #333;"><strong>🎫 Confirmation:</strong> #TRIP_CONFNUM#</p>
+              </div>
+              
+              <p style="font-size: 14px; color: #d32f2f; text-align: center; margin-top: 25px; font-weight: 600;">
+                ⏰ Please proceed to your driver promptly to avoid wait time charges.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #263238; padding: 25px 40px; border-radius: 0 0 12px 12px; color: #90a4ae; font-size: 13px; text-align: center;">
+              <strong style="color: #ffffff;">#COMP_NAME#</strong><br>© #CURRENT_YEAR#
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+    smsTemplate: '📍 #COMP_NAME#: Your driver #TRIP_DRIVER1_FNAME# has ARRIVED at #TRIP_PICKUP#. Please proceed to your ride! Conf: #TRIP_CONFNUM#',
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'passenger-trip-completed',
+    name: 'Trip Completed Notification',
+    subject: '✅ Trip Completed - Thank You! #TRIP_CONFNUM#',
+    category: 'passenger-notification',
+    isSystem: true,
+    sendRules: {
+      enabled: true,
+      triggers: ['trip_complete'],
+      channels: ['email', 'sms'],
+      recipients: ['passenger', 'billing']
+    },
+    html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f4f4;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); padding: 25px 40px; border-radius: 12px 12px 0 0; text-align: center;">
+              <img src="#COMP_LOGO#" alt="#COMP_NAME#" style="max-height: 60px; max-width: 200px; width: auto;">
+            </td>
+          </tr>
+          <tr>
+            <td style="background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%); padding: 20px 40px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px;">✅ Trip Completed!</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 35px 40px;">
+              <p style="font-size: 17px; color: #333;">Hello <strong>#TRIP_PAX_NAME#</strong>,</p>
+              <p style="font-size: 15px; color: #555; line-height: 1.7;">Thank you for riding with <strong>#COMP_NAME#</strong>! We hope you had a pleasant trip.</p>
+              
+              <div style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border-radius: 10px; padding: 25px; margin: 25px 0; text-align: center;">
+                <div style="font-size: 48px; margin-bottom: 10px;">🎉</div>
+                <h3 style="margin: 0 0 10px 0; color: #7b1fa2; font-size: 18px;">Trip Summary</h3>
+              </div>
+              
+              <div style="background: #f5f5f5; border-radius: 10px; padding: 20px; margin: 20px 0;">
+                <p style="margin: 8px 0; color: #333;"><strong>🎫 Confirmation:</strong> #TRIP_CONFNUM#</p>
+                <p style="margin: 8px 0; color: #333;"><strong>📅 Date:</strong> #TRIP_DATE#</p>
+                <p style="margin: 8px 0; color: #333;"><strong>📍 From:</strong> #TRIP_PICKUP#</p>
+                <p style="margin: 8px 0; color: #333;"><strong>📍 To:</strong> #TRIP_DROPOFF#</p>
+                <p style="margin: 8px 0; color: #333;"><strong>🚗 Driver:</strong> #TRIP_DRIVER1_FNAME#</p>
+              </div>
+              
+              <div style="border-top: 2px dashed #ddd; padding-top: 20px; margin-top: 25px;">
+                <h3 style="margin: 0 0 15px 0; color: #1565c0; font-size: 16px;">💰 Fare Summary</h3>
+                #TRIP_RATES_SUMMARY#
+                <p style="margin: 15px 0 5px 0; font-size: 18px; color: #333;"><strong>Total:</strong> #TRIP_RATES_TOTAL#</p>
+              </div>
+              
+              <div style="text-align: center; margin: 35px 0 20px 0;">
+                <p style="font-size: 15px; color: #555; margin-bottom: 15px;">We'd love to hear about your experience!</p>
+                <a href="#BOOKING_LINK#" style="display: inline-block; background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); color: #1a237e; text-decoration: none; padding: 12px 30px; border-radius: 25px; font-weight: 600; font-size: 14px;">📅 Book Your Next Ride</a>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #263238; padding: 25px 40px; border-radius: 0 0 12px 12px; color: #90a4ae; font-size: 13px; text-align: center;">
+              <strong style="color: #ffffff;">#COMP_NAME#</strong><br>
+              Thank you for choosing us!<br>
+              © #CURRENT_YEAR#
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+    smsTemplate: '✅ #COMP_NAME#: Trip completed! Thank you for riding with us. Conf: #TRIP_CONFNUM#. Total: #TRIP_RATES_TOTAL#. Book again: #BOOKING_LINK#',
+    updatedAt: new Date().toISOString()
   }
 ];
 
