@@ -399,9 +399,9 @@
 
   <script type="module">
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    import { getSupabaseCredentials } from './supabase-config.js';
     
-    const supabaseUrl = localStorage.getItem('supabaseUrl') || window.SUPABASE_URL;
-    const supabaseKey = localStorage.getItem('supabaseAnonKey') || window.SUPABASE_ANON_KEY;
+    const { url: supabaseUrl, key: supabaseKey } = getSupabaseCredentials();
     
     let supabase = null;
     let emails = [];
