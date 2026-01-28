@@ -489,6 +489,145 @@ const DEFAULT_TEMPLATES = [
 </html>`,
     smsTemplate: '✅ #COMP_NAME#: Trip completed! Thank you for riding with us. Conf: #TRIP_CONFNUM#. Total: #TRIP_RATES_TOTAL#. Book again: #BOOKING_LINK#',
     updatedAt: new Date().toISOString()
+  },
+  // ========== ADDITIONAL DRIVER STATUS TEMPLATES ==========
+  {
+    id: 'passenger-driver-assigned',
+    name: 'Driver Assigned Notification',
+    subject: '🚗 Driver Assigned - #TRIP_CONFNUM#',
+    category: 'passenger-notification',
+    isSystem: true,
+    sendRules: {
+      enabled: true,
+      triggers: ['driver_assigned'],
+      channels: ['email', 'sms'],
+      recipients: ['passenger']
+    },
+    html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f4f4;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+          <tr><td style="background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); padding: 25px 40px; border-radius: 12px 12px 0 0; text-align: center;"><img src="#COMP_LOGO#" alt="#COMP_NAME#" style="max-height: 60px; max-width: 200px; width: auto;"></td></tr>
+          <tr><td style="background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%); padding: 20px 40px; text-align: center;"><h1 style="margin: 0; color: #ffffff; font-size: 24px;">🚗 Driver Assigned!</h1></td></tr>
+          <tr><td style="padding: 35px 40px;">
+            <p style="font-size: 17px; color: #333;">Hello <strong>#TRIP_PAX_NAME#</strong>,</p>
+            <p style="font-size: 15px; color: #555; line-height: 1.7;">Great news! A driver has been assigned to your upcoming trip.</p>
+            <div style="background: #e8f5e9; border-radius: 10px; padding: 25px; margin: 25px 0;">
+              <p style="margin: 5px 0; color: #333;"><strong>🎫 Confirmation:</strong> #TRIP_CONFNUM#</p>
+              <p style="margin: 5px 0; color: #333;"><strong>📅 Date:</strong> #TRIP_DATE# at #TRIP_TIME#</p>
+              <p style="margin: 5px 0; color: #333;"><strong>🚗 Driver:</strong> #TRIP_DRIVER1_FNAME#</p>
+              <p style="margin: 5px 0; color: #333;"><strong>🚙 Vehicle:</strong> #TRIP_VEHICLE_TYPE#</p>
+              <p style="margin: 5px 0; color: #333;"><strong>📍 Pickup:</strong> #TRIP_PICKUP#</p>
+            </div>
+          </td></tr>
+          <tr><td style="background-color: #263238; padding: 25px 40px; border-radius: 0 0 12px 12px; color: #90a4ae; font-size: 13px; text-align: center;"><strong style="color: #ffffff;">#COMP_NAME#</strong><br>© #CURRENT_YEAR#</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+    smsTemplate: '🚗 #COMP_NAME#: Driver assigned! #TRIP_DRIVER1_FNAME# will pick you up on #TRIP_DATE# at #TRIP_TIME#. Conf: #TRIP_CONFNUM#',
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'passenger-getting-ready',
+    name: 'Driver Getting Ready Notification',
+    subject: '🔧 Your Driver is Getting Ready - #TRIP_CONFNUM#',
+    category: 'passenger-notification',
+    isSystem: true,
+    sendRules: {
+      enabled: false,
+      triggers: ['driver_getting_ready'],
+      channels: ['sms'],
+      recipients: ['passenger']
+    },
+    html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h2 style="color: #1a237e;">🔧 Your Driver is Getting Ready!</h2>
+  <p>Hello <strong>#TRIP_PAX_NAME#</strong>,</p>
+  <p>Your driver <strong>#TRIP_DRIVER1_FNAME#</strong> is preparing for your upcoming trip.</p>
+  <div style="background: #fff3e0; padding: 15px; border-radius: 8px; margin: 15px 0;">
+    <p><strong>📅 Pickup:</strong> #TRIP_DATE# at #TRIP_TIME#</p>
+    <p><strong>📍 Location:</strong> #TRIP_PICKUP#</p>
+    <p><strong>🎫 Confirmation:</strong> #TRIP_CONFNUM#</p>
+  </div>
+  <p style="color: #666; font-size: 12px;">#COMP_NAME# - © #CURRENT_YEAR#</p>
+</div>`,
+    smsTemplate: '🔧 #COMP_NAME#: Your driver #TRIP_DRIVER1_FNAME# is getting ready for your pickup at #TRIP_TIME#. Conf: #TRIP_CONFNUM#',
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'passenger-driver-waiting',
+    name: 'Driver Waiting Notification',
+    subject: '⏳ Your Driver is Waiting - #TRIP_CONFNUM#',
+    category: 'passenger-notification',
+    isSystem: true,
+    sendRules: {
+      enabled: true,
+      triggers: ['driver_waiting'],
+      channels: ['email', 'sms'],
+      recipients: ['passenger']
+    },
+    html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f4f4;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+          <tr><td style="background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); padding: 25px 40px; border-radius: 12px 12px 0 0; text-align: center;"><img src="#COMP_LOGO#" alt="#COMP_NAME#" style="max-height: 60px; max-width: 200px; width: auto;"></td></tr>
+          <tr><td style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); padding: 20px 40px; text-align: center;"><h1 style="margin: 0; color: #ffffff; font-size: 24px;">⏳ Your Driver is Waiting!</h1></td></tr>
+          <tr><td style="padding: 35px 40px;">
+            <p style="font-size: 17px; color: #333;">Hello <strong>#TRIP_PAX_NAME#</strong>,</p>
+            <p style="font-size: 15px; color: #555; line-height: 1.7;">Your driver has arrived and is waiting for you at the pickup location.</p>
+            <div style="background: #fff3e0; border-radius: 10px; padding: 25px; margin: 25px 0; text-align: center;">
+              <div style="font-size: 48px; margin-bottom: 10px;">⏳</div>
+              <p style="margin: 5px 0; color: #333; font-size: 16px;"><strong>#TRIP_DRIVER1_FNAME#</strong> is waiting in a <strong>#TRIP_VEHICLE_TYPE#</strong></p>
+            </div>
+            <p style="font-size: 14px; color: #d32f2f; text-align: center; margin-top: 25px; font-weight: 600;">⏰ Please proceed to your driver to avoid additional wait time charges.</p>
+          </td></tr>
+          <tr><td style="background-color: #263238; padding: 25px 40px; border-radius: 0 0 12px 12px; color: #90a4ae; font-size: 13px; text-align: center;"><strong style="color: #ffffff;">#COMP_NAME#</strong><br>© #CURRENT_YEAR#</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+    smsTemplate: '⏳ #COMP_NAME#: Your driver #TRIP_DRIVER1_FNAME# is WAITING at #TRIP_PICKUP#. Please proceed now! Conf: #TRIP_CONFNUM#',
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'passenger-onboard',
+    name: 'Passenger Onboard Notification',
+    subject: '🧳 Trip In Progress - #TRIP_CONFNUM#',
+    category: 'passenger-notification',
+    isSystem: true,
+    sendRules: {
+      enabled: false,
+      triggers: ['passenger_onboard'],
+      channels: ['email'],
+      recipients: ['billing']
+    },
+    html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h2 style="color: #1a237e;">🧳 Trip In Progress</h2>
+  <p>Hello,</p>
+  <p>This is to confirm that the passenger <strong>#TRIP_PAX_NAME#</strong> is now onboard and the trip is in progress.</p>
+  <div style="background: #e1f5fe; padding: 15px; border-radius: 8px; margin: 15px 0;">
+    <p><strong>🎫 Confirmation:</strong> #TRIP_CONFNUM#</p>
+    <p><strong>📅 Date:</strong> #TRIP_DATE# at #TRIP_TIME#</p>
+    <p><strong>🚗 Driver:</strong> #TRIP_DRIVER1_FNAME#</p>
+    <p><strong>📍 From:</strong> #TRIP_PICKUP#</p>
+    <p><strong>📍 To:</strong> #TRIP_DROPOFF#</p>
+  </div>
+  <p style="color: #666; font-size: 12px;">#COMP_NAME# - © #CURRENT_YEAR#</p>
+</div>`,
+    smsTemplate: '🧳 #COMP_NAME#: Passenger #TRIP_PAX_NAME# is now onboard. Trip in progress. Conf: #TRIP_CONFNUM#',
+    updatedAt: new Date().toISOString()
   }
 ];
 
