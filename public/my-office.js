@@ -11276,6 +11276,11 @@ Would you also like to delete this driver?`
             if (oldFleetVehicle) {
               oldFleetVehicle.assigned_driver_id = null;
               console.log(`🔄 Unassigned driver from old fleet vehicle ${origVehicle}`);
+              // Also update Supabase
+              try {
+                await updateFleetVehicle(origVehicle, { assigned_driver_id: null });
+                console.log(`✅ Supabase: Cleared assigned_driver_id from vehicle ${origVehicle}`);
+              } catch (e) { console.warn('Failed to update Supabase for old vehicle:', e); }
             }
           }
           
@@ -11291,6 +11296,12 @@ Would you also like to delete this driver?`
               });
               newFleetVehicle.assigned_driver_id = driverId;
               console.log(`✅ Assigned driver ${driverId} to fleet vehicle ${vehicleId}`);
+              
+              // IMPORTANT: Also update Supabase so the assignment persists
+              try {
+                await updateFleetVehicle(vehicleId, { assigned_driver_id: driverId });
+                console.log(`✅ Supabase: Updated vehicle ${vehicleId} with assigned_driver_id: ${driverId}`);
+              } catch (e) { console.warn('Failed to update Supabase for new vehicle:', e); }
             }
           }
           

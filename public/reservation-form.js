@@ -1035,16 +1035,27 @@ class ReservationForm {
         this.fleetVehicleIdToVehicle = {};
         // Build vehicle-to-driver map for auto-selecting driver when fleet vehicle is chosen
         this.vehicleToDriverMap = {};
+        // Build driver-to-vehicle map for auto-selecting vehicle when driver is chosen
+        this.driverToVehicleMap = {};
         (fleetVehicles || []).forEach(v => { 
           if (v && v.id) {
             this.fleetVehicleIdToVehicle[v.id] = v;
             // Map vehicle ID to assigned driver ID
             if (v.assigned_driver_id) {
               this.vehicleToDriverMap[v.id] = v.assigned_driver_id;
+              // Map driver ID to array of vehicles (driver can have multiple)
+              if (!this.driverToVehicleMap[v.assigned_driver_id]) {
+                this.driverToVehicleMap[v.assigned_driver_id] = [];
+              }
+              this.driverToVehicleMap[v.assigned_driver_id].push(v);
             }
           }
         });
         console.log('[loadVehicles] Built vehicle-to-driver map:', Object.keys(this.vehicleToDriverMap).length, 'mappings');
+        console.log('[loadVehicles] Built driver-to-vehicle map:', Object.keys(this.driverToVehicleMap).length, 'drivers have vehicles');
+        Object.entries(this.driverToVehicleMap).forEach(([driverId, vehicles]) => {
+          console.log(`[loadVehicles] Driver ${driverId} has ${vehicles.length} vehicle(s):`, vehicles.map(v => v.veh_title || v.id));
+        });
 
         // Format label: Prioritize veh_title (Year Make Model), fallback to components
         const formatFleetLabel = (v) => {
@@ -1902,10 +1913,12 @@ class ReservationForm {
           // Recalculate garage times based on new driver's address
           this.updateGarageTimesFromDriver();
           
-          // Find all fleet vehicles assigned to this driver
-          const matchingVehicles = (this.fleetVehicles || []).filter(v => 
-            v && v.assigned_driver_id === driverId
-          );
+          // Find all fleet vehicles assigned to this driver using the pre-built map
+          const matchingVehicles = this.driverToVehicleMap?.[driverId] || 
+            (this.fleetVehicles || []).filter(v => v && v.assigned_driver_id === driverId);
+          
+          console.log('[driverSelect] Looking for vehicles for driver:', driverId, 
+            'Found:', matchingVehicles.length, 'vehicles');
           
           if (matchingVehicles.length === 0) {
             console.log('[driverSelect] No vehicles assigned to driver:', driverId);
@@ -1916,7 +1929,7 @@ class ReservationForm {
             // Single vehicle - auto-select it
             const veh = matchingVehicles[0];
             carSelect.value = veh.id;
-            console.log('[driverSelect] Auto-selected vehicle:', veh.id, veh.veh_title || veh.make + ' ' + veh.model);
+            console.log('[driverSelect] ✅ Auto-selected vehicle:', veh.id, veh.veh_title || veh.make + ' ' + veh.model);
           } else {
             // Multiple vehicles - ask user which one to use
             console.log('[driverSelect] Multiple vehicles for driver:', matchingVehicles.length);

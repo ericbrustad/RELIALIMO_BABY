@@ -8,6 +8,7 @@ import './CompanySettingsManager.js';
 import supabaseDb from './supabase-db.js';
 import { wireMainNav } from './navigation.js';
 import { loadServiceTypes, SERVICE_TYPES_STORAGE_KEY } from './service-types-store.js';
+import { LocalAirportsService } from './LocalAirportsService.js';
 
 // Use Supabase-only database (no localStorage)
 const db = supabaseDb;
@@ -982,8 +983,11 @@ class ReservationForm {
         const rates = opt.raw?.rates || opt.raw?.metadata?.rates || null;
         if (opt.value && rates && Object.keys(rates).length > 0) {
           this.vehicleTypeRates[opt.value] = rates;
+          console.log('[ReservationForm] Stored rates for vehicle', opt.value, ':', rates);
         }
       });
+      
+      console.log('[ReservationForm] All vehicleTypeRates:', this.vehicleTypeRates);
 
       const typeOptions = mergedOptions.map(({ value, label }) => ({ value, label }));
 
@@ -1031,16 +1035,27 @@ class ReservationForm {
         this.fleetVehicleIdToVehicle = {};
         // Build vehicle-to-driver map for auto-selecting driver when fleet vehicle is chosen
         this.vehicleToDriverMap = {};
+        // Build driver-to-vehicle map for auto-selecting vehicle when driver is chosen
+        this.driverToVehicleMap = {};
         (fleetVehicles || []).forEach(v => { 
           if (v && v.id) {
             this.fleetVehicleIdToVehicle[v.id] = v;
             // Map vehicle ID to assigned driver ID
             if (v.assigned_driver_id) {
               this.vehicleToDriverMap[v.id] = v.assigned_driver_id;
+              // Map driver ID to array of vehicles (driver can have multiple)
+              if (!this.driverToVehicleMap[v.assigned_driver_id]) {
+                this.driverToVehicleMap[v.assigned_driver_id] = [];
+              }
+              this.driverToVehicleMap[v.assigned_driver_id].push(v);
             }
           }
         });
         console.log('[loadVehicles] Built vehicle-to-driver map:', Object.keys(this.vehicleToDriverMap).length, 'mappings');
+        console.log('[loadVehicles] Built driver-to-vehicle map:', Object.keys(this.driverToVehicleMap).length, 'drivers have vehicles');
+        Object.entries(this.driverToVehicleMap).forEach(([driverId, vehicles]) => {
+          console.log(`[loadVehicles] Driver ${driverId} has ${vehicles.length} vehicle(s):`, vehicles.map(v => v.veh_title || v.id));
+        });
 
         // Format label: Prioritize veh_title (Year Make Model), fallback to components
         const formatFleetLabel = (v) => {
@@ -1898,10 +1913,12 @@ class ReservationForm {
           // Recalculate garage times based on new driver's address
           this.updateGarageTimesFromDriver();
           
-          // Find all fleet vehicles assigned to this driver
-          const matchingVehicles = (this.fleetVehicles || []).filter(v => 
-            v && v.assigned_driver_id === driverId
-          );
+          // Find all fleet vehicles assigned to this driver using the pre-built map
+          const matchingVehicles = this.driverToVehicleMap?.[driverId] || 
+            (this.fleetVehicles || []).filter(v => v && v.assigned_driver_id === driverId);
+          
+          console.log('[driverSelect] Looking for vehicles for driver:', driverId, 
+            'Found:', matchingVehicles.length, 'vehicles');
           
           if (matchingVehicles.length === 0) {
             console.log('[driverSelect] No vehicles assigned to driver:', driverId);
@@ -1912,7 +1929,7 @@ class ReservationForm {
             // Single vehicle - auto-select it
             const veh = matchingVehicles[0];
             carSelect.value = veh.id;
-            console.log('[driverSelect] Auto-selected vehicle:', veh.id, veh.veh_title || veh.make + ' ' + veh.model);
+            console.log('[driverSelect] ✅ Auto-selected vehicle:', veh.id, veh.veh_title || veh.make + ' ' + veh.model);
           } else {
             // Multiple vehicles - ask user which one to use
             console.log('[driverSelect] Multiple vehicles for driver:', matchingVehicles.length);
@@ -2782,12 +2799,47 @@ class ReservationForm {
       console.log('📍 searchAirportsList called with query:', query);
       const { searchAirports } = await import('./api-service.js');
       console.log('✅ searchAirports function imported');
-      const airports = await searchAirports(query);
+      
+      // Get organization ID for local airport lookup
+      const organizationId = window.currentOrganizationId || this.organizationId;
+      
+      // searchAirports now includes LocalAirportsService fallback
+      const airports = await searchAirports(query, organizationId);
       console.log('✅ Airports found:', airports);
+      
+      // If no results from API, try local airports directly
+      if ((!airports || airports.length === 0) && organizationId) {
+        console.log('📍 Trying local airports fallback');
+        const localAirports = await LocalAirportsService.searchLocalAirports(query, organizationId);
+        if (localAirports && localAirports.length > 0) {
+          const formatted = localAirports.map(a => LocalAirportsService.formatAirport(a));
+          console.log('✅ Local airports found:', formatted);
+          this.showAirportSuggestions(formatted);
+          return;
+        }
+      }
+      
       this.showAirportSuggestions(airports);
     } catch (error) {
       console.error('❌ Airport search error:', error);
-      // Show fallback message
+      
+      // Try local airports as last resort fallback
+      try {
+        const organizationId = window.currentOrganizationId || this.organizationId;
+        if (organizationId) {
+          const localAirports = await LocalAirportsService.searchLocalAirports(query, organizationId);
+          if (localAirports && localAirports.length > 0) {
+            const formatted = localAirports.map(a => LocalAirportsService.formatAirport(a));
+            console.log('✅ Fallback to local airports:', formatted);
+            this.showAirportSuggestions(formatted);
+            return;
+          }
+        }
+      } catch (fallbackError) {
+        console.error('❌ Local airport fallback also failed:', fallbackError);
+      }
+      
+      // Show error message only if all fallbacks fail
       const container = document.getElementById('airportSuggestions');
       if (container) {
         container.innerHTML = '<div class="airport-suggestion-item" style="color: red;">Error searching airports. Please try again.</div>';
@@ -5814,15 +5866,19 @@ class ReservationForm {
       }
 
       if (rates.distance) {
+        console.log('[ReservationForm] Processing distance rates:', rates.distance);
         const miles = this.latestRouteSummary?.miles;
+        console.log('[ReservationForm] Route miles:', miles, 'from latestRouteSummary:', this.latestRouteSummary);
         const includedMiles = getNum(rates.distance.includedMiles);
         const billableMiles = miles !== undefined && miles !== null
           ? Math.max(0, miles - includedMiles)
           : null;
+        console.log('[ReservationForm] Billable miles:', billableMiles, '(miles:', miles, '- included:', includedMiles, ')');
 
         const mileRate = getNum(rates.distance.ratePerMile)
           || getNum(rates.distance.basePerMile)
           || getNum(rates.distance.tiers && rates.distance.tiers[0]?.rate);
+        console.log('[ReservationForm] Mile rate:', mileRate);
         if (mileRate) {
           setIfEmpty('mileRate', mileRate.toString());
         }
@@ -5831,7 +5887,10 @@ class ReservationForm {
           const mileQtyEl = document.getElementById('mileQty');
           if (mileQtyEl) {
             mileQtyEl.value = billableMiles.toFixed(1);
+            console.log('[ReservationForm] Set mileQty to:', billableMiles.toFixed(1));
           }
+        } else {
+          console.log('[ReservationForm] No billable miles - route may not be calculated yet');
         }
 
         const minimumFare = getNum(rates.distance.minimumFare);
@@ -6159,6 +6218,8 @@ class ReservationForm {
 
     const serviceTypeCode = serviceTypeEl?.value || '';
     const vehicleTypeId = vehicleTypeEl?.value || '';
+    
+    console.log('[ReservationForm] updateRateConfigDisplay called:', { serviceTypeCode, vehicleTypeId, forceReset });
 
     // Track service type changes and clear rates when it changes
     const previousServiceType = this._lastServiceTypeForRates || '';
@@ -6172,8 +6233,11 @@ class ReservationForm {
     let allowedPricingTypes = ['DISTANCE']; // Default
     let primaryPricingBasis = 'Distance';
     
+    console.log('[ReservationForm] Service types list:', this._serviceTypesList);
+    
     if (this._serviceTypesList) {
       const serviceType = this._serviceTypesList.find(st => st.code === serviceTypeCode);
+      console.log('[ReservationForm] Found service type:', serviceType);
       if (serviceType) {
         // Get allowed pricing types (array or single value)
         if (Array.isArray(serviceType.pricing_types) && serviceType.pricing_types.length > 0) {
@@ -6202,6 +6266,8 @@ class ReservationForm {
         allowedPricingTypes = ['DISTANCE'];
       }
     }
+    
+    console.log('[ReservationForm] Pricing config:', { primaryPricingBasis, allowedPricingTypes });
 
     // Helper to check if a pricing type is allowed
     const isAllowed = (type) => {
@@ -6266,6 +6332,8 @@ class ReservationForm {
     };
     
     const relevantRates = getRatesForPricingBasis(allRates, primaryPricingBasis);
+    console.log('[ReservationForm] relevantRates for', primaryPricingBasis, ':', relevantRates);
+    console.log('[ReservationForm] allRates:', allRates);
     
     // Extract rates from nested structure (perHour, distance, etc.) or flat structure
     const getNum = (val) => {
@@ -6299,6 +6367,8 @@ class ReservationForm {
       || getNum(allRates.distance?.basePerMile)
       || getNum(allRates.distance?.tiers?.[0]?.rate) || 0
     ) : 0;
+    
+    console.log('[ReservationForm] Extracted perMile:', perMile, 'baseRate:', baseRate);
     
     // Min hours - only include if HOURS pricing type is allowed
     const minHours = isAllowed('HOURS') ? (
@@ -6346,6 +6416,8 @@ class ReservationForm {
    */
   autoApplyRatesToCosts(rateConfig) {
     const { baseRate, perHour, perMile, perPassenger, minHours, gratuity, pricingBasis, allowedPricingTypes, tieredFormula } = rateConfig;
+    
+    console.log('[ReservationForm] autoApplyRatesToCosts called:', rateConfig);
     
     // Helper to check if a pricing type is allowed
     const isAllowed = (type) => {
@@ -7321,14 +7393,6 @@ class ReservationForm {
         }
       }
 
-      // Save route stops if available (optional feature; db may not implement this)
-      if (reservationData.routing.stops && reservationData.routing.stops.length > 0) {
-        if (typeof db.saveRouteStops === 'function') {
-          db.saveRouteStops(saved.id, reservationData.routing.stops);
-          console.log('✅ Route stops saved to db');
-        }
-      }
-
       // Save addresses to account if account number exists
       // This captures all addresses from the reservation for easy reuse
       const accountNumber = reservationData.billingAccount.account;
@@ -7341,8 +7405,14 @@ class ReservationForm {
           console.log('📍 Saving addresses to account:', account.id);
           const addressPromises = [];
           
-          // Save each stop address to the account
+          // Save route stops if available
           if (reservationData.routing.stops && reservationData.routing.stops.length > 0) {
+            if (typeof db.saveRouteStops === 'function') {
+              db.saveRouteStops(saved.id, reservationData.routing.stops);
+              console.log('✅ Route stops saved to db');
+            }
+            
+            // Save each stop address to the account
             for (const stop of reservationData.routing.stops) {
               if (stop.address1 && stop.city) {
                 const addressData = {
@@ -7502,6 +7572,35 @@ class ReservationForm {
           }
           // Keep form open for further editing; just show a toast/notification
           this.showSaveNotification('Reservation saved');
+          
+          // 📧 Send confirmation emails (billing with price, passenger without price if different)
+          try {
+            if (window.CustomerNotificationService) {
+              console.log('📧 Sending reservation confirmation emails...');
+              // Build reservation data for notification
+              const reservationForNotification = {
+                confirmation_number: currentConfNumber,
+                passenger_name: passengerFullName,
+                pickup_datetime: pickupAt,
+                pickup_address: document.getElementById('puAddress')?.value || '',
+                dropoff_address: document.getElementById('doAddress')?.value || '',
+                vehicle_type: vehicleTypeValue,
+                passenger_count: parseInt(document.getElementById("numPax")?.value || "1") || 1,
+                grand_total: grandTotalValue,
+                base_fare: document.getElementById('baseRate')?.value || '0',
+                gratuity: document.getElementById('gratuity')?.value || '0',
+                taxes: document.getElementById('tax')?.value || '0',
+                billing_email: document.getElementById('acctEmail')?.value || document.getElementById('bookByEmail')?.value || '',
+                passenger_email: document.getElementById('paxEmail')?.value || '',
+                passenger_phone: document.getElementById('paxPhone')?.value || document.getElementById('paxCell')?.value || ''
+              };
+              const confirmResults = await window.CustomerNotificationService.sendReservationConfirmation(reservationForNotification);
+              console.log('📬 Confirmation notification results:', confirmResults);
+            }
+          } catch (notifyError) {
+            console.error('❌ Failed to send confirmation emails:', notifyError);
+            // Don't block the save operation if notification fails
+          }
           
           // Auto Farmout Mode: After save, auto-set farmout options if enabled
           await this.applyAutoFarmoutIfEnabled();
@@ -8288,26 +8387,6 @@ class ReservationForm {
           console.log('📞 [ReservationForm] Populated booking agent from account (is_booking_contact)');
         }
         
-        // Store account's preferred airports and home address for quick selection
-        this.accountPreferredAirports = account.preferred_airports || [];
-        this.accountPreferredFBOs = account.preferred_fbos || [];
-        // Check both address_line1 and address1 for compatibility
-        const homeStreet = account.address_line1 || account.address1;
-        this.accountHomeAddress = homeStreet ? 
-          `${homeStreet}${account.city ? ', ' + account.city : ''}${account.state ? ', ' + account.state : ''}${account.zip || account.zip_code ? ' ' + (account.zip || account.zip_code) : ''}` : null;
-        this.accountHomeCoordinates = account.home_coordinates;
-        this.accountHomeAirport = account.home_airport;
-        
-        if (this.accountPreferredAirports.length > 0) {
-          console.log('✈️ [ReservationForm] Account preferred airports:', this.accountPreferredAirports.map(a => a.code).join(', '));
-          this.populatePreferredAirportsQuickSelect();
-        }
-        
-        if (this.accountHomeAddress) {
-          console.log('🏠 [ReservationForm] Account home address:', this.accountHomeAddress);
-          this.addHomeAddressQuickSelect();
-        }
-        
         // Load saved passengers and addresses for this account
         await this.loadSavedPassengersAndAddresses(accountId);
         
@@ -8397,91 +8476,6 @@ class ReservationForm {
       this.savedAddresses.map(a => a.label || a.full_address?.substring(0, 30)));
   }
   
-  /**
-   * Populate preferred airports quick select buttons for account owner
-   */
-  populatePreferredAirportsQuickSelect() {
-    if (!this.accountPreferredAirports?.length) return;
-    
-    // Find the stops container to add quick selects near address inputs
-    const stopsContainer = document.getElementById('stopsContainer');
-    if (!stopsContainer) return;
-    
-    // Add quick select to each stop's address input
-    const stopAddressInputs = stopsContainer.querySelectorAll('.stop-address-input, input[name*="address"]');
-    
-    stopAddressInputs.forEach((input, index) => {
-      const wrapper = input.closest('.stop-address-wrapper') || input.parentElement;
-      if (!wrapper) return;
-      
-      // Check if quick select already exists
-      if (wrapper.querySelector('.preferred-airports-quick')) return;
-      
-      const quickSelectHtml = `
-        <div class="preferred-airports-quick" style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;">
-          <span style="font-size: 11px; color: #888; margin-right: 4px;">Quick:</span>
-          ${this.accountPreferredAirports.map(a => `
-            <button type="button" class="quick-airport-btn" data-code="${a.code}" data-name="${a.name}" 
-                    style="font-size: 11px; padding: 2px 8px; background: rgba(99, 102, 241, 0.2); 
-                           border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 4px; 
-                           color: #6366f1; cursor: pointer;"
-                    title="${a.name}">
-              ✈️ ${a.code}
-            </button>
-          `).join('')}
-          ${this.accountHomeAddress ? `
-            <button type="button" class="quick-home-btn" 
-                    style="font-size: 11px; padding: 2px 8px; background: rgba(34, 197, 94, 0.2); 
-                           border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 4px; 
-                           color: #22c55e; cursor: pointer;"
-                    title="${this.accountHomeAddress}">
-              🏠 Home
-            </button>
-          ` : ''}
-        </div>
-      `;
-      
-      wrapper.insertAdjacentHTML('beforeend', quickSelectHtml);
-      
-      // Add click handlers
-      wrapper.querySelectorAll('.quick-airport-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const airport = this.accountPreferredAirports.find(a => a.code === btn.dataset.code);
-          if (airport && input) {
-            input.value = `${airport.name} (${airport.code})`;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            console.log('✈️ [ReservationForm] Quick-selected airport:', airport.code);
-          }
-        });
-      });
-      
-      const homeBtn = wrapper.querySelector('.quick-home-btn');
-      if (homeBtn) {
-        homeBtn.addEventListener('click', () => {
-          if (input && this.accountHomeAddress) {
-            input.value = this.accountHomeAddress;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            console.log('🏠 [ReservationForm] Quick-selected home address');
-          }
-        });
-      }
-    });
-    
-    console.log('✈️ [ReservationForm] Added preferred airports quick select buttons');
-  }
-  
-  /**
-   * Add home address quick select button to address inputs
-   */
-  addHomeAddressQuickSelect() {
-    // This is handled by populatePreferredAirportsQuickSelect if preferred airports exist
-    // Only need separate handling if no preferred airports but has home address
-    if (this.accountPreferredAirports?.length > 0) return;
-    if (!this.accountHomeAddress) return;
-    
-    console.log('🏠 [ReservationForm] Home address available for quick select');
-  }
-
   /**
    * Parse passenger phone/email from special_instructions field
    * Format: "Passenger: Name, Phone: xxx, Email: xxx, ..."
@@ -8661,7 +8655,16 @@ class ReservationForm {
   }
 
   applyReservationSnapshot(snapshot) {
-    if (!snapshot || typeof snapshot !== 'object') return;
+    console.log('📸 [applyReservationSnapshot] Received snapshot:', snapshot);
+    console.log('📸 [applyReservationSnapshot] Billing:', snapshot?.billing);
+    console.log('📸 [applyReservationSnapshot] Passenger:', snapshot?.passenger);
+    console.log('📸 [applyReservationSnapshot] Routing:', snapshot?.routing);
+    console.log('📸 [applyReservationSnapshot] Details:', snapshot?.details);
+    
+    if (!snapshot || typeof snapshot !== 'object') {
+      console.warn('⚠️ [applyReservationSnapshot] No valid snapshot provided');
+      return;
+    }
 
     this.safeSetValue('billingAccountSearch', snapshot.billing?.account || '');
     this.safeSetValue('billingCompany', snapshot.billing?.company || '');

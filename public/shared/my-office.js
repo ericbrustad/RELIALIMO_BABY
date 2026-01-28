@@ -11276,6 +11276,11 @@ Would you also like to delete this driver?`
             if (oldFleetVehicle) {
               oldFleetVehicle.assigned_driver_id = null;
               console.log(`🔄 Unassigned driver from old fleet vehicle ${origVehicle}`);
+              // Also update Supabase
+              try {
+                await updateFleetVehicle(origVehicle, { assigned_driver_id: null });
+                console.log(`✅ Supabase: Cleared assigned_driver_id from vehicle ${origVehicle}`);
+              } catch (e) { console.warn('Failed to update Supabase for old vehicle:', e); }
             }
           }
           
@@ -11291,6 +11296,12 @@ Would you also like to delete this driver?`
               });
               newFleetVehicle.assigned_driver_id = driverId;
               console.log(`✅ Assigned driver ${driverId} to fleet vehicle ${vehicleId}`);
+              
+              // IMPORTANT: Also update Supabase so the assignment persists
+              try {
+                await updateFleetVehicle(vehicleId, { assigned_driver_id: driverId });
+                console.log(`✅ Supabase: Updated vehicle ${vehicleId} with assigned_driver_id: ${driverId}`);
+              } catch (e) { console.warn('Failed to update Supabase for new vehicle:', e); }
             }
           }
           
@@ -12003,6 +12014,9 @@ document.addEventListener('DOMContentLoaded', () => {
   
   console.log('Office airports system initialized - each airport stored in its own cell in office.Airports');
   
+  // Initialize startup page selector
+  initStartupPageSelector();
+  
   // Cleanup realtime subscriptions on page unload
   window.addEventListener('beforeunload', () => {
     if (unsubscribeDriversRealtime) {
@@ -12015,3 +12029,75 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+// ============================================
+// Startup Page Selector
+// ============================================
+function initStartupPageSelector() {
+  const select = document.getElementById('startupPageSelect');
+  if (!select) return;
+  
+  // Load saved startup page
+  const savedPage = localStorage.getItem('startup_page') || 'dispatch';
+  select.value = savedPage;
+  
+  // Save on change
+  select.addEventListener('change', (e) => {
+    const page = e.target.value;
+    localStorage.setItem('startup_page', page);
+    console.log('[Settings] Startup page set to:', page);
+    showToast(`Startup page set to: ${getStartupPageLabel(page)}`, 'success');
+  });
+}
+
+// Get label for startup page value
+function getStartupPageLabel(value) {
+  const labels = {
+    'new-reservation': '➕ New Reservation',
+    'reservations': '📋 Reservations',
+    'farmout': '🏠 Farmout Dashboard',
+    'office': '🏢 Office',
+    'accounts': '👤 Accounts',
+    'passengers': '🧳 Passengers',
+    'drivers': '🚗 Drivers',
+    'calendar': '📅 Calendar',
+    'quotes': '💬 Quotes',
+    'dispatch': '🚙 Dispatch',
+    'network': '🌐 Network',
+    'settle': '💰 Settle',
+    'receivables': '📊 Receivables',
+    'payables': '💳 Payables',
+    'memos': '📝 Memos',
+    'files': '📁 Files',
+    'reports': '📈 Reports'
+  };
+  return labels[value] || value;
+}
+
+// Get startup page URL for navigation
+function getStartupPageUrl() {
+  const page = localStorage.getItem('startup_page') || 'dispatch';
+  const urls = {
+    'new-reservation': 'reservation-form.html',
+    'reservations': 'index.html?tab=reservations',
+    'farmout': 'index.html?tab=farmout',
+    'office': 'my-office.html',
+    'accounts': 'accounts.html',
+    'passengers': 'index.html?tab=passengers',
+    'drivers': 'driver-active-list.html',
+    'calendar': 'calendar.html',
+    'quotes': 'index.html?tab=quotes',
+    'dispatch': 'dispatch-grid.html',
+    'network': 'index.html?tab=network',
+    'settle': 'index.html?tab=settle',
+    'receivables': 'index.html?tab=receivables',
+    'payables': 'index.html?tab=payables',
+    'memos': 'index.html?tab=memos',
+    'files': 'index.html?tab=files',
+    'reports': 'index.html?tab=reports'
+  };
+  return urls[page] || 'dispatch-grid.html';
+}
+
+// Make function globally available for use in auth
+window.getStartupPageUrl = getStartupPageUrl;
