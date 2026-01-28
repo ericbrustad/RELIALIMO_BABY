@@ -348,6 +348,74 @@
           <div class="reservations-panel farmout">
             <div class="panel-header">
               <h2 class="panel-title">Farm-out Reservations</h2>
+              
+              <!-- Search Controls for Farmout Reservations -->
+              <div class="search-section farmout-search">
+                <h3 class="search-title">Search Reservations</h3>
+                <div class="search-controls">
+                  <div class="search-group">
+                    <label for="farmoutSearchFor">Search For</label>
+                    <input type="text" id="farmoutSearchFor" placeholder="Enter search term..." class="search-input">
+                  </div>
+                  <div class="search-group">
+                    <label for="farmoutSearchIn">Search In</label>
+                    <select id="farmoutSearchIn" class="search-select">
+                      <option value="all">All Fields</option>
+                      <option value="confirmation">Confirmation #</option>
+                      <option value="passenger">Passenger Name</option>
+                      <option value="company">Company</option>
+                      <option value="driver">Driver Name</option>
+                      <option value="pickup">Pickup Location</option>
+                      <option value="dropoff">Dropoff Location</option>
+                    </select>
+                  </div>
+                  <div class="search-group">
+                    <label for="farmoutDateFrom">Date From</label>
+                    <input type="date" id="farmoutDateFrom" class="search-input">
+                  </div>
+                  <div class="search-group">
+                    <label for="farmoutDateTo">Date To</label>
+                    <input type="date" id="farmoutDateTo" class="search-input">
+                  </div>
+                  <div class="search-group">
+                    <label for="farmoutSortBy">Sort By</label>
+                    <select id="farmoutSortBy" class="search-select">
+                      <option value="pickup_datetime">PU Date</option>
+                      <option value="confirmation_number">Confirmation #</option>
+                      <option value="passenger_name">Passenger Name</option>
+                      <option value="company_name">Company</option>
+                      <option value="grand_total">Amount</option>
+                      <option value="status">Status</option>
+                    </select>
+                  </div>
+                  <div class="search-group">
+                    <label for="farmoutOrderBy">Order By</label>
+                    <select id="farmoutOrderBy" class="search-select">
+                      <option value="asc">Ascending</option>
+                      <option value="desc">Descending</option>
+                    </select>
+                  </div>
+                  <div class="search-group">
+                    <label for="farmoutPageSize">Page Size</label>
+                    <select id="farmoutPageSize" class="search-select">
+                      <option value="25">25</option>
+                      <option value="50">50</option>
+                      <option value="75" selected>75</option>
+                      <option value="100">100</option>
+                      <option value="150">150</option>
+                      <option value="200">200</option>
+                    </select>
+                  </div>
+                  <div class="search-group search-buttons">
+                    <button id="farmoutSearchBtn" class="btn btn-primary">SEARCH</button>
+                    <button id="farmoutClearSearchBtn" class="btn btn-secondary">CLEAR</button>
+                  </div>
+                </div>
+                <div class="search-results-info">
+                  <span id="farmoutResultCount">Showing all reservations</span>
+                </div>
+              </div>
+              
               <div class="farmout-toolbar">
                 <div class="toolbar-group">
                   <label for="farmoutStatusFilter">Status</label>

@@ -97,6 +97,18 @@ export class UIManager {
     this.interactionGuardInstalled = false;
     this.automationService = null;
     this.boundHandleDelegatedClick = this.handleDelegatedClick.bind(this);
+    
+    // Farmout search state
+    this.farmoutSearchTerm = '';
+    this.farmoutSearchField = 'all';
+    this.farmoutDateFrom = '';
+    this.farmoutDateTo = '';
+    this.farmoutSortBy = 'pickup_datetime';
+    this.farmoutOrderBy = 'asc';
+    this.farmoutPageSize = 75;
+    this.farmoutCurrentPage = 1;
+    this.farmoutFilteredReservations = [];
+    
     try {
       this.currencyFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
     } catch (error) {
@@ -408,6 +420,9 @@ export class UIManager {
       });
     }
 
+    // Apply search/filter/sort/pagination from farmout search controls
+    reservations = this.filterFarmoutReservations(reservations);
+
     this.renderFarmoutTable(container, reservations);
   }
 
@@ -715,6 +730,203 @@ export class UIManager {
     const resendOfferBtn = document.getElementById('resendOfferBtn');
     if (resendOfferBtn) {
       resendOfferBtn.addEventListener('click', () => this.handleResendOffer());
+    }
+
+    // Farmout search controls
+    this.bindFarmoutSearchControls();
+  }
+
+  bindFarmoutSearchControls() {
+    const searchBtn = document.getElementById('farmoutSearchBtn');
+    const clearBtn = document.getElementById('farmoutClearSearchBtn');
+    const searchFor = document.getElementById('farmoutSearchFor');
+    const searchIn = document.getElementById('farmoutSearchIn');
+    const dateFrom = document.getElementById('farmoutDateFrom');
+    const dateTo = document.getElementById('farmoutDateTo');
+    const sortBy = document.getElementById('farmoutSortBy');
+    const orderBy = document.getElementById('farmoutOrderBy');
+    const pageSize = document.getElementById('farmoutPageSize');
+
+    if (searchBtn) {
+      searchBtn.addEventListener('click', () => this.applyFarmoutSearch());
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => this.clearFarmoutSearch());
+    }
+
+    // Enter key triggers search
+    if (searchFor) {
+      searchFor.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') this.applyFarmoutSearch();
+      });
+    }
+
+    // Real-time filter on control changes
+    [searchIn, dateFrom, dateTo, sortBy, orderBy, pageSize].forEach(control => {
+      if (control) {
+        control.addEventListener('change', () => this.applyFarmoutSearch());
+      }
+    });
+  }
+
+  applyFarmoutSearch() {
+    // Get current values from controls
+    this.farmoutSearchTerm = (document.getElementById('farmoutSearchFor')?.value || '').toLowerCase().trim();
+    this.farmoutSearchField = document.getElementById('farmoutSearchIn')?.value || 'all';
+    this.farmoutDateFrom = document.getElementById('farmoutDateFrom')?.value || '';
+    this.farmoutDateTo = document.getElementById('farmoutDateTo')?.value || '';
+    this.farmoutSortBy = document.getElementById('farmoutSortBy')?.value || 'pickup_datetime';
+    this.farmoutOrderBy = document.getElementById('farmoutOrderBy')?.value || 'asc';
+    this.farmoutPageSize = parseInt(document.getElementById('farmoutPageSize')?.value || '75', 10);
+    this.farmoutCurrentPage = 1;
+
+    // Update table with filters applied
+    this.updateFarmoutTable();
+  }
+
+  clearFarmoutSearch() {
+    // Reset control values
+    const searchFor = document.getElementById('farmoutSearchFor');
+    const searchIn = document.getElementById('farmoutSearchIn');
+    const dateFrom = document.getElementById('farmoutDateFrom');
+    const dateTo = document.getElementById('farmoutDateTo');
+    const sortBy = document.getElementById('farmoutSortBy');
+    const orderBy = document.getElementById('farmoutOrderBy');
+    const pageSize = document.getElementById('farmoutPageSize');
+
+    if (searchFor) searchFor.value = '';
+    if (searchIn) searchIn.value = 'all';
+    if (dateFrom) dateFrom.value = '';
+    if (dateTo) dateTo.value = '';
+    if (sortBy) sortBy.value = 'pickup_datetime';
+    if (orderBy) orderBy.value = 'asc';
+    if (pageSize) pageSize.value = '75';
+
+    // Reset state
+    this.farmoutSearchTerm = '';
+    this.farmoutSearchField = 'all';
+    this.farmoutDateFrom = '';
+    this.farmoutDateTo = '';
+    this.farmoutSortBy = 'pickup_datetime';
+    this.farmoutOrderBy = 'asc';
+    this.farmoutPageSize = 75;
+    this.farmoutCurrentPage = 1;
+
+    // Update table
+    this.updateFarmoutTable();
+  }
+
+  filterFarmoutReservations(reservations) {
+    let filtered = [...reservations];
+
+    // Apply search term filter
+    if (this.farmoutSearchTerm) {
+      filtered = filtered.filter(res => {
+        const searchTerm = this.farmoutSearchTerm;
+        const raw = res.raw || res;
+        
+        const fieldsToSearch = {
+          all: () => {
+            const allText = [
+              this.resolveConfirmationNumber(res),
+              this.resolvePassengerName(res),
+              raw.company_name || '',
+              this.resolveDriverName(res),
+              this.resolveLocation(res, 'pickup'),
+              this.resolveLocation(res, 'dropoff')
+            ].join(' ').toLowerCase();
+            return allText.includes(searchTerm);
+          },
+          confirmation: () => (this.resolveConfirmationNumber(res) || '').toLowerCase().includes(searchTerm),
+          passenger: () => (this.resolvePassengerName(res) || '').toLowerCase().includes(searchTerm),
+          company: () => (raw.company_name || '').toLowerCase().includes(searchTerm),
+          driver: () => (this.resolveDriverName(res) || '').toLowerCase().includes(searchTerm),
+          pickup: () => (this.resolveLocation(res, 'pickup') || '').toLowerCase().includes(searchTerm),
+          dropoff: () => (this.resolveLocation(res, 'dropoff') || '').toLowerCase().includes(searchTerm)
+        };
+
+        const searchFn = fieldsToSearch[this.farmoutSearchField] || fieldsToSearch.all;
+        return searchFn();
+      });
+    }
+
+    // Apply date range filter
+    if (this.farmoutDateFrom || this.farmoutDateTo) {
+      filtered = filtered.filter(res => {
+        const raw = res.raw || res;
+        const pickupDate = raw.pickup_datetime || raw.pickup_at || res.pickupDate || '';
+        if (!pickupDate) return true;
+        
+        const resDate = new Date(pickupDate).toISOString().split('T')[0];
+        
+        if (this.farmoutDateFrom && resDate < this.farmoutDateFrom) return false;
+        if (this.farmoutDateTo && resDate > this.farmoutDateTo) return false;
+        return true;
+      });
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      const rawA = a.raw || a;
+      const rawB = b.raw || b;
+      let valA, valB;
+
+      switch (this.farmoutSortBy) {
+        case 'pickup_datetime':
+          valA = new Date(rawA.pickup_datetime || rawA.pickup_at || '').getTime() || 0;
+          valB = new Date(rawB.pickup_datetime || rawB.pickup_at || '').getTime() || 0;
+          break;
+        case 'confirmation_number':
+          valA = (this.resolveConfirmationNumber(a) || '').toLowerCase();
+          valB = (this.resolveConfirmationNumber(b) || '').toLowerCase();
+          break;
+        case 'passenger_name':
+          valA = (this.resolvePassengerName(a) || '').toLowerCase();
+          valB = (this.resolvePassengerName(b) || '').toLowerCase();
+          break;
+        case 'company_name':
+          valA = (rawA.company_name || '').toLowerCase();
+          valB = (rawB.company_name || '').toLowerCase();
+          break;
+        case 'grand_total':
+          valA = parseFloat(rawA.grand_total || rawA.payout || 0);
+          valB = parseFloat(rawB.grand_total || rawB.payout || 0);
+          break;
+        case 'status':
+          valA = (a.farmoutStatus || 'unassigned').toLowerCase();
+          valB = (b.farmoutStatus || 'unassigned').toLowerCase();
+          break;
+        default:
+          valA = '';
+          valB = '';
+      }
+
+      if (typeof valA === 'string') {
+        return this.farmoutOrderBy === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+      return this.farmoutOrderBy === 'asc' ? valA - valB : valB - valA;
+    });
+
+    // Store filtered reservations for pagination
+    this.farmoutFilteredReservations = filtered;
+
+    // Update result count display
+    this.updateFarmoutResultCount(filtered.length, reservations.length);
+
+    // Apply pagination
+    const startIndex = (this.farmoutCurrentPage - 1) * this.farmoutPageSize;
+    return filtered.slice(startIndex, startIndex + this.farmoutPageSize);
+  }
+
+  updateFarmoutResultCount(filtered, total) {
+    const resultCountEl = document.getElementById('farmoutResultCount');
+    if (resultCountEl) {
+      if (this.farmoutSearchTerm || this.farmoutDateFrom || this.farmoutDateTo) {
+        resultCountEl.textContent = `Showing ${filtered} of ${total} reservations`;
+      } else {
+        resultCountEl.textContent = `Showing all ${total} reservations`;
+      }
     }
   }
 

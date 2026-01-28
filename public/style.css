@@ -577,6 +577,81 @@ textarea {
   flex-wrap: wrap;
 }
 
+/* Farmout Search Section */
+.farmout-search {
+  background: #1a1a1a;
+  border: 1px solid #2e2e2e;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.farmout-search .search-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #2e2e2e;
+}
+
+.farmout-search .search-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.farmout-search .search-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.farmout-search .search-group label {
+  font-size: 11px;
+  color: #8d8d8d;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.farmout-search .search-input,
+.farmout-search .search-select {
+  padding: 8px 12px;
+  background: #0f0f0f;
+  border: 1px solid #2e2e2e;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 13px;
+  min-width: 140px;
+}
+
+.farmout-search .search-input:focus,
+.farmout-search .search-select:focus {
+  outline: none;
+  border-color: #e53935;
+}
+
+.farmout-search .search-buttons {
+  flex-direction: row;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.farmout-search .search-buttons .btn {
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.farmout-search .search-results-info {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #2e2e2e;
+  font-size: 12px;
+  color: #8d8d8d;
+}
+
 .farmout-toolbar {
   display: flex;
   gap: 12px;
