@@ -9,6 +9,8 @@ DROP POLICY IF EXISTS "customer_addresses_insert" ON public.customer_addresses;
 DROP POLICY IF EXISTS "customer_addresses_select" ON public.customer_addresses;
 DROP POLICY IF EXISTS "customer_addresses_update" ON public.customer_addresses;
 DROP POLICY IF EXISTS "customer_addresses_delete" ON public.customer_addresses;
+DROP POLICY IF EXISTS "customer_addresses_anon" ON public.customer_addresses;
+DROP POLICY IF EXISTS "customer_addresses_service_role" ON public.customer_addresses;
 DROP POLICY IF EXISTS "Allow authenticated insert" ON public.customer_addresses;
 DROP POLICY IF EXISTS "Allow authenticated select" ON public.customer_addresses;
 DROP POLICY IF EXISTS "Allow service role full access" ON public.customer_addresses;
@@ -46,6 +48,14 @@ TO service_role
 USING (true)
 WITH CHECK (true);
 
+-- Allow anon users full access (for customer portal)
+CREATE POLICY "customer_addresses_anon"
+ON public.customer_addresses
+FOR ALL
+TO anon
+USING (true)
+WITH CHECK (true);
+
 -- ============================================
 -- customer_passengers table
 -- ============================================
@@ -54,6 +64,8 @@ DROP POLICY IF EXISTS "customer_passengers_insert" ON public.customer_passengers
 DROP POLICY IF EXISTS "customer_passengers_select" ON public.customer_passengers;
 DROP POLICY IF EXISTS "customer_passengers_update" ON public.customer_passengers;
 DROP POLICY IF EXISTS "customer_passengers_delete" ON public.customer_passengers;
+DROP POLICY IF EXISTS "customer_passengers_anon" ON public.customer_passengers;
+DROP POLICY IF EXISTS "customer_passengers_service_role" ON public.customer_passengers;
 DROP POLICY IF EXISTS "Allow authenticated insert" ON public.customer_passengers;
 DROP POLICY IF EXISTS "Allow authenticated select" ON public.customer_passengers;
 DROP POLICY IF EXISTS "Allow service role full access" ON public.customer_passengers;
@@ -88,6 +100,14 @@ CREATE POLICY "customer_passengers_service_role"
 ON public.customer_passengers
 FOR ALL
 TO service_role
+USING (true)
+WITH CHECK (true);
+
+-- Allow anon users full access (for customer portal)
+CREATE POLICY "customer_passengers_anon"
+ON public.customer_passengers
+FOR ALL
+TO anon
 USING (true)
 WITH CHECK (true);
 
