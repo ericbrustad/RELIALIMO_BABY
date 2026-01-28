@@ -2,21 +2,37 @@
 -- A viewer can see all admin pages but cannot edit anything
 
 -- ============================================
--- 1. Ensure user_profiles table has the role column
+-- 1. Add 'viewer' to the user_role enum type
 -- ============================================
-ALTER TABLE public.user_profiles 
-ADD COLUMN IF NOT EXISTS role text DEFAULT 'user';
+-- Check if viewer already exists, if not add it
+DO $$
+BEGIN
+  -- Try to add 'viewer' to the enum
+  ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'viewer';
+EXCEPTION
+  WHEN duplicate_object THEN
+    -- Value already exists, ignore
+    NULL;
+  WHEN undefined_object THEN
+    -- Enum doesn't exist, we'll handle this below
+    NULL;
+END $$;
 
--- Add check constraint for valid roles
-ALTER TABLE public.user_profiles 
-DROP CONSTRAINT IF EXISTS valid_user_role;
-
-ALTER TABLE public.user_profiles 
-ADD CONSTRAINT valid_user_role 
-CHECK (role IN ('admin', 'dispatcher', 'viewer', 'user', 'owner'));
+-- If the enum doesn't exist at all, create it
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+    CREATE TYPE user_role AS ENUM ('admin', 'dispatcher', 'viewer', 'user', 'owner');
+  END IF;
+END $$;
 
 -- ============================================
--- 2. Create or update a user to have viewer role
+-- 2. Ensure user_profiles table has the role column
+-- ============================================
+-- Note: If role column uses the enum, it should now accept 'viewer'
+
+-- ============================================
+-- 3. Create or update a user to have viewer role
 -- ============================================
 -- To set a user as a viewer, run this with their user_id:
 -- 
