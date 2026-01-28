@@ -856,7 +856,7 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" id="submitPostTrip" class="btn btn-success btn-large">
+          <button type="button" id="submitPostTrip" class="btn btn-success btn-large" onclick="handlePostTripSubmit()">
             ✅ Complete Trip
           </button>
         </div>
@@ -1687,7 +1687,7 @@
           <div class="nav-current-step" id="navCurrentStep">Getting route...</div>
           <div class="nav-eta" id="navETA">Calculating ETA...</div>
         </div>
-        <button type="button" id="navEndBtn" class="btn-icon nav-end-btn" aria-label="End Navigation">
+        <button type="button" id="navEndBtn" class="btn-icon nav-end-btn" aria-label="End Navigation" onclick="if(confirm('End navigation?')) endNavigation();">
           ✕
         </button>
       </header>
