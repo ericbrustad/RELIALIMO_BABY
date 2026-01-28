@@ -8,6 +8,10 @@ class ReservationsList {
   constructor() {
     this.sortBy = 'date';     // Default sort column
     this.sortOrder = 'desc';  // Default sort direction
+    this.pageSize = 75;       // Default page size
+    this.currentPage = 1;
+    this.allReservations = []; // Store all loaded reservations
+    this.filteredReservations = []; // Store filtered reservations
     this.unsubscribeRealtime = null;
     this.init();
   }
@@ -50,7 +54,7 @@ class ReservationsList {
   }
   
   /**
-   * Load sort settings from CompanySettingsManager
+   * Load sort settings from CompanySettingsManager and sync with UI
    */
   loadSortSettings() {
     try {
@@ -60,6 +64,9 @@ class ReservationsList {
         this.sortOrder = settingsManager.getSetting('defaultReservationSortOrder') || 'desc';
         console.log(`📊 Loaded sort settings: sortBy=${this.sortBy}, sortOrder=${this.sortOrder}`);
         
+        // Sync UI dropdowns with settings
+        this.syncUIWithSettings();
+        
         // Listen for settings changes to apply instantly
         window.addEventListener('companySettingsChanged', (e) => {
           const { settings, changedKeys } = e.detail || {};
@@ -67,14 +74,28 @@ class ReservationsList {
             console.log('📊 Sort settings changed, reapplying...');
             this.sortBy = settings.defaultReservationSortBy || 'date';
             this.sortOrder = settings.defaultReservationSortOrder || 'desc';
+            this.syncUIWithSettings();
             // Re-display with new sort
-            this.loadReservations();
+            this.applyFiltersAndSort();
           }
         });
       }
     } catch (e) {
       console.warn('⚠️ Could not load sort settings:', e);
     }
+  }
+  
+  /**
+   * Sync UI dropdowns with current settings
+   */
+  syncUIWithSettings() {
+    const sortBySelect = document.getElementById('sortBy');
+    const orderBySelect = document.getElementById('orderBy');
+    const pageSizeSelect = document.getElementById('pageSize');
+    
+    if (sortBySelect) sortBySelect.value = this.sortBy;
+    if (orderBySelect) orderBySelect.value = this.sortOrder;
+    if (pageSizeSelect) pageSizeSelect.value = String(this.pageSize);
   }
   
   /**
@@ -196,14 +217,143 @@ class ReservationsList {
         }
       });
       
-      // Always call displayReservations, even with empty array
-      this.displayReservations(reservations || []);
+      // Store all reservations for filtering
+      this.allReservations = reservations || [];
+      
+      // Apply filters and display
+      this.applyFiltersAndSort();
       
       if (!reservations || reservations.length === 0) {
         console.log('📭 No reservations found in database');
       }
     } catch (error) {
       console.error('❌ Error loading reservations:', error);
+    }
+  }
+  
+  /**
+   * Apply current filters and sort settings, then display
+   */
+  applyFiltersAndSort() {
+    // Get filter values from UI
+    const searchFor = document.getElementById('searchFor')?.value?.trim().toLowerCase() || '';
+    const searchIn = document.getElementById('searchIn')?.value || 'all';
+    const dateFrom = document.getElementById('dateFrom')?.value || '';
+    const dateTo = document.getElementById('dateTo')?.value || '';
+    
+    // Get sort values from UI (these override settings)
+    const sortByUI = document.getElementById('sortBy')?.value;
+    const orderByUI = document.getElementById('orderBy')?.value;
+    const pageSizeUI = document.getElementById('pageSize')?.value;
+    
+    if (sortByUI) this.sortBy = sortByUI;
+    if (orderByUI) this.sortOrder = orderByUI;
+    if (pageSizeUI) this.pageSize = parseInt(pageSizeUI) || 75;
+    
+    console.log(`🔍 Filtering: search="${searchFor}" in="${searchIn}" from="${dateFrom}" to="${dateTo}"`);
+    console.log(`📊 Sort: by="${this.sortBy}" order="${this.sortOrder}" pageSize=${this.pageSize}`);
+    
+    // Filter reservations
+    let filtered = [...this.allReservations];
+    
+    // Apply text search filter
+    if (searchFor) {
+      filtered = filtered.filter(res => {
+        const confNum = String(res.confirmation_number || '').toLowerCase();
+        const passengerFirst = (res.lead_passenger_first_name || '').toLowerCase();
+        const passengerLast = (res.lead_passenger_last_name || '').toLowerCase();
+        const passengerName = `${passengerFirst} ${passengerLast}`;
+        const companyName = (res.account_name || res.company_name || '').toLowerCase();
+        const vehicleType = (res.vehicle_type || res.vehicle_type_name || '').toLowerCase();
+        
+        switch (searchIn) {
+          case 'conf':
+            return confNum.includes(searchFor);
+          case 'passenger':
+            return passengerName.includes(searchFor);
+          case 'company':
+            return companyName.includes(searchFor);
+          case 'vehicle':
+            return vehicleType.includes(searchFor);
+          case 'all':
+          default:
+            return confNum.includes(searchFor) || 
+                   passengerName.includes(searchFor) || 
+                   companyName.includes(searchFor) ||
+                   vehicleType.includes(searchFor);
+        }
+      });
+    }
+    
+    // Apply date range filter
+    if (dateFrom || dateTo) {
+      filtered = filtered.filter(res => {
+        const pickupDate = res.pickup_datetime || res.pickup_at;
+        if (!pickupDate) return false;
+        
+        const resDate = new Date(pickupDate);
+        if (isNaN(resDate.getTime())) return false;
+        
+        // Reset time for date-only comparison
+        resDate.setHours(0, 0, 0, 0);
+        
+        if (dateFrom) {
+          const fromDate = new Date(dateFrom);
+          fromDate.setHours(0, 0, 0, 0);
+          if (resDate < fromDate) return false;
+        }
+        
+        if (dateTo) {
+          const toDate = new Date(dateTo);
+          toDate.setHours(23, 59, 59, 999);
+          if (resDate > toDate) return false;
+        }
+        
+        return true;
+      });
+    }
+    
+    // Store filtered results
+    this.filteredReservations = filtered;
+    
+    // Sort the results
+    const sorted = this.sortReservations(filtered);
+    
+    // Apply pagination
+    const startIdx = (this.currentPage - 1) * this.pageSize;
+    const paginated = sorted.slice(startIdx, startIdx + this.pageSize);
+    
+    console.log(`📋 Showing ${paginated.length} of ${sorted.length} filtered (${this.allReservations.length} total)`);
+    
+    // Display results
+    this.displayReservations(paginated);
+    
+    // Update result count display
+    this.updateResultCount(sorted.length, this.allReservations.length);
+  }
+  
+  /**
+   * Update the result count display
+   */
+  updateResultCount(filtered, total) {
+    let countEl = document.getElementById('resultCount');
+    if (!countEl) {
+      // Create it if it doesn't exist
+      const searchSection = document.querySelector('.search-section');
+      if (searchSection) {
+        countEl = document.createElement('div');
+        countEl.id = 'resultCount';
+        countEl.className = 'result-count';
+        countEl.style.cssText = 'padding: 8px 12px; background: #f0f0f0; border-radius: 4px; margin-top: 10px; font-size: 14px;';
+        searchSection.appendChild(countEl);
+      }
+    }
+    if (countEl) {
+      if (filtered === total) {
+        countEl.textContent = `Showing ${Math.min(this.pageSize, filtered)} of ${total} reservations`;
+      } else {
+        countEl.textContent = `Showing ${Math.min(this.pageSize, filtered)} of ${filtered} filtered (${total} total)`;
+      }
     }
   }
   
@@ -604,44 +754,92 @@ class ReservationsList {
     });
 
     // Search button
-    const searchBtn = document.querySelector('.btn-search');
+    const searchBtn = document.getElementById('searchBtn');
     if (searchBtn) {
       searchBtn.addEventListener('click', () => {
-        this.performSearch();
+        this.currentPage = 1; // Reset to first page on new search
+        this.applyFiltersAndSort();
+      });
+    }
+    
+    // Clear button
+    const clearBtn = document.getElementById('clearBtn');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        this.clearFilters();
+      });
+    }
+    
+    // Enter key in search field triggers search
+    const searchFor = document.getElementById('searchFor');
+    if (searchFor) {
+      searchFor.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          this.currentPage = 1;
+          this.applyFiltersAndSort();
+        }
+      });
+    }
+    
+    // Sort/Order dropdowns trigger immediate re-sort
+    const sortBy = document.getElementById('sortBy');
+    const orderBy = document.getElementById('orderBy');
+    const pageSize = document.getElementById('pageSize');
+    
+    if (sortBy) {
+      sortBy.addEventListener('change', () => {
+        this.sortBy = sortBy.value;
+        this.applyFiltersAndSort();
+      });
+    }
+    
+    if (orderBy) {
+      orderBy.addEventListener('change', () => {
+        this.sortOrder = orderBy.value;
+        this.applyFiltersAndSort();
+      });
+    }
+    
+    if (pageSize) {
+      pageSize.addEventListener('change', () => {
+        this.pageSize = parseInt(pageSize.value) || 75;
+        this.currentPage = 1;
+        this.applyFiltersAndSort();
       });
     }
 
-    // Conf # links
-    document.querySelectorAll('.conf-link').forEach(link => {
-      link.addEventListener('click', (e) => {
+    // Conf # links - delegated event handling
+    document.addEventListener('click', (e) => {
+      if (e.target.classList.contains('conf-link')) {
         e.preventDefault();
-        // Navigate to reservation form with this reservation ID
-        const confNumber = e.target.textContent;
-        window.location.href = `reservation-form.html?conf=${confNumber}`;
-      });
-    });
-
-    // Select links
-    document.querySelectorAll('.select-link').forEach(link => {
-      link.addEventListener('click', (e) => {
+        const confNumber = e.target.dataset.conf || e.target.textContent;
+        this.openReservationInParent(confNumber);
+      }
+      if (e.target.classList.contains('select-link')) {
         e.preventDefault();
         const row = e.target.closest('tr');
-        const confNumber = row.querySelector('.conf-link')?.dataset?.conf;
-        this.selectReservation(confNumber);
-      });
+        const confNumber = row?.querySelector('.conf-link')?.dataset?.conf;
+        if (confNumber) this.selectReservation(confNumber);
+      }
     });
   }
-
-  performSearch() {
-    // Get search values
-    const searchFor = document.querySelector('.search-input').value;
-    const searchIn = document.querySelector('.search-select').value;
+  
+  /**
+   * Clear all filters and show all reservations
+   */
+  clearFilters() {
+    const searchFor = document.getElementById('searchFor');
+    const searchIn = document.getElementById('searchIn');
+    const dateFrom = document.getElementById('dateFrom');
+    const dateTo = document.getElementById('dateTo');
     
-    console.log('Searching for:', searchFor, 'in:', searchIn);
+    if (searchFor) searchFor.value = '';
+    if (searchIn) searchIn.value = 'all';
+    if (dateFrom) dateFrom.value = '';
+    if (dateTo) dateTo.value = '';
     
-    // Implement search logic here
-    // This would filter the table based on search criteria
-    alert('Search functionality will filter reservations based on your criteria');
+    this.currentPage = 1;
+    this.applyFiltersAndSort();
   }
 
   selectReservation(confNumber) {

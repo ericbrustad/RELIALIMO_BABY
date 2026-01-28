@@ -65,63 +65,64 @@
                 <div class="search-row">
                   <div class="search-field">
                     <label>Search For</label>
-                    <input type="text" class="search-input" />
+                    <input type="text" id="searchFor" class="search-input" placeholder="Enter search term..." />
                   </div>
 
                   <div class="search-field">
                     <label>Search In</label>
-                    <select class="search-select">
-                      <option>All Fields</option>
-                      <option>Conf #</option>
-                      <option>Passenger</option>
-                      <option>Company Name</option>
-                      <option>Vehicle Type</option>
+                    <select id="searchIn" class="search-select">
+                      <option value="all">All Fields</option>
+                      <option value="conf">Conf #</option>
+                      <option value="passenger">Passenger</option>
+                      <option value="company">Company Name</option>
+                      <option value="vehicle">Vehicle Type</option>
                     </select>
                   </div>
 
                   <div class="search-field">
                     <label>Date From</label>
-                    <input type="date" class="search-input" />
+                    <input type="date" id="dateFrom" class="search-input" />
                   </div>
 
                   <div class="search-field">
                     <label>Date To</label>
-                    <input type="date" class="search-input" />
+                    <input type="date" id="dateTo" class="search-input" />
                   </div>
                 </div>
 
                 <div class="search-row">
                   <div class="search-field">
                     <label>Sort By</label>
-                    <select class="search-select">
-                      <option>PU Date</option>
-                      <option>Conf #</option>
-                      <option>Passenger</option>
-                      <option>Company</option>
-                      <option>Total</option>
+                    <select id="sortBy" class="search-select">
+                      <option value="date">PU Date</option>
+                      <option value="confirmation_number">Conf #</option>
+                      <option value="passenger">Passenger</option>
+                      <option value="company">Company</option>
+                      <option value="price">Total</option>
                     </select>
                   </div>
 
                   <div class="search-field">
                     <label>Order By</label>
-                    <select class="search-select">
-                      <option>Ascending</option>
-                      <option>Descending</option>
+                    <select id="orderBy" class="search-select">
+                      <option value="asc">Ascending</option>
+                      <option value="desc">Descending</option>
                     </select>
                   </div>
 
                   <div class="search-field">
                     <label>Page Size</label>
-                    <select class="search-select">
-                      <option>75</option>
-                      <option>50</option>
-                      <option>100</option>
-                      <option>200</option>
+                    <select id="pageSize" class="search-select">
+                      <option value="75">75</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                      <option value="200">200</option>
                     </select>
                   </div>
 
                   <div class="search-field">
-                    <button class="btn-search">SEARCH</button>
+                    <button class="btn-search" id="searchBtn">SEARCH</button>
+                    <button class="btn-clear" id="clearBtn" style="margin-left: 5px;">CLEAR</button>
                   </div>
                 </div>
               </div>
