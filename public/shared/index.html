@@ -1,56 +1,25 @@
 <!DOCTYPE html>
 <html lang="en" data-layout="vertical">
   <head>
-    <script>
+    <!-- <script>
       // INSTANT startup page redirect - must be first script
       (function() {
         try {
-          // Check for startup page setting
-          var startupPage = localStorage.getItem('startupPage');
-          if (!startupPage) {
-            // Also check company_settings for backward compatibility
-            var s = localStorage.getItem('company_settings');
-            if (s) {
-              var parsed = JSON.parse(s);
-              startupPage = parsed.defaultStartPage || parsed.startupPage;
-            }
-          }
-          
-          // Map page keys to actual HTML files
-          var routes = {
-            'reservation-form': 'reservation-form.html',
-            'reservations': 'reservations.html',
-            'farmout-dashboard': 'dashboard.html',
-            'my-office': 'my-office.html',
-            'accounts': 'accounts.html',
-            'passengers': 'passengers.html',
-            'drivers': 'my-office.html#drivers',
-            'calendar': 'calendar.html',
-            'quotes': 'quotes.html',
-            'dispatch': 'dispatch-grid.html',
-            'network': 'network.html',
-            'settle': 'settle.html',
-            'receivables': 'receivables.html',
-            'payables': 'payables.html',
-            'memos': 'memos.html',
-            'files': 'files.html',
-            'reports': 'reports.html'
-          };
-          
-          if (startupPage && routes[startupPage]) {
-            var targetPage = routes[startupPage];
-            // Only redirect if we're on index.html
-            if (window.location.pathname === '/' || window.location.pathname.endsWith('/index.html') || window.location.pathname.endsWith('/')) {
-              window.location.replace(targetPage);
+          var s = localStorage.getItem('company_settings');
+          if (s) {
+            var p = JSON.parse(s).defaultStartPage;
+            var r = {'new-reservation':'reservation-form.html','farmout-dashboard':'dashboard.html','office':'my-office.html','accounts':'accounts.html','calendar':'calendar.html','quotes':'quotes.html','dispatch':'dispatch-grid.html','network':'network.html','settle':'settle.html','receivables':'receivables.html','payables':'payables.html','memos':'memos.html','files':'files.html','tools':'tools.html','reports':'reports.html'};
+            if (r[p] && window.location.pathname.indexOf(r[p]) === -1) {
+              window.location.replace(r[p]);
               return;
             }
           }
         } catch(e) {
-          console.error('Startup redirect failed:', e);
+          console.error('Startup script failed:', e);
         }
         document.documentElement.style.visibility = 'visible';
       })();
-    </script>
+    </script> -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RELIA LIMO™</title>
@@ -278,6 +247,166 @@
         background: white;
         color: #667eea;
       }
+      
+      /* Quick Settings Styles */
+      .quick-settings-container {
+        position: relative;
+        margin-left: 8px;
+      }
+      .quick-settings-toggle {
+        background: rgba(255,255,255,0.15);
+        border: none;
+        color: white;
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+      }
+      .quick-settings-toggle:hover {
+        background: rgba(255,255,255,0.25);
+      }
+      .quick-settings-toggle.active {
+        background: white;
+        color: #667eea;
+      }
+      
+      /* Startup Page Modal */
+      .startup-modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+      }
+      .startup-modal-overlay.active {
+        display: flex;
+      }
+      .startup-modal {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        width: 420px;
+        max-height: 80vh;
+        overflow: hidden;
+        animation: modalSlideIn 0.2s ease-out;
+      }
+      @keyframes modalSlideIn {
+        from { transform: translateY(-20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+      .startup-modal-header {
+        padding: 20px 24px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .startup-modal-header h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .startup-modal-close {
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+      }
+      .startup-modal-close:hover {
+        background: rgba(255,255,255,0.3);
+      }
+      .startup-modal-body {
+        padding: 16px;
+        max-height: 60vh;
+        overflow-y: auto;
+      }
+      .startup-modal-subtitle {
+        color: #666;
+        font-size: 13px;
+        margin-bottom: 16px;
+        padding: 0 8px;
+      }
+      .startup-page-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+      .startup-page-option {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 16px 8px;
+        border: 2px solid #eee;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+        color: inherit;
+      }
+      .startup-page-option:hover {
+        border-color: #667eea;
+        background: #f8f9ff;
+        transform: translateY(-2px);
+      }
+      .startup-page-option.selected {
+        border-color: #667eea;
+        background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+      }
+      .startup-page-option .emoji {
+        font-size: 32px;
+        margin-bottom: 8px;
+      }
+      .startup-page-option .label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #333;
+        text-align: center;
+      }
+      .startup-page-option.selected .label {
+        color: #667eea;
+        font-weight: 600;
+      }
+      .startup-page-option .check {
+        display: none;
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        background: #667eea;
+        color: white;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        font-size: 12px;
+        align-items: center;
+        justify-content: center;
+      }
+      .startup-page-option.selected .check {
+        display: flex;
+      }
+      .startup-page-option {
+        position: relative;
+      }
+      
       .global-search-box {
         position: absolute;
         top: 100%;
@@ -661,7 +790,7 @@
       }, 8000);
     </script>
     <!-- Viewer Guard - enables read-only mode for viewer role -->
-    <script type="module" src="viewer-guard.js"></script>
+    <script type="module" src="shared/viewer-guard.js"></script>
   </head>
   <body>
     <!-- Splash Screen - Shows during auth check -->
@@ -700,6 +829,10 @@
                 <div class="global-search-results" id="globalSearchResults"></div>
               </div>
             </div>
+            <!-- Quick Settings -->
+            <div class="quick-settings-container">
+              <button class="quick-settings-toggle" id="quickSettingsToggle" title="Quick Settings">⚙️</button>
+            </div>
             <!-- System Status Indicators -->
             <div class="system-status-bar">
               <div id="smsStatusIndicator" class="status-indicator not-configured" title="Click to configure SMS" onclick="navigateToSmsSettings()">
@@ -718,6 +851,7 @@
             <button class="nav-btn" data-section="dashboard"><span>Farmout Dashboard</span><span style="font-size: 24px;">🏠</span></button>
             <button class="nav-btn active" data-section="office"><span>Office</span><span style="font-size: 24px;">🏢</span></button>
             <button class="nav-btn" data-section="accounts"><span>Accounts</span><span style="font-size: 24px;">👤</span></button>
+            <button class="nav-btn" data-section="emails"><span>Emails</span><span style="font-size: 24px;">📧</span></button>
             <button class="nav-btn" data-section="passengers"><span>Passengers</span><span style="font-size: 24px;">🧳</span></button>
             <button class="nav-btn" data-section="drivers"><span>Drivers</span><span style="font-size: 24px;">🚗</span></button>
             <button class="nav-btn" data-section="calendar"><span>Calendar</span><span style="font-size: 24px;">📅</span></button>
@@ -752,6 +886,11 @@
       <!-- PASSENGERS SECTION -->
       <div id="passengersSection" class="app-main-section">
         <iframe src="passengers.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
+      </div>
+
+      <!-- EMAILS SECTION -->
+      <div id="emailsSection" class="app-main-section">
+        <iframe src="emails.html" style="width: 100%; height: calc(100vh - 60px); border: none;"></iframe>
       </div>
 
       <!-- DRIVERS SECTION -->
@@ -1651,7 +1790,119 @@
         }
       };
       
-      document.addEventListener('DOMContentLoaded', () => GlobalSearch.init());
+      // Quick Settings Manager with Modal
+      const QuickSettings = {
+        pages: [
+          { id: 'new-reservation', emoji: '➕', label: 'New Reservation' },
+          { id: 'reservations', emoji: '📋', label: 'Reservations' },
+          { id: 'dashboard', emoji: '🏠', label: 'Farmout' },
+          { id: 'office', emoji: '🏢', label: 'Office' },
+          { id: 'accounts', emoji: '👤', label: 'Accounts' },
+          { id: 'passengers', emoji: '🧳', label: 'Passengers' },
+          { id: 'drivers', emoji: '🚗', label: 'Drivers' },
+          { id: 'calendar', emoji: '📅', label: 'Calendar' },
+          { id: 'quotes', emoji: '💬', label: 'Quotes' },
+          { id: 'dispatch', emoji: '🚙', label: 'Dispatch' },
+          { id: 'network', emoji: '🌐', label: 'Network' },
+          { id: 'settle', emoji: '💰', label: 'Settle' },
+          { id: 'receivables', emoji: '📊', label: 'Receivables' },
+          { id: 'payables', emoji: '💳', label: 'Payables' },
+          { id: 'memos', emoji: '📝', label: 'Memos' },
+          { id: 'files', emoji: '📁', label: 'Files' },
+          { id: 'reports', emoji: '📈', label: 'Reports' }
+        ],
+        
+        init() {
+          this.createModal();
+          
+          const toggle = document.getElementById('quickSettingsToggle');
+          if (toggle) {
+            toggle.addEventListener('click', (e) => {
+              e.stopPropagation();
+              this.open();
+            });
+          }
+        },
+        
+        createModal() {
+          const savedPage = localStorage.getItem('startup_page') || 'dispatch';
+          
+          const modal = document.createElement('div');
+          modal.className = 'startup-modal-overlay';
+          modal.id = 'startupPageModal';
+          modal.innerHTML = `
+            <div class="startup-modal">
+              <div class="startup-modal-header">
+                <h3>⚙️ Select Startup Page</h3>
+                <button class="startup-modal-close" onclick="QuickSettings.close()">✕</button>
+              </div>
+              <div class="startup-modal-body">
+                <p class="startup-modal-subtitle">Choose which page opens when you log in:</p>
+                <div class="startup-page-grid">
+                  ${this.pages.map(p => `
+                    <div class="startup-page-option ${p.id === savedPage ? 'selected' : ''}" data-page="${p.id}" onclick="QuickSettings.selectPage('${p.id}')">
+                      <span class="check">✓</span>
+                      <span class="emoji">${p.emoji}</span>
+                      <span class="label">${p.label}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+          `;
+          
+          // Close on overlay click
+          modal.addEventListener('click', (e) => {
+            if (e.target === modal) this.close();
+          });
+          
+          document.body.appendChild(modal);
+        },
+        
+        selectPage(pageId) {
+          localStorage.setItem('startup_page', pageId);
+          
+          // Update UI
+          document.querySelectorAll('.startup-page-option').forEach(opt => {
+            opt.classList.toggle('selected', opt.dataset.page === pageId);
+          });
+          
+          const page = this.pages.find(p => p.id === pageId);
+          console.log('[Settings] Startup page set to:', pageId);
+          
+          // Show toast and close after brief delay
+          if (window.showToast) {
+            window.showToast(`Startup page: ${page.emoji} ${page.label}`, 'success');
+          }
+          
+          setTimeout(() => this.close(), 300);
+        },
+        
+        open() {
+          const modal = document.getElementById('startupPageModal');
+          const toggle = document.getElementById('quickSettingsToggle');
+          if (modal) modal.classList.add('active');
+          if (toggle) toggle.classList.add('active');
+        },
+        
+        close() {
+          const modal = document.getElementById('startupPageModal');
+          const toggle = document.getElementById('quickSettingsToggle');
+          if (modal) modal.classList.remove('active');
+          if (toggle) toggle.classList.remove('active');
+        }
+      };
+      
+      // Get startup page URL for navigation
+      window.getStartupPageUrl = function() {
+        const page = localStorage.getItem('startup_page') || 'dispatch';
+        return page; // Return section name for switchSection
+      };
+      
+      document.addEventListener('DOMContentLoaded', () => {
+        GlobalSearch.init();
+        QuickSettings.init();
+      });
     </script>
 
     <!-- Authentication Protection & User Menu -->
