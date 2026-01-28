@@ -247,6 +247,80 @@
         background: white;
         color: #667eea;
       }
+      
+      /* Quick Settings Styles */
+      .quick-settings-container {
+        position: relative;
+        margin-left: 8px;
+      }
+      .quick-settings-toggle {
+        background: rgba(255,255,255,0.15);
+        border: none;
+        color: white;
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+      }
+      .quick-settings-toggle:hover {
+        background: rgba(255,255,255,0.25);
+      }
+      .quick-settings-toggle.active {
+        background: white;
+        color: #667eea;
+      }
+      .quick-settings-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 280px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        display: none;
+        z-index: 9999;
+        margin-top: 8px;
+      }
+      .quick-settings-dropdown.active {
+        display: block;
+      }
+      .quick-settings-header {
+        padding: 12px 16px;
+        font-weight: 600;
+        color: #333;
+        border-bottom: 1px solid #eee;
+        font-size: 14px;
+      }
+      .quick-settings-row {
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .quick-settings-row label {
+        font-size: 13px;
+        color: #555;
+        white-space: nowrap;
+      }
+      .quick-settings-select {
+        flex: 1;
+        padding: 6px 10px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 13px;
+        background: white;
+        cursor: pointer;
+      }
+      .quick-settings-select:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+      
       .global-search-box {
         position: absolute;
         top: 100%;
@@ -665,6 +739,35 @@
               <div class="global-search-box" id="globalSearchBox">
                 <input type="text" class="global-search-input" id="globalSearchInput" placeholder="Search sections, settings, data..." autocomplete="off">
                 <div class="global-search-results" id="globalSearchResults"></div>
+              </div>
+            </div>
+            <!-- Quick Settings -->
+            <div class="quick-settings-container">
+              <button class="quick-settings-toggle" id="quickSettingsToggle" title="Quick Settings">⚙️</button>
+              <div class="quick-settings-dropdown" id="quickSettingsDropdown">
+                <div class="quick-settings-header">Quick Settings</div>
+                <div class="quick-settings-row">
+                  <label>Startup Page:</label>
+                  <select id="startupPageSelect" class="quick-settings-select">
+                    <option value="new-reservation">➕ New Reservation</option>
+                    <option value="reservations">📋 Reservations</option>
+                    <option value="dashboard">🏠 Farmout Dashboard</option>
+                    <option value="office">🏢 Office</option>
+                    <option value="accounts">👤 Accounts</option>
+                    <option value="passengers">🧳 Passengers</option>
+                    <option value="drivers">🚗 Drivers</option>
+                    <option value="calendar">📅 Calendar</option>
+                    <option value="quotes">💬 Quotes</option>
+                    <option value="dispatch" selected>🚙 Dispatch</option>
+                    <option value="network">🌐 Network</option>
+                    <option value="settle">💰 Settle</option>
+                    <option value="receivables">📊 Receivables</option>
+                    <option value="payables">💳 Payables</option>
+                    <option value="memos">📝 Memos</option>
+                    <option value="files">📁 Files</option>
+                    <option value="reports">📈 Reports</option>
+                  </select>
+                </div>
               </div>
             </div>
             <!-- System Status Indicators -->
@@ -1546,7 +1649,81 @@
         }
       };
       
-      document.addEventListener('DOMContentLoaded', () => GlobalSearch.init());
+      // Quick Settings Manager
+      const QuickSettings = {
+        init() {
+          const toggle = document.getElementById('quickSettingsToggle');
+          const dropdown = document.getElementById('quickSettingsDropdown');
+          const startupSelect = document.getElementById('startupPageSelect');
+          
+          // Load saved startup page
+          if (startupSelect) {
+            const savedPage = localStorage.getItem('startup_page') || 'dispatch';
+            startupSelect.value = savedPage;
+            
+            // Save on change
+            startupSelect.addEventListener('change', (e) => {
+              const page = e.target.value;
+              localStorage.setItem('startup_page', page);
+              console.log('[Settings] Startup page set to:', page);
+              // Show toast if available
+              if (window.showToast) {
+                window.showToast(`Startup page set to: ${e.target.options[e.target.selectedIndex].text}`, 'success');
+              }
+            });
+          }
+          
+          // Toggle dropdown
+          if (toggle) {
+            toggle.addEventListener('click', (e) => {
+              e.stopPropagation();
+              this.toggle();
+            });
+          }
+          
+          // Close on click outside
+          document.addEventListener('click', (e) => {
+            const container = document.querySelector('.quick-settings-container');
+            if (container && !container.contains(e.target)) {
+              this.close();
+            }
+          });
+        },
+        
+        open() {
+          const toggle = document.getElementById('quickSettingsToggle');
+          const dropdown = document.getElementById('quickSettingsDropdown');
+          if (toggle) toggle.classList.add('active');
+          if (dropdown) dropdown.classList.add('active');
+        },
+        
+        close() {
+          const toggle = document.getElementById('quickSettingsToggle');
+          const dropdown = document.getElementById('quickSettingsDropdown');
+          if (toggle) toggle.classList.remove('active');
+          if (dropdown) dropdown.classList.remove('active');
+        },
+        
+        toggle() {
+          const dropdown = document.getElementById('quickSettingsDropdown');
+          if (dropdown?.classList.contains('active')) {
+            this.close();
+          } else {
+            this.open();
+          }
+        }
+      };
+      
+      // Get startup page URL for navigation
+      window.getStartupPageUrl = function() {
+        const page = localStorage.getItem('startup_page') || 'dispatch';
+        return page; // Return section name for switchSection
+      };
+      
+      document.addEventListener('DOMContentLoaded', () => {
+        GlobalSearch.init();
+        QuickSettings.init();
+      });
     </script>
 
     <!-- Authentication Protection & User Menu -->
