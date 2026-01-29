@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   buttonText: {
-    color: colors.background,
+    color: colors.white,
     fontSize: fontSize.md,
     fontWeight: '600',
   },

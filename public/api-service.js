@@ -45,6 +45,28 @@ function buildUrl(path) {
   return `${API_BASE}/${path}`;
 }
 
+// Helper to check if an error is a retryable network/abort error
+function isRetryableError(err) {
+  if (!err) return false;
+  const msg = (err.message || '').toLowerCase();
+  const name = (err.name || '').toLowerCase();
+  return (
+    name === 'aborterror' ||
+    name === 'typeerror' ||
+    msg.includes('abort') ||
+    msg.includes('signal') ||
+    msg.includes('network') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('connection') ||
+    msg.includes('timeout')
+  );
+}
+
+// Sleep helper for retry delays
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function request(path, options = {}) {
   const url = buildUrl(path);
   const apiKey = getApiKeyForPath(path);
@@ -81,83 +103,107 @@ async function request(path, options = {}) {
     throw err;
   }
 
-  try {
-    // Extract headers from options separately to prevent overwriting
-    const { headers: optionHeaders, ...restOptions } = options;
-    
-    // Get user's access token for Authorization header (required for RLS)
-    let authToken = apiKey; // Default to anon key
+  // Retry configuration
+  const MAX_RETRIES = 3;
+  const BASE_DELAY_MS = 500;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      // First, try the shared session helper from auth-guard.js
-      if (window.__reliaGetValidSession) {
-        const session = await window.__reliaGetValidSession();
-        if (session?.access_token) {
-          authToken = session.access_token;
-          console.debug('[api-service] Using user access token for auth (from __reliaGetValidSession)');
-        }
-      }
-      // Fallback: try localStorage (auth-guard.js saves it there)
-      else if (localStorage.getItem('supabase_access_token')) {
-        authToken = localStorage.getItem('supabase_access_token');
-        console.debug('[api-service] Using user access token for auth (from localStorage)');
-      }
-      // Fallback: try to get from Supabase client if available
-      else if (window.__supabaseClient) {
-        const { data: { session } } = await window.__supabaseClient.auth.getSession();
-        if (session?.access_token) {
-          authToken = session.access_token;
-          console.debug('[api-service] Using user access token for auth (from __supabaseClient)');
-        }
-      } else if (window.supabase?.auth) {
-        const { data: { session } } = await window.supabase.auth.getSession();
-        if (session?.access_token) {
-          authToken = session.access_token;
-          console.debug('[api-service] Using user access token for auth (from window.supabase)');
-        }
-      }
-    } catch (authErr) {
-      console.warn('[api-service] Could not get user session, using anon key:', authErr.message);
-    }
-    
-    const res = await fetch(finalUrl, {
-      ...restOptions,
-      headers: {
-        "Content-Type": "application/json",
-        apikey: apiKey,
-        Authorization: `Bearer ${authToken}`,
-        ...optionHeaders
-      }
-    });
-
-    // read raw text first so we can include it in error messages even when JSON parsing fails
-    const text = await res.text();
-    let data = null;
-    if (text) {
+      // Extract headers from options separately to prevent overwriting
+      const { headers: optionHeaders, ...restOptions } = options;
+      
+      // Get user's access token for Authorization header (required for RLS)
+      let authToken = apiKey; // Default to anon key
       try {
-        data = JSON.parse(text);
-      } catch (err) {
-        // include parsing error context
-        console.error('Failed to parse JSON response:', err, 'raw:', text);
-        setLastApiError(err);
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status} ${res.statusText}: ${text}`);
+        // First, try the shared session helper from auth-guard.js
+        if (window.__reliaGetValidSession) {
+          const session = await window.__reliaGetValidSession();
+          if (session?.access_token) {
+            authToken = session.access_token;
+            if (attempt === 1) console.debug('[api-service] Using user access token for auth (from __reliaGetValidSession)');
+          }
         }
-        throw new Error(`Invalid JSON response: ${text}`);
+        // Fallback: try localStorage (auth-guard.js saves it there)
+        else if (localStorage.getItem('supabase_access_token')) {
+          authToken = localStorage.getItem('supabase_access_token');
+          if (attempt === 1) console.debug('[api-service] Using user access token for auth (from localStorage)');
+        }
+        // Fallback: try to get from Supabase client if available
+        else if (window.__supabaseClient) {
+          const { data: { session } } = await window.__supabaseClient.auth.getSession();
+          if (session?.access_token) {
+            authToken = session.access_token;
+            if (attempt === 1) console.debug('[api-service] Using user access token for auth (from __supabaseClient)');
+          }
+        } else if (window.supabase?.auth) {
+          const { data: { session } } = await window.supabase.auth.getSession();
+          if (session?.access_token) {
+            authToken = session.access_token;
+            if (attempt === 1) console.debug('[api-service] Using user access token for auth (from window.supabase)');
+          }
+        }
+      } catch (authErr) {
+        console.warn('[api-service] Could not get user session, using anon key:', authErr.message);
       }
-    }
+      
+      const res = await fetch(finalUrl, {
+        ...restOptions,
+        headers: {
+          "Content-Type": "application/json",
+          apikey: apiKey,
+          Authorization: `Bearer ${authToken}`,
+          ...optionHeaders
+        }
+      });
 
-    if (!res.ok) {
-      const msg = data?.error || data?.message || JSON.stringify(data) || text || `${res.status} ${res.statusText}`;
-      const err = new Error(msg);
-      console.error('API request failed:', { path, url: finalUrl, status: res.status, body: msg });
+      // read raw text first so we can include it in error messages even when JSON parsing fails
+      const text = await res.text();
+      let data = null;
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch (err) {
+          // include parsing error context
+          console.error('Failed to parse JSON response:', err, 'raw:', text);
+          setLastApiError(err);
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status} ${res.statusText}: ${text}`);
+          }
+          throw new Error(`Invalid JSON response: ${text}`);
+        }
+      }
+
+      if (!res.ok) {
+        const msg = data?.error || data?.message || JSON.stringify(data) || text || `${res.status} ${res.statusText}`;
+        const err = new Error(msg);
+        console.error('API request failed:', { path, url: finalUrl, status: res.status, body: msg });
+        setLastApiError(err);
+        throw err;
+      }
+
+      return data;
+    } catch (err) {
+      lastError = err;
+      
+      // Check if this is a retryable error (abort, network, connection issues)
+      if (isRetryableError(err) && attempt < MAX_RETRIES) {
+        const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1); // Exponential backoff
+        console.warn(`[api-service] Request failed (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms:`, err.message);
+        await sleep(delay);
+        continue;
+      }
+      
+      // Non-retryable error or max retries exceeded
       setLastApiError(err);
       throw err;
     }
-
-    return data;
-  } catch (err) {
-    setLastApiError(err);
-    throw err;
+  }
+  
+  // Should not reach here, but just in case
+  if (lastError) {
+    setLastApiError(lastError);
+    throw lastError;
   }
 }
 

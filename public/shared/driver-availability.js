@@ -16,29 +16,59 @@ const STATUS_OPTIONS = [
 // Cache for drivers loaded from Supabase
 let cachedDrivers = null;
 
-async function fetchDriversFromSupabase() {
-	try {
-		const client = getSupabaseClient();
-		if (!client) {
-			console.warn('[driver-availability] Supabase client not available');
+// Helper to check if error is retryable (network/abort issues)
+function isRetryableError(err) {
+	if (!err) return false;
+	const msg = (err.message || '').toLowerCase();
+	const name = (err.name || '').toLowerCase();
+	return (
+		name === 'aborterror' ||
+		msg.includes('abort') ||
+		msg.includes('signal') ||
+		msg.includes('network') ||
+		msg.includes('failed to fetch') ||
+		msg.includes('connection')
+	);
+}
+
+async function fetchDriversFromSupabase(retries = 3) {
+	for (let attempt = 1; attempt <= retries; attempt++) {
+		try {
+			const client = getSupabaseClient();
+			if (!client) {
+				console.warn('[driver-availability] Supabase client not available');
+				return null;
+			}
+			
+			const { data, error } = await client
+				.from('drivers')
+				.select('id, first_name, last_name, cell_phone, mobile_phone, phone, home_phone, other_phone, pager, driver_status, status, is_active, driver_level, vehicle_type, affiliate_id, assigned_vehicle_id, email, city, state')
+				.order('last_name', { ascending: true });
+			
+			if (error) {
+				// Check if it's a retryable error
+				if (isRetryableError(error) && attempt < retries) {
+					console.warn(`[driver-availability] Retryable error (attempt ${attempt}/${retries}):`, error.message);
+					await new Promise(r => setTimeout(r, 500 * attempt));
+					continue;
+				}
+				console.error('[driver-availability] Error fetching drivers:', error);
+				return null;
+			}
+			
+			return data;
+		} catch (e) {
+			// Check if it's a retryable error
+			if (isRetryableError(e) && attempt < retries) {
+				console.warn(`[driver-availability] Retryable error (attempt ${attempt}/${retries}):`, e.message);
+				await new Promise(r => setTimeout(r, 500 * attempt));
+				continue;
+			}
+			console.error('[driver-availability] Failed to fetch drivers:', e);
 			return null;
 		}
-		
-		const { data, error } = await client
-			.from('drivers')
-			.select('id, first_name, last_name, cell_phone, mobile_phone, phone, home_phone, other_phone, pager, driver_status, status, is_active, driver_level, vehicle_type, affiliate_id, assigned_vehicle_id, email, city, state')
-			.order('last_name', { ascending: true });
-		
-		if (error) {
-			console.error('[driver-availability] Error fetching drivers:', error);
-			return null;
-		}
-		
-		return data;
-	} catch (e) {
-		console.error('[driver-availability] Failed to fetch drivers:', e);
-		return null;
 	}
+	return null;
 }
 
 function getDriversFromCache() {

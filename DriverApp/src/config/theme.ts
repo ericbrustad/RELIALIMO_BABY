@@ -1,47 +1,65 @@
 /**
  * App Theme Configuration
- * Matches the existing dark theme from the web driver portal
+ * DriverAnywhere-style light theme with coral accents
  */
 
 export const colors = {
-  // Primary colors
-  primary: '#6366f1', // Indigo
-  primaryLight: '#818cf8',
-  primaryDark: '#4f46e5',
+  // Primary colors - DriverAnywhere coral/red
+  primary: '#E85A4F', // Coral red accent
+  primaryLight: '#FF7B6F',
+  primaryDark: '#D14940',
   
   // Status colors
-  success: '#22c55e',
-  warning: '#f59e0b',
-  error: '#ef4444',
-  danger: '#ef4444', // Alias for error
-  info: '#3b82f6',
+  success: '#4CAF50',
+  warning: '#FF9800',
+  error: '#F44336',
+  danger: '#F44336',
+  info: '#2196F3',
   
   // Background colors
-  background: '#0f172a', // Main dark background
-  surface: '#1e293b', // Card/surface background
-  bgDark: '#1a1a2e',
-  bgCard: '#16213e',
-  bgInput: '#0f3460',
+  background: '#f5f5f5', // Light gray background
+  surface: '#ffffff', // White surface
+  bgDark: '#333333',
+  bgCard: '#ffffff',
+  bgInput: '#f0f0f0',
+  
+  // Dark surfaces (for headers)
+  headerBg: '#333333',
+  cardHeader: '#444444',
   
   // Text colors
-  text: '#ffffff', // Alias for textPrimary
-  textPrimary: '#ffffff',
-  textSecondary: '#94a3b8',
-  textMuted: '#64748b',
+  text: '#333333', // Dark text on light bg
+  textLight: '#ffffff', // Light text on dark bg
+  textPrimary: '#333333',
+  textSecondary: '#666666',
+  textMuted: '#999999',
   
   // Border colors
-  border: '#334155',
-  borderLight: '#475569',
+  border: '#e0e0e0',
+  borderLight: '#eeeeee',
   
   // Driver status colors
-  statusAvailable: '#22c55e',
-  statusEnroute: '#f59e0b',
-  statusArrived: '#f97316',
-  statusOnboard: '#3b82f6',
-  statusOffline: '#6b7280',
-  statusBusy: '#ef4444',
-  statusCancelled: '#dc3545',
-  statusNoShow: '#6c757d',
+  statusAvailable: '#4CAF50',
+  statusEnroute: '#FF9800',
+  statusArrived: '#E85A4F',
+  statusOnboard: '#2196F3',
+  statusOffline: '#9E9E9E',
+  statusBusy: '#F44336',
+  statusCancelled: '#F44336',
+  statusNoShow: '#757575',
+  
+  // Additional
+  white: '#ffffff',
+  black: '#000000',
+  
+  // Tab colors
+  tabActive: '#E85A4F',
+  tabInactive: '#666666',
+  
+  // Navigation theme aliases
+  card: '#ffffff',
+  notification: '#E85A4F',
+  md: '#999999',
 };
 
 export const spacing = {

@@ -5,7 +5,12 @@ import { colors } from '../config/theme';
 import type { RootStackParamList } from '../types';
 
 // Screens
+import { SplashScreen } from '../screens/SplashScreen';
 import AuthScreen from '../screens/AuthScreen';
+import { RegisterScreen } from '../screens/RegisterScreen';
+import { RegisterCompanyScreen } from '../screens/RegisterCompanyScreen';
+import { RegisterVehicleScreen } from '../screens/RegisterVehicleScreen';
+import { WelcomeScreen } from '../screens/WelcomeScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import TripDetailScreen from '../screens/TripDetailScreen';
 import ActiveTripScreen from '../screens/ActiveTripScreen';
@@ -31,19 +36,51 @@ const screenOptions = {
 export default function AppNavigator() {
   const { isAuthenticated, isLoading } = useAuthStore();
   
+  // Show splash screen while loading
   if (isLoading) {
-    return null; // App.tsx shows loading indicator
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Splash" component={SplashScreen} />
+      </Stack.Navigator>
+    );
   }
   
   return (
     <Stack.Navigator screenOptions={screenOptions}>
       {!isAuthenticated ? (
         // Auth Stack
-        <Stack.Screen
-          name="Auth"
-          component={AuthScreen}
-          options={{ headerShown: false }}
-        />
+        <>
+          <Stack.Screen
+            name="Splash"
+            component={SplashScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Auth"
+            component={AuthScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Register"
+            component={RegisterScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="RegisterCompany"
+            component={RegisterCompanyScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="RegisterVehicle"
+            component={RegisterVehicleScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Welcome"
+            component={WelcomeScreen}
+            options={{ headerShown: false }}
+          />
+        </>
       ) : (
         // Main App Stack
         <>
@@ -51,7 +88,7 @@ export default function AppNavigator() {
             name="Dashboard"
             component={DashboardScreen}
             options={{
-              title: 'My Trips',
+              headerShown: false, // Dashboard has its own header
             }}
           />
           <Stack.Screen

@@ -107,9 +107,13 @@ export interface Location {
 
 // Navigation types
 export type RootStackParamList = {
+  Splash: undefined;
   Auth: undefined;
   Login: undefined;
   Register: undefined;
+  RegisterCompany: { userData: RegisterUserData };
+  RegisterVehicle: { userData: RegisterUserData; companyData: RegisterCompanyData };
+  Welcome: { driverName: string; driverId: string };
   Main: undefined;
   Dashboard: undefined;
   TripDetail: { tripId: string };
@@ -118,6 +122,25 @@ export type RootStackParamList = {
   Profile: undefined;
   Settings: undefined;
 };
+
+// Registration data types
+export interface RegisterUserData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  password: string;
+}
+
+export interface RegisterCompanyData {
+  existingCompanyId?: string;
+  companyName?: string | null;
+  companyAddress?: string | null;
+  companyCity?: string | null;
+  companyState?: string | null;
+  companyZip?: string | null;
+  companyPhone?: string | null;
+}
 
 // Status metadata
 export const STATUS_META: Record<DriverStatus, { emoji: string; label: string; color: string }> = {

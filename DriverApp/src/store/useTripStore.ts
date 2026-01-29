@@ -32,27 +32,50 @@ export const useTripStore = create<TripState>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
       
+      console.log('[Trips] Fetching trips for driver:', driverId);
+      
       // Fetch today's and upcoming trips for this driver
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
-      const { data, error } = await supabase
+      // First try to get trips assigned to this driver
+      let { data, error } = await supabase
         .from('reservations')
         .select('*')
         .eq('assigned_driver_id', driverId)
         .gte('pickup_datetime', today.toISOString())
-        .in('status', ['confirmed', 'pending', 'assigned', 'in_progress'])
-        .order('pickup_datetime', { ascending: true });
+        .order('pickup_datetime', { ascending: true })
+        .limit(50);
       
       if (error) {
-        console.error('Fetch trips error:', error);
+        console.error('[Trips] Fetch error:', error);
         set({ isLoading: false, error: error.message });
         return;
       }
       
+      console.log('[Trips] Found', data?.length || 0, 'assigned trips');
+      
+      // If no trips assigned, show unassigned trips as "available" (for demo/testing)
+      if (!data || data.length === 0) {
+        console.log('[Trips] No assigned trips, fetching available trips for demo...');
+        const { data: availableTrips, error: availableError } = await supabase
+          .from('reservations')
+          .select('*')
+          .gte('pickup_datetime', today.toISOString())
+          .is('assigned_driver_id', null)
+          .order('pickup_datetime', { ascending: true })
+          .limit(10);
+        
+        if (!availableError && availableTrips && availableTrips.length > 0) {
+          console.log('[Trips] Found', availableTrips.length, 'available/unassigned trips');
+          // Mark these as offers
+          data = availableTrips.map(t => ({ ...t, driver_status: 'offered' }));
+        }
+      }
+      
       set({ trips: data || [], isLoading: false });
     } catch (error: any) {
-      console.error('Fetch trips error:', error);
+      console.error('[Trips] Fetch error:', error);
       set({ isLoading: false, error: error.message });
     }
   },
