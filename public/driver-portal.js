@@ -9275,60 +9275,367 @@ function setMapPreference(mapApp) {
   if (prefSelect) prefSelect.value = mapApp;
 }
 
+// ============================================
+// RELIABLE NAVIGATION SYSTEM - v2.0
+// ============================================
+// This system prioritizes reliability and immediate feedback.
+// It uses native app deep links which are the most reliable way to navigate.
+
+const NavigationHelper = {
+  // Detect platform
+  get isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent); },
+  get isAndroid() { return /android/i.test(navigator.userAgent); },
+  get isMobile() { return this.isIOS || this.isAndroid; },
+  
+  // Build navigation URLs for each app
+  buildUrls(address) {
+    const encoded = encodeURIComponent(address);
+    return {
+      google: this.isAndroid 
+        ? `google.navigation:q=${encoded}&mode=d`
+        : `https://www.google.com/maps/dir/?api=1&destination=${encoded}&travelmode=driving`,
+      apple: this.isIOS 
+        ? `maps://?daddr=${encoded}&dirflg=d`
+        : `https://maps.apple.com/?daddr=${encoded}&dirflg=d`,
+      waze: `https://waze.com/ul?q=${encoded}&navigate=yes`,
+      uber: `uber://?action=setPickup&dropoff[formatted_address]=${encoded}`,
+      lyft: `lyft://ridetype?id=lyft&destination[address]=${encoded}`
+    };
+  },
+  
+  // Launch navigation immediately with preferred app
+  launch(address, preferredApp = 'google') {
+    if (!address || address.trim() === '') {
+      showToast('No address provided', 'warning');
+      return false;
+    }
+    
+    console.log('[Navigation] Launching navigation to:', address, 'with:', preferredApp);
+    const urls = this.buildUrls(address.trim());
+    
+    // Get the URL for preferred app, fallback to Google
+    let url = urls[preferredApp] || urls.google;
+    
+    // Special handling for Apple Maps on non-iOS
+    if (preferredApp === 'apple' && !this.isIOS) {
+      url = urls.google;
+      console.log('[Navigation] Apple Maps not available, using Google Maps');
+    }
+    
+    // Try to open
+    try {
+      window.open(url, '_blank');
+      showToast('Opening navigation...', 'success', 2000);
+      return true;
+    } catch (err) {
+      console.error('[Navigation] Failed to open:', err);
+      // Fallback to Google Maps web
+      window.open(urls.google, '_blank');
+      return true;
+    }
+  },
+  
+  // Show app picker modal for one-tap selection
+  showAppPicker(address, callback) {
+    // Remove existing modal if any
+    const existing = document.getElementById('navAppPickerModal');
+    if (existing) existing.remove();
+    
+    const urls = this.buildUrls(address);
+    const isIOS = this.isIOS;
+    
+    // Build modal HTML
+    const modal = document.createElement('div');
+    modal.id = 'navAppPickerModal';
+    modal.className = 'nav-app-picker-modal';
+    modal.innerHTML = `
+      <div class="nav-app-picker-overlay" onclick="NavigationHelper.closeAppPicker()"></div>
+      <div class="nav-app-picker-content">
+        <div class="nav-app-picker-header">
+          <h3>🧭 Navigate To</h3>
+          <button class="nav-app-picker-close" onclick="NavigationHelper.closeAppPicker()">×</button>
+        </div>
+        <div class="nav-app-picker-address">${address}</div>
+        <div class="nav-app-picker-buttons">
+          <button class="nav-app-btn nav-app-google" data-app="google">
+            <span class="nav-app-icon">🗺️</span>
+            <span class="nav-app-name">Google Maps</span>
+          </button>
+          ${isIOS ? `
+          <button class="nav-app-btn nav-app-apple" data-app="apple">
+            <span class="nav-app-icon">🍎</span>
+            <span class="nav-app-name">Apple Maps</span>
+          </button>
+          ` : ''}
+          <button class="nav-app-btn nav-app-waze" data-app="waze">
+            <span class="nav-app-icon">🚙</span>
+            <span class="nav-app-name">Waze</span>
+          </button>
+        </div>
+        <label class="nav-app-remember">
+          <input type="checkbox" id="navRememberApp"> Remember my choice
+        </label>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Add animation
+    requestAnimationFrame(() => modal.classList.add('active'));
+    
+    // Handle button clicks
+    modal.querySelectorAll('.nav-app-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const app = btn.dataset.app;
+        const remember = document.getElementById('navRememberApp')?.checked;
+        
+        if (remember) {
+          localStorage.setItem('driver_preferred_map', app);
+          state.preferredMapApp = app;
+        }
+        
+        this.closeAppPicker();
+        this.launch(address, app);
+        
+        if (callback) callback(app);
+      });
+    });
+  },
+  
+  closeAppPicker() {
+    const modal = document.getElementById('navAppPickerModal');
+    if (modal) {
+      modal.classList.remove('active');
+      setTimeout(() => modal.remove(), 300);
+    }
+  }
+};
+
+// Make available globally
+window.NavigationHelper = NavigationHelper;
+
+// Main navigation function - simple and reliable
 window.openNavigation = function(address, usePickup = false) {
-  if (!address) {
+  if (!address || address.trim() === '') {
     showToast('No address available', 'warning');
     return;
   }
   
-  // Check if user has set a preference, if not ask first
-  if (!state.preferredMapApp) {
-    checkMapPreference();
-    // Store the address to navigate after preference is set
-    localStorage.setItem('pending_navigation_address', address);
+  // Get saved preference
+  const preferredApp = state.preferredMapApp || localStorage.getItem('driver_preferred_map');
+  
+  // If no preference saved, show app picker
+  if (!preferredApp || preferredApp === 'ask') {
+    NavigationHelper.showAppPicker(address);
     return;
   }
   
-  const encoded = encodeURIComponent(address);
-  const userAgent = navigator.userAgent.toLowerCase();
-  const isIOS = /iphone|ipad|ipod/.test(userAgent);
-  const isAndroid = /android/.test(userAgent);
-  
-  let navigationUrl = '';
-  
-  switch (state.preferredMapApp) {
-    case 'google':
-      if (isAndroid) {
-        // Deep link for Google Maps on Android - works with CarPlay/Android Auto
-        navigationUrl = `google.navigation:q=${encoded}&mode=d`;
-      } else {
-        // Universal link works on iOS and opens in Google Maps app if installed
-        navigationUrl = `https://www.google.com/maps/dir/?api=1&destination=${encoded}&travelmode=driving`;
-      }
-      break;
-      
-    case 'apple':
-      if (isIOS) {
-        // Apple Maps deep link - works great with CarPlay
-        navigationUrl = `maps://?daddr=${encoded}&dirflg=d`;
-      } else {
-        // Fallback to Google Maps on non-iOS
-        navigationUrl = `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
-      }
-      break;
-      
-    case 'waze':
-      // Waze deep link - works on both platforms and CarPlay
-      navigationUrl = `https://waze.com/ul?q=${encoded}&navigate=yes`;
-      break;
-      
-    default:
-      // Default to Google Maps web
-      navigationUrl = `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
+  // If preference is 'internal', show internal map overlay
+  if (preferredApp === 'internal') {
+    openInternalNavigation(address);
+    return;
   }
   
-  console.log(`[DriverPortal] Opening navigation with ${state.preferredMapApp}:`, navigationUrl);
-  window.open(navigationUrl, '_blank');
+  // Otherwise launch directly with preferred app
+  NavigationHelper.launch(address, preferredApp);
+};
+
+// Internal map navigation (optional overlay within app)
+window.openInternalNavigation = function(address) {
+  if (!address) {
+    showToast('No address provided', 'warning');
+    return;
+  }
+  
+  console.log('[Navigation] Opening internal navigation to:', address);
+  
+  // Get or create overlay
+  let overlay = document.getElementById('navigationOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'navigationOverlay';
+    overlay.className = 'navigation-overlay';
+    document.body.appendChild(overlay);
+  }
+  
+  // Show loading state immediately
+  overlay.innerHTML = `
+    <div class="nav-header">
+      <button type="button" class="nav-back-btn" onclick="closeInternalNavigation()">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <h3>🧭 Navigation</h3>
+      <button type="button" class="nav-external-btn" onclick="NavigationHelper.launch('${address.replace(/'/g, "\\'")}', 'google')" title="Open in Google Maps">
+        🗺️
+      </button>
+    </div>
+    <div class="nav-map-container" id="navMapContainer">
+      <div class="nav-map-loading">
+        <div class="nav-loading-spinner"></div>
+        <p>Loading route...</p>
+      </div>
+    </div>
+    <div class="nav-destination-bar">
+      <div class="nav-destination-icon">📍</div>
+      <div class="nav-destination-text">${address}</div>
+    </div>
+    <div class="nav-actions-bar">
+      <button class="btn btn-primary btn-large" onclick="NavigationHelper.showAppPicker('${address.replace(/'/g, "\\'")}')">
+        Open in Navigation App
+      </button>
+    </div>
+  `;
+  
+  overlay.classList.add('active');
+  
+  // Initialize map with Mapbox
+  initInternalNavigationMap(address);
+};
+
+// Initialize the internal navigation map
+async function initInternalNavigationMap(address) {
+  const mapContainer = document.getElementById('navMapContainer');
+  if (!mapContainer) return;
+  
+  try {
+    // Wait for Mapbox to be available
+    if (!window.mapboxgl) {
+      await waitForMapbox(5000);
+    }
+    
+    if (!window.mapboxgl) {
+      throw new Error('Mapbox not available');
+    }
+    
+    const mapboxToken = window.ENV?.MAPBOX_TOKEN || MAPBOX_ACCESS_TOKEN;
+    if (!mapboxToken) {
+      throw new Error('No map token available');
+    }
+    
+    mapboxgl.accessToken = mapboxToken;
+    
+    // Get current position
+    let center = [-95.3698, 29.7604]; // Default Houston
+    try {
+      const pos = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+      });
+      center = [pos.coords.longitude, pos.coords.latitude];
+    } catch (e) {
+      console.warn('[Navigation] Could not get current location:', e.message);
+    }
+    
+    // Create map
+    mapContainer.innerHTML = ''; // Clear loading state
+    const map = new mapboxgl.Map({
+      container: mapContainer,
+      style: 'mapbox://styles/mapbox/navigation-night-v1',
+      center: center,
+      zoom: 14
+    });
+    
+    // Add navigation controls
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    
+    // Add current location marker
+    new mapboxgl.Marker({ color: '#4f46e5' })
+      .setLngLat(center)
+      .addTo(map);
+    
+    // Geocode destination and add marker
+    try {
+      const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${mapboxToken}&limit=1`;
+      const geocodeRes = await fetch(geocodeUrl);
+      const geocodeData = await geocodeRes.json();
+      
+      if (geocodeData.features?.length > 0) {
+        const destCoords = geocodeData.features[0].center;
+        
+        // Add destination marker
+        new mapboxgl.Marker({ color: '#ef4444' })
+          .setLngLat(destCoords)
+          .addTo(map);
+        
+        // Get route
+        const routeUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${center[0]},${center[1]};${destCoords[0]},${destCoords[1]}?geometries=geojson&access_token=${mapboxToken}`;
+        const routeRes = await fetch(routeUrl);
+        const routeData = await routeRes.json();
+        
+        if (routeData.routes?.length > 0) {
+          const route = routeData.routes[0];
+          
+          // Wait for map to load
+          map.on('load', () => {
+            // Add route line
+            map.addSource('route', {
+              type: 'geojson',
+              data: {
+                type: 'Feature',
+                geometry: route.geometry
+              }
+            });
+            
+            map.addLayer({
+              id: 'route-line',
+              type: 'line',
+              source: 'route',
+              layout: {
+                'line-join': 'round',
+                'line-cap': 'round'
+              },
+              paint: {
+                'line-color': '#4f46e5',
+                'line-width': 6
+              }
+            });
+            
+            // Fit bounds to show full route
+            const bounds = new mapboxgl.LngLatBounds();
+            route.geometry.coordinates.forEach(coord => bounds.extend(coord));
+            map.fitBounds(bounds, { padding: 50 });
+          });
+          
+          // Update destination bar with ETA
+          const duration = Math.round(route.duration / 60);
+          const distance = (route.distance / 1609.344).toFixed(1);
+          const destBar = document.querySelector('.nav-destination-bar');
+          if (destBar) {
+            destBar.innerHTML = `
+              <div class="nav-destination-icon">📍</div>
+              <div class="nav-destination-info">
+                <div class="nav-destination-text">${address}</div>
+                <div class="nav-destination-meta">${distance} mi • ${duration} min</div>
+              </div>
+            `;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Navigation] Route calculation failed:', e);
+    }
+    
+  } catch (err) {
+    console.error('[Navigation] Map initialization failed:', err);
+    mapContainer.innerHTML = `
+      <div class="nav-map-error">
+        <div class="nav-error-icon">⚠️</div>
+        <p>Map could not be loaded</p>
+        <button class="btn btn-primary" onclick="NavigationHelper.launch('${address.replace(/'/g, "\\'")}', 'google')">
+          Open Google Maps Instead
+        </button>
+      </div>
+    `;
+  }
+}
+
+// Close internal navigation
+window.closeInternalNavigation = function() {
+  const overlay = document.getElementById('navigationOverlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+  }
 };
 
 // Toggle map visibility for small screens
@@ -10344,59 +10651,21 @@ function updateTimerWindowCountdown(countdown, tripInfo, progress, urgency) {
 }
 
 /**
- * Start turn-by-turn navigation (embedded)
+ * Start turn-by-turn navigation (embedded) - UPDATED
+ * Now uses the reliable NavigationHelper system
  */
 function startEmbeddedNavigation(destination) {
-  // Create navigation overlay
-  let overlay = document.getElementById('navigationOverlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'navigationOverlay';
-    overlay.className = 'navigation-overlay';
-    overlay.innerHTML = `
-      <div class="nav-header">
-        <h3>🧭 Navigation</h3>
-        <button type="button" class="nav-close-btn" onclick="closeEmbeddedNavigation()">×</button>
-      </div>
-      <div class="nav-map-container" id="navMapContainer">
-        <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #888;">
-          Loading navigation...
-        </div>
-      </div>
-      <div class="nav-directions-panel" id="navDirectionsPanel"></div>
-    `;
-    document.body.appendChild(overlay);
-  }
-  
-  overlay.classList.add('active');
-  
-  // Use Google Maps Embed for directions
-  const destEncoded = encodeURIComponent(destination);
-  const mapContainer = document.getElementById('navMapContainer');
-  
-  // Get current location and create directions embed
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const origin = `${pos.coords.latitude},${pos.coords.longitude}`;
-        const embedUrl = `https://www.google.com/maps/embed/v1/directions?key=AIzaSyBHLGQGz0yjLvJpL7lFLzwNOLyIkVXgcDo&origin=${origin}&destination=${destEncoded}&mode=driving`;
-        
-        mapContainer.innerHTML = `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" allowfullscreen loading="lazy"></iframe>`;
-      },
-      () => {
-        // Fallback - just show destination
-        const embedUrl = `https://www.google.com/maps/embed/v1/place?key=AIzaSyBHLGQGz0yjLvJpL7lFLzwNOLyIkVXgcDo&q=${destEncoded}`;
-        mapContainer.innerHTML = `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" allowfullscreen loading="lazy"></iframe>`;
-      }
-    );
+  // Use our new reliable internal navigation
+  if (window.openInternalNavigation) {
+    openInternalNavigation(destination);
+  } else {
+    // Fallback - just open Google Maps directly
+    NavigationHelper.launch(destination, 'google');
   }
 }
 
 function closeEmbeddedNavigation() {
-  const overlay = document.getElementById('navigationOverlay');
-  if (overlay) {
-    overlay.classList.remove('active');
-  }
+  closeInternalNavigation();
 }
 
 // Make functions global

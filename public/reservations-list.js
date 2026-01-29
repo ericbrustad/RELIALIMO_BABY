@@ -34,7 +34,7 @@ class ReservationsList {
   async setupRealtimeSubscription() {
     try {
       // Dynamically import realtime service to prevent blocking
-      const realtimeModule = await import('./realtime-service.js');
+      const realtimeModule = await import('./shared/realtime-service.js');
       realtimeService = realtimeModule.default;
       subscribeToReservations = realtimeModule.subscribeToReservations;
       

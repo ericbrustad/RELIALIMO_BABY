@@ -2901,32 +2901,140 @@ class ReservationForm {
 
   async searchFlight(airlineCode, flightNumber) {
     try {
-      const flightData = await this.airlineService.searchFlights(airlineCode, flightNumber);
-      this.populateFlightData(flightData);
+      // Get the user's selected date for the flight lookup
+      const puDate = document.getElementById('puDate')?.value;
+      
+      // First try the real API
+      const fullFlightNumber = `${airlineCode}${flightNumber}`;
+      console.log('[ReservationForm] Searching flight:', fullFlightNumber, 'on date:', puDate);
+      
+      let flightData = null;
+      
+      // Try the real flight verification API first
+      try {
+        const response = await fetch('/api/flight-verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            flightNumber: fullFlightNumber,
+            date: puDate || new Date().toISOString().split('T')[0]
+          })
+        });
+        
+        if (response.ok) {
+          const apiResult = await response.json();
+          console.log('[ReservationForm] Flight API response:', apiResult);
+          
+          if (apiResult.valid && apiResult.arrival_time) {
+            // Convert API response to our format
+            flightData = {
+              airline: airlineCode,
+              flightNumber: flightNumber,
+              origin: apiResult.origin || apiResult.departure_airport || 'Origin',
+              destination: apiResult.destination || apiResult.arrival_airport || 'Destination',
+              scheduledArrival: apiResult.arrival_time,
+              estimatedArrival: apiResult.arrival_time,
+              terminal: apiResult.terminal || 'TBD',
+              gate: apiResult.gate || 'TBD',
+              status: apiResult.status || 'Scheduled'
+            };
+          } else if (apiResult.valid) {
+            // Flight exists but no arrival time - use message
+            console.log('[ReservationForm] Flight verified but no arrival time:', apiResult.message);
+          }
+        }
+      } catch (apiError) {
+        console.warn('[ReservationForm] Flight API call failed:', apiError.message);
+      }
+      
+      // Fallback to local airline service if API failed
+      if (!flightData) {
+        console.log('[ReservationForm] Using local airline service fallback');
+        flightData = await this.airlineService.searchFlights(airlineCode, flightNumber);
+      }
+      
+      if (flightData) {
+        this.populateFlightData(flightData);
+      }
     } catch (error) {
       console.error('Flight search error:', error);
     }
   }
 
   populateFlightData(flightData) {
-    document.getElementById('terminalGate').value = `${flightData.terminal} / ${flightData.gate}`;
-    document.getElementById('flightStatus').value = flightData.status.toUpperCase();
-    document.getElementById('scheduledArrival').value = flightData.scheduledArrival;
-    document.getElementById('estimatedArrival').value = flightData.estimatedArrival;
-    document.getElementById('originAirport').value = flightData.origin;
+    document.getElementById('terminalGate').value = `${flightData.terminal || 'TBD'} / ${flightData.gate || 'TBD'}`;
+    document.getElementById('flightStatus').value = (flightData.status || 'Scheduled').toUpperCase();
+    document.getElementById('scheduledArrival').value = flightData.scheduledArrival || '';
+    document.getElementById('estimatedArrival').value = flightData.estimatedArrival || '';
+    document.getElementById('originAirport').value = flightData.origin || '';
+
+    // ===== AUTO-SET PICKUP TIME FROM FLIGHT ARRIVAL =====
+    // For airport pickups, the pickup time should be the flight arrival time
+    const arrivalTime = flightData.estimatedArrival || flightData.scheduledArrival;
+    if (arrivalTime) {
+      // Parse arrival time - could be "HH:MM" or "YYYY-MM-DD HH:MM" or ISO format
+      let timeOnly = arrivalTime;
+      
+      // Handle "2026-01-28 22:15" format
+      if (arrivalTime.includes(' ')) {
+        const parts = arrivalTime.split(' ');
+        if (parts.length >= 2) {
+          // Check if first part is a date
+          if (parts[0].includes('-')) {
+            timeOnly = parts[1].substring(0, 5); // Get HH:MM
+            // Also update the date if it's different
+            const dateOnly = parts[0];
+            const puDateEl = document.getElementById('puDate');
+            if (puDateEl && dateOnly && dateOnly !== puDateEl.value) {
+              console.log('[ReservationForm] Updating pickup date from flight:', dateOnly);
+              puDateEl.value = dateOnly;
+            }
+          } else {
+            timeOnly = parts[0].substring(0, 5);
+          }
+        }
+      }
+      
+      // Handle ISO format
+      if (arrivalTime.includes('T')) {
+        const timePart = arrivalTime.split('T')[1];
+        timeOnly = timePart ? timePart.substring(0, 5) : arrivalTime;
+      }
+      
+      // Ensure HH:MM format
+      if (timeOnly && timeOnly.length >= 5) {
+        timeOnly = timeOnly.substring(0, 5);
+        
+        // Set the pickup time
+        const puTimeEl = document.getElementById('puTime');
+        if (puTimeEl) {
+          console.log('[ReservationForm] Setting pickup time from flight arrival:', timeOnly);
+          puTimeEl.value = timeOnly;
+          
+          // Trigger change event to update spot time, gar times, etc.
+          puTimeEl.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      }
+    }
+    // ===== END AUTO-SET PICKUP TIME =====
 
     // Show success indicator
     const indicator = document.getElementById('flightStatusIndicator');
-    indicator.style.display = 'flex';
+    if (indicator) {
+      indicator.style.display = 'flex';
+    }
     
     // Add status color
     const statusInput = document.getElementById('flightStatus');
-    statusInput.style.color = flightData.status === 'on-time' ? '#155724' : 
-                              flightData.status === 'delayed' ? '#856404' : '#721c24';
-    statusInput.style.fontWeight = '600';
+    if (statusInput) {
+      const status = (flightData.status || '').toLowerCase();
+      statusInput.style.color = status === 'on-time' || status === 'scheduled' ? '#155724' : 
+                                status === 'delayed' ? '#856404' : '#721c24';
+      statusInput.style.fontWeight = '600';
+    }
 
     setTimeout(() => {
-      indicator.style.display = 'none';
+      if (indicator) indicator.style.display = 'none';
     }, 3000);
   }
 

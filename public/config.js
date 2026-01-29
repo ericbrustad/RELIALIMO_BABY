@@ -54,3 +54,23 @@ export async function initSupabase() {
   const { default: supabase } = await import('./supabase-client.js');
   return supabase;
 }
+
+// Alias for backward compatibility
+export const getSupabaseClient = initSupabase;
+
+// Lazy supabase instance for imports that expect { supabase }
+let _supabaseInstance = null;
+export const supabase = {
+  async init() {
+    if (!_supabaseInstance) {
+      _supabaseInstance = await initSupabase();
+    }
+    return _supabaseInstance;
+  },
+  // Proxy common methods
+  from: (...args) => initSupabase().then(client => client.from(...args)),
+  auth: {
+    getSession: () => initSupabase().then(client => client.auth?.getSession?.() || { data: { session: null } }),
+    getUser: () => initSupabase().then(client => client.auth?.getUser?.() || { data: { user: null } })
+  }
+};
