@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Linking,
   Platform,
   ActivityIndicator,
+  Animated,
+  Vibration,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -33,25 +35,74 @@ const STATUS_FLOW: DriverStatus[] = [
   'done',
 ];
 
+// Status button configurations
+const STATUS_BUTTONS: Record<DriverStatus, { nextLabel: string; icon: string; color: string }> = {
+  getting_ready: { nextLabel: 'Start Driving', icon: '🚗', color: colors.primary },
+  enroute: { nextLabel: 'I\'ve Arrived', icon: '📍', color: colors.warning },
+  arrived: { nextLabel: 'Start Waiting', icon: '⏱', color: colors.warning },
+  waiting: { nextLabel: 'Passenger In', icon: '👤', color: colors.success },
+  passenger_onboard: { nextLabel: 'Complete Trip', icon: '🏁', color: colors.success },
+  done: { nextLabel: 'Done!', icon: '✅', color: colors.success },
+  available: { nextLabel: 'Start', icon: '▶️', color: colors.primary },
+  completed: { nextLabel: 'Completed', icon: '✅', color: colors.success },
+  busy: { nextLabel: 'Continue', icon: '▶️', color: colors.primary },
+  offline: { nextLabel: 'Go Online', icon: '🟢', color: colors.success },
+  cancelled: { nextLabel: 'Cancelled', icon: '❌', color: colors.danger },
+  no_show: { nextLabel: 'No Show', icon: '🚫', color: colors.danger },
+};
+
 export default function ActiveTripScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteParams>();
   const { tripId } = route.params;
   const { updateTripStatus, setCurrentTrip } = useTripStore();
-  const { startTracking, stopTracking } = useLocationStore();
+  const { startTracking, stopTracking, location } = useLocationStore();
   
   const [trip, setTrip] = useState<Reservation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [waitingTime, setWaitingTime] = useState(0);
+  
+  // Animations
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
   
   useEffect(() => {
     fetchTripDetails();
     
+    // Start pulse animation for status
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.05, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    
     return () => {
-      // Stop tracking when leaving active trip
+      pulse.stop();
       stopTracking();
     };
   }, [tripId]);
+  
+  // Waiting time counter
+  useEffect(() => {
+    if (trip?.driver_status === 'waiting' || trip?.driver_status === 'arrived') {
+      const interval = setInterval(() => {
+        setWaitingTime(prev => prev + 1);
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [trip?.driver_status]);
+  
+  // Update progress animation based on status
+  useEffect(() => {
+    const currentIndex = getCurrentStatusIndex();
+    Animated.spring(progressAnim, {
+      toValue: currentIndex / (STATUS_FLOW.length - 1),
+      useNativeDriver: false,
+    }).start();
+  }, [trip?.driver_status]);
   
   const fetchTripDetails = async () => {
     try {
@@ -87,28 +138,6 @@ export default function ActiveTripScreen() {
     return null;
   };
   
-  const getNextButtonText = (): string => {
-    const nextStatus = getNextStatus();
-    if (!nextStatus) return 'Trip Completed';
-    
-    const labels: Record<DriverStatus, string> = {
-      available: 'Available',
-      getting_ready: 'Getting Ready',
-      enroute: 'Start Driving',
-      arrived: 'Mark Arrived',
-      waiting: 'Start Waiting',
-      passenger_onboard: 'Passenger In Car',
-      done: 'Complete Trip',
-      completed: 'Completed',
-      busy: 'Busy',
-      offline: 'Offline',
-      cancelled: 'Cancelled',
-      no_show: 'No Show',
-    };
-    
-    return labels[nextStatus] || nextStatus;
-  };
-  
   const handleAdvanceStatus = async () => {
     if (!trip) return;
     
@@ -118,6 +147,11 @@ export default function ActiveTripScreen() {
       setCurrentTrip(null);
       navigation.navigate('Dashboard');
       return;
+    }
+    
+    // Haptic feedback
+    if (Platform.OS !== 'web') {
+      Vibration.vibrate(50);
     }
     
     setIsUpdating(true);
@@ -137,27 +171,31 @@ export default function ActiveTripScreen() {
       
       // If passenger onboard, offer to navigate to dropoff
       if (nextStatus === 'passenger_onboard') {
+        setWaitingTime(0); // Reset waiting timer
         const address = trip.dropoff_address || trip.dropoff_location;
         if (address) {
           Alert.alert(
             'Navigate to Dropoff?',
-            'Would you like to open navigation to the dropoff location?',
+            'Open navigation to the dropoff location?',
             [
-              { text: 'No', style: 'cancel' },
-              { text: 'Yes', onPress: () => handleNavigate(address) },
+              { text: 'Not Now', style: 'cancel' },
+              { text: 'Navigate', onPress: () => handleNavigate(address) },
             ]
           );
         }
       }
       
-      // If done, go back to dashboard
+      // If done, show completion celebration
       if (nextStatus === 'done') {
+        if (Platform.OS !== 'web') {
+          Vibration.vibrate([0, 100, 50, 100]);
+        }
         Alert.alert(
-          'Trip Completed! 🎉',
-          'Great job! The trip has been completed.',
+          '🎉 Trip Completed!',
+          'Great job! You\'ve completed this trip.',
           [
             {
-              text: 'OK',
+              text: 'Back to Dashboard',
               onPress: () => {
                 setCurrentTrip(null);
                 navigation.navigate('Dashboard');
@@ -174,7 +212,7 @@ export default function ActiveTripScreen() {
   const handleCancelTrip = () => {
     Alert.alert(
       'Cancel Trip',
-      'Are you sure you want to cancel this trip? This should only be done if instructed by dispatch.',
+      'Are you sure? This should only be done if instructed by dispatch.',
       [
         { text: 'No', style: 'cancel' },
         {
@@ -201,7 +239,7 @@ export default function ActiveTripScreen() {
   const handleNoShow = () => {
     Alert.alert(
       'Mark as No Show',
-      'Confirm that the passenger did not show up. Make sure you have waited the required time and attempted to contact them.',
+      'Have you waited the required time and tried to contact the passenger?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -274,6 +312,12 @@ export default function ActiveTripScreen() {
     }
   };
   
+  const formatWaitingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+  
   const getPassengerName = () => {
     if (!trip) return 'Unknown';
     if (trip.passenger_name) return trip.passenger_name;
@@ -287,6 +331,7 @@ export default function ActiveTripScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading trip...</Text>
       </View>
     );
   }
@@ -295,78 +340,132 @@ export default function ActiveTripScreen() {
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.errorText}>Trip not found</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
       </View>
     );
   }
   
   const status = trip.driver_status || 'getting_ready';
   const statusMeta = STATUS_META[status] || STATUS_META.getting_ready;
+  const statusButton = STATUS_BUTTONS[status] || STATUS_BUTTONS.getting_ready;
   const currentIndex = getCurrentStatusIndex();
+  const isWaiting = status === 'waiting' || status === 'arrived';
+  const isOnTheWay = status === 'passenger_onboard';
+  const nextStatus = getNextStatus();
+  
+  // Determine which address to show prominently
+  const currentDestination = isOnTheWay
+    ? (trip.dropoff_address || trip.dropoff_location || 'Dropoff')
+    : (trip.pickup_address || trip.pickup_location || 'Pickup');
+  const destinationLabel = isOnTheWay ? 'DROPOFF' : 'PICKUP';
   
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      {/* Header with confirmation */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBack}>
+          <Text style={styles.headerBackText}>←</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>#{trip.confirmation_number}</Text>
+        <View style={{ width: 40 }} />
+      </View>
+      
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Big Status Display */}
-        <View style={[styles.statusCard, { borderColor: statusMeta.color }]}>
-          <Text style={styles.statusEmoji}>{statusMeta.emoji}</Text>
-          <Text style={[styles.statusLabel, { color: statusMeta.color }]}>
-            {statusMeta.label}
-          </Text>
-        </View>
+        {/* Big Status Card */}
+        <Animated.View style={[styles.statusCard, { transform: [{ scale: pulseAnim }] }]}>
+          <View style={[styles.statusBadge, { backgroundColor: statusMeta.color }]}>
+            <Text style={styles.statusEmoji}>{statusMeta.emoji}</Text>
+            <Text style={styles.statusLabel}>{statusMeta.label}</Text>
+          </View>
+        </Animated.View>
         
-        {/* Progress Dots */}
+        {/* Progress Bar */}
         <View style={styles.progressContainer}>
-          {STATUS_FLOW.map((s, idx) => (
-            <View
-              key={s}
+          <View style={styles.progressTrack}>
+            <Animated.View
               style={[
-                styles.progressDot,
-                idx <= currentIndex && { backgroundColor: colors.primary },
+                styles.progressFill,
+                {
+                  width: progressAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0%', '100%'],
+                  }),
+                },
               ]}
             />
-          ))}
+          </View>
+          <View style={styles.progressDots}>
+            {STATUS_FLOW.map((s, idx) => (
+              <View
+                key={s}
+                style={[
+                  styles.progressDot,
+                  idx <= currentIndex && styles.progressDotActive,
+                ]}
+              />
+            ))}
+          </View>
         </View>
         
-        {/* Passenger Info Card */}
+        {/* Waiting Timer (shows when arrived/waiting) */}
+        {isWaiting && (
+          <View style={styles.waitingCard}>
+            <Text style={styles.waitingLabel}>⏱ Waiting Time</Text>
+            <Text style={styles.waitingTime}>{formatWaitingTime(waitingTime)}</Text>
+          </View>
+        )}
+        
+        {/* Passenger Card */}
         <View style={styles.card}>
           <Text style={styles.passengerName}>{getPassengerName()}</Text>
+          {trip.passenger_count && trip.passenger_count > 1 && (
+            <Text style={styles.passengerCount}>👥 {trip.passenger_count} passengers</Text>
+          )}
           
           {trip.passenger_phone && (
             <View style={styles.contactRow}>
               <TouchableOpacity style={styles.contactBtn} onPress={handleCall}>
-                <Text style={styles.contactBtnText}>📞 Call</Text>
+                <Text style={styles.contactIcon}>📞</Text>
+                <Text style={styles.contactBtnText}>Call</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.contactBtn} onPress={handleText}>
-                <Text style={styles.contactBtnText}>💬 Text</Text>
+                <Text style={styles.contactIcon}>💬</Text>
+                <Text style={styles.contactBtnText}>Text</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
         
-        {/* Current Destination */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>
-            {status === 'passenger_onboard' ? 'DROPOFF' : 'PICKUP'}
-          </Text>
-          <Text style={styles.addressText}>
-            {status === 'passenger_onboard'
-              ? (trip.dropoff_address || trip.dropoff_location || 'Dropoff')
-              : (trip.pickup_address || trip.pickup_location || 'Pickup')}
-          </Text>
+        {/* Destination Card */}
+        <View style={styles.destinationCard}>
+          <View style={styles.destinationHeader}>
+            <View style={[styles.destinationBadge, { backgroundColor: isOnTheWay ? colors.danger : colors.success }]}>
+              <Text style={styles.destinationBadgeText}>{isOnTheWay ? 'DO' : 'PU'}</Text>
+            </View>
+            <Text style={styles.destinationLabel}>{destinationLabel}</Text>
+          </View>
+          <Text style={styles.destinationAddress}>{currentDestination}</Text>
           <TouchableOpacity
             style={styles.navButton}
-            onPress={() => handleNavigate(
-              status === 'passenger_onboard'
-                ? (trip.dropoff_address || trip.dropoff_location || '')
-                : (trip.pickup_address || trip.pickup_location || '')
-            )}
+            onPress={() => handleNavigate(currentDestination)}
           >
-            <Text style={styles.navButtonText}>🧭 Navigate</Text>
+            <Text style={styles.navButtonIcon}>🧭</Text>
+            <Text style={styles.navButtonText}>Navigate</Text>
           </TouchableOpacity>
         </View>
         
-        {/* Action Buttons for Arrived/Waiting status */}
-        {(status === 'arrived' || status === 'waiting') && (
+        {/* Special Instructions */}
+        {trip.special_instructions && (
+          <View style={styles.notesCard}>
+            <Text style={styles.notesLabel}>📝 Special Instructions</Text>
+            <Text style={styles.notesText}>{trip.special_instructions}</Text>
+          </View>
+        )}
+        
+        {/* Quick Actions */}
+        {isWaiting && (
           <TouchableOpacity style={styles.noShowButton} onPress={handleNoShow}>
             <Text style={styles.noShowButtonText}>🚫 Mark as No Show</Text>
           </TouchableOpacity>
@@ -376,23 +475,26 @@ export default function ActiveTripScreen() {
           <Text style={styles.cancelButtonText}>Cancel Trip</Text>
         </TouchableOpacity>
         
-        <View style={{ height: 120 }} />
+        <View style={{ height: 140 }} />
       </ScrollView>
       
-      {/* Main Action Button */}
+      {/* Big Action Button */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
-          style={[
-            styles.actionButton,
-            status === 'done' && styles.actionButtonCompleted,
-          ]}
+          style={[styles.actionButton, { backgroundColor: statusButton.color }]}
           onPress={handleAdvanceStatus}
           disabled={isUpdating}
+          activeOpacity={0.8}
         >
           {isUpdating ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color="#fff" size="large" />
           ) : (
-            <Text style={styles.actionButtonText}>{getNextButtonText()}</Text>
+            <>
+              <Text style={styles.actionButtonIcon}>{statusButton.icon}</Text>
+              <Text style={styles.actionButtonText}>
+                {nextStatus ? statusButton.nextLabel : 'Return to Dashboard'}
+              </Text>
+            </>
           )}
         </TouchableOpacity>
       </View>
@@ -411,61 +513,144 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.background,
   },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+  },
   errorText: {
     fontSize: fontSize.lg,
     color: colors.textSecondary,
+    marginBottom: spacing.md,
+  },
+  backButton: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+  },
+  backButtonText: {
+    color: colors.white,
+    fontWeight: '600',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  headerBack: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerBackText: {
+    fontSize: 24,
+    color: colors.text,
+  },
+  headerTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: colors.text,
   },
   scrollView: {
     flex: 1,
-    padding: spacing.lg,
+    padding: spacing.md,
   },
   statusCard: {
     alignItems: 'center',
-    padding: spacing.xl,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 2,
     marginBottom: spacing.lg,
   },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: 50,
+    gap: spacing.sm,
+  },
   statusEmoji: {
-    fontSize: 64,
-    marginBottom: spacing.md,
+    fontSize: 32,
   },
   statusLabel: {
-    fontSize: fontSize.xxl,
+    fontSize: fontSize.xl,
     fontWeight: '700',
+    color: colors.white,
   },
   progressContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.sm,
     marginBottom: spacing.xl,
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: colors.border,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: 3,
+  },
+  progressDots: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
   progressDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
     backgroundColor: colors.border,
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
+  progressDotActive: {
+    backgroundColor: colors.primary,
+  },
+  waitingCard: {
+    backgroundColor: colors.warning + '20',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    borderWidth: 2,
+    borderColor: colors.warning,
+  },
+  waitingLabel: {
+    fontSize: fontSize.md,
+    color: colors.warning,
+    fontWeight: '600',
+  },
+  waitingTime: {
+    fontSize: 48,
+    fontWeight: '700',
+    color: colors.text,
+    fontVariant: ['tabular-nums'],
   },
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    padding: spacing.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  cardLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-    color: colors.textMuted,
-    letterSpacing: 1,
-    marginBottom: spacing.xs,
-  },
   passengerName: {
     fontSize: fontSize.xl,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.text,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  passengerCount: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: spacing.md,
   },
@@ -475,35 +660,98 @@ const styles = StyleSheet.create({
   },
   contactBtn: {
     flex: 1,
-    backgroundColor: colors.primary + '20',
-    borderRadius: borderRadius.md,
-    padding: spacing.sm,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary + '15',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  contactIcon: {
+    fontSize: 20,
   },
   contactBtnText: {
     fontSize: fontSize.md,
     fontWeight: '600',
     color: colors.primary,
   },
-  addressText: {
+  destinationCard: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  destinationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  destinationBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+  },
+  destinationBadgeText: {
+    color: colors.white,
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+  },
+  destinationLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.textMuted,
+    letterSpacing: 1,
+  },
+  destinationAddress: {
     fontSize: fontSize.lg,
     color: colors.text,
-    marginBottom: spacing.md,
     lineHeight: 24,
+    marginBottom: spacing.md,
   },
   navButton: {
-    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.headerBg,
     borderRadius: borderRadius.md,
     padding: spacing.md,
-    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  navButtonIcon: {
+    fontSize: 20,
   },
   navButtonText: {
     fontSize: fontSize.md,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
+  },
+  notesCard: {
+    backgroundColor: colors.warning + '10',
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.warning + '30',
+  },
+  notesLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.warning,
+    marginBottom: spacing.xs,
+  },
+  notesText: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    lineHeight: 22,
   },
   noShowButton: {
-    backgroundColor: colors.warning + '20',
+    backgroundColor: colors.danger + '15',
     borderRadius: borderRadius.md,
     padding: spacing.md,
     alignItems: 'center',
@@ -512,7 +760,7 @@ const styles = StyleSheet.create({
   noShowButtonText: {
     fontSize: fontSize.md,
     fontWeight: '600',
-    color: colors.warning,
+    color: colors.danger,
   },
   cancelButton: {
     backgroundColor: 'transparent',
@@ -520,36 +768,43 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.danger,
+    borderColor: colors.border,
   },
   cancelButtonText: {
     fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.danger,
+    fontWeight: '500',
+    color: colors.textMuted,
   },
   bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: colors.background,
-    padding: spacing.lg,
-    paddingBottom: spacing.xl,
+    backgroundColor: colors.white,
+    padding: spacing.md,
+    paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 10,
   },
   actionButton: {
-    backgroundColor: colors.success,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    gap: spacing.sm,
   },
-  actionButtonCompleted: {
-    backgroundColor: colors.primary,
+  actionButtonIcon: {
+    fontSize: 28,
   },
   actionButtonText: {
-    fontSize: fontSize.lg,
+    fontSize: fontSize.xl,
     fontWeight: '700',
-    color: '#fff',
+    color: colors.white,
   },
 });
