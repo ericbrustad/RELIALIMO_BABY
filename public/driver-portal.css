@@ -1308,6 +1308,8 @@ body {
 .status-dot.arrived { background: var(--status-arrived); }
 .status-dot.onboard { background: var(--status-onboard); }
 .status-dot.offline { background: var(--status-offline); }
+.status-dot.cancelled { background: #dc3545; }
+.status-dot.no-show { background: #6c757d; }
 
 /* ============================================
    Memo Notifications

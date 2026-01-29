@@ -1060,6 +1060,8 @@ const STATUS_META = {
   passenger_onboard: { emoji: '🚗', label: 'Customer in Car', color: 'onboard' },
   done: { emoji: '✅', label: 'Done', color: 'done' },
   completed: { emoji: '🏁', label: 'Completed', color: 'completed' },
+  cancelled: { emoji: '❌', label: 'Cancelled', color: 'cancelled' },
+  no_show: { emoji: '🚫', label: 'No Show', color: 'no-show' },
   busy: { emoji: '🔴', label: 'Busy', color: 'busy' },
   offline: { emoji: '⚫', label: 'Offline', color: 'offline' }
 };
@@ -10003,7 +10005,9 @@ window.openStatusModal = function(tripId) {
     { value: 'arrived', label: '📍 Arrived', icon: '📍' },
     { value: 'waiting', label: '⏳ Waiting', icon: '⏳' },
     { value: 'passenger_onboard', label: '👥 Passenger Onboard', icon: '👥' },
-    { value: 'done', label: '✅ Trip Complete', icon: '✅' }
+    { value: 'done', label: '✅ Trip Complete', icon: '✅' },
+    { value: 'no_show', label: '🚫 No Show', icon: '🚫' },
+    { value: 'cancelled', label: '❌ Cancelled', icon: '❌' }
   ];
   
   const optionsHtml = statusOptions.map(opt => `
