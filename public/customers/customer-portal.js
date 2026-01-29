@@ -3565,11 +3565,15 @@ function renderTrips(filter = 'upcoming') {
             <span class="route-address">${truncateAddress(trip.dropoff_address)}</span>
           </div>
         </div>
-        ${canTrack(trip) ? `
-          <div class="trip-actions">
-            <button class="btn btn-sm btn-primary track-trip-btn" data-id="${trip.id}">📍 Track Driver</button>
-          </div>
-        ` : ''}
+        <div class="trip-actions">
+          ${canTrack(trip) ? `
+            <button class="btn btn-sm btn-primary track-trip-btn" data-id="${trip.id}">📍 Track</button>
+          ` : ''}
+          ${canModifyTrip(trip) ? `
+            <button class="btn btn-sm btn-secondary edit-trip-btn" data-id="${trip.id}">✏️ Edit</button>
+            <button class="btn btn-sm btn-danger cancel-trip-btn" data-id="${trip.id}">❌ Cancel</button>
+          ` : ''}
+        </div>
       </div>
     `;
   }).join('');
@@ -3577,6 +3581,16 @@ function renderTrips(filter = 'upcoming') {
   // Add track handlers
   container.querySelectorAll('.track-trip-btn').forEach(btn => {
     btn.addEventListener('click', () => trackTrip(btn.dataset.id));
+  });
+  
+  // Add edit handlers
+  container.querySelectorAll('.edit-trip-btn').forEach(btn => {
+    btn.addEventListener('click', () => openEditTripModal(btn.dataset.id));
+  });
+  
+  // Add cancel handlers
+  container.querySelectorAll('.cancel-trip-btn').forEach(btn => {
+    btn.addEventListener('click', () => openCancelTripModal(btn.dataset.id));
   });
 }
 
@@ -3598,6 +3612,19 @@ function canTrack(trip) {
   return ['assigned', 'enroute', 'arrived', 'in_progress'].includes(trip.status);
 }
 
+// Check if a trip can be modified (edited or cancelled)
+// Only allow for upcoming trips that haven't started
+function canModifyTrip(trip) {
+  // Don't allow modification for completed, cancelled, or in-progress trips
+  const nonModifiableStatuses = ['completed', 'cancelled', 'in_progress', 'enroute', 'arrived', 'passenger_onboard'];
+  if (nonModifiableStatuses.includes(trip.status)) return false;
+  
+  // Check if the trip is in the future
+  const pickupDate = getTripPickupDateTime(trip);
+  const now = new Date();
+  return pickupDate > now;
+}
+
 function truncateAddress(address, maxLength = 40) {
   if (!address) return 'N/A';
   return address.length > maxLength ? address.substring(0, maxLength) + '...' : address;
@@ -3610,6 +3637,341 @@ function getInitials(name) {
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
+
+// ============================================
+// Trip Modification (Edit/Cancel)
+// ============================================
+
+/**
+ * Open modal to edit a trip
+ */
+function openEditTripModal(tripId) {
+  const trip = state.trips.find(t => t.id == tripId);
+  if (!trip) {
+    showToast('Trip not found', 'error');
+    return;
+  }
+  
+  const pickupDate = trip.pickup_datetime ? trip.pickup_datetime.split('T')[0] : '';
+  const pickupTime = trip.pickup_datetime ? trip.pickup_datetime.split('T')[1]?.substring(0, 5) : '';
+  
+  const modalHtml = `
+    <div class="modal active" id="editTripModal" onclick="if(event.target===this) closeEditTripModal()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>✏️ Edit Reservation #${trip.confirmation_number || tripId}</h2>
+          <button type="button" class="modal-close" onclick="closeEditTripModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="notice-banner warning">
+            <span class="notice-icon">⚠️</span>
+            <div class="notice-text">
+              <strong>Change fees may apply</strong><br>
+              Changes made less than 24 hours before pickup may incur fees. Dispatch will be notified of your changes.
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">📅 New Pickup Date</label>
+            <input type="date" id="editPickupDate" class="form-input" value="${pickupDate}">
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">🕐 New Pickup Time</label>
+            <input type="time" id="editPickupTime" class="form-input" value="${pickupTime}">
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">📍 Pickup Address</label>
+            <input type="text" id="editPickupAddress" class="form-input" value="${trip.pickup_address || ''}" placeholder="Enter pickup address">
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">🏁 Dropoff Address</label>
+            <input type="text" id="editDropoffAddress" class="form-input" value="${trip.dropoff_address || ''}" placeholder="Enter dropoff address">
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">👥 Number of Passengers</label>
+            <input type="number" id="editPassengerCount" class="form-input" value="${trip.passenger_count || 1}" min="1" max="50">
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">📝 Special Instructions (optional)</label>
+            <textarea id="editSpecialInstructions" class="form-input" rows="3" placeholder="Any special requests or notes...">${trip.special_instructions || trip.notes || ''}</textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeEditTripModal()">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="saveEditedTrip('${tripId}')">💾 Save Changes</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Remove existing modal if any
+  const existing = document.getElementById('editTripModal');
+  if (existing) existing.remove();
+  
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function closeEditTripModal() {
+  const modal = document.getElementById('editTripModal');
+  if (modal) modal.remove();
+}
+
+/**
+ * Save the edited trip to the database
+ */
+async function saveEditedTrip(tripId) {
+  const trip = state.trips.find(t => t.id == tripId);
+  if (!trip) return;
+  
+  const newDate = document.getElementById('editPickupDate').value;
+  const newTime = document.getElementById('editPickupTime').value;
+  const newPickupAddress = document.getElementById('editPickupAddress').value;
+  const newDropoffAddress = document.getElementById('editDropoffAddress').value;
+  const newPassengerCount = document.getElementById('editPassengerCount').value;
+  const newInstructions = document.getElementById('editSpecialInstructions').value;
+  
+  if (!newDate || !newTime) {
+    showToast('Please enter date and time', 'error');
+    return;
+  }
+  
+  const newPickupDateTime = `${newDate}T${newTime}`;
+  
+  try {
+    const creds = getSupabaseCredentials();
+    
+    // Build update payload
+    const updateData = {
+      pickup_datetime: newPickupDateTime,
+      pickup_address: newPickupAddress,
+      dropoff_address: newDropoffAddress,
+      passenger_count: parseInt(newPassengerCount) || 1,
+      special_instructions: newInstructions,
+      notes: newInstructions,
+      // Mark that this was modified by customer
+      customer_modified: true,
+      customer_modified_at: new Date().toISOString()
+    };
+    
+    const response = await fetch(
+      `${creds.url}/rest/v1/reservations?id=eq.${tripId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'apikey': creds.anonKey,
+          'Authorization': `Bearer ${state.session?.access_token}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(updateData)
+      }
+    );
+    
+    if (response.ok) {
+      closeEditTripModal();
+      showToast('Reservation updated! Dispatch has been notified.', 'success');
+      
+      // Send notification to dispatch
+      await notifyDispatchOfChange(tripId, 'modified', {
+        previousDateTime: trip.pickup_datetime,
+        newDateTime: newPickupDateTime,
+        previousPickup: trip.pickup_address,
+        newPickup: newPickupAddress
+      });
+      
+      // Reload trips
+      await loadTrips();
+    } else {
+      const error = await response.text();
+      console.error('[CustomerPortal] Failed to update trip:', error);
+      showToast('Failed to update reservation', 'error');
+    }
+  } catch (err) {
+    console.error('[CustomerPortal] Error updating trip:', err);
+    showToast('Error updating reservation', 'error');
+  }
+}
+
+/**
+ * Open modal to cancel a trip
+ */
+function openCancelTripModal(tripId) {
+  const trip = state.trips.find(t => t.id == tripId);
+  if (!trip) {
+    showToast('Trip not found', 'error');
+    return;
+  }
+  
+  const pickupDate = getTripPickupDateTime(trip);
+  const dateStr = pickupDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const timeStr = pickupDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  
+  const modalHtml = `
+    <div class="modal active" id="cancelTripModal" onclick="if(event.target===this) closeCancelTripModal()">
+      <div class="modal-content">
+        <div class="modal-header danger-header">
+          <h2>❌ Cancel Reservation</h2>
+          <button type="button" class="modal-close" onclick="closeCancelTripModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="notice-banner danger">
+            <span class="notice-icon">⚠️</span>
+            <div class="notice-text">
+              <strong>Cancellation fees may apply</strong><br>
+              Cancellations made less than 24 hours before pickup may incur fees. Dispatch will be notified of this cancellation.
+            </div>
+          </div>
+          
+          <div class="cancel-trip-summary">
+            <div class="summary-row">
+              <span class="summary-label">Confirmation #:</span>
+              <span class="summary-value">${trip.confirmation_number || tripId}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">Date & Time:</span>
+              <span class="summary-value">${dateStr} at ${timeStr}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">Pickup:</span>
+              <span class="summary-value">${truncateAddress(trip.pickup_address, 50)}</span>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Reason for cancellation (optional)</label>
+            <textarea id="cancelReason" class="form-input" rows="3" placeholder="Let us know why you're cancelling..."></textarea>
+          </div>
+          
+          <p class="confirm-text">Are you sure you want to cancel this reservation?</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeCancelTripModal()">Keep Reservation</button>
+          <button type="button" class="btn btn-danger" onclick="confirmCancelTrip('${tripId}')">❌ Cancel Reservation</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Remove existing modal if any
+  const existing = document.getElementById('cancelTripModal');
+  if (existing) existing.remove();
+  
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function closeCancelTripModal() {
+  const modal = document.getElementById('cancelTripModal');
+  if (modal) modal.remove();
+}
+
+/**
+ * Confirm and execute trip cancellation
+ */
+async function confirmCancelTrip(tripId) {
+  const trip = state.trips.find(t => t.id == tripId);
+  if (!trip) return;
+  
+  const reason = document.getElementById('cancelReason')?.value || '';
+  
+  try {
+    const creds = getSupabaseCredentials();
+    
+    const updateData = {
+      status: 'cancelled',
+      cancellation_reason: reason,
+      cancelled_by: 'customer',
+      cancelled_at: new Date().toISOString(),
+      customer_cancelled: true
+    };
+    
+    const response = await fetch(
+      `${creds.url}/rest/v1/reservations?id=eq.${tripId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'apikey': creds.anonKey,
+          'Authorization': `Bearer ${state.session?.access_token}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(updateData)
+      }
+    );
+    
+    if (response.ok) {
+      closeCancelTripModal();
+      showToast('Reservation cancelled. Dispatch has been notified.', 'success');
+      
+      // Send notification to dispatch
+      await notifyDispatchOfChange(tripId, 'cancelled', { reason });
+      
+      // Reload trips
+      await loadTrips();
+    } else {
+      const error = await response.text();
+      console.error('[CustomerPortal] Failed to cancel trip:', error);
+      showToast('Failed to cancel reservation', 'error');
+    }
+  } catch (err) {
+    console.error('[CustomerPortal] Error cancelling trip:', err);
+    showToast('Error cancelling reservation', 'error');
+  }
+}
+
+/**
+ * Send notification to dispatch about customer changes
+ */
+async function notifyDispatchOfChange(tripId, changeType, details) {
+  try {
+    const trip = state.trips.find(t => t.id == tripId);
+    if (!trip) return;
+    
+    // Create a dispatch notification record
+    const creds = getSupabaseCredentials();
+    
+    const notification = {
+      type: 'customer_change',
+      reservation_id: tripId,
+      confirmation_number: trip.confirmation_number,
+      change_type: changeType, // 'modified' or 'cancelled'
+      customer_name: `${state.customer?.first_name || ''} ${state.customer?.last_name || ''}`.trim(),
+      customer_email: state.customer?.email,
+      change_details: JSON.stringify(details),
+      created_at: new Date().toISOString(),
+      read: false
+    };
+    
+    // Try to insert into dispatch_notifications table (if it exists)
+    await fetch(`${creds.url}/rest/v1/dispatch_notifications`, {
+      method: 'POST',
+      headers: {
+        'apikey': creds.anonKey,
+        'Authorization': `Bearer ${state.session?.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(notification)
+    }).catch(() => {
+      // Table might not exist, that's ok - the reservation update itself serves as notification
+      console.log('[CustomerPortal] Dispatch notifications table not available');
+    });
+    
+    console.log(`[CustomerPortal] Notified dispatch of ${changeType} for trip ${tripId}`);
+  } catch (err) {
+    console.warn('[CustomerPortal] Could not send dispatch notification:', err);
+    // Non-critical, don't show error to user
+  }
+}
+
+// Make modal functions globally accessible
+window.closeEditTripModal = closeEditTripModal;
+window.saveEditedTrip = saveEditedTrip;
+window.closeCancelTripModal = closeCancelTripModal;
+window.confirmCancelTrip = confirmCancelTrip;
 
 // ============================================
 // Trip Tracking
