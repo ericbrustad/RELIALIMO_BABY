@@ -8985,13 +8985,20 @@ window.startTrip = async function(tripId) {
       return;
     }
     
-    // Start turn-by-turn navigation with geofencing
-    if (typeof NavigationModule !== 'undefined' && NavigationModule.startNavigation) {
-      await NavigationModule.startNavigation(tripData);
-    } else {
-      console.warn('[DriverPortal] NavigationModule not available, using standard flow');
-      switchTab('active');
-      await refreshTrips();
+    // SIMPLIFIED NAVIGATION: Skip complex built-in navigation, go to Active tab
+    // The Active tab already has navigate buttons for pickup/dropoff
+    switchTab('active');
+    await refreshTrips();
+    
+    // Show navigation app picker for pickup address
+    const pickupAddress = tripData.pickup_address || tripData.pickup_location;
+    if (pickupAddress && window.NavigationHelper) {
+      // Small delay to let the Active tab render
+      setTimeout(() => {
+        NavigationHelper.showAppPicker(pickupAddress, (app) => {
+          console.log('[DriverPortal] User selected navigation app:', app);
+        });
+      }, 500);
     }
     
     // Check map preference on first navigation
@@ -9277,60 +9284,153 @@ function setMapPreference(mapApp) {
   if (prefSelect) prefSelect.value = mapApp;
 }
 
+// ============================================
+// RELIABLE NAVIGATION SYSTEM - v2.0
+// ============================================
+// This system prioritizes reliability and immediate feedback.
+// It uses native app deep links which are the most reliable way to navigate.
+
+const NavigationHelper = {
+  // Detect platform
+  get isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent); },
+  get isAndroid() { return /android/i.test(navigator.userAgent); },
+  get isMobile() { return this.isIOS || this.isAndroid; },
+  
+  // Build navigation URLs for each app
+  buildUrls(address) {
+    const encoded = encodeURIComponent(address);
+    return {
+      google: this.isAndroid 
+        ? `google.navigation:q=${encoded}&mode=d`
+        : `https://www.google.com/maps/dir/?api=1&destination=${encoded}&travelmode=driving`,
+      apple: this.isIOS 
+        ? `maps://?daddr=${encoded}&dirflg=d`
+        : `https://maps.apple.com/?daddr=${encoded}&dirflg=d`,
+      waze: `https://waze.com/ul?q=${encoded}&navigate=yes`
+    };
+  },
+  
+  // Launch navigation immediately with preferred app
+  launch(address, preferredApp = 'google') {
+    if (!address || address.trim() === '') {
+      showToast('No address provided', 'warning');
+      return false;
+    }
+    
+    console.log('[Navigation] Launching navigation to:', address, 'with:', preferredApp);
+    const urls = this.buildUrls(address.trim());
+    
+    // Get the URL for preferred app, fallback to Google
+    let url = urls[preferredApp] || urls.google;
+    
+    // Special handling for Apple Maps on non-iOS
+    if (preferredApp === 'apple' && !this.isIOS) {
+      url = urls.google;
+    }
+    
+    try {
+      window.open(url, '_blank');
+      showToast('Opening navigation...', 'success', 2000);
+      return true;
+    } catch (err) {
+      window.open(urls.google, '_blank');
+      return true;
+    }
+  },
+  
+  // Show app picker modal for one-tap selection
+  showAppPicker(address, callback) {
+    const existing = document.getElementById('navAppPickerModal');
+    if (existing) existing.remove();
+    
+    const urls = this.buildUrls(address);
+    const isIOS = this.isIOS;
+    
+    const modal = document.createElement('div');
+    modal.id = 'navAppPickerModal';
+    modal.className = 'nav-app-picker-modal';
+    modal.innerHTML = `
+      <div class="nav-app-picker-overlay" onclick="NavigationHelper.closeAppPicker()"></div>
+      <div class="nav-app-picker-content">
+        <div class="nav-app-picker-header">
+          <h3>🧭 Navigate To</h3>
+          <button class="nav-app-picker-close" onclick="NavigationHelper.closeAppPicker()">×</button>
+        </div>
+        <div class="nav-app-picker-address">${address}</div>
+        <div class="nav-app-picker-buttons">
+          <button class="nav-app-btn nav-app-google" data-app="google">
+            <span class="nav-app-icon">🗺️</span>
+            <span class="nav-app-name">Google Maps</span>
+          </button>
+          ${isIOS ? `
+          <button class="nav-app-btn nav-app-apple" data-app="apple">
+            <span class="nav-app-icon">🍎</span>
+            <span class="nav-app-name">Apple Maps</span>
+          </button>
+          ` : ''}
+          <button class="nav-app-btn nav-app-waze" data-app="waze">
+            <span class="nav-app-icon">🚙</span>
+            <span class="nav-app-name">Waze</span>
+          </button>
+        </div>
+        <label class="nav-app-remember">
+          <input type="checkbox" id="navRememberApp"> Remember my choice
+        </label>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    requestAnimationFrame(() => modal.classList.add('active'));
+    
+    modal.querySelectorAll('.nav-app-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const app = btn.dataset.app;
+        const remember = document.getElementById('navRememberApp')?.checked;
+        
+        if (remember) {
+          localStorage.setItem('driver_preferred_map', app);
+          state.preferredMapApp = app;
+        }
+        
+        this.closeAppPicker();
+        this.launch(address, app);
+        
+        if (callback) callback(app);
+      });
+    });
+  },
+  
+  closeAppPicker() {
+    const modal = document.getElementById('navAppPickerModal');
+    if (modal) {
+      modal.classList.remove('active');
+      setTimeout(() => modal.remove(), 300);
+    }
+  }
+};
+
+// Make available globally
+window.NavigationHelper = NavigationHelper;
+
+// Main navigation function - simple and reliable
 window.openNavigation = function(address, usePickup = false) {
-  if (!address) {
+  if (!address || address.trim() === '') {
     showToast('No address available', 'warning');
     return;
   }
   
-  // Check if user has set a preference, if not ask first
-  if (!state.preferredMapApp) {
-    checkMapPreference();
-    // Store the address to navigate after preference is set
-    localStorage.setItem('pending_navigation_address', address);
+  // Get saved preference
+  const preferredApp = state.preferredMapApp || localStorage.getItem('driver_preferred_map');
+  
+  // If no preference saved, show app picker
+  if (!preferredApp || preferredApp === 'ask') {
+    NavigationHelper.showAppPicker(address);
     return;
   }
   
-  const encoded = encodeURIComponent(address);
-  const userAgent = navigator.userAgent.toLowerCase();
-  const isIOS = /iphone|ipad|ipod/.test(userAgent);
-  const isAndroid = /android/.test(userAgent);
-  
-  let navigationUrl = '';
-  
-  switch (state.preferredMapApp) {
-    case 'google':
-      if (isAndroid) {
-        // Deep link for Google Maps on Android - works with CarPlay/Android Auto
-        navigationUrl = `google.navigation:q=${encoded}&mode=d`;
-      } else {
-        // Universal link works on iOS and opens in Google Maps app if installed
-        navigationUrl = `https://www.google.com/maps/dir/?api=1&destination=${encoded}&travelmode=driving`;
-      }
-      break;
-      
-    case 'apple':
-      if (isIOS) {
-        // Apple Maps deep link - works great with CarPlay
-        navigationUrl = `maps://?daddr=${encoded}&dirflg=d`;
-      } else {
-        // Fallback to Google Maps on non-iOS
-        navigationUrl = `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
-      }
-      break;
-      
-    case 'waze':
-      // Waze deep link - works on both platforms and CarPlay
-      navigationUrl = `https://waze.com/ul?q=${encoded}&navigate=yes`;
-      break;
-      
-    default:
-      // Default to Google Maps web
-      navigationUrl = `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
-  }
-  
-  console.log(`[DriverPortal] Opening navigation with ${state.preferredMapApp}:`, navigationUrl);
-  window.open(navigationUrl, '_blank');
+  // Otherwise launch directly with preferred app
+  NavigationHelper.launch(address, preferredApp);
+};
 };
 
 // Toggle map visibility for small screens

@@ -8985,13 +8985,20 @@ window.startTrip = async function(tripId) {
       return;
     }
     
-    // Start turn-by-turn navigation with geofencing
-    if (typeof NavigationModule !== 'undefined' && NavigationModule.startNavigation) {
-      await NavigationModule.startNavigation(tripData);
-    } else {
-      console.warn('[DriverPortal] NavigationModule not available, using standard flow');
-      switchTab('active');
-      await refreshTrips();
+    // SIMPLIFIED NAVIGATION: Skip complex built-in navigation, go to Active tab
+    // The Active tab already has navigate buttons for pickup/dropoff
+    switchTab('active');
+    await refreshTrips();
+    
+    // Show navigation app picker for pickup address
+    const pickupAddress = tripData.pickup_address || tripData.pickup_location;
+    if (pickupAddress && window.NavigationHelper) {
+      // Small delay to let the Active tab render
+      setTimeout(() => {
+        NavigationHelper.showAppPicker(pickupAddress, (app) => {
+          console.log('[DriverPortal] User selected navigation app:', app);
+        });
+      }, 500);
     }
     
     // Check map preference on first navigation
