@@ -5,76 +5,49 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "newArchEnabled": false,
+    "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#f8f9fa"
+      "backgroundColor": "#0f172a"
     },
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.relialimo.driver",
-      "buildNumber": "1",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "We need your location to show your position on the map and provide navigation to pickups and dropoffs.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "We need your location to track your position during active trips for dispatch visibility.",
-        "NSLocationAlwaysUsageDescription": "We need your location to track your position during active trips for dispatch visibility.",
+        "NSLocationWhenInUseUsageDescription": "We need your location to show you on the map and help navigate to pickups.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "We need your location to track trips and share your ETA with passengers.",
         "UIBackgroundModes": ["location", "fetch", "remote-notification"]
       }
     },
     "android": {
-      "package": "com.relialimo.driver",
-      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#E85A4F"
+        "backgroundColor": "#0f172a"
       },
-      "edgeToEdgeEnabled": true,
+      "package": "com.relialimo.driver",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
-        "FOREGROUND_SERVICE",
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
       ]
     },
-    "web": {
-      "favicon": "./assets/favicon.png",
-      "bundler": "metro",
-      "output": "single"
-    },
     "plugins": [
-      "expo-secure-store",
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow ReliaLimo Driver to use your location for trip tracking.",
-          "isAndroidBackgroundLocationEnabled": true,
-          "isAndroidForegroundServiceEnabled": true
+          "locationAlwaysAndWhenInUsePermission": "Allow ReliaLimo Driver to use your location to track trips."
         }
       ],
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification-icon.png",
-          "color": "#E85A4F",
-          "sounds": ["./assets/sounds/notification.wav"]
+          "sounds": ["./assets/notification.wav"]
         }
       ]
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "relialimo-driver"
-      }
-    },
-    "owner": "relialimo",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/relialimo-driver"
-    }
+    ]
   }
 }

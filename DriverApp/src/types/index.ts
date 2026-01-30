@@ -16,18 +16,9 @@ export interface Driver {
 }
 
 export type DriverStatus = 
-  | 'available'
-  | 'busy'
-  | 'offline'
-  | 'getting_ready'
-  | 'enroute'
-  | 'arrived'
-  | 'waiting'
-  | 'passenger_onboard'
-  | 'done'
-  | 'completed'
-  | 'cancelled'
-  | 'no_show';
+  | 'available' | 'busy' | 'offline'
+  | 'getting_ready' | 'enroute' | 'arrived' | 'waiting'
+  | 'passenger_onboard' | 'done' | 'completed' | 'cancelled' | 'no_show';
 
 export interface Reservation {
   id: number | string;
@@ -77,13 +68,7 @@ export interface Location {
   timestamp?: number;
 }
 
-export interface StatusMeta {
-  label: string;
-  emoji: string;
-  color: string;
-}
-
-export const STATUS_META: Record<DriverStatus, StatusMeta> = {
+export const STATUS_META: Record<DriverStatus, { label: string; emoji: string; color: string }> = {
   available: { label: 'Available', emoji: '🟢', color: '#4ade80' },
   busy: { label: 'Busy', emoji: '🟡', color: '#fbbf24' },
   offline: { label: 'Offline', emoji: '⚫', color: '#6b7280' },
