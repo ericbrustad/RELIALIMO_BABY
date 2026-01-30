@@ -11,12 +11,10 @@ export interface Driver {
   status?: string;
   driver_status?: DriverStatus;
   vehicle_type?: string;
-  created_at?: string;
-  updated_at?: string;
 }
 
-export type DriverStatus = 
-  | 'available' | 'busy' | 'offline'
+export type DriverStatus =
+  | 'available' | 'busy' | 'offline' | 'assigned'
   | 'getting_ready' | 'enroute' | 'arrived' | 'waiting'
   | 'passenger_onboard' | 'done' | 'completed' | 'cancelled' | 'no_show';
 
@@ -72,6 +70,7 @@ export const STATUS_META: Record<DriverStatus, { label: string; emoji: string; c
   available: { label: 'Available', emoji: '🟢', color: '#4ade80' },
   busy: { label: 'Busy', emoji: '🟡', color: '#fbbf24' },
   offline: { label: 'Offline', emoji: '⚫', color: '#6b7280' },
+  assigned: { label: 'Assigned', emoji: '📋', color: '#6366f1' },
   getting_ready: { label: 'Getting Ready', emoji: '🚗', color: '#6366f1' },
   enroute: { label: 'On The Way', emoji: '🛣️', color: '#3b82f6' },
   arrived: { label: 'Arrived', emoji: '📍', color: '#f59e0b' },

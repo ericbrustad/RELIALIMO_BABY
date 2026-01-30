@@ -1,7 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, ActivityIndicator,
-} from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,22 +8,15 @@ import { colors, spacing, fontSize, borderRadius } from '../config/theme';
 import { STATUS_META } from '../types';
 import type { Reservation, RootStackParamList } from '../types';
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function DashboardScreen() {
-  const navigation = useNavigation<NavigationProp>();
+  const navigation = useNavigation<Nav>();
   const { driver } = useAuthStore();
   const { trips, offers, fetchTrips, fetchOffers, isLoading } = useTripStore();
   const [refreshing, setRefreshing] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (driver?.id) {
-        fetchTrips(driver.id);
-        fetchOffers(driver.id);
-      }
-    }, [driver?.id])
-  );
+  useFocusEffect(useCallback(() => { if (driver?.id) { fetchTrips(driver.id); fetchOffers(driver.id); } }, [driver?.id]));
 
   const onRefresh = useCallback(async () => {
     if (!driver?.id) return;
@@ -34,119 +25,47 @@ export default function DashboardScreen() {
     setRefreshing(false);
   }, [driver?.id]);
 
-  const formatDateTime = (datetime: string) => {
-    const date = new Date(datetime);
-    const today = new Date();
-    const tomorrow = new Date(today);
+  const formatDateTime = (dt: string) => {
+    const d = new Date(dt), today = new Date(), tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-
-    let dateStr = '';
-    if (date.toDateString() === today.toDateString()) {
-      dateStr = 'Today';
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      dateStr = 'Tomorrow';
-    } else {
-      dateStr = date.toLocaleDateString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-      });
-    }
-
-    const timeStr = date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-
-    return { date: dateStr, time: timeStr };
+    const dateStr = d.toDateString() === today.toDateString() ? 'Today' : d.toDateString() === tomorrow.toDateString() ? 'Tomorrow' : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    return { date: dateStr, time: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) };
   };
 
-  const getPassengerName = (trip: Reservation) => {
-    if (trip.passenger_name) return trip.passenger_name;
-    if (trip.passenger_first_name) {
-      return `${trip.passenger_first_name} ${trip.passenger_last_name || ''}`.trim();
-    }
-    return 'Passenger';
-  };
+  const getName = (t: Reservation) => t.passenger_name || (t.passenger_first_name ? `${t.passenger_first_name} ${t.passenger_last_name || ''}`.trim() : 'Passenger');
 
   const renderTrip = ({ item: trip }: { item: Reservation }) => {
     const { date, time } = formatDateTime(trip.pickup_datetime);
     const status = trip.driver_status || 'available';
-    const statusMeta = STATUS_META[status] || STATUS_META.available;
-
+    const meta = STATUS_META[status] || STATUS_META.available;
     return (
-      <TouchableOpacity
-        style={styles.tripCard}
-        onPress={() => {
-          const activeStatuses = ['getting_ready', 'enroute', 'arrived', 'waiting', 'passenger_onboard'];
-          if (activeStatuses.includes(status)) {
-            navigation.navigate('ActiveTrip', { tripId: trip.id });
-          } else {
-            navigation.navigate('TripDetail', { tripId: trip.id });
-          }
-        }}
-      >
+      <TouchableOpacity style={styles.tripCard} onPress={() => { ['getting_ready', 'enroute', 'arrived', 'waiting', 'passenger_onboard'].includes(status) ? navigation.navigate('ActiveTrip', { tripId: trip.id }) : navigation.navigate('TripDetail', { tripId: trip.id }); }}>
         <View style={styles.tripHeader}>
-          <View>
-            <Text style={styles.tripDate}>{date}</Text>
-            <Text style={styles.tripTime}>{time}</Text>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: statusMeta.color + '20' }]}>
-            <Text style={styles.statusEmoji}>{statusMeta.emoji}</Text>
-            <Text style={[styles.statusText, { color: statusMeta.color }]}>{statusMeta.label}</Text>
-          </View>
+          <View><Text style={styles.tripDate}>{date}</Text><Text style={styles.tripTime}>{time}</Text></View>
+          <View style={[styles.statusBadge, { backgroundColor: meta.color + '20' }]}><Text style={styles.statusEmoji}>{meta.emoji}</Text><Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text></View>
         </View>
-        <Text style={styles.passengerName}>{getPassengerName(trip)}</Text>
+        <Text style={styles.passengerName}>{getName(trip)}</Text>
         <View style={styles.locationContainer}>
-          <View style={styles.locationRow}>
-            <View style={[styles.dot, { backgroundColor: colors.success }]} />
-            <Text style={styles.locationText} numberOfLines={1}>{trip.pickup_address || 'Pickup TBD'}</Text>
-          </View>
-          <View style={styles.locationRow}>
-            <View style={[styles.dot, { backgroundColor: colors.danger }]} />
-            <Text style={styles.locationText} numberOfLines={1}>{trip.dropoff_address || 'Dropoff TBD'}</Text>
-          </View>
+          <View style={styles.locationRow}><View style={[styles.dot, { backgroundColor: colors.success }]} /><Text style={styles.locationText} numberOfLines={1}>{trip.pickup_address || 'Pickup TBD'}</Text></View>
+          <View style={styles.locationRow}><View style={[styles.dot, { backgroundColor: colors.danger }]} /><Text style={styles.locationText} numberOfLines={1}>{trip.dropoff_address || 'Dropoff TBD'}</Text></View>
         </View>
       </TouchableOpacity>
     );
   };
 
-  if (isLoading && trips.length === 0) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading trips...</Text>
-      </View>
-    );
-  }
+  if (isLoading && trips.length === 0) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /><Text style={styles.loadingText}>Loading trips...</Text></View>;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <FlatList
-        data={trips}
-        renderItem={renderTrip}
-        keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={styles.listContent}
+      <FlatList data={trips} renderItem={renderTrip} keyExtractor={i => String(i.id)} contentContainerStyle={styles.listContent}
         ListHeaderComponent={() => (
           <View style={styles.header}>
             <Text style={styles.greeting}>Hello, {driver?.first_name || 'Driver'}! 👋</Text>
-            {offers.length > 0 && (
-              <TouchableOpacity style={styles.offersBanner} onPress={() => navigation.navigate('Offers')}>
-                <Text style={styles.offersBannerText}>🔔 {offers.length} new trip offer{offers.length > 1 ? 's' : ''}</Text>
-                <Text style={styles.offersBannerArrow}>→</Text>
-              </TouchableOpacity>
-            )}
+            {offers.length > 0 && <TouchableOpacity style={styles.offersBanner} onPress={() => navigation.navigate('Offers')}><Text style={styles.offersBannerText}>🔔 {offers.length} new offer{offers.length > 1 ? 's' : ''}</Text><Text style={styles.offersBannerArrow}>→</Text></TouchableOpacity>}
             <Text style={styles.sectionTitle}>Your Trips</Text>
           </View>
         )}
-        ListEmptyComponent={() => (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>📅</Text>
-            <Text style={styles.emptyTitle}>No Trips Scheduled</Text>
-            <Text style={styles.emptySubtitle}>Check back later or contact dispatch.</Text>
-          </View>
-        )}
+        ListEmptyComponent={() => <View style={styles.emptyContainer}><Text style={styles.emptyEmoji}>📅</Text><Text style={styles.emptyTitle}>No Trips Scheduled</Text><Text style={styles.emptySubtitle}>Check back later.</Text></View>}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       />
     </SafeAreaView>

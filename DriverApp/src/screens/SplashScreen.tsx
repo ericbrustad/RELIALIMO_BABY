@@ -5,10 +5,7 @@ import { colors, fontSize, spacing } from '../config/theme';
 
 export default function SplashScreen() {
   const { initialize } = useAuthStore();
-
-  useEffect(() => {
-    initialize();
-  }, []);
+  useEffect(() => { initialize(); }, []);
 
   return (
     <View style={styles.container}>
@@ -21,27 +18,9 @@ export default function SplashScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-  },
-  logo: {
-    fontSize: 80,
-    marginBottom: spacing.md,
-  },
-  title: {
-    fontSize: fontSize.display,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: fontSize.lg,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  loader: {
-    marginTop: spacing.xxl,
-  },
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
+  logo: { fontSize: 80, marginBottom: spacing.md },
+  title: { fontSize: fontSize.display, fontWeight: '700', color: colors.text },
+  subtitle: { fontSize: fontSize.lg, color: colors.textSecondary, marginTop: spacing.xs },
+  loader: { marginTop: spacing.xxl },
 });

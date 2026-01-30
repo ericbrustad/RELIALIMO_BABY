@@ -18,7 +18,7 @@ interface TripState {
   clearError: () => void;
 }
 
-export const useTripStore = create<TripState>((set, get) => ({
+export const useTripStore = create<TripState>((set) => ({
   trips: [],
   offers: [],
   currentTrip: null,
@@ -28,7 +28,6 @@ export const useTripStore = create<TripState>((set, get) => ({
   fetchTrips: async (driverId: string) => {
     try {
       set({ isLoading: true, error: null });
-      
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
@@ -40,7 +39,6 @@ export const useTripStore = create<TripState>((set, get) => ({
         .order('pickup_datetime', { ascending: true });
       
       if (error) throw error;
-      
       set({ trips: data || [], isLoading: false });
     } catch (error: any) {
       console.error('[TripStore] fetchTrips error:', error);
@@ -50,8 +48,6 @@ export const useTripStore = create<TripState>((set, get) => ({
   
   fetchOffers: async (driverId: string) => {
     try {
-      set({ isLoading: true, error: null });
-      
       const { data, error } = await supabase
         .from('trip_offers')
         .select(`*, reservation:reservation_id (*)`)
@@ -61,18 +57,15 @@ export const useTripStore = create<TripState>((set, get) => ({
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      
-      set({ offers: data || [], isLoading: false });
+      set({ offers: data || [] });
     } catch (error: any) {
       console.error('[TripStore] fetchOffers error:', error);
-      set({ error: error.message, isLoading: false });
     }
   },
   
   acceptOffer: async (offerId: string) => {
     try {
-      set({ isLoading: true, error: null });
-      
+      set({ isLoading: true });
       const { data: offer, error: offerError } = await supabase
         .from('trip_offers')
         .update({ status: 'accepted', responded_at: new Date().toISOString() })
@@ -87,11 +80,7 @@ export const useTripStore = create<TripState>((set, get) => ({
         .update({ driver_status: 'assigned', updated_at: new Date().toISOString() })
         .eq('id', offer.reservation_id);
       
-      set(state => ({
-        offers: state.offers.filter(o => o.id !== offerId),
-        isLoading: false
-      }));
-      
+      set(state => ({ offers: state.offers.filter(o => o.id !== offerId), isLoading: false }));
       return { success: true };
     } catch (error: any) {
       set({ error: error.message, isLoading: false });
@@ -101,44 +90,29 @@ export const useTripStore = create<TripState>((set, get) => ({
   
   declineOffer: async (offerId: string) => {
     try {
-      set({ isLoading: true, error: null });
-      
       await supabase
         .from('trip_offers')
         .update({ status: 'declined', responded_at: new Date().toISOString() })
         .eq('id', offerId);
       
-      set(state => ({
-        offers: state.offers.filter(o => o.id !== offerId),
-        isLoading: false
-      }));
-      
+      set(state => ({ offers: state.offers.filter(o => o.id !== offerId) }));
       return { success: true };
     } catch (error: any) {
-      set({ error: error.message, isLoading: false });
       return { success: false, error: error.message };
     }
   },
   
   updateTripStatus: async (tripId: number | string, status: DriverStatus) => {
     try {
-      set({ isLoading: true, error: null });
-      
-      const updateData: Record<string, any> = {
-        driver_status: status,
-        updated_at: new Date().toISOString()
-      };
+      set({ isLoading: true });
+      const updateData: Record<string, any> = { driver_status: status, updated_at: new Date().toISOString() };
       
       if (status === 'enroute') updateData.departed_at = new Date().toISOString();
       else if (status === 'arrived') updateData.arrived_at = new Date().toISOString();
       else if (status === 'passenger_onboard') updateData.picked_up_at = new Date().toISOString();
       else if (status === 'done' || status === 'completed') updateData.completed_at = new Date().toISOString();
       
-      const { error } = await supabase
-        .from('reservations')
-        .update(updateData)
-        .eq('id', tripId);
-      
+      const { error } = await supabase.from('reservations').update(updateData).eq('id', tripId);
       if (error) throw error;
       
       set(state => ({
@@ -146,7 +120,6 @@ export const useTripStore = create<TripState>((set, get) => ({
         currentTrip: state.currentTrip?.id === tripId ? { ...state.currentTrip, driver_status: status } : state.currentTrip,
         isLoading: false
       }));
-      
       return { success: true };
     } catch (error: any) {
       set({ error: error.message, isLoading: false });

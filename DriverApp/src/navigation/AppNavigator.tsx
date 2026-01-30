@@ -15,37 +15,21 @@ import OffersScreen from '../screens/OffersScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-
-const screenOptions = {
-  headerStyle: { backgroundColor: colors.headerBg },
-  headerTintColor: colors.white,
-  headerTitleStyle: { fontWeight: '600' as const },
-  contentStyle: { backgroundColor: colors.background },
-};
+const opts = { headerStyle: { backgroundColor: colors.headerBg }, headerTintColor: colors.white, headerTitleStyle: { fontWeight: '600' as const }, contentStyle: { backgroundColor: colors.background } };
 
 export default function AppNavigator() {
   const { isAuthenticated, isLoading } = useAuthStore();
 
-  if (isLoading) {
-    return (
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="Splash" component={SplashScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
-    );
-  }
+  if (isLoading) return <NavigationContainer><Stack.Navigator screenOptions={{ headerShown: false }}><Stack.Screen name="Splash" component={SplashScreen} /></Stack.Navigator></NavigationContainer>;
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={screenOptions}>
-        {!isAuthenticated ? (
-          <Stack.Screen name="Auth" component={AuthScreen} options={{ headerShown: false }} />
-        ) : (
+      <Stack.Navigator screenOptions={opts}>
+        {!isAuthenticated ? <Stack.Screen name="Auth" component={AuthScreen} options={{ headerShown: false }} /> : (
           <>
             <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'My Trips', headerLeft: () => null }} />
             <Stack.Screen name="TripDetail" component={TripDetailScreen} options={{ title: 'Trip Details' }} />
-            <Stack.Screen name="ActiveTrip" component={ActiveTripScreen} options={{ title: 'Active Trip', headerShown: false }} />
+            <Stack.Screen name="ActiveTrip" component={ActiveTripScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Offers" component={OffersScreen} options={{ title: 'Trip Offers' }} />
             <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
           </>
