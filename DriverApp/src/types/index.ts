@@ -7,18 +7,18 @@ export interface Driver {
   first_name: string;
   last_name: string;
   email: string;
-  phone: string;
-  profile_photo?: string;
-  status: DriverStatus;
+  phone?: string;
+  status?: string;
+  driver_status?: DriverStatus;
   vehicle_type?: string;
-  assigned_vehicle_id?: string;
-  organization_id?: string;
-  created_at: string;
+  created_at?: string;
   updated_at?: string;
 }
 
 export type DriverStatus = 
   | 'available'
+  | 'busy'
+  | 'offline'
   | 'getting_ready'
   | 'enroute'
   | 'arrived'
@@ -26,134 +26,85 @@ export type DriverStatus =
   | 'passenger_onboard'
   | 'done'
   | 'completed'
-  | 'busy'
-  | 'offline'
   | 'cancelled'
   | 'no_show';
 
 export interface Reservation {
-  id: string;
+  id: number | string;
   confirmation_number: string;
-  status: string;
-  driver_status?: DriverStatus;
-  
-  // Passenger info
+  pickup_datetime: string;
+  pickup_address?: string;
+  pickup_location?: string;
+  dropoff_address?: string;
+  dropoff_location?: string;
+  stop1_address?: string;
+  stop2_address?: string;
   passenger_name?: string;
   passenger_first_name?: string;
   passenger_last_name?: string;
   passenger_phone?: string;
   passenger_email?: string;
   passenger_count?: number;
-  
-  // Pickup details
-  pickup_datetime: string;
-  pickup_address: string;
-  pickup_location?: string;
-  
-  // Dropoff details
-  dropoff_address: string;
-  dropoff_location?: string;
-  
-  // Stops
-  stop1_address?: string;
-  stop2_address?: string;
-  stop3_address?: string;
-  
-  // Vehicle & driver
   vehicle_type?: string;
-  assigned_driver_id?: string;
-  assigned_driver_name?: string;
-  fleet_vehicle_id?: string;
-  
-  // Pricing
-  base_fare?: number;
+  driver_id?: string;
+  driver_status?: DriverStatus;
   driver_pay?: number;
-  grand_total?: number;
-  gratuity?: number;
-  
-  // Notes
-  special_instructions?: string;
-  notes?: string;
   driver_notes?: string;
-  
-  // Farm-out
-  farm_option?: string;
-  farmout_status?: string;
-  
-  // Timestamps
-  created_at: string;
+  special_instructions?: string;
+  status?: string;
+  created_at?: string;
   updated_at?: string;
 }
 
 export interface TripOffer {
   id: string;
-  reservation_id: string;
   driver_id: string;
-  offered_at: string;
-  expires_at: string;
-  status: 'pending' | 'accepted' | 'declined' | 'expired';
-  offer_amount?: number;
+  reservation_id: string | number;
   reservation?: Reservation;
+  offer_amount?: number;
+  status: 'pending' | 'accepted' | 'declined' | 'expired';
+  expires_at: string;
+  created_at: string;
+  responded_at?: string;
 }
 
 export interface Location {
   latitude: number;
   longitude: number;
   accuracy?: number;
-  timestamp?: number;
   heading?: number;
   speed?: number;
+  timestamp?: number;
 }
 
-// Navigation types
+export interface StatusMeta {
+  label: string;
+  emoji: string;
+  color: string;
+}
+
+export const STATUS_META: Record<DriverStatus, StatusMeta> = {
+  available: { label: 'Available', emoji: '🟢', color: '#4ade80' },
+  busy: { label: 'Busy', emoji: '🟡', color: '#fbbf24' },
+  offline: { label: 'Offline', emoji: '⚫', color: '#6b7280' },
+  getting_ready: { label: 'Getting Ready', emoji: '🚗', color: '#6366f1' },
+  enroute: { label: 'On The Way', emoji: '🛣️', color: '#3b82f6' },
+  arrived: { label: 'Arrived', emoji: '📍', color: '#f59e0b' },
+  waiting: { label: 'Waiting', emoji: '⏱️', color: '#f59e0b' },
+  passenger_onboard: { label: 'Passenger Onboard', emoji: '👤', color: '#10b981' },
+  done: { label: 'Complete', emoji: '✅', color: '#22c55e' },
+  completed: { label: 'Completed', emoji: '✅', color: '#22c55e' },
+  cancelled: { label: 'Cancelled', emoji: '❌', color: '#ef4444' },
+  no_show: { label: 'No Show', emoji: '🚫', color: '#ef4444' },
+};
+
 export type RootStackParamList = {
   Splash: undefined;
   Auth: undefined;
-  Login: undefined;
-  Register: undefined;
-  RegisterCompany: { userData: RegisterUserData };
-  RegisterVehicle: { userData: RegisterUserData; companyData: RegisterCompanyData };
-  Welcome: { driverName: string; driverId: string };
-  Main: undefined;
   Dashboard: undefined;
-  TripDetail: { tripId: string };
-  ActiveTrip: { tripId: string };
+  TripDetail: { tripId: number | string };
+  ActiveTrip: { tripId: number | string };
   Offers: undefined;
   Profile: undefined;
   Settings: undefined;
-};
-
-// Registration data types
-export interface RegisterUserData {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  password: string;
-}
-
-export interface RegisterCompanyData {
-  existingCompanyId?: string;
-  companyName?: string | null;
-  companyAddress?: string | null;
-  companyCity?: string | null;
-  companyState?: string | null;
-  companyZip?: string | null;
-  companyPhone?: string | null;
-}
-
-// Status metadata
-export const STATUS_META: Record<DriverStatus, { emoji: string; label: string; color: string }> = {
-  available: { emoji: '🟢', label: 'Available', color: '#22c55e' },
-  getting_ready: { emoji: '🔵', label: 'Getting Ready', color: '#3b82f6' },
-  enroute: { emoji: '🟡', label: 'On the Way', color: '#f59e0b' },
-  arrived: { emoji: '🟠', label: 'Arrived', color: '#f97316' },
-  waiting: { emoji: '⏳', label: 'Waiting', color: '#f59e0b' },
-  passenger_onboard: { emoji: '🚗', label: 'Customer in Car', color: '#3b82f6' },
-  done: { emoji: '✅', label: 'Done', color: '#22c55e' },
-  completed: { emoji: '🏁', label: 'Completed', color: '#22c55e' },
-  busy: { emoji: '🔴', label: 'Busy', color: '#ef4444' },
-  offline: { emoji: '⚫', label: 'Offline', color: '#6b7280' },
-  cancelled: { emoji: '❌', label: 'Cancelled', color: '#dc3545' },
-  no_show: { emoji: '🚫', label: 'No Show', color: '#6c757d' },
 };

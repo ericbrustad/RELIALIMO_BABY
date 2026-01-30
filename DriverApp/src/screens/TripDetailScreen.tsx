@@ -14,11 +14,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
-import { useTripStore, useAuthStore } from '../store';
+import { useTripStore, useAuthStore, useSettingsStore } from '../store';
 import { supabase } from '../config/supabase';
 import { colors, spacing, fontSize, borderRadius } from '../config/theme';
 import { STATUS_META } from '../types';
 import type { Reservation, RootStackParamList } from '../types';
+import MississippiCountdown from '../components/MississippiCountdown';
+import { navigateToAddress } from '../utils/navigation';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteParams = RouteProp<RootStackParamList, 'TripDetail'>;
@@ -29,9 +31,11 @@ export default function TripDetailScreen() {
   const { tripId } = route.params;
   const { driver } = useAuthStore();
   const { updateTripStatus, setCurrentTrip } = useTripStore();
+  const { preferredNavigationApp, hasSetNavigationPreference, setNavigationApp } = useSettingsStore();
   
   const [trip, setTrip] = useState<Reservation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showCountdown, setShowCountdown] = useState(false);
   
   useEffect(() => {
     fetchTripDetails();
@@ -91,65 +95,29 @@ export default function TripDetailScreen() {
   };
   
   const handleNavigate = (address: string) => {
-    const encodedAddress = encodeURIComponent(address);
-    
-    Alert.alert(
-      'Open Navigation',
-      'Choose your navigation app',
-      [
-        {
-          text: 'Google Maps',
-          onPress: () => {
-            const url = Platform.OS === 'ios'
-              ? `comgooglemaps://?daddr=${encodedAddress}&directionsmode=driving`
-              : `google.navigation:q=${encodedAddress}`;
-            Linking.openURL(url).catch(() => {
-              // Fallback to web
-              Linking.openURL(`https://maps.google.com/maps?daddr=${encodedAddress}`);
-            });
-          },
-        },
-        {
-          text: 'Apple Maps',
-          onPress: () => {
-            Linking.openURL(`maps://?daddr=${encodedAddress}`);
-          },
-        },
-        {
-          text: 'Waze',
-          onPress: () => {
-            Linking.openURL(`waze://?q=${encodedAddress}&navigate=yes`).catch(() => {
-              Linking.openURL(`https://waze.com/ul?q=${encodedAddress}&navigate=yes`);
-            });
-          },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    navigateToAddress(address, preferredNavigationApp, hasSetNavigationPreference, setNavigationApp);
   };
   
-  const handleStartTrip = async () => {
+  const handleStartTrip = () => {
+    if (!trip) return;
+    setShowCountdown(true);
+  };
+  
+  const executeStartTrip = async () => {
+    setShowCountdown(false);
     if (!trip) return;
     
-    Alert.alert(
-      'Start Trip',
-      'Are you ready to start this trip?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Start',
-          onPress: async () => {
-            const result = await updateTripStatus(trip.id, 'getting_ready');
-            if (result.success) {
-              setCurrentTrip({ ...trip, driver_status: 'getting_ready' });
-              navigation.navigate('ActiveTrip', { tripId: trip.id });
-            } else {
-              Alert.alert('Error', result.error || 'Failed to start trip');
-            }
-          },
-        },
-      ]
-    );
+    const result = await updateTripStatus(trip.id, 'getting_ready');
+    if (result.success) {
+      setCurrentTrip({ ...trip, driver_status: 'getting_ready' });
+      navigation.navigate('ActiveTrip', { tripId: trip.id });
+    } else {
+      Alert.alert('Error', result.error || 'Failed to start trip');
+    }
+  };
+  
+  const cancelCountdown = () => {
+    setShowCountdown(false);
   };
   
   if (isLoading) {
@@ -342,6 +310,15 @@ export default function TripDetailScreen() {
           </TouchableOpacity>
         </View>
       )}
+      
+      {/* Mississippi Countdown Modal */}
+      <MississippiCountdown
+        visible={showCountdown}
+        onComplete={executeStartTrip}
+        onCancel={cancelCountdown}
+        actionLabel="Start Trip"
+        actionColor={colors.success}
+      />
     </SafeAreaView>
   );
 }

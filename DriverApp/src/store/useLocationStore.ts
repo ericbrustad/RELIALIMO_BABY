@@ -6,6 +6,7 @@ import type { Location as LocationType } from '../types';
 interface LocationState {
   // State
   currentLocation: LocationType | null;
+  location: LocationType | null; // Alias for currentLocation
   isTracking: boolean;
   permissionStatus: Location.PermissionStatus | null;
   error: string | null;
@@ -23,6 +24,7 @@ let updateInterval: NodeJS.Timeout | null = null;
 
 export const useLocationStore = create<LocationState>((set, get) => ({
   currentLocation: null,
+  location: null, // Alias for currentLocation
   isTracking: false,
   permissionStatus: null,
   error: null,

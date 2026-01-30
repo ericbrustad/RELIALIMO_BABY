@@ -12,6 +12,7 @@ interface AuthState {
   
   // Actions
   initialize: () => Promise<void>;
+  checkAuth: () => Promise<void>; // Alias for initialize
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
   updateDriver: (updates: Partial<Driver>) => void;
@@ -165,4 +166,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   
   clearError: () => set({ error: null }),
+  
+  // Alias for initialize (used by SplashScreen)
+  checkAuth: async () => {
+    return get().initialize();
+  },
 }));

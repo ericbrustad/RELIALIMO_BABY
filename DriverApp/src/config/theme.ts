@@ -4,71 +4,56 @@
  */
 
 export const colors = {
-  // Primary colors - DriverAnywhere coral/red
-  primary: '#E85A4F', // Coral red accent
-  primaryLight: '#FF7B6F',
-  primaryDark: '#D14940',
+  // Primary palette
+  primary: '#6366f1',    // Indigo
+  primaryDark: '#4f46e5',
+  primaryLight: '#818cf8',
+  
+  // Background
+  background: '#0f172a',  // Dark slate
+  surface: '#1e293b',
+  card: '#1e293b',
+  
+  // Text
+  text: '#f1f5f9',
+  textSecondary: '#94a3b8',
+  textMuted: '#64748b',
   
   // Status colors
-  success: '#4CAF50',
-  warning: '#FF9800',
-  error: '#F44336',
-  danger: '#F44336',
-  info: '#2196F3',
+  success: '#22c55e',
+  warning: '#f59e0b',
+  danger: '#ef4444',
+  info: '#3b82f6',
   
-  // Background colors
-  background: '#f5f5f5', // Light gray background
-  surface: '#ffffff', // White surface
-  bgDark: '#333333',
-  bgCard: '#ffffff',
-  bgInput: '#f0f0f0',
+  // UI elements
+  border: '#334155',
+  divider: '#334155',
+  headerBg: '#1e40af',
   
-  // Dark surfaces (for headers)
-  headerBg: '#333333',
-  cardHeader: '#444444',
-  
-  // Text colors
-  text: '#333333', // Dark text on light bg
-  textLight: '#ffffff', // Light text on dark bg
-  textPrimary: '#333333',
-  textSecondary: '#666666',
-  textMuted: '#999999',
-  
-  // Border colors
-  border: '#e0e0e0',
-  borderLight: '#eeeeee',
-  
-  // Driver status colors
-  statusAvailable: '#4CAF50',
-  statusEnroute: '#FF9800',
-  statusArrived: '#E85A4F',
-  statusOnboard: '#2196F3',
-  statusOffline: '#9E9E9E',
-  statusBusy: '#F44336',
-  statusCancelled: '#F44336',
-  statusNoShow: '#757575',
-  
-  // Additional
+  // Common
   white: '#ffffff',
   black: '#000000',
-  
-  // Tab colors
-  tabActive: '#E85A4F',
-  tabInactive: '#666666',
-  
-  // Navigation theme aliases
-  card: '#ffffff',
-  notification: '#E85A4F',
-  md: '#999999',
 };
 
 export const spacing = {
   xs: 4,
   sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
-  xxl: 48,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+  xxxl: 32,
+};
+
+export const fontSize = {
+  xs: 10,
+  sm: 12,
+  md: 14,
+  lg: 16,
+  xl: 18,
+  xxl: 20,
+  xxxl: 24,
+  display: 32,
 };
 
 export const borderRadius = {
@@ -79,28 +64,36 @@ export const borderRadius = {
   full: 9999,
 };
 
-export const fontSize = {
-  xs: 12,
-  sm: 14,
-  md: 16, // Alias for base
-  base: 16,
-  lg: 18,
-  xl: 20,
-  xxl: 24,
-  xxxl: 32,
+export const shadows = {
+  sm: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  md: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  lg: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
 };
 
-export const fontWeight = {
-  normal: '400' as const,
-  medium: '500' as const,
-  semibold: '600' as const,
-  bold: '700' as const,
-};
-
-export default {
+export const theme = {
   colors,
   spacing,
   borderRadius,
   fontSize,
-  fontWeight,
+  shadows,
 };
+
+export default theme;

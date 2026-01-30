@@ -356,7 +356,7 @@ export function RegisterScreen() {
                   {[0, 1, 2, 3, 4, 5].map((index) => (
                     <TextInput
                       key={index}
-                      ref={(ref) => (emailOtpRefs.current[index] = ref)}
+                      ref={(ref) => { emailOtpRefs.current[index] = ref; }}
                       style={[styles.otpDigit, emailOtp[index] && styles.otpDigitFilled]}
                       value={emailOtp[index]}
                       onChangeText={(value) => handleOtpChange(index, value, emailOtp, setEmailOtp, emailOtpRefs)}
@@ -430,7 +430,7 @@ export function RegisterScreen() {
                   {[0, 1, 2, 3, 4, 5].map((index) => (
                     <TextInput
                       key={index}
-                      ref={(ref) => (phoneOtpRefs.current[index] = ref)}
+                      ref={(ref) => { phoneOtpRefs.current[index] = ref; }}
                       style={[styles.otpDigit, phoneOtp[index] && styles.otpDigitFilled]}
                       value={phoneOtp[index]}
                       onChangeText={(value) => handleOtpChange(index, value, phoneOtp, setPhoneOtp, phoneOtpRefs)}

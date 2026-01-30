@@ -38,9 +38,9 @@ class NotificationService {
    */
   async initialize(): Promise<string | null> {
     try {
-      // Check if physical device (notifications don't work on simulators)
+      // Skip on simulators/emulators - but don't crash
       if (!Device.isDevice) {
-        console.log('[Notifications] Must use physical device for push notifications');
+        console.log('[Notifications] Running on simulator - skipping push setup');
         return null;
       }
       
@@ -59,14 +59,18 @@ class NotificationService {
         return null;
       }
       
-      // Get Expo push token
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-      const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId: projectId,
-      });
-      
-      this.expoPushToken = tokenData.data;
-      console.log('[Notifications] Push token:', this.expoPushToken);
+      // Get Expo push token - may fail in Expo Go without EAS projectId
+      try {
+        const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+        const tokenData = await Notifications.getExpoPushTokenAsync(
+          projectId ? { projectId } : undefined
+        );
+        this.expoPushToken = tokenData.data;
+        console.log('[Notifications] Push token:', this.expoPushToken);
+      } catch (tokenError) {
+        console.log('[Notifications] Could not get push token (Expo Go limitation):', tokenError);
+        return null;
+      }
       
       // Configure Android channel
       if (Platform.OS === 'android') {
@@ -157,10 +161,10 @@ class NotificationService {
    */
   removeAllListeners() {
     if (this.notificationListener) {
-      Notifications.removeNotificationSubscription(this.notificationListener);
+      this.notificationListener.remove();
     }
     if (this.responseListener) {
-      Notifications.removeNotificationSubscription(this.responseListener);
+      this.responseListener.remove();
     }
   }
   

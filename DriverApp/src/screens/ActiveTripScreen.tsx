@@ -16,11 +16,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
-import { useTripStore, useLocationStore } from '../store';
+import { useTripStore, useLocationStore, useSettingsStore } from '../store';
 import { supabase } from '../config/supabase';
 import { colors, spacing, fontSize, borderRadius } from '../config/theme';
 import { STATUS_META } from '../types';
 import type { Reservation, DriverStatus, RootStackParamList } from '../types';
+import MississippiCountdown from '../components/MississippiCountdown';
+import { navigateToAddress } from '../utils/navigation';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteParams = RouteProp<RootStackParamList, 'ActiveTrip'>;
@@ -37,7 +39,7 @@ const STATUS_FLOW: DriverStatus[] = [
 
 // Status button configurations
 const STATUS_BUTTONS: Record<DriverStatus, { nextLabel: string; icon: string; color: string }> = {
-  getting_ready: { nextLabel: 'Start Driving', icon: '🚗', color: colors.primary },
+  getting_ready: { nextLabel: 'Start Trip', icon: '🚗', color: colors.primary },
   enroute: { nextLabel: 'I\'ve Arrived', icon: '📍', color: colors.warning },
   arrived: { nextLabel: 'Start Waiting', icon: '⏱', color: colors.warning },
   waiting: { nextLabel: 'Passenger In', icon: '👤', color: colors.success },
@@ -57,11 +59,14 @@ export default function ActiveTripScreen() {
   const { tripId } = route.params;
   const { updateTripStatus, setCurrentTrip } = useTripStore();
   const { startTracking, stopTracking, location } = useLocationStore();
+  const { preferredNavigationApp, hasSetNavigationPreference, setNavigationApp } = useSettingsStore();
   
   const [trip, setTrip] = useState<Reservation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [waitingTime, setWaitingTime] = useState(0);
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ label: string; color: string } | null>(null);
   
   // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -114,11 +119,33 @@ export default function ActiveTripScreen() {
         .single();
       
       if (error) throw error;
+      
+      console.log('📋 Trip fetched, current driver_status:', data.driver_status);
+      
+      // If trip doesn't have a valid active status, initialize to getting_ready
+      const activeStatuses: DriverStatus[] = ['getting_ready', 'enroute', 'arrived', 'waiting', 'passenger_onboard', 'done'];
+      if (!data.driver_status || !activeStatuses.includes(data.driver_status)) {
+        console.log('📋 Initializing trip status to getting_ready (current:', data.driver_status, ')');
+        // Update database
+        const { error: updateError } = await supabase
+          .from('reservations')
+          .update({ driver_status: 'getting_ready', updated_at: new Date().toISOString() })
+          .eq('id', tripId);
+        
+        if (updateError) {
+          console.error('Error initializing trip status:', updateError);
+          Alert.alert('Database Error', `Could not update status: ${updateError.message}`);
+        } else {
+          console.log('✅ Status updated to getting_ready in database');
+          data.driver_status = 'getting_ready';
+        }
+      }
+      
       setTrip(data);
       setCurrentTrip(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching trip:', error);
-      Alert.alert('Error', 'Failed to load trip details');
+      Alert.alert('Error', `Failed to load trip details: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -138,16 +165,43 @@ export default function ActiveTripScreen() {
     return null;
   };
   
-  const handleAdvanceStatus = async () => {
-    if (!trip) return;
+  // Trigger the countdown before advancing status
+  const handleAdvanceStatus = () => {
+    console.log('🔘 handleAdvanceStatus called!', { trip: trip?.id, driver_status: trip?.driver_status });
+    if (!trip) {
+      console.log('❌ No trip, returning');
+      return;
+    }
     
     const nextStatus = getNextStatus();
+    console.log('📍 Next status would be:', nextStatus);
     if (!nextStatus) {
-      // Trip completed - go back to dashboard
+      // Trip completed - go back to dashboard (no countdown needed)
+      console.log('✅ Trip done, going to dashboard');
       setCurrentTrip(null);
       navigation.navigate('Dashboard');
       return;
     }
+    
+    const status = trip.driver_status || 'getting_ready';
+    const statusButton = STATUS_BUTTONS[status] || STATUS_BUTTONS.getting_ready;
+    
+    // Start the Mississippi countdown
+    console.log('🚀 Starting Mississippi countdown!', { label: statusButton.nextLabel, color: statusButton.color });
+    setPendingAction({ label: statusButton.nextLabel, color: statusButton.color });
+    setShowCountdown(true);
+  };
+  
+  // Called when countdown completes
+  const executeStatusAdvance = async () => {
+    console.log('🎯 executeStatusAdvance called! Countdown complete.');
+    setShowCountdown(false);
+    setPendingAction(null);
+    
+    if (!trip) return;
+    
+    const nextStatus = getNextStatus();
+    if (!nextStatus) return;
     
     // Haptic feedback
     if (Platform.OS !== 'web') {
@@ -209,6 +263,11 @@ export default function ActiveTripScreen() {
     }
   };
   
+  const cancelCountdown = () => {
+    setShowCountdown(false);
+    setPendingAction(null);
+  };
+  
   const handleCancelTrip = () => {
     Alert.alert(
       'Cancel Trip',
@@ -264,40 +323,7 @@ export default function ActiveTripScreen() {
   };
   
   const handleNavigate = (address: string) => {
-    const encodedAddress = encodeURIComponent(address);
-    
-    Alert.alert(
-      'Open Navigation',
-      'Choose your navigation app',
-      [
-        {
-          text: 'Google Maps',
-          onPress: () => {
-            const url = Platform.OS === 'ios'
-              ? `comgooglemaps://?daddr=${encodedAddress}&directionsmode=driving`
-              : `google.navigation:q=${encodedAddress}`;
-            Linking.openURL(url).catch(() => {
-              Linking.openURL(`https://maps.google.com/maps?daddr=${encodedAddress}`);
-            });
-          },
-        },
-        {
-          text: 'Apple Maps',
-          onPress: () => {
-            Linking.openURL(`maps://?daddr=${encodedAddress}`);
-          },
-        },
-        {
-          text: 'Waze',
-          onPress: () => {
-            Linking.openURL(`waze://?q=${encodedAddress}&navigate=yes`).catch(() => {
-              Linking.openURL(`https://waze.com/ul?q=${encodedAddress}&navigate=yes`);
-            });
-          },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    navigateToAddress(address, preferredNavigationApp, hasSetNavigationPreference, setNavigationApp);
   };
   
   const handleCall = () => {
@@ -498,6 +524,15 @@ export default function ActiveTripScreen() {
           )}
         </TouchableOpacity>
       </View>
+      
+      {/* Mississippi Countdown Modal */}
+      <MississippiCountdown
+        visible={showCountdown}
+        onComplete={executeStatusAdvance}
+        onCancel={cancelCountdown}
+        actionLabel={pendingAction?.label || 'Updating Status'}
+        actionColor={pendingAction?.color || colors.primary}
+      />
     </SafeAreaView>
   );
 }

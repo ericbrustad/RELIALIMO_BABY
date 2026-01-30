@@ -7,54 +7,77 @@
 -- Check if viewer already exists, if not add it
 DO $$
 BEGIN
-  -- Try to add 'viewer' to the enum
-  ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'viewer';
-EXCEPTION
-  WHEN duplicate_object THEN
-    -- Value already exists, ignore
-    NULL;
-  WHEN undefined_object THEN
-    -- Enum doesn't exist, we'll handle this below
-    NULL;
-END $$;
-
--- If the enum doesn't exist at all, create it
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+  -- Check if the enum type exists first
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+    -- Try to add 'viewer' to the enum
+    BEGIN
+      ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'viewer';
+    EXCEPTION
+      WHEN duplicate_object THEN
+        RAISE NOTICE 'viewer value already exists in user_role enum';
+    END;
+  ELSE
+    -- Enum doesn't exist, create it with all values
     CREATE TYPE user_role AS ENUM ('admin', 'dispatcher', 'viewer', 'user', 'owner');
+    RAISE NOTICE 'Created user_role enum with viewer';
   END IF;
 END $$;
 
 -- ============================================
--- 2. Ensure user_profiles table has the role column
+-- 2. Ensure user_profiles table exists with role column
 -- ============================================
--- Note: If role column uses the enum, it should now accept 'viewer'
+CREATE TABLE IF NOT EXISTS public.user_profiles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+  role text DEFAULT 'user',
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+-- Enable RLS
+ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies to avoid conflicts
+DROP POLICY IF EXISTS "user_profiles_select" ON public.user_profiles;
+DROP POLICY IF EXISTS "user_profiles_update_own" ON public.user_profiles;
+DROP POLICY IF EXISTS "user_profiles_service_role" ON public.user_profiles;
+
+-- Users can view their own profile
+CREATE POLICY "user_profiles_select"
+ON public.user_profiles
+FOR SELECT
+TO authenticated
+USING (user_id = auth.uid() OR EXISTS (
+  SELECT 1 FROM public.user_profiles up 
+  WHERE up.user_id = auth.uid() AND up.role IN ('admin', 'owner')
+));
+
+-- Users can update their own profile (but not role)
+CREATE POLICY "user_profiles_update_own"
+ON public.user_profiles
+FOR UPDATE
+TO authenticated
+USING (user_id = auth.uid())
+WITH CHECK (user_id = auth.uid());
+
+-- Service role full access
+CREATE POLICY "user_profiles_service_role"
+ON public.user_profiles
+FOR ALL
+TO service_role
+USING (true)
+WITH CHECK (true);
 
 -- ============================================
--- 3. Create or update a user to have viewer role
+-- 3. Create helper functions
 -- ============================================
--- To set a user as a viewer, run this with their user_id:
--- 
--- UPDATE public.user_profiles 
--- SET role = 'viewer' 
--- WHERE user_id = 'USER_UUID_HERE';
---
--- Or by email (requires joining auth.users):
--- 
--- UPDATE public.user_profiles p
--- SET role = 'viewer'
--- FROM auth.users u
--- WHERE p.user_id = u.id 
--- AND u.email = 'viewer@example.com';
 
--- ============================================
--- 3. Create a function to check if user is viewer
--- ============================================
+-- Function to check if user is viewer
 CREATE OR REPLACE FUNCTION public.is_viewer()
 RETURNS boolean
 LANGUAGE sql
 SECURITY DEFINER
+STABLE
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.user_profiles
@@ -63,31 +86,48 @@ AS $$
   );
 $$;
 
-GRANT EXECUTE ON FUNCTION public.is_viewer() TO authenticated;
-
--- ============================================
--- 4. Create a function to get user role
--- ============================================
+-- Function to get user role
 CREATE OR REPLACE FUNCTION public.get_user_role()
 RETURNS text
 LANGUAGE sql
 SECURITY DEFINER
+STABLE
 AS $$
   SELECT COALESCE(
-    (SELECT role FROM public.user_profiles WHERE user_id = auth.uid()),
+    (SELECT role::text FROM public.user_profiles WHERE user_id = auth.uid()),
     'user'
   );
 $$;
 
+-- Function to check if user can edit (not a viewer)
+CREATE OR REPLACE FUNCTION public.can_edit()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT COALESCE(
+    (SELECT role != 'viewer' FROM public.user_profiles WHERE user_id = auth.uid()),
+    true
+  );
+$$;
+
+-- Grant execute permissions
+GRANT EXECUTE ON FUNCTION public.is_viewer() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_user_role() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.can_edit() TO authenticated;
 
 -- ============================================
--- 5. Example: Create a viewer user
+-- 4. Example: Set a user as viewer
 -- ============================================
--- First create the user in Supabase Auth, then run:
+-- UPDATE public.user_profiles 
+-- SET role = 'viewer', updated_at = now()
+-- WHERE user_id = 'USER_UUID_HERE';
 --
--- INSERT INTO public.user_profiles (user_id, role, created_at)
--- SELECT id, 'viewer', NOW()
--- FROM auth.users
--- WHERE email = 'viewer@yourcompany.com'
--- ON CONFLICT (user_id) DO UPDATE SET role = 'viewer';
+-- Or by email (requires joining auth.users):
+-- 
+-- UPDATE public.user_profiles p
+-- SET role = 'viewer', updated_at = now()
+-- FROM auth.users u
+-- WHERE p.user_id = u.id 
+-- AND u.email = 'viewer@example.com';

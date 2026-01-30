@@ -9,6 +9,7 @@ class ViewerGuard {
   constructor() {
     this.isViewer = false;
     this.initialized = false;
+    this.updateTimeout = null;
   }
 
   /**
@@ -29,6 +30,7 @@ class ViewerGuard {
       this.initialized = true;
     } catch (err) {
       console.error('ViewerGuard init error:', err);
+      this.initialized = true; // Mark as initialized even on error to prevent loops
     }
   }
 
@@ -38,44 +40,74 @@ class ViewerGuard {
   async getUserRole() {
     // Try from localStorage first (cached)
     const cachedRole = localStorage.getItem('user_role');
-    if (cachedRole) return cachedRole;
+    const cacheTime = localStorage.getItem('user_role_time');
+    
+    // Use cache if less than 5 minutes old
+    if (cachedRole && cacheTime) {
+      const age = Date.now() - parseInt(cacheTime, 10);
+      if (age < 5 * 60 * 1000) {
+        return cachedRole;
+      }
+    }
 
     // Try to get from Supabase
     try {
       const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-      const supabaseUrl = window.SUPABASE_URL || localStorage.getItem('supabaseUrl');
-      const supabaseKey = window.SUPABASE_ANON_KEY || localStorage.getItem('supabaseAnonKey');
+      
+      // Get credentials from multiple sources
+      const supabaseUrl = window.ENV?.SUPABASE_URL || 
+                         window.SUPABASE_URL || 
+                         localStorage.getItem('supabaseUrl');
+      const supabaseKey = window.ENV?.SUPABASE_ANON_KEY || 
+                         window.SUPABASE_ANON_KEY || 
+                         localStorage.getItem('supabaseAnonKey');
       
       if (!supabaseUrl || !supabaseKey) {
+        console.warn('[ViewerGuard] Supabase not configured');
         return 'user';
       }
 
       const supabase = createClient(supabaseUrl, supabaseKey);
       
       // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return 'user';
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        console.log('[ViewerGuard] No authenticated user');
+        return 'user';
+      }
 
       // Check user_metadata first
       if (user.user_metadata?.role) {
-        localStorage.setItem('user_role', user.user_metadata.role);
+        this.cacheRole(user.user_metadata.role);
         return user.user_metadata.role;
       }
 
       // Check user_profiles table
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('user_profiles')
         .select('role')
         .eq('user_id', user.id)
         .single();
 
+      if (profileError) {
+        console.warn('[ViewerGuard] Could not fetch profile:', profileError.message);
+      }
+
       const role = profile?.role || 'user';
-      localStorage.setItem('user_role', role);
+      this.cacheRole(role);
       return role;
     } catch (err) {
-      console.warn('Could not fetch user role:', err);
+      console.warn('[ViewerGuard] Could not fetch user role:', err);
       return 'user';
     }
+  }
+  
+  /**
+   * Cache the role in localStorage
+   */
+  cacheRole(role) {
+    localStorage.setItem('user_role', role);
+    localStorage.setItem('user_role_time', Date.now().toString());
   }
 
   /**
@@ -102,6 +134,9 @@ class ViewerGuard {
    * Show a banner indicating read-only mode
    */
   showViewerBanner() {
+    // Don't add if already exists
+    if (document.getElementById('viewer-mode-banner')) return;
+    
     const banner = document.createElement('div');
     banner.id = 'viewer-mode-banner';
     banner.innerHTML = `
@@ -133,13 +168,15 @@ class ViewerGuard {
    */
   disableFormElements() {
     const selectors = [
-      'input:not([type="search"]):not([readonly])',
+      'input:not([type="search"]):not([type="checkbox"][data-viewer-allow]):not([readonly])',
       'textarea:not([readonly])',
       'select:not([data-viewer-allow])',
       '[contenteditable="true"]'
     ];
 
     document.querySelectorAll(selectors.join(', ')).forEach(el => {
+      if (el.hasAttribute('data-viewer-disabled')) return; // Already processed
+      
       el.setAttribute('disabled', 'true');
       el.setAttribute('data-viewer-disabled', 'true');
       el.style.opacity = '0.7';
@@ -154,23 +191,28 @@ class ViewerGuard {
     const actionKeywords = [
       'save', 'submit', 'create', 'add', 'new', 'delete', 'remove', 
       'update', 'edit', 'assign', 'confirm', 'send', 'post', 'upload',
-      'import', 'export', 'cancel', 'clear', 'reset'
+      'import', 'export', 'cancel', 'clear', 'reset', 'compose'
     ];
 
-    document.querySelectorAll('button, .btn, [role="button"]').forEach(btn => {
+    document.querySelectorAll('button, .btn, [role="button"], a.btn').forEach(btn => {
+      if (btn.hasAttribute('data-viewer-disabled')) return; // Already processed
+      
       const text = (btn.textContent || btn.innerText || '').toLowerCase();
       const id = (btn.id || '').toLowerCase();
       const className = (btn.className || '').toLowerCase();
+      const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+      
+      const combinedText = `${text} ${id} ${className} ${ariaLabel}`;
       
       const isActionButton = actionKeywords.some(keyword => 
-        text.includes(keyword) || id.includes(keyword) || className.includes(keyword)
+        combinedText.includes(keyword)
       );
 
-      // Allow search and filter buttons
-      const isAllowed = text.includes('search') || text.includes('filter') || 
-                        text.includes('view') || text.includes('show') ||
-                        text.includes('refresh') || text.includes('close') ||
-                        btn.hasAttribute('data-viewer-allow');
+      // Allow search, filter, view, navigation buttons
+      const isAllowed = ['search', 'filter', 'view', 'show', 'refresh', 'close', 
+                         'back', 'next', 'prev', 'previous', 'detail', 'expand', 'collapse']
+        .some(word => combinedText.includes(word)) ||
+        btn.hasAttribute('data-viewer-allow');
 
       if (isActionButton && !isAllowed) {
         btn.setAttribute('disabled', 'true');
@@ -192,7 +234,11 @@ class ViewerGuard {
       
       mutations.forEach(mutation => {
         if (mutation.addedNodes.length > 0) {
-          needsUpdate = true;
+          mutation.addedNodes.forEach(node => {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              needsUpdate = true;
+            }
+          });
         }
       });
 
@@ -231,6 +277,16 @@ class ViewerGuard {
         return false;
       });
     }
+  }
+  
+  /**
+   * Clear cached role (call on logout)
+   */
+  clearCache() {
+    localStorage.removeItem('user_role');
+    localStorage.removeItem('user_role_time');
+    this.isViewer = false;
+    this.initialized = false;
   }
 }
 

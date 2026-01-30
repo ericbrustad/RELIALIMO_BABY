@@ -8,11 +8,18 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuthStore } from '../store';
+import { useAuthStore, useSettingsStore } from '../store';
 import { colors, spacing, fontSize, borderRadius } from '../config/theme';
+
+const NAV_APP_LABELS: Record<string, string> = {
+  google: 'Google Maps',
+  apple: 'Apple Maps',
+  waze: 'Waze',
+};
 
 export default function ProfileScreen() {
   const { driver, signOut } = useAuthStore();
+  const { preferredNavigationApp, hasSetNavigationPreference, setNavigationApp, resetNavigationPreference } = useSettingsStore();
   
   const handleSignOut = () => {
     Alert.alert(
@@ -25,6 +32,28 @@ export default function ProfileScreen() {
           style: 'destructive',
           onPress: signOut,
         },
+      ]
+    );
+  };
+  
+  const handleChangeNavigationApp = () => {
+    Alert.alert(
+      '🗺️ Default Navigation App',
+      'Choose your preferred navigation app for driving directions',
+      [
+        {
+          text: 'Google Maps',
+          onPress: () => setNavigationApp('google'),
+        },
+        {
+          text: 'Apple Maps',
+          onPress: () => setNavigationApp('apple'),
+        },
+        {
+          text: 'Waze',
+          onPress: () => setNavigationApp('waze'),
+        },
+        { text: 'Cancel', style: 'cancel' },
       ]
     );
   };
@@ -99,6 +128,25 @@ export default function ProfileScreen() {
               <Text style={styles.infoLabel}>Version</Text>
               <Text style={styles.infoValue}>1.0.0</Text>
             </View>
+          </View>
+        </View>
+        
+        {/* Settings */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Settings</Text>
+          
+          <View style={styles.infoCard}>
+            <TouchableOpacity style={styles.settingsRow} onPress={handleChangeNavigationApp}>
+              <View>
+                <Text style={styles.infoLabel}>Default Navigation App</Text>
+                <Text style={styles.settingsValue}>
+                  {hasSetNavigationPreference && preferredNavigationApp 
+                    ? NAV_APP_LABELS[preferredNavigationApp] 
+                    : 'Not set - tap to choose'}
+                </Text>
+              </View>
+              <Text style={styles.settingsArrow}>›</Text>
+            </TouchableOpacity>
           </View>
         </View>
         
@@ -197,5 +245,22 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: '600',
     color: colors.danger,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  settingsValue: {
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    marginTop: 2,
+  },
+  settingsArrow: {
+    fontSize: 24,
+    color: colors.textMuted,
   },
 });
