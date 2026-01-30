@@ -6,48 +6,59 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#0f172a"
     },
-    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.relialimo.driver",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "We need your location to show you on the map and help navigate to pickups.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "We need your location to track trips and share your ETA with passengers.",
+        "NSLocationWhenInUseUsageDescription": "We need your location to show your position on the map and provide navigation to pickups and dropoffs.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "We need your location to track your position during active trips for dispatch visibility.",
+        "NSLocationAlwaysUsageDescription": "We need your location to track your position during active trips for dispatch visibility.",
         "UIBackgroundModes": ["location", "fetch", "remote-notification"]
       }
     },
     "android": {
+      "package": "com.relialimo.driver",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0f172a"
       },
-      "package": "com.relialimo.driver",
+      "edgeToEdgeEnabled": true,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
-        "VIBRATE",
-        "RECEIVE_BOOT_COMPLETED"
+        "FOREGROUND_SERVICE"
       ]
     },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
     "plugins": [
+      "expo-secure-store",
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow ReliaLimo Driver to use your location to track trips."
+          "locationAlwaysAndWhenInUsePermission": "Allow ReliaLimo Driver to use your location for trip tracking."
         }
       ],
       [
         "expo-notifications",
         {
-          "sounds": ["./assets/notification.wav"]
+          "icon": "./assets/notification-icon.png",
+          "color": "#6366f1"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id"
+      }
+    }
   }
 }
