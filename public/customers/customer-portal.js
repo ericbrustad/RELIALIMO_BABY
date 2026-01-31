@@ -5016,6 +5016,23 @@ function setupEventListeners() {
     document.getElementById('pickupAddressNew').classList.toggle('hidden', val !== 'new');
     document.getElementById('airportPickupDetails').classList.toggle('hidden', val !== 'airport');
     
+    // If selecting empty option, show selected address if one exists
+    if (!val && state.selectedPickupAddress) {
+      const selectedContainer = document.getElementById('selectedPickupAddress');
+      if (selectedContainer) {
+        selectedContainer.innerHTML = `<div class="selected-address-display"><span class="selected-icon">📍</span><span class="selected-text">${state.selectedPickupAddress}</span><button type="button" class="clear-selection" title="Clear">✕</button></div>`;
+        selectedContainer.classList.remove('hidden');
+        selectedContainer.querySelector('.clear-selection')?.addEventListener('click', () => {
+          state.selectedPickupAddress = null;
+          document.getElementById('pickupAddressInput').value = '';
+          selectedContainer.classList.add('hidden');
+          calculateRouteAndPrice();
+        });
+      }
+    } else {
+      document.getElementById('selectedPickupAddress')?.classList.add('hidden');
+    }
+    
     // Handle saved addresses - always populate when selected
     if (val === 'saved') {
       const container = document.getElementById('savedPickupAddresses');
@@ -5054,6 +5071,23 @@ function setupEventListeners() {
     // Show/hide appropriate containers
     document.getElementById('dropoffAddressNew').classList.toggle('hidden', val !== 'new');
     document.getElementById('airportDropoffDetails').classList.toggle('hidden', val !== 'airport');
+    
+    // If selecting empty option, show selected address if one exists
+    if (!val && state.selectedDropoffAddress) {
+      const selectedContainer = document.getElementById('selectedDropoffAddress');
+      if (selectedContainer) {
+        selectedContainer.innerHTML = `<div class="selected-address-display"><span class="selected-icon">📍</span><span class="selected-text">${state.selectedDropoffAddress}</span><button type="button" class="clear-selection" title="Clear">✕</button></div>`;
+        selectedContainer.classList.remove('hidden');
+        selectedContainer.querySelector('.clear-selection')?.addEventListener('click', () => {
+          state.selectedDropoffAddress = null;
+          document.getElementById('dropoffAddressInput').value = '';
+          selectedContainer.classList.add('hidden');
+          calculateRouteAndPrice();
+        });
+      }
+    } else {
+      document.getElementById('selectedDropoffAddress')?.classList.add('hidden');
+    }
     
     // Handle saved addresses - always populate when selected
     if (val === 'saved') {
