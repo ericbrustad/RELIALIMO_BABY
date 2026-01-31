@@ -1821,47 +1821,9 @@ function populateAddressDropdowns() {
     console.log('[CustomerPortal] Container', containerId, ':', container ? 'found' : 'NOT FOUND');
     if (!container) return;
     
-    const isPickup = containerId.includes('Pickup');
-    const selectedAddress = isPickup ? state.selectedPickupAddress : state.selectedDropoffAddress;
-    
-    // Build the HTML content
-    let html = '';
-    
-    // If there's a selected address, show it at the top
-    if (selectedAddress) {
-      html += `
-        <div class="selected-address-item" data-address="${selectedAddress}">
-          <span class="address-icon">✅</span>
-          <div class="address-content">
-            <div class="address-label">Currently Selected</div>
-            <div class="address-text">${selectedAddress}</div>
-          </div>
-          <button type="button" class="clear-selection-btn" title="Clear selection">✕</button>
-        </div>
-      `;
-    }
-    
     // If no addresses, show empty state
     if (!state.savedAddresses || state.savedAddresses.length === 0) {
-      if (!selectedAddress) {
-        html += '<p class="empty-hint" style="padding: 12px; color: #6b7280; text-align: center;">No saved addresses yet. Add addresses from My Account tab.</p>';
-      }
-      container.innerHTML = html;
-      
-      // Add clear button handler if present
-      container.querySelector('.clear-selection-btn')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (isPickup) {
-          state.selectedPickupAddress = null;
-          document.getElementById('pickupAddressInput').value = '';
-        } else {
-          state.selectedDropoffAddress = null;
-          document.getElementById('dropoffAddressInput').value = '';
-        }
-        populateAddressDropdowns();
-        calculateRouteAndPrice();
-      });
-      
+      container.innerHTML = '<p class="empty-hint" style="padding: 12px; color: #6b7280; text-align: center;">No saved addresses yet. Add addresses from My Account tab.</p>';
       console.log('[CustomerPortal] No addresses, showing empty state');
       return;
     }
@@ -1874,7 +1836,7 @@ function populateAddressDropdowns() {
     });
     
     // Use full_address field name from database
-    html += sortedAddresses.map(addr => {
+    let html = sortedAddresses.map(addr => {
       const address = addr.full_address || addr.address || '';
       const label = addr.label || 'Saved';
       const icon = label.toLowerCase() === 'home' ? '🏠' : 
@@ -1899,24 +1861,10 @@ function populateAddressDropdowns() {
     
     container.innerHTML = html;
     
-    // Add clear button handler for selected address
-    container.querySelector('.clear-selection-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (isPickup) {
-        state.selectedPickupAddress = null;
-        document.getElementById('pickupAddressInput').value = '';
-      } else {
-        state.selectedDropoffAddress = null;
-        document.getElementById('dropoffAddressInput').value = '';
-      }
-      populateAddressDropdowns();
-      calculateRouteAndPrice();
-    });
-    
     // Add click handlers
     container.querySelectorAll('.saved-address-item').forEach(item => {
       item.addEventListener('click', (e) => {
-        if (e.target.classList.contains('address-delete') || e.target.classList.contains('address-favorite') || e.target.classList.contains('clear-selection-btn')) return;
+        if (e.target.classList.contains('address-delete') || e.target.classList.contains('address-favorite')) return;
         
         const addressType = containerId.includes('Pickup') ? 'pickup' : 'dropoff';
         selectSavedAddress(item.dataset.id, item.dataset.address, addressType);
@@ -1945,18 +1893,72 @@ function selectSavedAddress(id, address, type) {
   if (type === 'pickup') {
     state.selectedPickupAddress = address;
     document.getElementById('pickupAddressInput').value = address;
+    // Update the dropdown to show selected address
+    updateAddressSelectDropdown('pickup', address);
+    // Hide the saved addresses list
+    document.getElementById('savedPickupAddresses').classList.add('hidden');
   } else {
     state.selectedDropoffAddress = address;
     document.getElementById('dropoffAddressInput').value = address;
+    // Update the dropdown to show selected address
+    updateAddressSelectDropdown('dropoff', address);
+    // Hide the saved addresses list
+    document.getElementById('savedDropoffAddresses').classList.add('hidden');
   }
-  
-  // Re-populate dropdowns to show the selected address at the top
-  populateAddressDropdowns();
   
   // Increment usage count
   incrementAddressUsage(id);
   
   // Trigger route/price calculation
+  calculateRouteAndPrice();
+}
+
+// Update the address select dropdown to show the selected address
+function updateAddressSelectDropdown(type, selectedAddress) {
+  const selectId = type === 'pickup' ? 'pickupAddressSelect' : 'dropoffAddressSelect';
+  const select = document.getElementById(selectId);
+  if (!select) return;
+  
+  // Remove any existing selected-address option
+  const existingSelected = select.querySelector('option[value="selected"]');
+  if (existingSelected) {
+    existingSelected.remove();
+  }
+  
+  if (selectedAddress) {
+    // Truncate address for display if too long
+    const displayAddress = selectedAddress.length > 50 
+      ? selectedAddress.substring(0, 47) + '...' 
+      : selectedAddress;
+    
+    // Add the selected address as the first option after the placeholder
+    const selectedOption = document.createElement('option');
+    selectedOption.value = 'selected';
+    selectedOption.textContent = `📍 ${displayAddress}`;
+    selectedOption.selected = true;
+    
+    // Insert after the first option (placeholder)
+    select.insertBefore(selectedOption, select.options[1]);
+  }
+  
+  // Set the dropdown to show the selected address
+  select.value = selectedAddress ? 'selected' : '';
+}
+
+// Clear selected address and update dropdown
+function clearSelectedAddress(type) {
+  if (type === 'pickup') {
+    state.selectedPickupAddress = null;
+    document.getElementById('pickupAddressInput').value = '';
+  } else {
+    state.selectedDropoffAddress = null;
+    document.getElementById('dropoffAddressInput').value = '';
+  }
+  
+  // Remove the selected option from dropdown
+  updateAddressSelectDropdown(type, null);
+  
+  // Recalculate route
   calculateRouteAndPrice();
 }
 
@@ -5049,6 +5051,12 @@ function setupEventListeners() {
     document.getElementById('pickupAddressNew').classList.toggle('hidden', val !== 'new');
     document.getElementById('airportPickupDetails').classList.toggle('hidden', val !== 'airport');
     
+    // If "selected" is chosen, just keep the current selection (already set)
+    if (val === 'selected') {
+      document.getElementById('savedPickupAddresses').classList.add('hidden');
+      return;
+    }
+    
     // Handle saved addresses - always populate when selected
     if (val === 'saved') {
       const container = document.getElementById('savedPickupAddresses');
@@ -5066,14 +5074,16 @@ function setupEventListeners() {
         console.log('[CustomerPortal] After loading, addressesLoaded:', state.addressesLoaded, 'count:', state.savedAddresses?.length || 0);
       }
       
-      // Always populate to ensure content is fresh (shows selected address at top)
+      // Always populate to ensure content is fresh
       populateAddressDropdowns();
     } else {
       document.getElementById('savedPickupAddresses').classList.add('hidden');
     }
     
-    // Clear selection only when switching to airport or new (not when going back to empty)
-    if (val === 'airport' || val === 'new') {
+    // Clear selection only when switching to airport, new, or empty
+    if (val === 'airport' || val === 'new' || val === '') {
+      clearSelectedAddress('pickup');
+    }
       state.selectedPickupAddress = null;
     }
     
@@ -5088,6 +5098,12 @@ function setupEventListeners() {
     // Show/hide appropriate containers
     document.getElementById('dropoffAddressNew').classList.toggle('hidden', val !== 'new');
     document.getElementById('airportDropoffDetails').classList.toggle('hidden', val !== 'airport');
+    
+    // If "selected" is chosen, just keep the current selection (already set)
+    if (val === 'selected') {
+      document.getElementById('savedDropoffAddresses').classList.add('hidden');
+      return;
+    }
     
     // Handle saved addresses - always populate when selected
     if (val === 'saved') {
@@ -5106,15 +5122,15 @@ function setupEventListeners() {
         console.log('[CustomerPortal] After loading, addressesLoaded:', state.addressesLoaded, 'count:', state.savedAddresses?.length || 0);
       }
       
-      // Always populate to ensure content is fresh (shows selected address at top)
+      // Always populate to ensure content is fresh
       populateAddressDropdowns();
     } else {
       document.getElementById('savedDropoffAddresses').classList.add('hidden');
     }
     
-    // Clear selection only when switching to airport or new (not when going back to empty)
-    if (val === 'airport' || val === 'new') {
-      state.selectedDropoffAddress = null;
+    // Clear selection only when switching to airport, new, or empty
+    if (val === 'airport' || val === 'new' || val === '') {
+      clearSelectedAddress('dropoff');
     }
     
     // Auto-select trip type based on airport selection
