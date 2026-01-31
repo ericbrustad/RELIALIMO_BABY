@@ -4823,12 +4823,12 @@ function renderSavedAddresses() {
   container.innerHTML = sortedAddresses.map(a => {
     const icon = a.label === 'Home' ? '🏠' : a.label === 'Work' ? '🏢' : '📍';
     const starClass = a.is_favorite ? 'favorite-active' : '';
-    // Use ★ (filled) when favorite, ☆ (outline) when not
-    const starIcon = a.is_favorite ? '★' : '☆';
+    // Use ✓ checkmark when favorite, ☆ (outline star) when not
+    const starIcon = a.is_favorite ? '✓' : '☆';
     const address = a.full_address || a.address || '';
     
     return `
-      <div class="saved-item ${a.is_favorite ? 'is-favorite' : ''}">
+      <div class="saved-item">
         <span class="saved-item-icon">${icon}</span>
         <div class="saved-item-content">
           <div class="saved-item-name">${a.label || 'Address'}</div>
