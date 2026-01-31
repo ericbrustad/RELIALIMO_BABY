@@ -1053,7 +1053,6 @@ const elements = {
 // ============================================
 const STATUS_META = {
   available: { emoji: '🟢', label: 'Available', color: 'available' },
-  getting_ready: { emoji: '🔵', label: 'Getting Ready', color: 'getting-ready' },
   enroute: { emoji: '🟡', label: 'On the Way', color: 'enroute' },
   arrived: { emoji: '🟠', label: 'Arrived', color: 'arrived' },
   waiting: { emoji: '⏳', label: 'Waiting', color: 'waiting' },
@@ -1069,8 +1068,7 @@ const STATUS_META = {
 // Status flow with skip options (e.g., can skip 'waiting')
 const STATUS_TRANSITIONS = {
   // What statuses are available from each status
-  available: ['getting_ready'],
-  getting_ready: ['enroute'],
+  available: ['enroute'],
   enroute: ['arrived'],
   arrived: ['waiting', 'passenger_onboard'], // Can skip waiting
   waiting: ['passenger_onboard'],
@@ -8487,8 +8485,8 @@ function calculateDriverPayoutForTrip(trip) {
 }
 
 function renderActiveTripCard(trip) {
-  const status = trip.driver_status || 'getting_ready';
-  const statusMeta = STATUS_META[status] || STATUS_META.getting_ready;
+  const status = trip.driver_status || 'enroute';
+  const statusMeta = STATUS_META[status] || STATUS_META.enroute;
   const passengerName = trip.passenger_name || trip.passenger_first_name || 'Passenger';
   const passengerPhone = trip.passenger_phone || trip.passenger_cell || '';
   
@@ -8512,7 +8510,7 @@ function renderActiveTripCard(trip) {
   state.activeTripBaseFare = parseFloat(trip.driver_pay) || parseFloat(trip.base_fare) || 0;
   
   // Create status progress bar
-  const statusFlow = ['getting_ready', 'enroute', 'arrived', 'passenger_onboard', 'done'];
+  const statusFlow = ['enroute', 'arrived', 'passenger_onboard', 'done'];
   const currentStatusIndex = statusFlow.indexOf(status);
   
   elements.activeTripCard.innerHTML = `
@@ -8964,8 +8962,8 @@ window.startTrip = async function(tripId) {
     // Play trip start sound
     playNotificationSound('trip_start');
     
-    // Start with "getting_ready" status instead of immediately enroute
-    await updateReservationStatus(tripId, { driver_status: 'getting_ready' });
+    // Start with "enroute" status
+    await updateReservationStatus(tripId, { driver_status: 'enroute' });
     
     showToast('Trip started! Loading navigation...', 'success');
     
@@ -9792,7 +9790,6 @@ function formatPhone(phone) {
 
 function getStatusActionLabel(status) {
   switch (status) {
-    case 'getting_ready': return 'Getting Ready';
     case 'enroute': return 'On the Way';
     case 'arrived': return 'Arrived';
     case 'waiting': return 'Waiting';
@@ -10100,7 +10097,6 @@ window.openStatusModal = function(tripId) {
   // Define status options with progression
   const statusOptions = [
     { value: 'assigned', label: '📋 Assigned', icon: '📋' },
-    { value: 'getting_ready', label: '🔧 Getting Ready', icon: '🔧' },
     { value: 'enroute', label: '🚗 On The Way', icon: '🚗' },
     { value: 'arrived', label: '📍 Arrived', icon: '📍' },
     { value: 'waiting', label: '⏳ Waiting', icon: '⏳' },

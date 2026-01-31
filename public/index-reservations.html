@@ -421,31 +421,33 @@
                   <label for="farmoutStatusFilter">Status</label>
                   <select id="farmoutStatusFilter">
                     <option value="all">All</option>
-                    <option value="unassigned">Unassigned</option>
-                    <option value="offered">Offered</option>
-                    <option value="offered_to_affiliate">Offered to Affiliate</option>
-                    <option value="assigned">Assigned</option>
-                    <option value="affiliate_assigned">Affiliate Assigned</option>
-                    <option value="affiliate_driver_assigned">Affiliate Driver Assigned</option>
-                    <option value="declined">Declined</option>
-                    <option value="enroute">En Route</option>
-                    <option value="driver_en_route">Driver En Route</option>
-                    <option value="on_the_way">Driver On The Way</option>
-                    <option value="arrived">Arrived</option>
-                    <option value="driver_waiting_at_pickup">Driver Waiting at Pickup</option>
-                    <option value="waiting_at_pickup">Waiting at Pickup</option>
-                    <option value="passenger_onboard">Passenger Onboard</option>
-                    <option value="driver_circling">Driver Circling</option>
-                    <option value="customer_in_car">Customer In Car</option>
-                    <option value="driving_passenger">Driving Passenger</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
-                    <option value="cancelled_by_affiliate">Cancelled by Affiliate</option>
-                    <option value="late_cancel">Late Cancel</option>
-                    <option value="late_cancelled">Late Cancelled</option>
-                    <option value="no_show">No Show</option>
-                    <option value="covid19_cancellation">COVID-19 Cancellation</option>
-                    <option value="in_house">In House</option>
+                    <optgroup label="── Farmout Status ──">
+                      <option value="unassigned">Unassigned</option>
+                      <option value="offered">Offered</option>
+                      <option value="offered_to_affiliate">Offered to Affiliate</option>
+                      <option value="assigned">Assigned</option>
+                      <option value="affiliate_assigned">Affiliate Assigned</option>
+                      <option value="declined">Declined</option>
+                    </optgroup>
+                    <optgroup label="── Driver Trip Status ──">
+                      <option value="enroute">En Route</option>
+                      <option value="arrived">Arrived</option>
+                      <option value="waiting">Waiting</option>
+                      <option value="passenger_onboard">Passenger Onboard</option>
+                      <option value="done">Complete</option>
+                    </optgroup>
+                    <optgroup label="── Final Status ──">
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="no_show">No Show</option>
+                    </optgroup>
+                    <optgroup label="── Legacy Status ──">
+                      <option value="driver_en_route">Driver En Route</option>
+                      <option value="on_the_way">Driver On The Way</option>
+                      <option value="driver_waiting_at_pickup">Driver Waiting at Pickup</option>
+                      <option value="customer_in_car">Customer In Car</option>
+                      <option value="in_house">In House</option>
+                    </optgroup>
                   </select>
                 </div>
                 <div class="toolbar-group">

@@ -15,7 +15,7 @@ export interface Driver {
 
 export type DriverStatus =
   | 'available' | 'busy' | 'offline' | 'assigned'
-  | 'getting_ready' | 'enroute' | 'arrived' | 'waiting'
+  | 'enroute' | 'arrived' | 'waiting'
   | 'passenger_onboard' | 'done' | 'completed' | 'cancelled' | 'no_show';
 
 export interface Reservation {
@@ -43,6 +43,21 @@ export interface Reservation {
   status?: string;
   created_at?: string;
   updated_at?: string;
+  
+  // Farmout system fields
+  assigned_driver_id?: string;
+  assigned_driver_name?: string;
+  farmout_status?: string;
+  farmout_mode?: string;
+  current_offer_driver_id?: string;
+  current_offer_sent_at?: string;
+  current_offer_expires_at?: string;
+  
+  // Timestamps
+  departed_at?: string;
+  arrived_at?: string;
+  picked_up_at?: string;
+  completed_at?: string;
 }
 
 export interface TripOffer {
@@ -71,7 +86,6 @@ export const STATUS_META: Record<DriverStatus, { label: string; emoji: string; c
   busy: { label: 'Busy', emoji: '🟡', color: '#fbbf24' },
   offline: { label: 'Offline', emoji: '⚫', color: '#6b7280' },
   assigned: { label: 'Assigned', emoji: '📋', color: '#6366f1' },
-  getting_ready: { label: 'Getting Ready', emoji: '🚗', color: '#6366f1' },
   enroute: { label: 'On The Way', emoji: '🛣️', color: '#3b82f6' },
   arrived: { label: 'Arrived', emoji: '📍', color: '#f59e0b' },
   waiting: { label: 'Waiting', emoji: '⏱️', color: '#f59e0b' },
@@ -85,10 +99,37 @@ export const STATUS_META: Record<DriverStatus, { label: string; emoji: string; c
 export type RootStackParamList = {
   Splash: undefined;
   Auth: undefined;
+  Register: undefined;
+  RegisterCompany: { userData: RegisterUserData };
+  RegisterVehicle: { 
+    userData: RegisterUserData; 
+    companyId?: string;
+    affiliateId?: string;
+    affiliateName?: string;
+  };
+  Welcome: { 
+    driverName: string; 
+    driverId: string;
+    portalSlug?: string;
+  };
   Dashboard: undefined;
   TripDetail: { tripId: number | string };
   ActiveTrip: { tripId: number | string };
   Offers: undefined;
   Profile: undefined;
   Settings: undefined;
+  TripHistory: undefined;
+  Calendar: undefined;
+  Messages: undefined;
+  GreetingSign: undefined;
+  MapProviderSettings: undefined;
+  CalendarSync: undefined;
 };
+
+export interface RegisterUserData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  password: string;
+}

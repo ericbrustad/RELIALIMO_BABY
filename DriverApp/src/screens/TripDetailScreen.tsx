@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { useTripStore, useAuthStore, useSettingsStore } from '../store';
 import { supabase } from '../config/supabase';
-import { colors, spacing, fontSize, borderRadius } from '../config/theme';
+import { useTheme } from '../context';
+import { spacing, fontSize, borderRadius } from '../config/theme';
 import { STATUS_META } from '../types';
 import type { Reservation, RootStackParamList } from '../types';
 import MississippiCountdown from '../components/MississippiCountdown';
@@ -32,10 +33,14 @@ export default function TripDetailScreen() {
   const { driver } = useAuthStore();
   const { updateTripStatus, setCurrentTrip } = useTripStore();
   const { preferredNavigationApp, hasSetNavigationPreference, setNavigationApp } = useSettingsStore();
+  const { colors } = useTheme();
   
   const [trip, setTrip] = useState<Reservation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showCountdown, setShowCountdown] = useState(false);
+  
+  // Create dynamic styles based on current theme
+  const styles = useMemo(() => createStyles(colors), [colors]);
   
   useEffect(() => {
     fetchTripDetails();
@@ -107,9 +112,9 @@ export default function TripDetailScreen() {
     setShowCountdown(false);
     if (!trip) return;
     
-    const result = await updateTripStatus(trip.id, 'getting_ready');
+    const result = await updateTripStatus(trip.id, 'enroute');
     if (result.success) {
-      setCurrentTrip({ ...trip, driver_status: 'getting_ready' });
+      setCurrentTrip({ ...trip, driver_status: 'enroute' });
       navigation.navigate('ActiveTrip', { tripId: trip.id });
     } else {
       Alert.alert('Error', result.error || 'Failed to start trip');
@@ -323,7 +328,8 @@ export default function TripDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Create dynamic styles based on theme colors
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

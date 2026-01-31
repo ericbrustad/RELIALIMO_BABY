@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore, useSettingsStore } from '../store';
-import { colors, spacing, fontSize, borderRadius } from '../config/theme';
+import { useTheme } from '../context';
+import { spacing, fontSize, borderRadius } from '../config/theme';
 
 const NAV_APP_LABELS: Record<string, string> = {
   google: 'Google Maps',
@@ -20,6 +21,10 @@ const NAV_APP_LABELS: Record<string, string> = {
 export default function ProfileScreen() {
   const { driver, signOut } = useAuthStore();
   const { preferredNavigationApp, hasSetNavigationPreference, setNavigationApp, resetNavigationPreference } = useSettingsStore();
+  const { colors } = useTheme();
+  
+  // Create dynamic styles based on current theme
+  const styles = useMemo(() => createStyles(colors), [colors]);
   
   const handleSignOut = () => {
     Alert.alert(
@@ -161,7 +166,8 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Create dynamic styles based on theme colors
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

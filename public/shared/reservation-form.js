@@ -37,7 +37,16 @@ const FARMOUT_STATUS_ALIASES = {
   passenger_on_boarding: 'passenger_onboard',
   inhouse: 'in_house',
   'in-house': 'in_house',
-  in_house_dispatch: 'in_house'
+  in_house_dispatch: 'in_house',
+  // Driver app status aliases
+  assigned: 'assigned',
+  arrived: 'arrived',
+  waiting: 'waiting',
+  waiting_at_pickup: 'waiting',
+  passenger_onboard: 'passenger_onboard',
+  // In-house farmout (auto-assigned to default driver)
+  in_house_assigned: 'in_house_assigned',
+  in_house_farmout: 'in_house_assigned'
 };
 
 const FARMOUT_STATUS_LABELS = {
@@ -45,18 +54,23 @@ const FARMOUT_STATUS_LABELS = {
   farm_out_unassigned: 'Farm-out Unassigned',
   farmout_unassigned: 'Farm-out Unassigned',
   offered: 'Farm-out Offered',
-  assigned: 'Farm-out Assigned',
+  assigned: 'Assigned',
   farm_out_assigned: 'Farm-out Assigned',
   farmout_assigned: 'Farm-out Assigned',
   declined: 'Farm-out Declined',
-  enroute: 'Farm-out En Route',
-  en_route: 'Farm-out En Route',
-  arrived: 'Farm-out Arrived',
+  enroute: 'En Route',
+  en_route: 'En Route',
+  arrived: 'Arrived',
+  waiting: 'Waiting at Pickup',
+  waiting_at_pickup: 'Waiting at Pickup',
   passenger_onboard: 'Passenger On Board',
   passenger_on_board: 'Passenger On Board',
-  completed: 'Farm-out Completed',
+  completed: 'Completed',
   in_house: 'In-house Dispatch',
   inhouse: 'In-house Dispatch',
+  // In-house farmout - auto-assigned to default driver
+  in_house_assigned: 'In House Farmout',
+  in_house_farmout: 'In House Farmout',
   offered_to_affiliate: 'Offered to Affiliate',
   affiliate_assigned: 'Affiliate Assigned',
   affiliate_driver_assigned: 'Affiliate Driver Assigned',
@@ -8318,7 +8332,8 @@ class ReservationForm {
         // Farmout settings - comprehensive handling
         console.log('📋 [ReservationForm] Loading farmout settings:', {
           farmout_mode: record.farmout_mode,
-          farmout_status: record.farmout_status
+          farmout_status: record.farmout_status,
+          driver_status: record.driver_status
         });
         
         // Determine if this is a farmout reservation based on farmout_mode
@@ -8339,8 +8354,11 @@ class ReservationForm {
         }
         
         // Set and display the farmout status with proper styling
-        if (record.farmout_status) {
-          this.updateEFarmStatus(record.farmout_status);
+        // Priority: driver_status (from app) > farmout_status (from admin)
+        // This ensures the driver app status is reflected in the reservation form
+        const effectiveStatus = record.driver_status || record.farmout_status;
+        if (effectiveStatus) {
+          this.updateEFarmStatus(effectiveStatus);
         } else if (isFarmout) {
           this.updateEFarmStatus('unassigned');
         }

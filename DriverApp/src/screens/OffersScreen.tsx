@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuthStore, useTripStore } from '../store';
-import { colors, spacing, fontSize, borderRadius } from '../config/theme';
-import type { TripOffer, RootStackParamList } from '../types';
+import { useTheme } from '../context';
+import { spacing, fontSize, borderRadius } from '../config/theme';
+import type { Reservation, RootStackParamList } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -22,8 +23,12 @@ export default function OffersScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { driver } = useAuthStore();
   const { offers, fetchOffers, acceptOffer, declineOffer, isLoading } = useTripStore();
+  const { colors } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
-  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [processingId, setProcessingId] = useState<string | number | null>(null);
+  
+  // Create dynamic styles based on current theme
+  const styles = useMemo(() => createStyles(colors), [colors]);
   
   const onRefresh = useCallback(async () => {
     if (!driver?.id) return;
@@ -60,7 +65,9 @@ export default function OffersScreen() {
     return { date: dateStr, time: timeStr };
   };
   
-  const getExpiresIn = (expiresAt: string) => {
+  const getExpiresIn = (expiresAt: string | undefined) => {
+    if (!expiresAt) return '15 min left';  // Default if no expiry set
+    
     const expires = new Date(expiresAt);
     const now = new Date();
     const diffMs = expires.getTime() - now.getTime();
@@ -74,7 +81,7 @@ export default function OffersScreen() {
     return `${hours}h ${minutes % 60}m left`;
   };
   
-  const handleAccept = async (offer: TripOffer) => {
+  const handleAccept = async (offer: Reservation) => {
     Alert.alert(
       'Accept Trip Offer',
       'Are you sure you want to accept this trip?',
@@ -101,7 +108,7 @@ export default function OffersScreen() {
     );
   };
   
-  const handleDecline = async (offer: TripOffer) => {
+  const handleDecline = async (offer: Reservation) => {
     Alert.alert(
       'Decline Trip Offer',
       'Are you sure you want to decline this trip?',
@@ -124,22 +131,17 @@ export default function OffersScreen() {
     );
   };
   
-  const getPassengerName = (offer: TripOffer) => {
-    const res = offer.reservation;
-    if (!res) return 'Unknown';
-    if (res.passenger_name) return res.passenger_name;
-    if (res.passenger_first_name) {
-      return `${res.passenger_first_name} ${res.passenger_last_name || ''}`.trim();
+  const getPassengerName = (offer: Reservation) => {
+    if (offer.passenger_name) return offer.passenger_name;
+    if (offer.passenger_first_name) {
+      return `${offer.passenger_first_name} ${offer.passenger_last_name || ''}`.trim();
     }
     return 'Passenger';
   };
   
-  const renderOffer = ({ item: offer }: { item: TripOffer }) => {
-    const res = offer.reservation;
-    if (!res) return null;
-    
-    const { date, time } = formatDateTime(res.pickup_datetime);
-    const expiresIn = getExpiresIn(offer.expires_at);
+  const renderOffer = ({ item: offer }: { item: Reservation }) => {
+    const { date, time } = formatDateTime(offer.pickup_datetime);
+    const expiresIn = getExpiresIn((offer as any).current_offer_expires_at);
     const isExpired = expiresIn === 'Expired';
     const isProcessing = processingId === offer.id;
     
@@ -157,9 +159,9 @@ export default function OffersScreen() {
               <Text style={styles.tripDate}>{date}</Text>
               <Text style={styles.tripTime}>{time}</Text>
             </View>
-            {offer.offer_amount && (
+            {offer.driver_pay && (
               <View style={styles.payBadge}>
-                <Text style={styles.payAmount}>${offer.offer_amount.toFixed(0)}</Text>
+                <Text style={styles.payAmount}>${Number(offer.driver_pay).toFixed(0)}</Text>
               </View>
             )}
           </View>
@@ -171,19 +173,19 @@ export default function OffersScreen() {
             <View style={styles.locationRow}>
               <View style={[styles.dot, { backgroundColor: colors.success }]} />
               <Text style={styles.locationText} numberOfLines={1}>
-                {res.pickup_address || res.pickup_location || 'Pickup TBD'}
+                {offer.pickup_address || offer.pickup_location || 'Pickup TBD'}
               </Text>
             </View>
             <View style={styles.locationRow}>
               <View style={[styles.dot, { backgroundColor: colors.danger }]} />
               <Text style={styles.locationText} numberOfLines={1}>
-                {res.dropoff_address || res.dropoff_location || 'Dropoff TBD'}
+                {offer.dropoff_address || offer.dropoff_location || 'Dropoff TBD'}
               </Text>
             </View>
           </View>
           
-          {res.vehicle_type && (
-            <Text style={styles.vehicleType}>{res.vehicle_type}</Text>
+          {offer.vehicle_type && (
+            <Text style={styles.vehicleType}>{offer.vehicle_type}</Text>
           )}
         </View>
         
@@ -234,7 +236,7 @@ export default function OffersScreen() {
       <FlatList
         data={offers}
         renderItem={renderOffer}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={renderEmpty}
@@ -251,7 +253,8 @@ export default function OffersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Create dynamic styles based on theme colors
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

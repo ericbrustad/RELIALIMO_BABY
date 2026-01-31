@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -18,55 +18,85 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { useTripStore, useLocationStore, useSettingsStore } from '../store';
 import { supabase } from '../config/supabase';
-import { colors, spacing, fontSize, borderRadius } from '../config/theme';
+import { useTheme } from '../context';
+import { spacing, fontSize, borderRadius } from '../config/theme';
 import { STATUS_META } from '../types';
 import type { Reservation, DriverStatus, RootStackParamList } from '../types';
 import MississippiCountdown from '../components/MississippiCountdown';
-import { navigateToAddress } from '../utils/navigation';
+import BackButton from '../components/BackButton';
+import { navigateToAddress, geocodeAddress } from '../utils/navigation';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteParams = RouteProp<RootStackParamList, 'ActiveTrip'>;
 
-// Status flow for active trip
+// Status flow for active trip - starts with assigned
 const STATUS_FLOW: DriverStatus[] = [
-  'getting_ready',
+  'assigned',
   'enroute',
   'arrived',
-  'waiting',
   'passenger_onboard',
   'done',
 ];
 
-// Status button configurations
-const STATUS_BUTTONS: Record<DriverStatus, { nextLabel: string; icon: string; color: string }> = {
-  getting_ready: { nextLabel: 'Start Trip', icon: '🚗', color: colors.primary },
-  enroute: { nextLabel: 'I\'ve Arrived', icon: '📍', color: colors.warning },
-  arrived: { nextLabel: 'Start Waiting', icon: '⏱', color: colors.warning },
-  waiting: { nextLabel: 'Passenger In', icon: '👤', color: colors.success },
-  passenger_onboard: { nextLabel: 'Complete Trip', icon: '🏁', color: colors.success },
-  done: { nextLabel: 'Done!', icon: '✅', color: colors.success },
+// Status button configurations - simplified flow
+const getStatusButtons = (colors: any): Record<DriverStatus, { nextLabel: string; icon: string; color: string }> => ({
+  assigned: { nextLabel: 'On the Way', icon: '🚗', color: colors.primary },
+  enroute: { nextLabel: 'Arrived', icon: '📍', color: colors.warning },
+  arrived: { nextLabel: 'Passenger In Car', icon: '👤', color: colors.success },
+  waiting: { nextLabel: 'Passenger In Car', icon: '👤', color: colors.success },
+  passenger_onboard: { nextLabel: 'Done', icon: '✅', color: colors.success },
+  done: { nextLabel: 'Trip Complete', icon: '✅', color: colors.success },
   available: { nextLabel: 'Start', icon: '▶️', color: colors.primary },
   completed: { nextLabel: 'Completed', icon: '✅', color: colors.success },
   busy: { nextLabel: 'Continue', icon: '▶️', color: colors.primary },
   offline: { nextLabel: 'Go Online', icon: '🟢', color: colors.success },
   cancelled: { nextLabel: 'Cancelled', icon: '❌', color: colors.danger },
   no_show: { nextLabel: 'No Show', icon: '🚫', color: colors.danger },
-};
+});
 
 export default function ActiveTripScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteParams>();
   const { tripId } = route.params;
   const { updateTripStatus, setCurrentTrip } = useTripStore();
-  const { startTracking, stopTracking, location } = useLocationStore();
+  const { startTracking, stopTracking, location, geofence, setDestination, clearGeofence, isMoving } = useLocationStore();
   const { preferredNavigationApp, hasSetNavigationPreference, setNavigationApp } = useSettingsStore();
+  const { colors } = useTheme();
   
   const [trip, setTrip] = useState<Reservation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [waitingTime, setWaitingTime] = useState(0);
   const [showCountdown, setShowCountdown] = useState(false);
-  const [pendingAction, setPendingAction] = useState<{ label: string; color: string } | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ label: string; color: string; targetStatus?: DriverStatus } | null>(null);
+  
+  // Use ref to avoid stale closure in countdown callback
+  const pendingActionRef = useRef<{ label: string; color: string; targetStatus?: DriverStatus } | null>(null);
+  const tripRef = useRef<Reservation | null>(null);
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    pendingActionRef.current = pendingAction;
+  }, [pendingAction]);
+  
+  useEffect(() => {
+    tripRef.current = trip;
+  }, [trip]);
+  
+  // Ref for navigation function to avoid stale closure
+  const handleNavigateRef = useRef<(address: string) => void>(() => {});
+  
+  // Status menu state (for passenger_onboard expandable menu)
+  const [showStatusMenu, setShowStatusMenu] = useState(false);
+  
+  // Geofence tracking state
+  const [hasEnteredDropoffGeofence, setHasEnteredDropoffGeofence] = useState(false);
+  const [hasConfirmedArrival, setHasConfirmedArrival] = useState(false);
+  const [geofenceAlertShown, setGeofenceAlertShown] = useState(false);
+  
+  // Create dynamic styles and status buttons based on current theme
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const STATUS_BUTTONS = useMemo(() => getStatusButtons(colors), [colors]);
   
   // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -109,6 +139,102 @@ export default function ActiveTripScreen() {
     }).start();
   }, [trip?.driver_status]);
   
+  // Set up dropoff geofence when passenger is onboard
+  useEffect(() => {
+    if (trip?.driver_status === 'passenger_onboard') {
+      const dropoffAddress = trip.dropoff_address || trip.dropoff_location;
+      if (dropoffAddress) {
+        // Geocode the dropoff address and set as geofence destination
+        setupDropoffGeofence(dropoffAddress);
+      }
+    } else {
+      // Clear geofence when not in passenger_onboard state
+      clearGeofence();
+      setHasEnteredDropoffGeofence(false);
+      setHasConfirmedArrival(false);
+      setGeofenceAlertShown(false);
+    }
+    
+    return () => {
+      clearGeofence();
+    };
+  }, [trip?.driver_status]);
+  
+  // Monitor geofence state changes
+  useEffect(() => {
+    if (trip?.driver_status !== 'passenger_onboard') return;
+    
+    // Track when driver enters the geofence
+    if (geofence.isInsideGeofence && !hasEnteredDropoffGeofence) {
+      console.log('📍 Driver entered dropoff geofence');
+      setHasEnteredDropoffGeofence(true);
+      
+      // Show notification
+      if (Platform.OS !== 'web') {
+        Vibration.vibrate([0, 100, 50, 100]);
+      }
+    }
+    
+    // Check if driver left geofence without confirming arrival
+    if (hasEnteredDropoffGeofence && !geofence.isInsideGeofence && !hasConfirmedArrival && !geofenceAlertShown) {
+      console.log('📍 Driver left geofence without confirming arrival');
+      setGeofenceAlertShown(true);
+      
+      Alert.alert(
+        'Did You Arrive?',
+        'It looks like you reached the dropoff location. Did you arrive and drop off the passenger?',
+        [
+          {
+            text: 'No, Still Driving',
+            style: 'cancel',
+            onPress: () => {
+              // Reset so we can track again
+              setHasEnteredDropoffGeofence(false);
+              setGeofenceAlertShown(false);
+            },
+          },
+          {
+            text: 'Yes, Arrived',
+            onPress: () => handleConfirmArrival(),
+          },
+        ]
+      );
+    }
+  }, [geofence.isInsideGeofence, hasEnteredDropoffGeofence, hasConfirmedArrival, trip?.driver_status]);
+  
+  // Helper to set up the dropoff geofence
+  const setupDropoffGeofence = async (address: string) => {
+    try {
+      const coords = await geocodeAddress(address);
+      if (coords) {
+        console.log('📍 Setting dropoff geofence at:', coords);
+        setDestination(coords);
+      } else {
+        console.log('⚠️ Could not geocode dropoff address:', address);
+      }
+    } catch (error) {
+      console.error('Error setting up geofence:', error);
+    }
+  };
+  
+  // Handle confirming arrival at dropoff
+  const handleConfirmArrival = async () => {
+    setHasConfirmedArrival(true);
+    setShowStatusMenu(false);
+    
+    // Just mark as confirmed, don't change status yet
+    // Driver will use "Done" to complete the trip
+    if (Platform.OS !== 'web') {
+      Vibration.vibrate(50);
+    }
+    
+    Alert.alert(
+      '✅ Arrival Confirmed',
+      'When the passenger exits, tap "Done" to complete the trip.',
+      [{ text: 'OK' }]
+    );
+  };
+  
   const fetchTripDetails = async () => {
     try {
       setIsLoading(true);
@@ -122,22 +248,22 @@ export default function ActiveTripScreen() {
       
       console.log('📋 Trip fetched, current driver_status:', data.driver_status);
       
-      // If trip doesn't have a valid active status, initialize to getting_ready
-      const activeStatuses: DriverStatus[] = ['getting_ready', 'enroute', 'arrived', 'waiting', 'passenger_onboard', 'done'];
+      // If trip doesn't have a valid active status, initialize to enroute
+      const activeStatuses: DriverStatus[] = ['enroute', 'arrived', 'waiting', 'passenger_onboard', 'done'];
       if (!data.driver_status || !activeStatuses.includes(data.driver_status)) {
-        console.log('📋 Initializing trip status to getting_ready (current:', data.driver_status, ')');
+        console.log('📋 Initializing trip status to enroute (current:', data.driver_status, ')');
         // Update database
         const { error: updateError } = await supabase
           .from('reservations')
-          .update({ driver_status: 'getting_ready', updated_at: new Date().toISOString() })
+          .update({ driver_status: 'enroute', updated_at: new Date().toISOString() })
           .eq('id', tripId);
         
         if (updateError) {
           console.error('Error initializing trip status:', updateError);
           Alert.alert('Database Error', `Could not update status: ${updateError.message}`);
         } else {
-          console.log('✅ Status updated to getting_ready in database');
-          data.driver_status = 'getting_ready';
+          console.log('✅ Status updated to enroute in database');
+          data.driver_status = 'enroute';
         }
       }
       
@@ -183,25 +309,60 @@ export default function ActiveTripScreen() {
       return;
     }
     
-    const status = trip.driver_status || 'getting_ready';
-    const statusButton = STATUS_BUTTONS[status] || STATUS_BUTTONS.getting_ready;
+    const status = trip.driver_status || 'enroute';
+    const statusButton = STATUS_BUTTONS[status] || STATUS_BUTTONS.enroute;
     
-    // Start the Mississippi countdown
-    console.log('🚀 Starting Mississippi countdown!', { label: statusButton.nextLabel, color: statusButton.color });
-    setPendingAction({ label: statusButton.nextLabel, color: statusButton.color });
+    // Start the Mississippi countdown with the target status
+    console.log('🚀 Starting Mississippi countdown!', { label: statusButton.nextLabel, color: statusButton.color, targetStatus: nextStatus });
+    setPendingAction({ label: statusButton.nextLabel, color: statusButton.color, targetStatus: nextStatus });
     setShowCountdown(true);
   };
   
-  // Called when countdown completes
-  const executeStatusAdvance = async () => {
-    console.log('🎯 executeStatusAdvance called! Countdown complete.');
+  // Handle selecting a status from the expandable menu
+  const handleStatusMenuSelect = (targetStatus: DriverStatus, label: string) => {
+    console.log('📍 Status menu selected:', targetStatus);
+    setShowStatusMenu(false);
+    
+    // Start countdown with the selected target status
+    setPendingAction({ 
+      label, 
+      color: targetStatus === 'done' ? colors.success : colors.primary,
+      targetStatus 
+    });
+    setShowCountdown(true);
+  };
+  
+  // Called when countdown completes - wrapped in useCallback with empty deps since it reads from refs
+  const executeStatusAdvance = useCallback(async () => {
+    // Use refs to get latest values (avoid stale closure)
+    const currentPendingAction = pendingActionRef.current;
+    const currentTrip = tripRef.current;
+    
+    console.log('🎯 executeStatusAdvance called! Countdown complete.', { 
+      pendingAction: currentPendingAction,
+      tripId: currentTrip?.id,
+      currentStatus: currentTrip?.driver_status 
+    });
     setShowCountdown(false);
+    
+    if (!currentTrip) {
+      console.log('❌ No trip in executeStatusAdvance');
+      setPendingAction(null);
+      return;
+    }
+    
+    // Use the target status from pendingAction if it exists, otherwise calculate next status
+    const currentIndex = STATUS_FLOW.indexOf(currentTrip.driver_status || 'enroute');
+    const calculatedNextStatus = currentIndex < STATUS_FLOW.length - 1 ? STATUS_FLOW[currentIndex + 1] : null;
+    const nextStatus = currentPendingAction?.targetStatus || calculatedNextStatus;
+    
+    console.log('📍 Will update to status:', nextStatus, 'from:', currentTrip.driver_status);
     setPendingAction(null);
     
-    if (!trip) return;
-    
-    const nextStatus = getNextStatus();
-    if (!nextStatus) return;
+    if (!nextStatus) {
+      console.log('❌ No next status found');
+      return;
+    }
     
     // Haptic feedback
     if (Platform.OS !== 'web') {
@@ -209,31 +370,34 @@ export default function ActiveTripScreen() {
     }
     
     setIsUpdating(true);
-    const result = await updateTripStatus(trip.id, nextStatus);
+    console.log('⏳ Calling updateTripStatus with:', currentTrip.id, nextStatus);
+    const result = await updateTripStatus(currentTrip.id, nextStatus);
+    console.log('📊 updateTripStatus result:', result);
     setIsUpdating(false);
     
     if (result.success) {
-      setTrip({ ...trip, driver_status: nextStatus });
+      console.log('✅ Status update successful, updating local state');
+      setTrip({ ...currentTrip, driver_status: nextStatus });
       
       // If starting to drive, open navigation
       if (nextStatus === 'enroute') {
-        const address = trip.pickup_address || trip.pickup_location;
+        const address = currentTrip.pickup_address || currentTrip.pickup_location;
         if (address) {
-          handleNavigate(address);
+          handleNavigateRef.current(address);
         }
       }
       
       // If passenger onboard, offer to navigate to dropoff
       if (nextStatus === 'passenger_onboard') {
         setWaitingTime(0); // Reset waiting timer
-        const address = trip.dropoff_address || trip.dropoff_location;
+        const address = currentTrip.dropoff_address || currentTrip.dropoff_location;
         if (address) {
           Alert.alert(
             'Navigate to Dropoff?',
             'Open navigation to the dropoff location?',
             [
               { text: 'Not Now', style: 'cancel' },
-              { text: 'Navigate', onPress: () => handleNavigate(address) },
+              { text: 'Navigate', onPress: () => handleNavigateRef.current(address) },
             ]
           );
         }
@@ -261,7 +425,7 @@ export default function ActiveTripScreen() {
     } else {
       Alert.alert('Error', result.error || 'Failed to update status');
     }
-  };
+  }, [updateTripStatus, setCurrentTrip, navigation, colors.success]);
   
   const cancelCountdown = () => {
     setShowCountdown(false);
@@ -326,6 +490,11 @@ export default function ActiveTripScreen() {
     navigateToAddress(address, preferredNavigationApp, hasSetNavigationPreference, setNavigationApp);
   };
   
+  // Keep handleNavigateRef in sync
+  useEffect(() => {
+    handleNavigateRef.current = handleNavigate;
+  });
+  
   const handleCall = () => {
     if (trip?.passenger_phone) {
       Linking.openURL(`tel:${trip.passenger_phone}`);
@@ -373,9 +542,9 @@ export default function ActiveTripScreen() {
     );
   }
   
-  const status = trip.driver_status || 'getting_ready';
-  const statusMeta = STATUS_META[status] || STATUS_META.getting_ready;
-  const statusButton = STATUS_BUTTONS[status] || STATUS_BUTTONS.getting_ready;
+  const status = trip.driver_status || 'enroute';
+  const statusMeta = STATUS_META[status] || STATUS_META.enroute;
+  const statusButton = STATUS_BUTTONS[status] || STATUS_BUTTONS.enroute;
   const currentIndex = getCurrentStatusIndex();
   const isWaiting = status === 'waiting' || status === 'arrived';
   const isOnTheWay = status === 'passenger_onboard';
@@ -464,7 +633,7 @@ export default function ActiveTripScreen() {
           )}
         </View>
         
-        {/* Destination Card */}
+        {/* Destination Card - Address is tappable for navigation */}
         <View style={styles.destinationCard}>
           <View style={styles.destinationHeader}>
             <View style={[styles.destinationBadge, { backgroundColor: isOnTheWay ? colors.danger : colors.success }]}>
@@ -472,13 +641,12 @@ export default function ActiveTripScreen() {
             </View>
             <Text style={styles.destinationLabel}>{destinationLabel}</Text>
           </View>
-          <Text style={styles.destinationAddress}>{currentDestination}</Text>
           <TouchableOpacity
-            style={styles.navButton}
             onPress={() => handleNavigate(currentDestination)}
+            activeOpacity={0.7}
           >
-            <Text style={styles.navButtonIcon}>🧭</Text>
-            <Text style={styles.navButtonText}>Navigate</Text>
+            <Text style={styles.destinationAddress}>{currentDestination}</Text>
+            <Text style={styles.tapToNavigate}>Tap address to navigate 🧭</Text>
           </TouchableOpacity>
         </View>
         
@@ -501,13 +669,33 @@ export default function ActiveTripScreen() {
           <Text style={styles.cancelButtonText}>Cancel Trip</Text>
         </TouchableOpacity>
         
-        <View style={{ height: 140 }} />
+        <View style={{ height: isOnTheWay ? 200 : 140 }} />
       </ScrollView>
+      
+      {/* Geofence indicator when passenger is onboard */}
+      {isOnTheWay && geofence.distanceToDestination !== null && (
+        <View style={styles.geofenceIndicator}>
+          <Text style={styles.geofenceText}>
+            {geofence.isInsideGeofence 
+              ? '📍 At dropoff location' 
+              : geofence.isApproaching 
+                ? `🔜 ${Math.round(geofence.distanceToDestination)}m to dropoff`
+                : `📍 ${Math.round(geofence.distanceToDestination)}m to dropoff`
+            }
+          </Text>
+          {hasConfirmedArrival && (
+            <Text style={styles.geofenceConfirmed}>✅ Arrival confirmed</Text>
+          )}
+        </View>
+      )}
       
       {/* Big Action Button */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: statusButton.color }]}
+          style={[
+            styles.actionButton, 
+            { backgroundColor: statusButton.color },
+          ]}
           onPress={handleAdvanceStatus}
           disabled={isUpdating}
           activeOpacity={0.8}
@@ -516,7 +704,9 @@ export default function ActiveTripScreen() {
             <ActivityIndicator color="#fff" size="large" />
           ) : (
             <>
-              <Text style={styles.actionButtonIcon}>{statusButton.icon}</Text>
+              <Text style={styles.actionButtonIcon}>
+                {statusButton.icon}
+              </Text>
               <Text style={styles.actionButtonText}>
                 {nextStatus ? statusButton.nextLabel : 'Return to Dashboard'}
               </Text>
@@ -537,7 +727,8 @@ export default function ActiveTripScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Create dynamic styles based on theme colors
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -574,19 +765,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   headerBack: {
-    width: 40,
-    height: 40,
+    width: 50,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    marginRight: 12,
   },
   headerBackText: {
-    fontSize: 24,
+    fontSize: 28,
     color: colors.text,
+    fontWeight: '600',
   },
   headerTitle: {
     fontSize: fontSize.lg,
@@ -745,9 +940,15 @@ const styles = StyleSheet.create({
   },
   destinationAddress: {
     fontSize: fontSize.lg,
-    color: colors.text,
+    color: colors.primary,
     lineHeight: 24,
-    marginBottom: spacing.md,
+    marginBottom: spacing.xs,
+    textDecorationLine: 'underline',
+  },
+  tapToNavigate: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
   },
   navButton: {
     flexDirection: 'row',
@@ -834,6 +1035,10 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.sm,
   },
+  actionButtonExpanded: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
   actionButtonIcon: {
     fontSize: 28,
   },
@@ -841,5 +1046,78 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl,
     fontWeight: '700',
     color: colors.white,
+  },
+  
+  // Geofence indicator
+  geofenceIndicator: {
+    position: 'absolute',
+    bottom: 120,
+    left: spacing.md,
+    right: spacing.md,
+    backgroundColor: colors.primary + '20',
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.md,
+  },
+  geofenceText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  geofenceConfirmed: {
+    fontSize: fontSize.sm,
+    color: colors.success,
+    fontWeight: '600',
+  },
+  
+  // Status menu (expandable)
+  statusMenu: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 100 : 85,
+    left: spacing.md,
+    right: spacing.md,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  statusMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    gap: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  statusMenuIcon: {
+    fontSize: 24,
+  },
+  statusMenuText: {
+    flex: 1,
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: colors.white,
+  },
+  geofenceBadge: {
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  geofenceBadgeText: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.success,
   },
 });

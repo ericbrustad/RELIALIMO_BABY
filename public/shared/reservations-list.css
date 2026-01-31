@@ -397,6 +397,12 @@ body {
   color: #00695c;
 }
 
+.status-badge.in_house_farmout {
+  background-color: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffb74d;
+}
+
 /* Farmout mode indicator (M/A badge) */
 .farmout-mode-indicator {
   display: inline-block;

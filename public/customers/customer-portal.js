@@ -135,6 +135,8 @@ const state = {
   },
   savedPassengers: [],
   savedAddresses: [],
+  addressesLoaded: false, // Flag to track if addresses have been fetched
+  favoriteAirports: [], // Customer's favorite airport codes
   trips: [],
   activeTrip: null,
   vehicleTypes: [],
@@ -969,10 +971,12 @@ async function loadSavedAddresses() {
     }
     
     state.savedAddresses = addresses;
+    state.addressesLoaded = true;
     console.log('[CustomerPortal] Loaded', addresses.length, 'total saved addresses:', addresses);
     
   } catch (err) {
     console.error('[CustomerPortal] Failed to load addresses:', err);
+    state.addressesLoaded = true; // Mark as loaded even on error to prevent infinite retries
   }
 }
 
@@ -1219,31 +1223,35 @@ async function loadAirports() {
     console.warn('[CustomerPortal] Using hardcoded fallback airports');
   }
   
-  // Get customer's preferred airports (from onboarding)
+  // Get customer's preferred airports (from onboarding) and favorite airports
   const preferredAirports = state.customer?.preferred_airports || [];
+  const favoriteAirportCodes = state.customer?.favorite_airports || [];
   const preferredCodes = preferredAirports.map(a => a.code);
   
-  // Populate airport dropdowns with preferred airports first, then primary, then rest
+  // Populate airport dropdowns with favorites first, then preferred, then primary, then rest
   ['pickupAirport', 'dropoffAirport'].forEach(id => {
     const select = document.getElementById(id);
     if (select) {
       let html = '<option value="">Select Airport</option>';
       
-      // Add preferred airports section if customer has any
-      if (preferredAirports.length > 0) {
-        html += '<optgroup label="⭐ Your Preferred Airports">';
-        preferredAirports.forEach(pa => {
-          // Find the full airport data or use what we have
-          const fullAirport = state.airports.find(a => a.code === pa.code) || pa;
-          html += `<option value="${pa.code}" data-address="${fullAirport.address || ''}">${fullAirport.name || pa.name}</option>`;
+      // Combine favorites and preferred into one "Your Airports" section
+      const customerAirportCodes = [...new Set([...favoriteAirportCodes, ...preferredCodes])];
+      
+      if (customerAirportCodes.length > 0) {
+        html += '<optgroup label="⭐ Your Favorite Airports">';
+        customerAirportCodes.forEach(code => {
+          const fullAirport = state.airports.find(a => a.code === code);
+          if (fullAirport) {
+            html += `<option value="${code}" data-address="${fullAirport.address || ''}">${fullAirport.name}</option>`;
+          }
         });
         html += '</optgroup>';
         html += '<optgroup label="All Airports">';
       }
       
-      // Add primary airports first (excluding preferred to avoid duplicates)
-      const primaryAirports = state.airports.filter(a => a.is_primary && !preferredCodes.includes(a.code));
-      const otherAirports = state.airports.filter(a => !a.is_primary && !preferredCodes.includes(a.code));
+      // Add primary airports first (excluding customer airports to avoid duplicates)
+      const primaryAirports = state.airports.filter(a => a.is_primary && !customerAirportCodes.includes(a.code));
+      const otherAirports = state.airports.filter(a => !a.is_primary && !customerAirportCodes.includes(a.code));
       
       if (primaryAirports.length > 0) {
         primaryAirports.forEach(a => {
@@ -1256,7 +1264,7 @@ async function loadAirports() {
         html += `<option value="${a.code}" data-address="${a.address || ''}">${a.name}</option>`;
       });
       
-      if (preferredAirports.length > 0) {
+      if (customerAirportCodes.length > 0) {
         html += '</optgroup>';
       }
       
@@ -1266,6 +1274,52 @@ async function loadAirports() {
   
   // Prefill airports AFTER dropdowns are populated (fixes timing issue)
   prefillAirports();
+}
+
+// Re-populate airport dropdowns (called after toggling favorites)
+function populateAirportDropdowns() {
+  const favoriteAirportCodes = state.customer?.favorite_airports || [];
+  const preferredAirports = state.customer?.preferred_airports || [];
+  const preferredCodes = preferredAirports.map(a => a.code);
+  const customerAirportCodes = [...new Set([...favoriteAirportCodes, ...preferredCodes])];
+  
+  ['pickupAirport', 'dropoffAirport'].forEach(id => {
+    const select = document.getElementById(id);
+    if (!select) return;
+    
+    const currentValue = select.value;
+    let html = '<option value="">Select Airport</option>';
+    
+    if (customerAirportCodes.length > 0) {
+      html += '<optgroup label="⭐ Your Favorite Airports">';
+      customerAirportCodes.forEach(code => {
+        const fullAirport = state.airports.find(a => a.code === code);
+        if (fullAirport) {
+          html += `<option value="${code}" data-address="${fullAirport.address || ''}">${fullAirport.name}</option>`;
+        }
+      });
+      html += '</optgroup>';
+      html += '<optgroup label="All Airports">';
+    }
+    
+    const primaryAirports = state.airports.filter(a => a.is_primary && !customerAirportCodes.includes(a.code));
+    const otherAirports = state.airports.filter(a => !a.is_primary && !customerAirportCodes.includes(a.code));
+    
+    primaryAirports.forEach(a => {
+      html += `<option value="${a.code}" data-address="${a.address || ''}">⭐ ${a.name}</option>`;
+    });
+    
+    otherAirports.forEach(a => {
+      html += `<option value="${a.code}" data-address="${a.address || ''}">${a.name}</option>`;
+    });
+    
+    if (customerAirportCodes.length > 0) {
+      html += '</optgroup>';
+    }
+    
+    select.innerHTML = html;
+    select.value = currentValue; // Restore selection
+  });
 }
 
 // ============================================
@@ -1751,26 +1805,47 @@ async function deletePassenger(passengerId) {
 // Address Management
 // ============================================
 function populateAddressDropdowns() {
+  console.log('[CustomerPortal] populateAddressDropdowns called');
+  console.log('[CustomerPortal] state.savedAddresses:', state.savedAddresses);
+  console.log('[CustomerPortal] Length:', state.savedAddresses?.length || 0);
+  
   ['savedPickupAddresses', 'savedDropoffAddresses'].forEach(containerId => {
     const container = document.getElementById(containerId);
+    console.log('[CustomerPortal] Container', containerId, ':', container ? 'found' : 'NOT FOUND');
     if (!container) return;
     
+    // If no addresses, show empty state
+    if (!state.savedAddresses || state.savedAddresses.length === 0) {
+      container.innerHTML = '<p class="empty-hint" style="padding: 12px; color: #6b7280; text-align: center;">No saved addresses yet. Add addresses from My Account tab.</p>';
+      console.log('[CustomerPortal] No addresses, showing empty state');
+      return;
+    }
+    
+    // Sort: favorites first, then by usage count
+    const sortedAddresses = [...state.savedAddresses].sort((a, b) => {
+      if (a.is_favorite && !b.is_favorite) return -1;
+      if (!a.is_favorite && b.is_favorite) return 1;
+      return (b.usage_count || 0) - (a.usage_count || 0);
+    });
+    
     // Use full_address field name from database
-    container.innerHTML = state.savedAddresses.map(addr => {
+    container.innerHTML = sortedAddresses.map(addr => {
       const address = addr.full_address || addr.address || '';
       const label = addr.label || 'Saved';
       const icon = label.toLowerCase() === 'home' ? '🏠' : 
                    label.toLowerCase() === 'work' ? '🏢' : 
-                   addr.address_type === 'airport' ? '✈️' :
-                   addr.is_favorite ? '⭐' : '📍';
+                   addr.address_type === 'airport' ? '✈️' : '📍';
+      const starClass = addr.is_favorite ? 'favorite-active' : '';
+      const starIcon = addr.is_favorite ? '⭐' : '☆';
       
       return `
-        <div class="saved-address-item" data-id="${addr.id}" data-address="${address}">
+        <div class="saved-address-item ${addr.is_favorite ? 'is-favorite' : ''}" data-id="${addr.id}" data-address="${address}">
           <span class="address-icon">${icon}</span>
           <div class="address-content">
-            <div class="address-label">${label}</div>
+            <div class="address-label">${label}${addr.is_favorite ? ' ⭐' : ''}</div>
             <div class="address-text">${address}</div>
           </div>
+          <button type="button" class="address-favorite ${starClass}" data-id="${addr.id}" title="Toggle favorite">${starIcon}</button>
           <button type="button" class="address-delete" data-id="${addr.id}" title="Remove">🗑️</button>
         </div>
       `;
@@ -1779,10 +1854,18 @@ function populateAddressDropdowns() {
     // Add click handlers
     container.querySelectorAll('.saved-address-item').forEach(item => {
       item.addEventListener('click', (e) => {
-        if (e.target.classList.contains('address-delete')) return;
+        if (e.target.classList.contains('address-delete') || e.target.classList.contains('address-favorite')) return;
         
         const addressType = containerId.includes('Pickup') ? 'pickup' : 'dropoff';
         selectSavedAddress(item.dataset.id, item.dataset.address, addressType);
+      });
+    });
+    
+    // Favorite handlers
+    container.querySelectorAll('.address-favorite').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleAddressFavorite(btn.dataset.id);
       });
     });
     
@@ -1877,10 +1960,43 @@ async function deleteSavedAddress(addressId) {
     
     state.savedAddresses = state.savedAddresses.filter(a => a.id != addressId);
     populateAddressDropdowns();
+    renderSavedAddresses();
     showToast('Address removed', 'success');
   } catch (err) {
     console.error('[CustomerPortal] Failed to delete address:', err);
     showToast('Failed to remove address', 'error');
+  }
+}
+
+async function toggleAddressFavorite(addressId) {
+  try {
+    const creds = getSupabaseCredentials();
+    const address = state.savedAddresses.find(a => a.id == addressId);
+    if (!address) return;
+    
+    const newFavoriteStatus = !address.is_favorite;
+    
+    await fetch(`${creds.url}/rest/v1/customer_addresses?id=eq.${addressId}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': creds.anonKey,
+        'Authorization': `Bearer ${state.session?.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ is_favorite: newFavoriteStatus })
+    });
+    
+    // Update local state
+    address.is_favorite = newFavoriteStatus;
+    
+    // Re-render both dropdowns and the saved addresses list
+    populateAddressDropdowns();
+    renderSavedAddresses();
+    
+    showToast(newFavoriteStatus ? 'Added to favorites ⭐' : 'Removed from favorites', 'success');
+  } catch (err) {
+    console.error('[CustomerPortal] Failed to toggle favorite:', err);
+    showToast('Failed to update favorite', 'error');
   }
 }
 
@@ -3448,20 +3564,41 @@ async function enrichTripsWithVehicleInfo(trips) {
 }
 
 // Helper to get pickup datetime from trip (handles multiple field name formats)
+// IMPORTANT: The datetime stored in DB represents the actual wall-clock time for pickup
+// We parse it as a local time (without timezone conversion) to display correctly
 function getTripPickupDateTime(trip) {
   // Try different field names used across the app
-  if (trip.pickup_datetime) {
-    return new Date(trip.pickup_datetime);
+  let dtString = trip.pickup_datetime || trip.pickup_date_time;
+  
+  if (dtString) {
+    // Remove timezone offset if present (e.g., +00:00) to parse as local time
+    // This ensures 13:59:00+00:00 displays as 1:59 PM, not converted to local TZ
+    dtString = dtString.replace(/[+-]\d{2}:\d{2}$/, '').replace(/Z$/, '');
+    
+    // Parse the components manually to avoid timezone conversion
+    const [datePart, timePart] = dtString.split('T');
+    if (datePart && timePart) {
+      const [year, month, day] = datePart.split('-').map(Number);
+      const [hours, minutes, seconds] = timePart.split(':').map(n => parseInt(n) || 0);
+      // Create date with local timezone interpretation
+      return new Date(year, month - 1, day, hours, minutes, seconds);
+    }
+    // Fallback for date-only strings
+    if (datePart) {
+      const [year, month, day] = datePart.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }
   }
-  if (trip.pickup_date_time) {
-    return new Date(trip.pickup_date_time);
-  }
+  
   // Try pu_date + pu_time (alternate schema)
   const puDate = trip.pu_date || trip.pickup_date || '';
   const puTime = trip.pu_time || trip.pickup_time || '00:00';
   if (puDate) {
-    return new Date(`${puDate}T${puTime}`);
+    const [year, month, day] = puDate.split('-').map(Number);
+    const [hours, minutes] = puTime.split(':').map(Number);
+    return new Date(year, month - 1, day, hours || 0, minutes || 0);
   }
+  
   // If no date fields, return far future date so trip shows as upcoming
   return new Date('2099-12-31');
 }
@@ -4444,6 +4581,7 @@ function updateAccountTab() {
   
   renderSavedPassengers();
   renderSavedAddresses();
+  renderFavoriteAirports();
 }
 
 function populateAccountAirportSelects() {
@@ -4639,21 +4777,128 @@ function renderSavedAddresses() {
     return;
   }
   
-  container.innerHTML = state.savedAddresses.map(a => `
-    <div class="saved-item">
-      <span class="saved-item-icon">${a.label === 'Home' ? '🏠' : a.label === 'Work' ? '🏢' : '📍'}</span>
-      <div class="saved-item-content">
-        <div class="saved-item-name">${a.label}</div>
-        <div class="saved-item-detail">${a.address}</div>
+  // Sort: favorites first, then by usage count
+  const sortedAddresses = [...state.savedAddresses].sort((a, b) => {
+    if (a.is_favorite && !b.is_favorite) return -1;
+    if (!a.is_favorite && b.is_favorite) return 1;
+    return (b.usage_count || 0) - (a.usage_count || 0);
+  });
+  
+  container.innerHTML = sortedAddresses.map(a => {
+    const icon = a.label === 'Home' ? '🏠' : a.label === 'Work' ? '🏢' : '📍';
+    const starClass = a.is_favorite ? 'favorite-active' : '';
+    const starIcon = a.is_favorite ? '⭐' : '☆';
+    const address = a.full_address || a.address || '';
+    
+    return `
+      <div class="saved-item ${a.is_favorite ? 'is-favorite' : ''}">
+        <span class="saved-item-icon">${icon}</span>
+        <div class="saved-item-content">
+          <div class="saved-item-name">${a.label}${a.is_favorite ? ' ⭐' : ''}</div>
+          <div class="saved-item-detail">${address}</div>
+        </div>
+        <button class="saved-item-favorite ${starClass}" data-id="${a.id}" title="Toggle favorite">${starIcon}</button>
+        <button class="saved-item-delete" data-id="${a.id}">🗑️</button>
       </div>
-      <button class="saved-item-delete" data-id="${a.id}">🗑️</button>
-    </div>
-  `).join('');
+    `;
+  }).join('');
+  
+  // Favorite handlers
+  container.querySelectorAll('.saved-item-favorite').forEach(btn => {
+    btn.addEventListener('click', () => toggleAddressFavorite(btn.dataset.id));
+  });
   
   // Delete handlers
   container.querySelectorAll('.saved-item-delete').forEach(btn => {
     btn.addEventListener('click', () => deleteSavedAddress(btn.dataset.id));
   });
+}
+
+function renderFavoriteAirports() {
+  const container = document.getElementById('favoriteAirportsList');
+  if (!container) return;
+  
+  const airports = state.airports || [];
+  
+  if (airports.length === 0) {
+    container.innerHTML = '<p class="empty-hint">No airports available</p>';
+    return;
+  }
+  
+  // Get customer's favorite airport codes
+  const favoriteAirportCodes = state.customer?.favorite_airports || [];
+  
+  // Sort: favorites first
+  const sortedAirports = [...airports].sort((a, b) => {
+    const aFav = favoriteAirportCodes.includes(a.code);
+    const bFav = favoriteAirportCodes.includes(b.code);
+    if (aFav && !bFav) return -1;
+    if (!aFav && bFav) return 1;
+    return 0;
+  });
+  
+  container.innerHTML = sortedAirports.map(airport => {
+    const isFavorite = favoriteAirportCodes.includes(airport.code);
+    const starClass = isFavorite ? 'favorite-active' : '';
+    const starIcon = isFavorite ? '⭐' : '☆';
+    
+    return `
+      <div class="saved-item ${isFavorite ? 'is-favorite' : ''}" data-code="${airport.code}">
+        <span class="saved-item-icon">✈️</span>
+        <div class="saved-item-content">
+          <div class="saved-item-name">${airport.code}${isFavorite ? ' ⭐' : ''}</div>
+          <div class="saved-item-detail">${airport.name}</div>
+        </div>
+        <button class="saved-item-favorite ${starClass}" data-code="${airport.code}" title="Toggle favorite">${starIcon}</button>
+      </div>
+    `;
+  }).join('');
+  
+  // Favorite handlers
+  container.querySelectorAll('.saved-item-favorite').forEach(btn => {
+    btn.addEventListener('click', () => toggleAirportFavorite(btn.dataset.code));
+  });
+}
+
+async function toggleAirportFavorite(airportCode) {
+  try {
+    const creds = getSupabaseCredentials();
+    
+    // Get current favorites
+    let favorites = state.customer?.favorite_airports || [];
+    
+    // Toggle
+    if (favorites.includes(airportCode)) {
+      favorites = favorites.filter(c => c !== airportCode);
+    } else {
+      favorites.push(airportCode);
+    }
+    
+    // Save to database
+    await fetch(`${creds.url}/rest/v1/accounts?id=eq.${state.customer?.id}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': creds.anonKey,
+        'Authorization': `Bearer ${state.session?.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ favorite_airports: favorites })
+    });
+    
+    // Update local state
+    state.customer.favorite_airports = favorites;
+    localStorage.setItem('current_customer', JSON.stringify(state.customer));
+    
+    // Re-render
+    renderFavoriteAirports();
+    populateAirportDropdowns();
+    
+    const isFav = favorites.includes(airportCode);
+    showToast(isFav ? `${airportCode} added to favorites ⭐` : `${airportCode} removed from favorites`, 'success');
+  } catch (err) {
+    console.error('[CustomerPortal] Failed to toggle airport favorite:', err);
+    showToast('Failed to update favorite', 'error');
+  }
 }
 
 async function deleteSavedPassenger(passengerId) {
@@ -4761,38 +5006,78 @@ function setupEventListeners() {
   });
   
   // Address selectors
-  document.getElementById('pickupAddressSelect')?.addEventListener('change', (e) => {
+  document.getElementById('pickupAddressSelect')?.addEventListener('change', async (e) => {
     const val = e.target.value;
+    console.log('[CustomerPortal] Pickup address select changed to:', val);
+    
+    // Show/hide appropriate containers
     document.getElementById('pickupAddressNew').classList.toggle('hidden', val !== 'new');
     document.getElementById('airportPickupDetails').classList.toggle('hidden', val !== 'airport');
-    document.getElementById('savedPickupAddresses').classList.toggle('hidden', val !== 'saved');
+    
+    // Handle saved addresses - always populate when selected
+    if (val === 'saved') {
+      const container = document.getElementById('savedPickupAddresses');
+      console.log('[CustomerPortal] Saved pickup selected, addressesLoaded:', state.addressesLoaded, 'count:', state.savedAddresses?.length || 0);
+      
+      // Show container immediately
+      if (container) container.classList.remove('hidden');
+      
+      // If addresses haven't been loaded yet, fetch them
+      if (!state.addressesLoaded) {
+        if (container) {
+          container.innerHTML = '<p style="padding: 12px; color: #6b7280; text-align: center;">Loading addresses...</p>';
+        }
+        await loadSavedAddresses();
+        console.log('[CustomerPortal] After loading, addressesLoaded:', state.addressesLoaded, 'count:', state.savedAddresses?.length || 0);
+      }
+      
+      // Always populate to ensure content is fresh
+      populateAddressDropdowns();
+    } else {
+      document.getElementById('savedPickupAddresses').classList.add('hidden');
+    }
     
     if (!val || val === 'airport' || val === 'new') {
       state.selectedPickupAddress = null;
-    }
-    
-    // Repopulate saved addresses when "saved" is selected to ensure they appear
-    if (val === 'saved') {
-      populateAddressDropdowns();
     }
     
     // Auto-select trip type based on airport selection
     updateTripTypeFromAddresses();
   });
   
-  document.getElementById('dropoffAddressSelect')?.addEventListener('change', (e) => {
+  document.getElementById('dropoffAddressSelect')?.addEventListener('change', async (e) => {
     const val = e.target.value;
+    console.log('[CustomerPortal] Dropoff address select changed to:', val);
+    
+    // Show/hide appropriate containers
     document.getElementById('dropoffAddressNew').classList.toggle('hidden', val !== 'new');
     document.getElementById('airportDropoffDetails').classList.toggle('hidden', val !== 'airport');
-    document.getElementById('savedDropoffAddresses').classList.toggle('hidden', val !== 'saved');
+    
+    // Handle saved addresses - always populate when selected
+    if (val === 'saved') {
+      const container = document.getElementById('savedDropoffAddresses');
+      console.log('[CustomerPortal] Saved dropoff selected, addressesLoaded:', state.addressesLoaded, 'count:', state.savedAddresses?.length || 0);
+      
+      // Show container immediately
+      if (container) container.classList.remove('hidden');
+      
+      // If addresses haven't been loaded yet, fetch them
+      if (!state.addressesLoaded) {
+        if (container) {
+          container.innerHTML = '<p style="padding: 12px; color: #6b7280; text-align: center;">Loading addresses...</p>';
+        }
+        await loadSavedAddresses();
+        console.log('[CustomerPortal] After loading, addressesLoaded:', state.addressesLoaded, 'count:', state.savedAddresses?.length || 0);
+      }
+      
+      // Always populate to ensure content is fresh
+      populateAddressDropdowns();
+    } else {
+      document.getElementById('savedDropoffAddresses').classList.add('hidden');
+    }
     
     if (!val || val === 'airport' || val === 'new') {
       state.selectedDropoffAddress = null;
-    }
-    
-    // Repopulate saved addresses when "saved" is selected to ensure they appear
-    if (val === 'saved') {
-      populateAddressDropdowns();
     }
     
     // Auto-select trip type based on airport selection

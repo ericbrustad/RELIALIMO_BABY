@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,22 +15,25 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
+import { useTheme } from '../context';
+import { spacing, fontSize, borderRadius } from '../config/theme';
+import type { RootStackParamList } from '../types';
 
 const { width } = Dimensions.get('window');
 
 const LOGO_URL = 'https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/reliabull%20limo%20logowhitecropped.png';
 
-type RootStackParamList = {
-  Welcome: { driverName: string; driverId: string };
-  Dashboard: undefined;
-};
-
 type RouteParams = RouteProp<RootStackParamList, 'Welcome'>;
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export function WelcomeScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<Nav>();
   const route = useRoute<RouteParams>();
-  const { driverName, driverId } = route.params;
+  const { driverName, driverId, portalSlug } = route.params;
+  const { colors } = useTheme();
+  
+  // Create dynamic styles based on current theme
+  const styles = useMemo(() => createStyles(colors), [colors]);
   
   const [locationGranted, setLocationGranted] = useState(false);
   const [requestingLocation, setRequestingLocation] = useState(false);
@@ -104,7 +107,9 @@ export function WelcomeScreen() {
   };
   
   // Generate driver portal URL
-  const portalUrl = `driver.relialimo.com/${driverName.toLowerCase().replace(/\s+/g, '_')}`;
+  const portalUrl = portalSlug 
+    ? `driver.relialimo.com/${portalSlug}` 
+    : `driver.relialimo.com/${driverName.toLowerCase().replace(/\s+/g, '_')}`;
   
   return (
     <SafeAreaView style={styles.container}>
@@ -196,10 +201,11 @@ export function WelcomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Create dynamic styles based on theme colors
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,

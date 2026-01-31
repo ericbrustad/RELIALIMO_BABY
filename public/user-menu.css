@@ -448,6 +448,40 @@
   color: white;
 }
 
+/* Timezone Selector in Dropdown Menu */
+.timezone-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  cursor: default;
+}
+
+.timezone-menu-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.timezone-dropdown {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  font-size: 13px;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.timezone-dropdown:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.timezone-dropdown option {
+  padding: 8px;
+}
+
 html[data-layout="horizontal"] .default-selector .default-select option {
   background: #333;
 }

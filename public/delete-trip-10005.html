@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete Trip 10005</title>
+    <script src="env.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 40px; max-width: 600px; margin: 0 auto; text-align: center; }
+        .btn { background: #dc3545; color: white; padding: 20px 40px; border: none; border-radius: 8px; cursor: pointer; font-size: 18px; }
+        .btn:hover { background: #c82333; }
+        .result { margin-top: 20px; padding: 20px; border-radius: 8px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>🗑️ Delete Trip 10005</h1>
+    <p>Click the button to delete reservation ID 10005</p>
+    
+    <button class="btn" onclick="deleteTrip()">Delete Trip 10005</button>
+    
+    <div id="result"></div>
+    
+    <script type="module">
+        import supabaseDb from './supabase-db.js';
+        
+        window.deleteTrip = async function() {
+            const result = document.getElementById('result');
+            result.innerHTML = '<p>Deleting...</p>';
+            
+            try {
+                // Direct delete using the Supabase client
+                const { error } = await supabaseDb.supabase
+                    .from('reservations')
+                    .delete()
+                    .eq('id', 10005);
+                
+                if (error) throw error;
+                
+                result.innerHTML = '<div class="result success">✅ Trip 10005 deleted successfully!</div>';
+                console.log('Deleted trip 10005');
+            } catch (err) {
+                console.error('Error:', err);
+                result.innerHTML = '<div class="result error">❌ Error: ' + err.message + '</div>';
+            }
+        };
+        
+        // Check if trip exists
+        async function checkTrip() {
+            try {
+                const { data, error } = await supabaseDb.supabase
+                    .from('reservations')
+                    .select('id, confirmation_number, driver_status')
+                    .eq('id', 10005)
+                    .single();
+                
+                if (data) {
+                    console.log('Trip 10005 found:', data);
+                    document.querySelector('p').innerHTML = 
+                        'Trip found: #' + data.confirmation_number + ' (Status: ' + (data.driver_status || 'none') + ')';
+                } else {
+                    document.querySelector('p').innerHTML = 'Trip 10005 not found in database.';
+                }
+            } catch (err) {
+                console.log('Trip check error:', err.message);
+            }
+        }
+        
+        checkTrip();
+    </script>
+</body>
+</html>

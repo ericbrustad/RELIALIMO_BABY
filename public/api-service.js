@@ -359,21 +359,22 @@ function buildNotesField(payload) {
 
 /**
  * Fetch the default driver (is_default_driver = true)
- * Returns the first active default driver or null if none configured
+ * Returns the first active default driver with their assigned vehicle or null if none configured
  */
 export async function getDefaultDriver() {
   try {
-    const drivers = await request('/drivers?is_default_driver=eq.true&is_active=eq.true&select=id,first_name,last_name,phone,email&limit=1');
+    const drivers = await request('/drivers?is_default_driver=eq.true&is_active=eq.true&select=id,first_name,last_name,phone,email,assigned_vehicle_id&limit=1');
     if (drivers && drivers.length > 0) {
       const driver = drivers[0];
-      console.log('📋 Found default driver:', driver.first_name, driver.last_name);
+      console.log('📋 Found default driver:', driver.first_name, driver.last_name, 'vehicle:', driver.assigned_vehicle_id);
       return {
         id: driver.id,
         name: `${driver.first_name || ''} ${driver.last_name || ''}`.trim(),
         firstName: driver.first_name,
         lastName: driver.last_name,
         phone: driver.phone,
-        email: driver.email
+        email: driver.email,
+        assignedVehicleId: driver.assigned_vehicle_id
       };
     }
     console.log('📋 No default driver configured');
@@ -414,33 +415,68 @@ export async function getDefaultVehicleType() {
 
 /**
  * Auto-apply default driver and vehicle to a reservation payload
- * Only applies if:
- * - farm_option is 'in-house' (or not set, defaults to in-house)
- * - No driver is already assigned
+ * When a default driver is configured:
+ * - Automatically assigns the default driver
+ * - Sets vehicle type to the default vehicle type
+ * - Assigns the driver's fleet vehicle
+ * - Sets status to "assigned" (not "offered" like farmout)
+ * - Sets farmout_mode to "automatic"
+ * - Sets farmout_status to "in_house_assigned" for "In House Farmout" display
+ * - Keeps farm_option as "in-house"
  * Returns the modified payload
  */
 export async function applyDefaultDriverAndVehicle(payload) {
   const details = payload.details || {};
   const farmOption = details.farmOption || payload.farm_option || 'in-house';
   
-  // Only auto-assign for in-house reservations
-  if (farmOption !== 'in-house') {
-    console.log('📋 Farm option is not in-house, skipping auto-assignment');
+  // Only auto-assign for in-house reservations (or reservations without explicit farm-out)
+  if (farmOption === 'farm-out') {
+    console.log('📋 Farm option is farm-out, skipping in-house auto-assignment');
     return payload;
   }
   
   // Check if driver is already assigned
   const hasDriver = details.driverId || payload.assigned_driver_id;
   
-  if (!hasDriver) {
-    // Fetch and assign default driver
-    const defaultDriver = await getDefaultDriver();
-    if (defaultDriver) {
-      console.log('📋 Auto-assigning default driver:', defaultDriver.name);
-      if (!payload.details) payload.details = {};
-      payload.details.driverId = defaultDriver.id;
-      payload.details.driverName = defaultDriver.name;
+  // Fetch default driver first to see if auto-assignment is needed
+  const defaultDriver = await getDefaultDriver();
+  
+  if (defaultDriver && !hasDriver) {
+    console.log('📋 [IN-HOUSE FARMOUT] Auto-assigning default driver:', defaultDriver.name);
+    
+    // Initialize details if not present
+    if (!payload.details) payload.details = {};
+    
+    // Assign the default driver
+    payload.details.driverId = defaultDriver.id;
+    payload.details.driverName = defaultDriver.name;
+    payload.assigned_driver_id = defaultDriver.id;
+    payload.assigned_driver_name = defaultDriver.name;
+    
+    // Assign the driver's fleet vehicle if available
+    if (defaultDriver.assignedVehicleId) {
+      console.log('📋 [IN-HOUSE FARMOUT] Auto-assigning fleet vehicle:', defaultDriver.assignedVehicleId);
+      payload.details.fleetVehicleId = defaultDriver.assignedVehicleId;
+      payload.fleet_vehicle_id = defaultDriver.assignedVehicleId;
     }
+    
+    // Set status to assigned (not offered - goes directly to driver app)
+    payload.details.driverStatus = 'assigned';
+    payload.driver_status = 'assigned';
+    
+    // Set farmout mode to automatic (handled by system)
+    payload.farmout_mode = 'automatic';
+    payload.details.farmoutMode = 'automatic';
+    
+    // Set farmout status to in_house_assigned (displays as "In House Farmout")
+    payload.farmout_status = 'in_house_assigned';
+    payload.details.farmoutStatus = 'in_house_assigned';
+    
+    // Keep farm_option as in-house
+    payload.farm_option = 'in-house';
+    payload.details.farmOption = 'in-house';
+    
+    console.log('📋 [IN-HOUSE FARMOUT] Reservation set for immediate driver assignment');
   }
   
   // Check if vehicle type is already set
@@ -453,6 +489,7 @@ export async function applyDefaultDriverAndVehicle(payload) {
       console.log('📋 Auto-assigning default vehicle type:', defaultVehicleType);
       if (!payload.details) payload.details = {};
       payload.details.vehicleType = defaultVehicleType;
+      payload.vehicle_type = defaultVehicleType;
     }
   }
   

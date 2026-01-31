@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,39 +10,42 @@ import {
   Platform,
   ScrollView,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../config/supabase';
+import { useTheme } from '../context';
+import { spacing, fontSize, borderRadius } from '../config/theme';
+import type { RootStackParamList } from '../types';
 
 const { width } = Dimensions.get('window');
 
 const LOGO_URL = 'https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/reliabull%20limo%20logowhitecropped.png';
 
-type RootStackParamList = {
-  Auth: undefined;
-  Register: undefined;
-  RegisterCompany: { userData: any };
-  RegisterVehicle: { userData: any; companyData: any };
-  Dashboard: undefined;
-};
-
 type RouteParams = RouteProp<RootStackParamList, 'RegisterCompany'>;
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-type Company = {
+// Match web portal - uses affiliates table
+type Affiliate = {
   id: string;
-  name: string;
-  address?: string;
+  company_name: string;
+  primary_address?: string;
   city?: string;
   state?: string;
   phone?: string;
+  organization_id?: string;
 };
 
 export function RegisterCompanyScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<Nav>();
   const route = useRoute<RouteParams>();
   const { userData } = route.params;
+  const { colors } = useTheme();
+  
+  // Create dynamic styles based on current theme
+  const styles = useMemo(() => createStyles(colors), [colors]);
   
   // Company state
   const [companyName, setCompanyName] = useState('');
@@ -52,37 +55,42 @@ export function RegisterCompanyScreen() {
   const [companyZip, setCompanyZip] = useState('');
   const [companyPhone, setCompanyPhone] = useState('');
   
-  // Matching state
-  const [matchingCompanies, setMatchingCompanies] = useState<Company[]>([]);
-  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  // Matching state - uses affiliates table like web portal
+  const [matchingAffiliates, setMatchingAffiliates] = useState<Affiliate[]>([]);
+  const [selectedAffiliate, setSelectedAffiliate] = useState<Affiliate | null>(null);
   const [showMatches, setShowMatches] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   
-  // Search for matching companies
+  // Search for matching affiliates (like web portal)
   useEffect(() => {
-    const searchCompanies = async () => {
+    const searchAffiliates = async () => {
       if (companyName.length < 2) {
-        setMatchingCompanies([]);
+        setMatchingAffiliates([]);
         setShowMatches(false);
         return;
       }
       
+      setIsSearching(true);
       try {
         const { data, error } = await supabase
-          .from('companies')
-          .select('id, name, address, city, state, phone')
-          .ilike('name', `%${companyName}%`)
+          .from('affiliates')
+          .select('id, company_name, primary_address, city, state, phone, organization_id')
+          .ilike('company_name', `%${companyName}%`)
           .limit(5);
         
         if (!error && data) {
-          setMatchingCompanies(data);
+          setMatchingAffiliates(data);
           setShowMatches(data.length > 0);
         }
       } catch (err) {
         console.log('[RegisterCompany] Search error:', err);
+      } finally {
+        setIsSearching(false);
       }
     };
     
-    const timer = setTimeout(searchCompanies, 300);
+    const timer = setTimeout(searchAffiliates, 300);
     return () => clearTimeout(timer);
   }, [companyName]);
   
@@ -94,35 +102,83 @@ export function RegisterCompanyScreen() {
     return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
   };
   
-  // Select existing company
-  const handleSelectCompany = (company: Company) => {
-    setSelectedCompany(company);
-    setCompanyName(company.name);
+  // Select existing affiliate
+  const handleSelectAffiliate = (affiliate: Affiliate) => {
+    setSelectedAffiliate(affiliate);
+    setCompanyName(affiliate.company_name);
     setShowMatches(false);
   };
   
   // Clear selection
   const handleClearSelection = () => {
-    setSelectedCompany(null);
+    setSelectedAffiliate(null);
   };
   
-  // Continue to vehicle info
-  const handleContinue = () => {
-    const companyData = selectedCompany
-      ? { existingCompanyId: selectedCompany.id, companyName: selectedCompany.name }
-      : {
-          companyName: companyName.trim() || null,
-          companyAddress: companyAddress.trim() || null,
-          companyCity: companyCity.trim() || null,
-          companyState: companyState.trim() || null,
-          companyZip: companyZip.trim() || null,
-          companyPhone: companyPhone.replace(/\D/g, '') || null,
-        };
+  // Create new affiliate if needed, then continue
+  const handleContinue = async () => {
+    // If affiliate selected, use it directly
+    if (selectedAffiliate) {
+      navigation.navigate('RegisterVehicle', {
+        userData,
+        affiliateId: selectedAffiliate.id,
+        affiliateName: selectedAffiliate.company_name,
+      });
+      return;
+    }
     
-    navigation.navigate('RegisterVehicle', {
-      userData,
-      companyData,
-    });
+    // If no company name, skip (independent driver)
+    if (!companyName.trim()) {
+      navigation.navigate('RegisterVehicle', {
+        userData,
+      });
+      return;
+    }
+    
+    // Create new affiliate
+    setIsCreating(true);
+    try {
+      const affiliateData = {
+        company_name: companyName.trim(),
+        primary_address: companyAddress.trim() || null,
+        city: companyCity.trim() || null,
+        state: companyState.trim() || null,
+        zip: companyZip.trim() || null,
+        phone: companyPhone.replace(/\D/g, '') || null,
+      };
+      
+      console.log('[RegisterCompany] Creating affiliate:', affiliateData);
+      
+      const { data: newAffiliate, error } = await supabase
+        .from('affiliates')
+        .insert(affiliateData)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('[RegisterCompany] Affiliate creation error:', error);
+        // Continue without affiliate if creation fails
+        navigation.navigate('RegisterVehicle', {
+          userData,
+        });
+        return;
+      }
+      
+      console.log('[RegisterCompany] ✅ Affiliate created:', newAffiliate.id);
+      
+      navigation.navigate('RegisterVehicle', {
+        userData,
+        affiliateId: newAffiliate.id,
+        affiliateName: newAffiliate.company_name,
+      });
+    } catch (err) {
+      console.error('[RegisterCompany] Error:', err);
+      // Continue without affiliate
+      navigation.navigate('RegisterVehicle', {
+        userData,
+      });
+    } finally {
+      setIsCreating(false);
+    }
   };
   
   // Go back
@@ -188,26 +244,29 @@ export function RegisterCompanyScreen() {
                 value={companyName}
                 onChangeText={(text) => {
                   setCompanyName(text);
-                  if (selectedCompany) setSelectedCompany(null);
+                  if (selectedAffiliate) setSelectedAffiliate(null);
                 }}
                 autoCapitalize="words"
               />
+              {isSearching && (
+                <ActivityIndicator color={colors.primary} style={{ marginTop: 8 }} />
+              )}
               
-              {/* Matching Companies Dropdown */}
-              {showMatches && !selectedCompany && (
+              {/* Matching Affiliates Dropdown */}
+              {showMatches && !selectedAffiliate && (
                 <View style={styles.matchResults}>
-                  {matchingCompanies.map((company) => (
+                  {matchingAffiliates.map((affiliate) => (
                     <TouchableOpacity
-                      key={company.id}
+                      key={affiliate.id}
                       style={styles.matchItem}
-                      onPress={() => handleSelectCompany(company)}
+                      onPress={() => handleSelectAffiliate(affiliate)}
                     >
                       <Text style={styles.matchIcon}>🏢</Text>
                       <View style={styles.matchInfo}>
-                        <Text style={styles.matchName}>{company.name}</Text>
-                        {company.city && company.state && (
+                        <Text style={styles.matchName}>{affiliate.company_name}</Text>
+                        {affiliate.city && affiliate.state && (
                           <Text style={styles.matchAddress}>
-                            {company.city}, {company.state}
+                            {affiliate.city}, {affiliate.state}
                           </Text>
                         )}
                       </View>
@@ -217,27 +276,27 @@ export function RegisterCompanyScreen() {
               )}
             </View>
             
-            {/* Selected Company Card */}
-            {selectedCompany && (
+            {/* Selected Affiliate Card */}
+            {selectedAffiliate && (
               <View style={styles.selectedCard}>
                 <View style={styles.selectedHeader}>
                   <Text style={styles.selectedIcon}>🏢</Text>
-                  <Text style={styles.selectedName}>{selectedCompany.name}</Text>
+                  <Text style={styles.selectedName}>{selectedAffiliate.company_name}</Text>
                   <TouchableOpacity onPress={handleClearSelection}>
                     <Text style={styles.clearBtn}>✕</Text>
                   </TouchableOpacity>
                 </View>
-                {(selectedCompany.address || selectedCompany.city) && (
+                {(selectedAffiliate.primary_address || selectedAffiliate.city) && (
                   <Text style={styles.selectedDetails}>
-                    {selectedCompany.address && `${selectedCompany.address}, `}
-                    {selectedCompany.city}, {selectedCompany.state}
+                    {selectedAffiliate.primary_address && `${selectedAffiliate.primary_address}, `}
+                    {selectedAffiliate.city}, {selectedAffiliate.state}
                   </Text>
                 )}
               </View>
             )}
             
             {/* New Company Form (only if no selection) */}
-            {!selectedCompany && (
+            {!selectedAffiliate && (
               <>
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Address</Text>
@@ -308,11 +367,15 @@ export function RegisterCompanyScreen() {
             
             {/* Navigation Buttons */}
             <View style={styles.buttonRow}>
-              <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
+              <TouchableOpacity style={styles.backBtn} onPress={handleBack} disabled={isCreating}>
                 <Text style={styles.backBtnText}>← Back</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.continueBtn} onPress={handleContinue}>
-                <Text style={styles.continueBtnText}>Continue →</Text>
+              <TouchableOpacity style={styles.continueBtn} onPress={handleContinue} disabled={isCreating}>
+                {isCreating ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.continueBtnText}>Continue →</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -322,10 +385,11 @@ export function RegisterCompanyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Create dynamic styles based on theme colors
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.background,
   },
   keyboardView: {
     flex: 1,
@@ -348,9 +412,9 @@ const styles = StyleSheet.create({
   tagline: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#ffffff',
+    color: colors.text,
     marginTop: 8,
-    textShadowColor: 'rgba(99, 102, 241, 0.8)',
+    textShadowColor: 'rgba(255, 107, 107, 0.8)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 15,
   },
@@ -371,12 +435,12 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   stepActive: {
-    backgroundColor: '#6366f1',
-    borderColor: '#6366f1',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   stepComplete: {
-    backgroundColor: '#22c55e',
-    borderColor: '#22c55e',
+    backgroundColor: colors.success,
+    borderColor: colors.success,
   },
   stepText: {
     color: '#ffffff',
@@ -390,25 +454,25 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   stepLineActive: {
-    backgroundColor: '#22c55e',
+    backgroundColor: colors.success,
   },
   formContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.border,
   },
   title: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#ffffff',
+    color: colors.text,
     marginBottom: 4,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 14,
-    color: '#888',
+    color: colors.textSecondary,
     marginBottom: 20,
     textAlign: 'center',
   },
@@ -421,31 +485,31 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#aaa',
+    color: colors.textSecondary,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 16,
-    color: '#ffffff',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: fontSize.md,
+    color: colors.text,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.border,
   },
   phoneInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: colors.border,
   },
   countryCode: {
     paddingLeft: 12,
     paddingRight: 8,
     fontSize: 14,
-    color: '#fff',
+    color: colors.text,
   },
   phoneInput: {
     flex: 1,
@@ -454,10 +518,10 @@ const styles = StyleSheet.create({
   },
   matchResults: {
     backgroundColor: 'rgba(30, 30, 50, 0.98)',
-    borderRadius: 10,
+    borderRadius: borderRadius.md,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.5)',
+    borderColor: colors.primary,
     overflow: 'hidden',
   },
   matchItem: {
@@ -465,7 +529,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: colors.border,
   },
   matchIcon: {
     fontSize: 20,
@@ -475,22 +539,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   matchName: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '500',
   },
   matchAddress: {
-    color: '#888',
+    color: colors.textSecondary,
     fontSize: 13,
     marginTop: 2,
   },
   selectedCard: {
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 107, 107, 0.15)',
+    borderRadius: borderRadius.lg,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.4)',
+    borderColor: colors.primary,
   },
   selectedHeader: {
     flexDirection: 'row',
@@ -502,17 +566,17 @@ const styles = StyleSheet.create({
   },
   selectedName: {
     flex: 1,
-    color: '#fff',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '600',
   },
   clearBtn: {
-    color: '#888',
+    color: colors.textSecondary,
     fontSize: 18,
     padding: 4,
   },
   selectedDetails: {
-    color: '#aaa',
+    color: colors.textSecondary,
     fontSize: 13,
     marginTop: 6,
     marginLeft: 28,
@@ -525,25 +589,25 @@ const styles = StyleSheet.create({
   backBtn: {
     flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
     alignItems: 'center',
   },
   backBtnText: {
-    color: '#fff',
-    fontSize: 16,
+    color: colors.text,
+    fontSize: fontSize.md,
     fontWeight: '500',
   },
   continueBtn: {
     flex: 1,
-    backgroundColor: '#6366f1',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
     alignItems: 'center',
   },
   continueBtnText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: fontSize.md,
     fontWeight: '600',
   },
 });

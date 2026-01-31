@@ -570,6 +570,20 @@ function renderSkeleton(container) {
             <span>System Settings</span>
           </button>
 
+          <!-- Global Timezone Selector -->
+          <div class="menu-item timezone-menu-item">
+            <span class="menu-icon">🌐</span>
+            <select id="globalTimezoneSelect" class="timezone-dropdown">
+              <option value="America/New_York">Eastern Time (ET)</option>
+              <option value="America/Chicago" selected>Central Time (CT)</option>
+              <option value="America/Denver">Mountain Time (MT)</option>
+              <option value="America/Phoenix">Arizona Time (AZ)</option>
+              <option value="America/Los_Angeles">Pacific Time (PT)</option>
+              <option value="America/Anchorage">Alaska Time (AK)</option>
+              <option value="Pacific/Honolulu">Hawaii Time (HI)</option>
+            </select>
+          </div>
+
           <div class="menu-divider"></div>
 
           <button type="button" class="menu-item" id="userMenuSignIn" style="display:none;">
@@ -846,6 +860,60 @@ function updateAutoFarmoutUI(enabled) {
   } catch (e) { /* ignore */ }
 }
 
+// Global Timezone Selector
+async function wireTimezoneSelector() {
+  const select = document.getElementById('globalTimezoneSelect');
+  if (!select || !supabase) return;
+  
+  try {
+    // Load current timezone from organization
+    const orgId = window.ENV?.ORGANIZATION_ID || 
+                 localStorage.getItem('relia_organization_id') ||
+                 '54eb6ce7-ba97-4198-8566-6ac075828160';
+    
+    const { data, error } = await supabase
+      .from('organizations')
+      .select('timezone')
+      .eq('id', orgId)
+      .single();
+    
+    if (!error && data?.timezone) {
+      select.value = data.timezone;
+      localStorage.setItem('organization_timezone', data.timezone);
+    }
+    
+    // Wire up change handler
+    select.addEventListener('change', async () => {
+      const newTimezone = select.value;
+      
+      const { error: updateError } = await supabase
+        .from('organizations')
+        .update({ timezone: newTimezone, updated_at: new Date().toISOString() })
+        .eq('id', orgId);
+      
+      if (updateError) {
+        console.error('Failed to update timezone:', updateError);
+        return;
+      }
+      
+      localStorage.setItem('organization_timezone', newTimezone);
+      
+      // Broadcast change
+      window.postMessage({ type: 'timezoneChanged', timezone: newTimezone }, '*');
+      localStorage.setItem('timezone_updated', Date.now().toString());
+      
+      // Show notification
+      const label = select.options[select.selectedIndex].text;
+      console.log(`✅ Timezone updated to: ${label}`);
+      
+      // Refresh any visible date/time displays
+      window.dispatchEvent(new CustomEvent('timezoneUpdated', { detail: { timezone: newTimezone } }));
+    });
+  } catch (err) {
+    console.warn('Failed to wire timezone selector:', err);
+  }
+}
+
 // Default Driver/Vehicle Selectors
 async function wireDefaultSelectors() {
   const driverSelect = document.getElementById('defaultDriverSelect');
@@ -856,6 +924,9 @@ async function wireDefaultSelectors() {
   // Load drivers and vehicles from database
   await loadDefaultDrivers();
   await loadDefaultVehicles();
+  
+  // Wire up timezone selector
+  await wireTimezoneSelector();
   
   // Wire up change handlers
   if (driverSelect) {
@@ -948,12 +1019,56 @@ async function setDefaultDriver(driverId) {
     
     // Then set the new default if selected
     if (driverId) {
+      // Get the driver's full info including assigned vehicle
+      const { data: driver, error: driverError } = await supabase
+        .from('drivers')
+        .select('id, first_name, last_name, assigned_vehicle_id')
+        .eq('id', driverId)
+        .single();
+      
+      if (driverError) throw driverError;
+      
       await supabase
         .from('drivers')
         .update({ is_default_driver: true })
         .eq('id', driverId);
       
       localStorage.setItem('defaultDriverId', driverId);
+      
+      // Update ALL unassigned in-house reservations with this driver
+      const driverName = `${driver.first_name || ''} ${driver.last_name || ''}`.trim();
+      
+      const updateData = {
+        assigned_driver_id: driver.id,
+        assigned_driver_name: driverName,
+        driver_status: 'assigned',
+        farmout_mode: 'automatic',
+        farmout_status: 'in_house_assigned',
+        farm_option: 'in-house'
+      };
+      
+      // Also assign the driver's vehicle if available
+      if (driver.assigned_vehicle_id) {
+        updateData.fleet_vehicle_id = driver.assigned_vehicle_id;
+      }
+      
+      // Update reservations that are:
+      // 1. In-house (not farm-out)
+      // 2. Don't have a driver assigned yet
+      // 3. Not completed/cancelled
+      const { data: updated, error: updateError } = await supabase
+        .from('reservations')
+        .update(updateData)
+        .or('farm_option.is.null,farm_option.eq.in-house')
+        .is('assigned_driver_id', null)
+        .not('status', 'in', '("completed","cancelled")')
+        .select('id, confirmation_number');
+      
+      if (updateError) {
+        console.error('Error updating reservations with default driver:', updateError);
+      } else {
+        console.log(`✅ Auto-assigned ${updated?.length || 0} reservations to default driver:`, driverName);
+      }
     } else {
       localStorage.removeItem('defaultDriverId');
     }
@@ -961,8 +1076,13 @@ async function setDefaultDriver(driverId) {
     // Reload the dropdown to show updated state
     await loadDefaultDrivers();
     
-    // Broadcast change
+    // Broadcast change to refresh reservation lists
     window.postMessage({ type: 'defaultDriverChanged', driverId }, '*');
+    
+    // Trigger reservation list refresh if available
+    if (window.dispatchEvent) {
+      window.dispatchEvent(new CustomEvent('reservationsUpdated'));
+    }
   } catch (err) {
     console.error('Failed to set default driver:', err);
   }

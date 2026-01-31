@@ -412,6 +412,11 @@ class ReservationsList {
     const farmoutStatus = (res.farmout_status || '').toString().toLowerCase();
     const dbStatus = (res.status || 'pending').toString().toLowerCase();
     
+    // Check for In House Farmout (auto-assigned to default driver)
+    if (farmoutStatus === 'in_house_assigned' || farmoutStatus === 'in_house_farmout') {
+      return { class: 'in_house_farmout', label: 'In House Farmout' };
+    }
+    
     // Check if this is a farm-out reservation
     const isFarmOut = farmOption === 'farm_out' || farmOption === 'farmout';
     
@@ -691,14 +696,44 @@ class ReservationsList {
   
   formatDate(dateString) {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+    // Parse as local time - strip timezone suffix to prevent conversion
+    const stripped = dateString.replace(/[+-]\d{2}:\d{2}$/, '').replace(/Z$/, '');
+    const [datePart] = stripped.split('T');
+    if (datePart) {
+      const [year, month, day] = datePart.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+    }
+    return '';
   }
   
   formatTime(dateString) {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    // Parse the datetime as LITERAL local time (no timezone conversion)
+    // Strip timezone suffix like +00:00 or Z so we get the raw time value
+    const stripped = dateString.replace(/[+-]\d{2}:\d{2}$/, '').replace(/Z$/, '');
+    
+    // Extract time from ISO format like "2026-01-31T13:59:00"
+    const timeMatch = stripped.match(/T(\d{1,2}):(\d{2})/);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1], 10);
+      const minutes = timeMatch[2];
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      return `${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
+    }
+    
+    // Fallback: try to extract time from string like "HH:MM" or "HH:MM:SS"
+    const plainTimeMatch = dateString.match(/^(\d{1,2}):(\d{2})/);
+    if (plainTimeMatch) {
+      let hours = parseInt(plainTimeMatch[1], 10);
+      const minutes = plainTimeMatch[2];
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      return `${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
+    }
+    
+    return '';
   }
 
   resolveDriverStatus(res) {
@@ -707,7 +742,7 @@ class ReservationsList {
                    res.form_snapshot?.details?.driverStatus || '';
     
     const statusMap = {
-      'getting_ready': { label: 'Getting Ready', class: 'status-getting-ready' },
+      'enroute': { label: 'En Route', class: 'status-on-the-way' },
       'on_the_way': { label: 'On The Way', class: 'status-on-the-way' },
       'arrived': { label: 'Arrived', class: 'status-arrived' },
       'waiting': { label: 'Waiting', class: 'status-waiting' },

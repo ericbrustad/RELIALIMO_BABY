@@ -9,17 +9,17 @@ import { colors } from './src/config/theme';
 import type { RootStackParamList } from './src/types';
 
 // Lazy load notification service to prevent crash on startup
-let notificationService: any = null;
+let notificationFunctions: any = null;
 const getNotificationService = async () => {
-  if (!notificationService) {
+  if (!notificationFunctions) {
     try {
       const module = await import('./src/services/notifications');
-      notificationService = module.notificationService;
+      notificationFunctions = module;
     } catch (e) {
       console.log('[Notifications] Service not available:', e);
     }
   }
-  return notificationService;
+  return notificationFunctions;
 };
 
 // Custom light theme for navigation (DriverAnywhere style)

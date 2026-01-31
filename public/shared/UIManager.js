@@ -22,45 +22,54 @@ const FARMOUT_STATUS_ALIASES = {
   passenger_on_boarding: 'passenger_onboard',
   inhouse: 'in_house',
   'in-house': 'in_house',
-  in_house_dispatch: 'in_house'
+  in_house_dispatch: 'in_house',
+  // Driver App status mappings
+  waiting: 'waiting_at_pickup',
+  waiting_at_pickup: 'waiting_at_pickup',
+  driver_waiting_at_pickup: 'waiting_at_pickup',
+  customer_in_car: 'passenger_onboard',
+  driving_passenger: 'passenger_onboard',
+  on_the_way: 'enroute',
+  driver_en_route: 'enroute'
 };
 
 const FARMOUT_STATUS_LABELS = {
-  unassigned: 'FU',
-  farm_out_unassigned: 'FU',
-  farmout_unassigned: 'FU',
-  offered: 'FO',
-  assigned: 'FA',
-  farm_out_assigned: 'FA',
-  farmout_assigned: 'FA',
-  declined: 'FD',
-  enroute: 'FER',
-  'en_route': 'FER',
-  arrived: 'FAR',
+  unassigned: 'UNASSIGNED',
+  farm_out_unassigned: 'UNASSIGNED',
+  farmout_unassigned: 'UNASSIGNED',
+  offered: 'OFFERED',
+  assigned: 'ASSIGNED',
+  farm_out_assigned: 'ASSIGNED',
+  farmout_assigned: 'ASSIGNED',
+  declined: 'DECLINED',
+  enroute: 'ER',
+  en_route: 'ER',
+  driver_en_route: 'ER',
+  on_the_way: 'ER',
+  arrived: 'ARR',
+  waiting: 'WAIT',
+  waiting_at_pickup: 'WAIT',
+  driver_waiting_at_pickup: 'WAIT',
   passenger_onboard: 'POB',
   passenger_on_board: 'POB',
-  completed: 'FC',
+  customer_in_car: 'POB',
+  driving_passenger: 'POB',
+  done: 'DONE',
+  completed: 'COMPLETE',
   in_house: 'IH',
   inhouse: 'IH',
-  in_house_assigned: 'IHA',
-  in_house_unassigned: 'IHU',
-  offered_to_affiliate: 'OTA',
-  affiliate_assigned: 'AA',
-  affiliate_driver_assigned: 'ADA',
-  driver_en_route: 'DER',
-  on_the_way: 'OTW',
-  driver_waiting_at_pickup: 'DWAP',
-  waiting_at_pickup: 'WAP',
-  driver_circling: 'DC',
-  customer_in_car: 'CIC',
-  driving_passenger: 'DP',
-  cancelled: 'CAN',
-  cancelled_by_affiliate: 'CBA',
-  late_cancel: 'LC',
-  late_cancelled: 'LC',
-  no_show: 'NS',
-  covid19_cancellation: 'C19',
-  done: 'DONE'
+  in_house_assigned: 'IH-A',
+  in_house_unassigned: 'IH-U',
+  offered_to_affiliate: 'AFF-O',
+  affiliate_assigned: 'AFF-A',
+  affiliate_driver_assigned: 'AFF-D',
+  driver_circling: 'ARR',
+  cancelled: 'CANCEL',
+  cancelled_by_affiliate: 'CANCEL',
+  late_cancel: 'CANCEL',
+  late_cancelled: 'CANCEL',
+  no_show: 'NO SHOW',
+  covid19_cancellation: 'CANCEL'
 };
 
 function normalizeFarmoutKey(value) {
@@ -409,7 +418,23 @@ export class UIManager {
 
     if (this.currentFarmoutStatusFilter !== 'all') {
       const statusFilterCanonical = canonicalizeFarmoutStatus(this.currentFarmoutStatusFilter) || 'unassigned';
-      reservations = reservations.filter(r => canonicalizeFarmoutStatus(r.farmoutStatus || 'unassigned') === statusFilterCanonical);
+      const driverTripStatuses = ['enroute', 'arrived', 'waiting', 'passenger_onboard', 'done'];
+      
+      reservations = reservations.filter(r => {
+        const raw = r.raw || r;
+        // Check farmout status first
+        const farmoutStatusCanonical = canonicalizeFarmoutStatus(r.farmoutStatus || 'unassigned');
+        if (farmoutStatusCanonical === statusFilterCanonical) {
+          return true;
+        }
+        // For driver trip statuses, also check driver_status field directly
+        if (driverTripStatuses.includes(statusFilterCanonical)) {
+          const driverStatus = raw.driver_status || raw.driverStatus || r.driver_status || r.driverStatus || '';
+          const driverStatusCanonical = canonicalizeFarmoutStatus(driverStatus);
+          return driverStatusCanonical === statusFilterCanonical;
+        }
+        return false;
+      });
     }
 
     if (this.currentFarmoutModeFilter !== 'all') {
@@ -1588,19 +1613,26 @@ export class UIManager {
       }
     }
     
-    // Map status to display info
+    // Map status to display info - includes all Driver App and Web UI statuses
     const statusMap = {
-      'getting_ready': { label: 'Getting Ready', class: 'status-getting-ready' },
-      'on_the_way': { label: 'On The Way', class: 'status-on-the-way' },
+      // Driver App canonical statuses
       'enroute': { label: 'En Route', class: 'status-on-the-way' },
       'arrived': { label: 'Arrived', class: 'status-arrived' },
       'waiting': { label: 'Waiting', class: 'status-waiting' },
       'passenger_onboard': { label: 'Passenger Onboard', class: 'status-onboard' },
-      'in_progress': { label: 'In Progress', class: 'status-in-progress' },
+      'done': { label: 'Complete', class: 'status-completed' },
       'completed': { label: 'Completed', class: 'status-completed' },
-      'done': { label: 'Completed', class: 'status-completed' },
       'cancelled': { label: 'Cancelled', class: 'status-cancelled' },
-      'no_show': { label: 'No Show', class: 'status-no-show' }
+      'no_show': { label: 'No Show', class: 'status-no-show' },
+      // Web UI legacy statuses (map to same display)
+      'on_the_way': { label: 'En Route', class: 'status-on-the-way' },
+      'driver_en_route': { label: 'En Route', class: 'status-on-the-way' },
+      'driver_waiting_at_pickup': { label: 'Waiting', class: 'status-waiting' },
+      'waiting_at_pickup': { label: 'Waiting', class: 'status-waiting' },
+      'customer_in_car': { label: 'Passenger Onboard', class: 'status-onboard' },
+      'driving_passenger': { label: 'Passenger Onboard', class: 'status-onboard' },
+      'in_progress': { label: 'In Progress', class: 'status-in-progress' },
+      'driver_circling': { label: 'Arrived', class: 'status-arrived' }
     };
     
     // Normalize status key

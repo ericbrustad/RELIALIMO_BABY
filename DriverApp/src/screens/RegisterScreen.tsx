@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,21 +16,22 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { theme } from '../config/theme';
+import { useTheme } from '../context';
+import { spacing, fontSize, borderRadius } from '../config/theme';
+import type { RootStackParamList } from '../types';
 
 const { width } = Dimensions.get('window');
 
 const LOGO_URL = 'https://siumiadylwcrkaqsfwkj.supabase.co/storage/v1/object/public/images/reliabull%20limo%20logowhitecropped.png';
 
-type RootStackParamList = {
-  Auth: undefined;
-  Register: undefined;
-  RegisterCompany: { userData: any };
-  Dashboard: undefined;
-};
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export function RegisterScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<Nav>();
+  const { colors } = useTheme();
+  
+  // Create dynamic styles based on current theme
+  const styles = useMemo(() => createStyles(colors), [colors]);
   
   // Form state
   const [firstName, setFirstName] = useState('');
@@ -502,10 +503,11 @@ export function RegisterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Create dynamic styles based on theme colors
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.background,
   },
   keyboardView: {
     flex: 1,

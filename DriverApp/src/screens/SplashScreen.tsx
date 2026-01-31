@@ -1,10 +1,14 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { useAuthStore } from '../store';
-import { colors, fontSize, spacing } from '../config/theme';
+import { useTheme } from '../context';
+import { fontSize, spacing } from '../config/theme';
 
 export default function SplashScreen() {
   const { initialize } = useAuthStore();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  
   useEffect(() => { initialize(); }, []);
 
   return (
@@ -17,7 +21,8 @@ export default function SplashScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Create dynamic styles based on theme colors
+const createStyles = (colors: any) => StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
   logo: { fontSize: 80, marginBottom: spacing.md },
   title: { fontSize: fontSize.display, fontWeight: '700', color: colors.text },
