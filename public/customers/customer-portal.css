@@ -1010,7 +1010,8 @@ body {
   margin-top: var(--space-sm);
 }
 
-.selected-address-display {
+.selected-address-display,
+.selected-address-item {
   display: flex;
   align-items: center;
   gap: var(--space-md);
@@ -1018,31 +1019,52 @@ body {
   background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
   border: 2px solid var(--primary);
   border-radius: var(--radius-md);
+  margin-bottom: var(--space-sm);
 }
 
-.selected-address-display .selected-icon {
+.selected-address-display .selected-icon,
+.selected-address-item .address-icon {
   font-size: 1.25rem;
 }
 
-.selected-address-display .selected-text {
+.selected-address-display .selected-text,
+.selected-address-item .address-content {
   flex: 1;
+}
+
+.selected-address-item .address-label {
+  font-weight: 600;
+  color: var(--primary);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.selected-address-item .address-text {
   font-size: 0.9rem;
   color: var(--text-primary);
 }
 
-.selected-address-display .clear-selection {
+.selected-address-display .clear-selection,
+.clear-selection-btn {
   background: none;
-  border: none;
+  border: 2px solid #cbd5e1;
+  border-radius: 50%;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 4px 8px;
-  font-size: 1rem;
-  border-radius: 50%;
+  padding: 4px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
   transition: all 0.2s;
 }
 
-.selected-address-display .clear-selection:hover {
-  background: rgba(0, 0, 0, 0.1);
+.selected-address-display .clear-selection:hover,
+.clear-selection-btn:hover {
+  background: #fef2f2;
+  border-color: var(--danger);
   color: var(--danger);
 }
 

@@ -572,6 +572,13 @@ async function init() {
     // Set default date/time
     setDefaultDateTime();
     
+    // Background refresh of addresses to ensure they show up
+    setTimeout(async () => {
+      console.log('[CustomerPortal] Background refresh of addresses...');
+      await loadSavedAddresses();
+      populateAddressDropdowns();
+    }, 2000);
+    
     console.log('[CustomerPortal] Initialized successfully');
   } catch (err) {
     console.error('[CustomerPortal] Initialization error:', err);
@@ -1814,9 +1821,47 @@ function populateAddressDropdowns() {
     console.log('[CustomerPortal] Container', containerId, ':', container ? 'found' : 'NOT FOUND');
     if (!container) return;
     
+    const isPickup = containerId.includes('Pickup');
+    const selectedAddress = isPickup ? state.selectedPickupAddress : state.selectedDropoffAddress;
+    
+    // Build the HTML content
+    let html = '';
+    
+    // If there's a selected address, show it at the top
+    if (selectedAddress) {
+      html += `
+        <div class="selected-address-item" data-address="${selectedAddress}">
+          <span class="address-icon">✅</span>
+          <div class="address-content">
+            <div class="address-label">Currently Selected</div>
+            <div class="address-text">${selectedAddress}</div>
+          </div>
+          <button type="button" class="clear-selection-btn" title="Clear selection">✕</button>
+        </div>
+      `;
+    }
+    
     // If no addresses, show empty state
     if (!state.savedAddresses || state.savedAddresses.length === 0) {
-      container.innerHTML = '<p class="empty-hint" style="padding: 12px; color: #6b7280; text-align: center;">No saved addresses yet. Add addresses from My Account tab.</p>';
+      if (!selectedAddress) {
+        html += '<p class="empty-hint" style="padding: 12px; color: #6b7280; text-align: center;">No saved addresses yet. Add addresses from My Account tab.</p>';
+      }
+      container.innerHTML = html;
+      
+      // Add clear button handler if present
+      container.querySelector('.clear-selection-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isPickup) {
+          state.selectedPickupAddress = null;
+          document.getElementById('pickupAddressInput').value = '';
+        } else {
+          state.selectedDropoffAddress = null;
+          document.getElementById('dropoffAddressInput').value = '';
+        }
+        populateAddressDropdowns();
+        calculateRouteAndPrice();
+      });
+      
       console.log('[CustomerPortal] No addresses, showing empty state');
       return;
     }
@@ -1829,7 +1874,7 @@ function populateAddressDropdowns() {
     });
     
     // Use full_address field name from database
-    container.innerHTML = sortedAddresses.map(addr => {
+    html += sortedAddresses.map(addr => {
       const address = addr.full_address || addr.address || '';
       const label = addr.label || 'Saved';
       const icon = label.toLowerCase() === 'home' ? '🏠' : 
@@ -1840,7 +1885,7 @@ function populateAddressDropdowns() {
       const starIcon = addr.is_favorite ? '★' : '☆';
       
       return `
-        <div class="saved-address-item ${addr.is_favorite ? 'is-favorite' : ''}" data-id="${addr.id}" data-address="${address}">
+        <div class="saved-address-item" data-id="${addr.id}" data-address="${address}">
           <span class="address-icon">${icon}</span>
           <div class="address-content">
             <div class="address-label">${label}</div>
@@ -1852,10 +1897,26 @@ function populateAddressDropdowns() {
       `;
     }).join('');
     
+    container.innerHTML = html;
+    
+    // Add clear button handler for selected address
+    container.querySelector('.clear-selection-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (isPickup) {
+        state.selectedPickupAddress = null;
+        document.getElementById('pickupAddressInput').value = '';
+      } else {
+        state.selectedDropoffAddress = null;
+        document.getElementById('dropoffAddressInput').value = '';
+      }
+      populateAddressDropdowns();
+      calculateRouteAndPrice();
+    });
+    
     // Add click handlers
     container.querySelectorAll('.saved-address-item').forEach(item => {
       item.addEventListener('click', (e) => {
-        if (e.target.classList.contains('address-delete') || e.target.classList.contains('address-favorite')) return;
+        if (e.target.classList.contains('address-delete') || e.target.classList.contains('address-favorite') || e.target.classList.contains('clear-selection-btn')) return;
         
         const addressType = containerId.includes('Pickup') ? 'pickup' : 'dropoff';
         selectSavedAddress(item.dataset.id, item.dataset.address, addressType);
@@ -1889,36 +1950,8 @@ function selectSavedAddress(id, address, type) {
     document.getElementById('dropoffAddressInput').value = address;
   }
   
-  // Get the container
-  const containerId = `saved${type.charAt(0).toUpperCase() + type.slice(1)}Addresses`;
-  const container = document.getElementById(containerId);
-  
-  // Collapse non-selected addresses and highlight selected
-  if (container) {
-    container.querySelectorAll('.saved-address-item').forEach(item => {
-      const isSelected = item.dataset.id === id;
-      item.classList.toggle('selected', isSelected);
-      item.classList.toggle('collapsed', !isSelected);
-    });
-    
-    // Add a "change" button to allow re-selecting
-    let changeBtn = container.querySelector('.change-address-btn');
-    if (!changeBtn) {
-      changeBtn = document.createElement('button');
-      changeBtn.type = 'button';
-      changeBtn.className = 'change-address-btn';
-      changeBtn.textContent = '↻ Change Address';
-      changeBtn.style.cssText = 'margin-top: 10px; padding: 8px 16px; font-size: 13px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 6px; cursor: pointer; color: #1565c0; width: 100%;';
-      changeBtn.addEventListener('click', () => {
-        // Expand all addresses again
-        container.querySelectorAll('.saved-address-item').forEach(item => {
-          item.classList.remove('collapsed', 'selected');
-        });
-        changeBtn.remove();
-      });
-      container.appendChild(changeBtn);
-    }
-  }
+  // Re-populate dropdowns to show the selected address at the top
+  populateAddressDropdowns();
   
   // Increment usage count
   incrementAddressUsage(id);
@@ -5016,23 +5049,6 @@ function setupEventListeners() {
     document.getElementById('pickupAddressNew').classList.toggle('hidden', val !== 'new');
     document.getElementById('airportPickupDetails').classList.toggle('hidden', val !== 'airport');
     
-    // If selecting empty option, show selected address if one exists
-    if (!val && state.selectedPickupAddress) {
-      const selectedContainer = document.getElementById('selectedPickupAddress');
-      if (selectedContainer) {
-        selectedContainer.innerHTML = `<div class="selected-address-display"><span class="selected-icon">📍</span><span class="selected-text">${state.selectedPickupAddress}</span><button type="button" class="clear-selection" title="Clear">✕</button></div>`;
-        selectedContainer.classList.remove('hidden');
-        selectedContainer.querySelector('.clear-selection')?.addEventListener('click', () => {
-          state.selectedPickupAddress = null;
-          document.getElementById('pickupAddressInput').value = '';
-          selectedContainer.classList.add('hidden');
-          calculateRouteAndPrice();
-        });
-      }
-    } else {
-      document.getElementById('selectedPickupAddress')?.classList.add('hidden');
-    }
-    
     // Handle saved addresses - always populate when selected
     if (val === 'saved') {
       const container = document.getElementById('savedPickupAddresses');
@@ -5050,13 +5066,14 @@ function setupEventListeners() {
         console.log('[CustomerPortal] After loading, addressesLoaded:', state.addressesLoaded, 'count:', state.savedAddresses?.length || 0);
       }
       
-      // Always populate to ensure content is fresh
+      // Always populate to ensure content is fresh (shows selected address at top)
       populateAddressDropdowns();
     } else {
       document.getElementById('savedPickupAddresses').classList.add('hidden');
     }
     
-    if (!val || val === 'airport' || val === 'new') {
+    // Clear selection only when switching to airport or new (not when going back to empty)
+    if (val === 'airport' || val === 'new') {
       state.selectedPickupAddress = null;
     }
     
@@ -5071,23 +5088,6 @@ function setupEventListeners() {
     // Show/hide appropriate containers
     document.getElementById('dropoffAddressNew').classList.toggle('hidden', val !== 'new');
     document.getElementById('airportDropoffDetails').classList.toggle('hidden', val !== 'airport');
-    
-    // If selecting empty option, show selected address if one exists
-    if (!val && state.selectedDropoffAddress) {
-      const selectedContainer = document.getElementById('selectedDropoffAddress');
-      if (selectedContainer) {
-        selectedContainer.innerHTML = `<div class="selected-address-display"><span class="selected-icon">📍</span><span class="selected-text">${state.selectedDropoffAddress}</span><button type="button" class="clear-selection" title="Clear">✕</button></div>`;
-        selectedContainer.classList.remove('hidden');
-        selectedContainer.querySelector('.clear-selection')?.addEventListener('click', () => {
-          state.selectedDropoffAddress = null;
-          document.getElementById('dropoffAddressInput').value = '';
-          selectedContainer.classList.add('hidden');
-          calculateRouteAndPrice();
-        });
-      }
-    } else {
-      document.getElementById('selectedDropoffAddress')?.classList.add('hidden');
-    }
     
     // Handle saved addresses - always populate when selected
     if (val === 'saved') {
@@ -5106,13 +5106,14 @@ function setupEventListeners() {
         console.log('[CustomerPortal] After loading, addressesLoaded:', state.addressesLoaded, 'count:', state.savedAddresses?.length || 0);
       }
       
-      // Always populate to ensure content is fresh
+      // Always populate to ensure content is fresh (shows selected address at top)
       populateAddressDropdowns();
     } else {
       document.getElementById('savedDropoffAddresses').classList.add('hidden');
     }
     
-    if (!val || val === 'airport' || val === 'new') {
+    // Clear selection only when switching to airport or new (not when going back to empty)
+    if (val === 'airport' || val === 'new') {
       state.selectedDropoffAddress = null;
     }
     
