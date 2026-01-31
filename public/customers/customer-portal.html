@@ -522,22 +522,7 @@
             </button>
           </div>
 
-          <div class="account-section">
-            <h3 class="subsection-title">✈️ Favorite Airports</h3>
-            <p class="section-hint">Star an airport to show it first when booking</p>
-            <div id="favoriteAirportsList" class="saved-list">
-              <!-- Loaded dynamically -->
-            </div>
-          </div>
-
           <!-- Booking Defaults Section -->
-          <div class="account-section">
-            <h3 class="subsection-title">✈️ Favorite Airports</h3>
-            <p class="section-hint">Star an airport to make it appear first in dropdowns</p>
-            <div id="savedAirportsList" class="saved-list">
-              <!-- Loaded dynamically -->
-            </div>
-          </div>
 
           <div class="account-section">
             <h3 class="subsection-title">🚗 Booking Defaults</h3>
@@ -550,18 +535,11 @@
                        placeholder="Enter your home address for quick booking">
               </div>
               
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">✈️ Preferred Pickup Airport</label>
-                  <select id="accountPreferredPickupAirport" class="form-select">
-                    <option value="">- Select preferred airport -</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">✈️ Preferred Dropoff Airport</label>
-                  <select id="accountPreferredDropoffAirport" class="form-select">
-                    <option value="">- Select preferred airport -</option>
-                  </select>
+              <div class="form-group">
+                <label class="form-label">✈️ Favorite Airports</label>
+                <p class="section-hint" style="margin-top: 0;">Star airports for quick access when booking</p>
+                <div id="accountAirportsList" class="saved-list">
+                  <!-- Loaded dynamically -->
                 </div>
               </div>
               

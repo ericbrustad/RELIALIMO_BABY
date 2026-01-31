@@ -4612,40 +4612,11 @@ function updateAccountTab() {
   document.getElementById('accountDefaultPassengers').value = state.customer.default_passenger_count || 1;
   
   // Populate airport and vehicle dropdowns
-  populateAccountAirportSelects();
   populateAccountVehicleSelect();
   
   renderSavedPassengers();
   renderSavedAddresses();
   renderFavoriteAirports();
-}
-
-function populateAccountAirportSelects() {
-  const pickupSelect = document.getElementById('accountPreferredPickupAirport');
-  const dropoffSelect = document.getElementById('accountPreferredDropoffAirport');
-  
-  if (!pickupSelect || !dropoffSelect) return;
-  
-  // Get airports from state (loaded elsewhere)
-  const airports = state.airports || [];
-  
-  [pickupSelect, dropoffSelect].forEach(select => {
-    select.innerHTML = '<option value="">- Select preferred airport -</option>';
-    airports.forEach(airport => {
-      const opt = document.createElement('option');
-      opt.value = airport.code || airport.iata_code || airport.id;
-      opt.textContent = `${airport.code || airport.iata_code || ''} - ${airport.name || airport.airport_name || ''}`;
-      select.appendChild(opt);
-    });
-  });
-  
-  // Set selected values
-  if (state.customer.preferred_pickup_airport) {
-    pickupSelect.value = state.customer.preferred_pickup_airport;
-  }
-  if (state.customer.preferred_dropoff_airport) {
-    dropoffSelect.value = state.customer.preferred_dropoff_airport;
-  }
 }
 
 function populateAccountVehicleSelect() {
@@ -4668,8 +4639,6 @@ function populateAccountVehicleSelect() {
 
 async function saveBookingDefaults() {
   const homeAddress = document.getElementById('accountHomeAddress').value.trim();
-  const preferredPickupAirport = document.getElementById('accountPreferredPickupAirport').value;
-  const preferredDropoffAirport = document.getElementById('accountPreferredDropoffAirport').value;
   const defaultPassengers = parseInt(document.getElementById('accountDefaultPassengers').value) || 1;
   const preferredVehicle = document.getElementById('accountPreferredVehicle').value;
   
@@ -4684,8 +4653,6 @@ async function saveBookingDefaults() {
       },
       body: JSON.stringify({
         home_address: homeAddress,
-        preferred_pickup_airport: preferredPickupAirport,
-        preferred_dropoff_airport: preferredDropoffAirport,
         default_passenger_count: defaultPassengers,
         preferred_vehicle_type: preferredVehicle,
         updated_at: new Date().toISOString()
@@ -4695,8 +4662,6 @@ async function saveBookingDefaults() {
     if (response.ok) {
       // Update local state
       state.customer.home_address = homeAddress;
-      state.customer.preferred_pickup_airport = preferredPickupAirport;
-      state.customer.preferred_dropoff_airport = preferredDropoffAirport;
       state.customer.default_passenger_count = defaultPassengers;
       state.customer.preferred_vehicle_type = preferredVehicle;
       
@@ -4852,7 +4817,7 @@ function renderSavedAddresses() {
 }
 
 function renderFavoriteAirports() {
-  const container = document.getElementById('favoriteAirportsList');
+  const container = document.getElementById('accountAirportsList');
   if (!container) return;
   
   const airports = state.airports || [];
@@ -4877,23 +4842,26 @@ function renderFavoriteAirports() {
   container.innerHTML = sortedAirports.map(airport => {
     const isFavorite = favoriteAirportCodes.includes(airport.code);
     const starClass = isFavorite ? 'favorite-active' : '';
-    const starIcon = isFavorite ? '⭐' : '☆';
+    const starIcon = isFavorite ? '✓' : '☆';
     
     return `
-      <div class="saved-item ${isFavorite ? 'is-favorite' : ''}" data-code="${airport.code}">
+      <div class="saved-item" data-code="${airport.code}" data-name="${airport.name}">
         <span class="saved-item-icon">✈️</span>
         <div class="saved-item-content">
-          <div class="saved-item-name">${airport.code}${isFavorite ? ' ⭐' : ''}</div>
+          <div class="saved-item-name">${airport.code}</div>
           <div class="saved-item-detail">${airport.name}</div>
         </div>
-        <button class="saved-item-favorite ${starClass}" data-code="${airport.code}" title="Toggle favorite">${starIcon}</button>
+        <button type="button" class="saved-item-favorite ${starClass}" data-code="${airport.code}" title="${isFavorite ? 'Remove from favorites' : 'Add to favorites'}">${starIcon}</button>
       </div>
     `;
   }).join('');
   
   // Favorite handlers
   container.querySelectorAll('.saved-item-favorite').forEach(btn => {
-    btn.addEventListener('click', () => toggleAirportFavorite(btn.dataset.code));
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleAirportFavorite(btn.dataset.code);
+    });
   });
 }
 
