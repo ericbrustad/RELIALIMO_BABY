@@ -5084,8 +5084,6 @@ function setupEventListeners() {
     if (val === 'airport' || val === 'new' || val === '') {
       clearSelectedAddress('pickup');
     }
-      state.selectedPickupAddress = null;
-    }
     
     // Auto-select trip type based on airport selection
     updateTripTypeFromAddresses();
