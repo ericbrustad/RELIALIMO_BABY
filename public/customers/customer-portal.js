@@ -1836,17 +1836,18 @@ function populateAddressDropdowns() {
                    label.toLowerCase() === 'work' ? '🏢' : 
                    addr.address_type === 'airport' ? '✈️' : '📍';
       const starClass = addr.is_favorite ? 'favorite-active' : '';
-      const starIcon = addr.is_favorite ? '⭐' : '☆';
+      // Use ★ (filled) when favorite, ☆ (outline) when not
+      const starIcon = addr.is_favorite ? '★' : '☆';
       
       return `
         <div class="saved-address-item ${addr.is_favorite ? 'is-favorite' : ''}" data-id="${addr.id}" data-address="${address}">
           <span class="address-icon">${icon}</span>
           <div class="address-content">
-            <div class="address-label">${label}${addr.is_favorite ? ' ⭐' : ''}</div>
+            <div class="address-label">${label}</div>
             <div class="address-text">${address}</div>
           </div>
-          <button type="button" class="address-favorite ${starClass}" data-id="${addr.id}" title="Toggle favorite">${starIcon}</button>
-          <button type="button" class="address-delete" data-id="${addr.id}" title="Remove">🗑️</button>
+          <button type="button" class="address-favorite ${starClass}" data-id="${addr.id}" title="${addr.is_favorite ? 'Remove from favorites' : 'Add to favorites'}">${starIcon}</button>
+          <button type="button" class="address-delete" data-id="${addr.id}" title="Delete">🗑️</button>
         </div>
       `;
     }).join('');
@@ -4787,18 +4788,19 @@ function renderSavedAddresses() {
   container.innerHTML = sortedAddresses.map(a => {
     const icon = a.label === 'Home' ? '🏠' : a.label === 'Work' ? '🏢' : '📍';
     const starClass = a.is_favorite ? 'favorite-active' : '';
-    const starIcon = a.is_favorite ? '⭐' : '☆';
+    // Use ★ (filled) when favorite, ☆ (outline) when not
+    const starIcon = a.is_favorite ? '★' : '☆';
     const address = a.full_address || a.address || '';
     
     return `
       <div class="saved-item ${a.is_favorite ? 'is-favorite' : ''}">
         <span class="saved-item-icon">${icon}</span>
         <div class="saved-item-content">
-          <div class="saved-item-name">${a.label}${a.is_favorite ? ' ⭐' : ''}</div>
+          <div class="saved-item-name">${a.label || 'Address'}</div>
           <div class="saved-item-detail">${address}</div>
         </div>
-        <button class="saved-item-favorite ${starClass}" data-id="${a.id}" title="Toggle favorite">${starIcon}</button>
-        <button class="saved-item-delete" data-id="${a.id}">🗑️</button>
+        <button type="button" class="saved-item-favorite ${starClass}" data-id="${a.id}" title="${a.is_favorite ? 'Remove from favorites' : 'Add to favorites'}">${starIcon}</button>
+        <button type="button" class="saved-item-delete" data-id="${a.id}" title="Delete address">🗑️</button>
       </div>
     `;
   }).join('');
