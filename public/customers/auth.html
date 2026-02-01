@@ -556,8 +556,10 @@
         const isAuth = await CustomerAuth.initAuth();
         if (isAuth) {
           const slug = CustomerAuth.getPortalSlug();
+          // Validate slug - must have alphanumeric characters, not just special chars
+          const validSlug = slug && slug.length > 1 && /[a-z0-9]/i.test(slug);
           // If user has a valid slug, go to their portal. Otherwise complete profile.
-          window.location.href = slug ? `/${slug}` : '/complete-profile';
+          window.location.href = validSlug ? `/${slug}` : '/complete-profile';
           return true;
         }
         return false;
@@ -690,13 +692,16 @@
                 const customer = CustomerAuth.getCustomer();
                 const slug = CustomerAuth.getPortalSlug();
                 
+                // Validate slug - must have alphanumeric characters
+                const validSlug = slug && slug.length > 1 && /[a-z0-9]/i.test(slug);
+                
                 // Check onboarding
                 const onboardingComplete = customer?.onboarding_complete || 
                                            (customer?.home_address && customer?.home_airport);
                 
                 if (!onboardingComplete) {
                   window.location.href = '/onboarding';
-                } else if (slug) {
+                } else if (validSlug) {
                   window.location.href = `/${slug}`;
                 } else {
                   window.location.href = 'https://relialimo.com/book';
@@ -1117,8 +1122,8 @@
           slug = CustomerAuth.getPortalSlug();
         }
         
-        // Validate slug is not empty or just underscores
-        if (!slug || slug === '_' || slug.replace(/_/g, '') === '') {
+        // Validate slug is not empty or just underscores/dashes
+        if (!slug || slug === '_' || slug === '-' || slug.replace(/[_-]/g, '') === '' || !/[a-z0-9]/i.test(slug)) {
           slug = '';  // No valid slug
         }
         

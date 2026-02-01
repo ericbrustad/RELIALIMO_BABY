@@ -788,7 +788,11 @@ export function getPortalSlug() {
   
   // Use stored portal_slug - should always exist for properly created accounts
   if (authState.customer.portal_slug) {
-    return authState.customer.portal_slug;
+    const slug = authState.customer.portal_slug;
+    // Validate slug has at least one alphanumeric character and is more than 1 char
+    if (slug.length > 1 && /[a-z0-9]/i.test(slug)) {
+      return slug;
+    }
   }
   
   // Fallback: Generate slug with random ID if name exists but no stored slug

@@ -154,37 +154,8 @@ async function redirectToUserPortal(session) {
     // Load ENV settings to localStorage on login
     await loadEnvSettingsToLocalStorage();
     
-    const email = session.user?.email;
-    if (!email) {
-      window.location.replace('/index.html');
-      return;
-    }
-
-    // Fetch user profile from accounts table
-    const { data: accounts, error } = await supabase
-      .from('accounts')
-      .select('id, first_name, last_name, portal_slug')
-      .eq('email', email.toLowerCase())
-      .limit(1);
-
-    if (!error && accounts && accounts.length > 0) {
-      const account = accounts[0];
-      const slug = account.portal_slug || 
-        `${(account.first_name || '').toLowerCase()}-${(account.last_name || '').toLowerCase()}`.replace(/[^a-z0-9-]/g, '');
-      
-      // Update portal_slug if it wasn't set
-      if (!account.portal_slug && slug) {
-        await supabase
-          .from('accounts')
-          .update({ portal_slug: slug })
-          .eq('id', account.id);
-      }
-      
-      window.location.replace(`/${slug}`);
-      return;
-    }
-
-    // Fallback to index if no account found
+    // For admin portal, always redirect to index.html (the admin dashboard)
+    // Portal slugs are for customer/driver portals, not admin
     window.location.replace('/index.html');
   } catch (err) {
     console.error('Error redirecting to portal:', err);

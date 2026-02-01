@@ -18,6 +18,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context';
 import { spacing, fontSize, borderRadius } from '../config/theme';
+import { sendOtpEmail } from '../services/email';
+import { sendOtpSms } from '../services/sms';
 import type { RootStackParamList } from '../types';
 
 const { width } = Dimensions.get('window');
@@ -106,13 +108,26 @@ export function RegisterScreen() {
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       setEmailOtpCode(code);
       
-      // TODO: Send via email API
-      console.log('[RegisterScreen] Email OTP:', code);
+      // Send via Supabase Edge Function (Resend API)
+      console.log('[RegisterScreen] Sending email OTP to:', email);
+      const result = await sendOtpEmail(email, code, firstName);
+      
+      if (!result.success) {
+        console.error('[RegisterScreen] Email send failed:', result.error);
+        // Still allow proceeding in dev mode with the code shown
+        Alert.alert(
+          'Email Service Issue', 
+          `Could not send email: ${result.error}\n\nFor testing, your code is: ${code}`
+        );
+      } else {
+        console.log('[RegisterScreen] Email sent successfully');
+        Alert.alert('Code Sent', `A verification code has been sent to ${email}`);
+      }
       
       setEmailOtpSent(true);
       setEmailResendTimer(60);
-      Alert.alert('Code Sent', `A verification code has been sent to ${email}\n\n(Dev: ${code})`);
     } catch (error) {
+      console.error('[RegisterScreen] Email OTP error:', error);
       Alert.alert('Error', 'Failed to send verification code');
     } finally {
       setSendingEmailOtp(false);
@@ -147,14 +162,24 @@ export function RegisterScreen() {
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       setPhoneOtpCode(code);
       
-      // TODO: Send via Twilio SMS
-      console.log('[RegisterScreen] Phone OTP:', code);
+      // Format phone number with country code
+      const formattedPhone = digits.length === 10 ? `+1${digits}` : `+${digits}`;
+      
+      // Send via SMS API
+      const result = await sendOtpSms(formattedPhone, code);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to send SMS');
+      }
+      
+      console.log('[RegisterScreen] Phone OTP sent successfully');
       
       setPhoneOtpSent(true);
       setPhoneResendTimer(60);
-      Alert.alert('Code Sent', `A verification code has been sent to ${phone}\n\n(Dev: ${code})`);
+      Alert.alert('Code Sent', `A verification code has been sent to ${phone}`);
     } catch (error) {
-      Alert.alert('Error', 'Failed to send verification code');
+      console.error('[RegisterScreen] SMS error:', error);
+      Alert.alert('Error', 'Failed to send verification code. Please try again.');
     } finally {
       setSendingPhoneOtp(false);
     }

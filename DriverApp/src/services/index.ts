@@ -8,3 +8,4 @@ export * from './trips';
 export * from './location';
 export * from './navigation';
 export * from './notifications';
+export * from './email';
