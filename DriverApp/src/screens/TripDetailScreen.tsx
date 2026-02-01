@@ -21,6 +21,8 @@ import { spacing, fontSize, borderRadius } from '../config/theme';
 import { STATUS_META } from '../types';
 import type { Reservation, RootStackParamList } from '../types';
 import MississippiCountdown from '../components/MississippiCountdown';
+import PassengerInfoBar from '../components/PassengerInfoBar';
+import CancelTripModal from '../components/CancelTripModal';
 import { navigateToAddress } from '../utils/navigation';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -38,6 +40,8 @@ export default function TripDetailScreen() {
   const [trip, setTrip] = useState<Reservation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showCountdown, setShowCountdown] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   
   // Create dynamic styles based on current theme
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -82,15 +86,6 @@ export default function TripDetailScreen() {
     };
   };
   
-  const getPassengerName = () => {
-    if (!trip) return 'Unknown';
-    if (trip.passenger_name) return trip.passenger_name;
-    if (trip.passenger_first_name) {
-      return `${trip.passenger_first_name} ${trip.passenger_last_name || ''}`.trim();
-    }
-    return 'Unknown Passenger';
-  };
-  
   const handleCall = (phone: string) => {
     Linking.openURL(`tel:${phone}`);
   };
@@ -125,6 +120,68 @@ export default function TripDetailScreen() {
     setShowCountdown(false);
   };
   
+  const getPassengerName = () => {
+    if (!trip) return 'Unknown';
+    if (trip.passenger_name) return trip.passenger_name;
+    if (trip.passenger_first_name) {
+      return `${trip.passenger_first_name} ${trip.passenger_last_name || ''}`.trim();
+    }
+    return 'Unknown Passenger';
+  };
+  
+  const handleCancelTrip = async (reason: string) => {
+    if (!trip) return;
+    
+    setIsCancelling(true);
+    try {
+      // Save cancellation reason to database
+      const driverFullName = driver ? `${driver.first_name} ${driver.last_name}`.trim() : undefined;
+      const { error: cancelError } = await supabase
+        .from('driver_trip_cancellations')
+        .insert({
+          reservation_id: trip.id,
+          driver_id: driver?.id,
+          reason: reason,
+          driver_name: driverFullName,
+          driver_phone: driver?.phone,
+          passenger_name: getPassengerName(),
+          pickup_address: trip.pickup_address || trip.pickup_location,
+          dropoff_address: trip.dropoff_address || trip.dropoff_location,
+          pickup_datetime: trip.pickup_datetime,
+          confirmation_number: trip.confirmation_number,
+        });
+      
+      if (cancelError) {
+        console.error('Error saving cancellation reason:', cancelError);
+        // Continue with cancellation even if logging fails
+      }
+      
+      // Update reservation with cancellation info
+      const { error: updateError } = await supabase
+        .from('reservations')
+        .update({
+          driver_status: 'cancelled',
+          cancellation_reason: reason,
+          cancelled_by_driver_id: driver?.id,
+          cancelled_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', trip.id);
+      
+      if (updateError) throw updateError;
+      
+      setShowCancelModal(false);
+      Alert.alert('Trip Cancelled', 'The trip has been cancelled.', [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
+    } catch (error: any) {
+      console.error('Error cancelling trip:', error);
+      Alert.alert('Error', 'Failed to cancel trip. Please try again.');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+  
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -147,6 +204,15 @@ export default function TripDetailScreen() {
   
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      {/* Persistent Passenger Info Bar at Top */}
+      <View style={styles.passengerBar}>
+        <PassengerInfoBar
+          passengerName={getPassengerName()}
+          passengerPhone={trip.passenger_phone}
+          passengerCount={trip.passenger_count}
+        />
+      </View>
+      
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Status Badge */}
         <View style={[styles.statusContainer, { backgroundColor: statusMeta.color + '20' }]}>
@@ -162,40 +228,9 @@ export default function TripDetailScreen() {
           <Text style={styles.timeText}>{time}</Text>
         </View>
         
-        {/* Passenger Info */}
+        {/* Locations - Clickable for Navigation */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Passenger</Text>
-          <Text style={styles.passengerName}>{getPassengerName()}</Text>
-          
-          {trip.passenger_phone && (
-            <View style={styles.contactButtons}>
-              <TouchableOpacity
-                style={styles.contactButton}
-                onPress={() => handleCall(trip.passenger_phone!)}
-              >
-                <Text style={styles.contactButtonEmoji}>📞</Text>
-                <Text style={styles.contactButtonText}>Call</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.contactButton}
-                onPress={() => handleText(trip.passenger_phone!)}
-              >
-                <Text style={styles.contactButtonEmoji}>💬</Text>
-                <Text style={styles.contactButtonText}>Text</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          
-          {trip.passenger_count && trip.passenger_count > 1 && (
-            <Text style={styles.passengerCount}>
-              👥 {trip.passenger_count} passengers
-            </Text>
-          )}
-        </View>
-        
-        {/* Locations */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Route</Text>
+          <Text style={styles.cardTitle}>Route - Tap to Navigate</Text>
           
           {/* Pickup */}
           <TouchableOpacity
@@ -205,11 +240,11 @@ export default function TripDetailScreen() {
             <View style={[styles.locationDot, { backgroundColor: colors.success }]} />
             <View style={styles.locationInfo}>
               <Text style={styles.locationLabel}>PICKUP</Text>
-              <Text style={styles.locationAddress}>
+              <Text style={[styles.locationAddress, styles.clickableAddress]}>
                 {trip.pickup_address || trip.pickup_location || 'Not specified'}
               </Text>
             </View>
-            <Text style={styles.navArrow}>→</Text>
+            <Text style={styles.navArrow}>🧭</Text>
           </TouchableOpacity>
           
           {/* Stops */}
@@ -221,9 +256,9 @@ export default function TripDetailScreen() {
               <View style={[styles.locationDot, { backgroundColor: colors.warning }]} />
               <View style={styles.locationInfo}>
                 <Text style={styles.locationLabel}>STOP 1</Text>
-                <Text style={styles.locationAddress}>{trip.stop1_address}</Text>
+                <Text style={[styles.locationAddress, styles.clickableAddress]}>{trip.stop1_address}</Text>
               </View>
-              <Text style={styles.navArrow}>→</Text>
+              <Text style={styles.navArrow}>🧭</Text>
             </TouchableOpacity>
           )}
           
@@ -235,9 +270,9 @@ export default function TripDetailScreen() {
               <View style={[styles.locationDot, { backgroundColor: colors.warning }]} />
               <View style={styles.locationInfo}>
                 <Text style={styles.locationLabel}>STOP 2</Text>
-                <Text style={styles.locationAddress}>{trip.stop2_address}</Text>
+                <Text style={[styles.locationAddress, styles.clickableAddress]}>{trip.stop2_address}</Text>
               </View>
-              <Text style={styles.navArrow}>→</Text>
+              <Text style={styles.navArrow}>🧭</Text>
             </TouchableOpacity>
           )}
           
@@ -249,11 +284,11 @@ export default function TripDetailScreen() {
             <View style={[styles.locationDot, { backgroundColor: colors.danger }]} />
             <View style={styles.locationInfo}>
               <Text style={styles.locationLabel}>DROPOFF</Text>
-              <Text style={styles.locationAddress}>
+              <Text style={[styles.locationAddress, styles.clickableAddress]}>
                 {trip.dropoff_address || trip.dropoff_location || 'Not specified'}
               </Text>
             </View>
-            <Text style={styles.navArrow}>→</Text>
+            <Text style={styles.navArrow}>🧭</Text>
           </TouchableOpacity>
         </View>
         
@@ -304,15 +339,28 @@ export default function TripDetailScreen() {
           </View>
         )}
         
-        <View style={{ height: 100 }} />
+        {/* Cancel Trip Button */}
+        <TouchableOpacity 
+          style={styles.cancelTripButton} 
+          onPress={() => setShowCancelModal(true)}
+        >
+          <Text style={styles.cancelTripButtonText}>Cancel Trip</Text>
+        </TouchableOpacity>
+        
+        <View style={{ height: 120 }} />
       </ScrollView>
       
-      {/* Start Trip Button */}
-      {(!trip.driver_status || trip.driver_status === 'available') && (
+      {/* Bottom Action Buttons */}
+      {(!trip.driver_status || trip.driver_status === 'available' || trip.driver_status === 'assigned') && (
         <View style={styles.bottomBar}>
-          <TouchableOpacity style={styles.startButton} onPress={handleStartTrip}>
-            <Text style={styles.startButtonText}>Start Trip</Text>
+          <TouchableOpacity 
+            style={styles.onTheWayButton} 
+            onPress={handleStartTrip}
+          >
+            <Text style={styles.onTheWayButtonIcon}>🚗</Text>
+            <Text style={styles.onTheWayButtonText}>On the Way</Text>
           </TouchableOpacity>
+          <Text style={styles.bottomHint}>Press to start 3-2-1 countdown before status change</Text>
         </View>
       )}
       
@@ -321,8 +369,16 @@ export default function TripDetailScreen() {
         visible={showCountdown}
         onComplete={executeStartTrip}
         onCancel={cancelCountdown}
-        actionLabel="Start Trip"
-        actionColor={colors.success}
+        actionLabel="On the Way"
+        actionColor={colors.primary}
+      />
+      
+      {/* Cancel Trip Modal with Reason */}
+      <CancelTripModal
+        visible={showCancelModal}
+        onConfirm={handleCancelTrip}
+        onCancel={() => setShowCancelModal(false)}
+        isLoading={isCancelling}
       />
     </SafeAreaView>
   );
@@ -453,6 +509,10 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.text,
   },
+  clickableAddress: {
+    color: colors.primary,
+    textDecorationLine: 'underline',
+  },
   navArrow: {
     fontSize: fontSize.lg,
     color: colors.primary,
@@ -493,6 +553,26 @@ const createStyles = (colors: any) => StyleSheet.create({
     color: colors.text,
     lineHeight: 22,
   },
+  passengerBar: {
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  cancelTripButton: {
+    backgroundColor: 'transparent',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.danger + '50',
+    marginTop: spacing.md,
+  },
+  cancelTripButtonText: {
+    fontSize: fontSize.md,
+    fontWeight: '500',
+    color: colors.danger,
+  },
   bottomBar: {
     position: 'absolute',
     bottom: 0,
@@ -503,6 +583,31 @@ const createStyles = (colors: any) => StyleSheet.create({
     paddingBottom: spacing.xl,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    alignItems: 'center',
+  },
+  onTheWayButton: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    gap: spacing.sm,
+  },
+  onTheWayButtonIcon: {
+    fontSize: 24,
+  },
+  onTheWayButtonText: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  bottomHint: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
   startButton: {
     backgroundColor: colors.success,

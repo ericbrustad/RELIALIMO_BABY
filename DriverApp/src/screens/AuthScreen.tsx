@@ -51,13 +51,28 @@ export default function AuthScreen() {
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     try {
-      // For now, show that Google sign-in requires the web portal
-      // Full OAuth implementation requires expo-auth-session setup
-      Alert.alert(
-        'Google Sign-In',
-        'Google sign-in is available on the web portal. Please sign in with email/password or create an account.',
-        [{ text: 'OK' }]
-      );
+      if (Platform.OS === 'web') {
+        // For web, use direct redirect to Supabase OAuth
+        const supabaseUrl = 'https://siumiadylwcrkaqsfwkj.supabase.co';
+        const redirectUrl = window.location.origin + window.location.pathname;
+        console.log('[AuthScreen] Starting Google OAuth with redirect:', redirectUrl);
+        
+        const authUrl = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
+        window.location.href = authUrl;
+      } else {
+        // For native, use Supabase OAuth with deep linking
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: 'relialimo://auth/callback',
+          },
+        });
+        
+        if (error) {
+          console.error('[AuthScreen] Google OAuth error:', error);
+          Alert.alert('Error', error.message || 'Google sign-in failed');
+        }
+      }
     } catch (err: any) {
       console.error('[AuthScreen] Google sign-in error:', err);
       Alert.alert('Error', 'Google sign-in failed. Please try again.');

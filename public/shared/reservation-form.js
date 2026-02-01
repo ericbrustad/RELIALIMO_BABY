@@ -5708,6 +5708,9 @@ class ReservationForm {
   }
 
   async updateTripMetricsFromStops() {
+    // Clear previous route data to ensure fresh calculation
+    this.latestRouteSummary = null;
+    
     const routeInfo = document.getElementById('routeInfo');
     const distanceEl = document.getElementById('routeDistance');
     const durationEl = document.getElementById('routeDuration');
@@ -5726,6 +5729,9 @@ class ReservationForm {
       if (inlineDuration) inlineDuration.textContent = '-';
       if (directionsEl) directionsEl.innerHTML = '';
       this.latestRouteSummary = null;
+      // Clear distance-based rate fields when route is reset
+      const mileQtyEl = document.getElementById('mileQty');
+      if (mileQtyEl) mileQtyEl.value = '0';
     };
 
     const stops = this.getStops();
@@ -5960,7 +5966,15 @@ class ReservationForm {
         if (waitTimeRate) {
           setIfEmpty('waitRate', waitTimeRate.toString());
         }
-        if (durationHours) {
+        // ALWAYS update hourQty when route duration is available
+        const routeHours = this.latestRouteSummary?.hours;
+        if (routeHours !== undefined && routeHours !== null && routeHours > 0) {
+          const hourQtyEl = document.getElementById('hourQty');
+          if (hourQtyEl) {
+            hourQtyEl.value = routeHours.toFixed(2);
+            hourQtyEl.dataset.autofilled = 'route';
+          }
+        } else if (durationHours) {
           setIfEmpty('hourQty', durationHours.toFixed(2));
         }
       }
@@ -6005,10 +6019,12 @@ class ReservationForm {
           setIfEmpty('mileRate', mileRate.toString());
         }
 
+        // ALWAYS update mileQty when we have fresh route data - don't use setIfEmpty
         if (billableMiles !== null) {
           const mileQtyEl = document.getElementById('mileQty');
           if (mileQtyEl) {
             mileQtyEl.value = billableMiles.toFixed(1);
+            mileQtyEl.dataset.autofilled = 'route'; // Mark as route-calculated
             console.log('[ReservationForm] Set mileQty to:', billableMiles.toFixed(1));
           }
         } else {

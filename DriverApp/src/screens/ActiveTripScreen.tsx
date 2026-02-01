@@ -16,13 +16,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
-import { useTripStore, useLocationStore, useSettingsStore } from '../store';
+import { useTripStore, useLocationStore, useSettingsStore, useAuthStore } from '../store';
 import { supabase } from '../config/supabase';
 import { useTheme } from '../context';
 import { spacing, fontSize, borderRadius } from '../config/theme';
 import { STATUS_META } from '../types';
 import type { Reservation, DriverStatus, RootStackParamList } from '../types';
 import MississippiCountdown from '../components/MississippiCountdown';
+import PassengerInfoBar from '../components/PassengerInfoBar';
+import CancelTripModal from '../components/CancelTripModal';
 import BackButton from '../components/BackButton';
 import { navigateToAddress, geocodeAddress } from '../utils/navigation';
 
@@ -59,6 +61,7 @@ export default function ActiveTripScreen() {
   const route = useRoute<RouteParams>();
   const { tripId } = route.params;
   const { updateTripStatus, setCurrentTrip } = useTripStore();
+  const { driver } = useAuthStore();
   const { startTracking, stopTracking, location, geofence, setDestination, clearGeofence, isMoving } = useLocationStore();
   const { preferredNavigationApp, hasSetNavigationPreference, setNavigationApp } = useSettingsStore();
   const { colors } = useTheme();
@@ -68,6 +71,8 @@ export default function ActiveTripScreen() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [waitingTime, setWaitingTime] = useState(0);
   const [showCountdown, setShowCountdown] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [pendingAction, setPendingAction] = useState<{ label: string; color: string; targetStatus?: DriverStatus } | null>(null);
   
   // Use ref to avoid stale closure in countdown callback
@@ -433,30 +438,60 @@ export default function ActiveTripScreen() {
   };
   
   const handleCancelTrip = () => {
-    Alert.alert(
-      'Cancel Trip',
-      'Are you sure? This should only be done if instructed by dispatch.',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: async () => {
-            if (!trip) return;
-            setIsUpdating(true);
-            const result = await updateTripStatus(trip.id, 'cancelled');
-            setIsUpdating(false);
-            
-            if (result.success) {
-              setCurrentTrip(null);
-              navigation.navigate('Dashboard');
-            } else {
-              Alert.alert('Error', result.error || 'Failed to cancel trip');
-            }
-          },
-        },
-      ]
-    );
+    setShowCancelModal(true);
+  };
+  
+  const executeCancelTrip = async (reason: string) => {
+    if (!trip) return;
+    
+    setIsCancelling(true);
+    try {
+      // Save cancellation reason to database
+      const driverFullName = driver ? `${driver.first_name} ${driver.last_name}`.trim() : undefined;
+      const { error: cancelError } = await supabase
+        .from('driver_trip_cancellations')
+        .insert({
+          reservation_id: trip.id,
+          driver_id: driver?.id,
+          reason: reason,
+          driver_name: driverFullName,
+          driver_phone: driver?.phone,
+          passenger_name: getPassengerName(),
+          pickup_address: trip.pickup_address || trip.pickup_location,
+          dropoff_address: trip.dropoff_address || trip.dropoff_location,
+          pickup_datetime: trip.pickup_datetime,
+          confirmation_number: trip.confirmation_number,
+        });
+      
+      if (cancelError) {
+        console.error('Error saving cancellation reason:', cancelError);
+      }
+      
+      // Update reservation with cancellation info
+      const { error: updateError } = await supabase
+        .from('reservations')
+        .update({
+          driver_status: 'cancelled',
+          cancellation_reason: reason,
+          cancelled_by_driver_id: driver?.id,
+          cancelled_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', trip.id);
+      
+      if (updateError) throw updateError;
+      
+      setShowCancelModal(false);
+      setCurrentTrip(null);
+      Alert.alert('Trip Cancelled', 'The trip has been cancelled.', [
+        { text: 'OK', onPress: () => navigation.navigate('Dashboard') }
+      ]);
+    } catch (error: any) {
+      console.error('Error cancelling trip:', error);
+      Alert.alert('Error', 'Failed to cancel trip. Please try again.');
+    } finally {
+      setIsCancelling(false);
+    }
   };
   
   const handleNoShow = () => {
@@ -565,6 +600,16 @@ export default function ActiveTripScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>#{trip.confirmation_number}</Text>
         <View style={{ width: 40 }} />
+      </View>
+      
+      {/* Persistent Passenger Info Bar */}
+      <View style={styles.passengerBar}>
+        <PassengerInfoBar
+          passengerName={getPassengerName()}
+          passengerPhone={trip.passenger_phone}
+          passengerCount={trip.passenger_count}
+          compact
+        />
       </View>
       
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -723,6 +768,14 @@ export default function ActiveTripScreen() {
         actionLabel={pendingAction?.label || 'Updating Status'}
         actionColor={pendingAction?.color || colors.primary}
       />
+      
+      {/* Cancel Trip Modal with Reason */}
+      <CancelTripModal
+        visible={showCancelModal}
+        onConfirm={executeCancelTrip}
+        onCancel={() => setShowCancelModal(false)}
+        isLoading={isCancelling}
+      />
     </SafeAreaView>
   );
 }
@@ -787,6 +840,13 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: '600',
     color: colors.text,
+  },
+  passengerBar: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   scrollView: {
     flex: 1,

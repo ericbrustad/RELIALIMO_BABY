@@ -36,11 +36,14 @@ function ThemedApp() {
 }
 
 function AppContent() {
-  const { initialize, isLoading } = useAuthStore();
+  const { initialize, isLoading, setupAuthListener } = useAuthStore();
   const { colors } = useTheme();
   
   useEffect(() => {
     initialize();
+    // Setup auth state listener
+    const unsubscribe = setupAuthListener();
+    return () => unsubscribe();
   }, []);
   
   if (isLoading) {

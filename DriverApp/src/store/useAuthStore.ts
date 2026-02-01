@@ -17,6 +17,7 @@ interface AuthState {
   signOut: () => Promise<void>;
   updateDriver: (updates: Partial<Driver>) => void;
   clearError: () => void;
+  setupAuthListener: () => () => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -144,17 +145,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   
   signOut: async () => {
     try {
-      set({ isLoading: true });
+      console.log('[Auth] Signing out...');
+      // Clear state first to ensure UI updates immediately
+      set({
+        driver: null,
+        session: null,
+        isAuthenticated: false,
+        isLoading: false,
+        error: null,
+      });
+      // Then sign out from Supabase
       await supabase.auth.signOut();
+      console.log('[Auth] Sign out complete');
+    } catch (error) {
+      console.error('Sign out error:', error);
+      // Still clear state even if Supabase sign out fails
       set({
         driver: null,
         session: null,
         isAuthenticated: false,
         isLoading: false,
       });
-    } catch (error) {
-      console.error('Sign out error:', error);
-      set({ isLoading: false });
     }
   },
   
@@ -170,5 +181,62 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // Alias for initialize (used by SplashScreen)
   checkAuth: async () => {
     return get().initialize();
+  },
+  
+  // Setup auth state listener for Supabase auth events
+  setupAuthListener: () => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Auth] Auth state changed:', event);
+      
+      if (event === 'SIGNED_OUT' || !session) {
+        console.log('[Auth] User signed out, clearing state');
+        set({
+          driver: null,
+          session: null,
+          isAuthenticated: false,
+          isLoading: false,
+        });
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        // Handle OAuth callback (e.g., Google sign-in)
+        console.log('[Auth] User signed in via OAuth:', session.user.email);
+        
+        // Fetch driver profile using case-insensitive email match
+        const { data: driver, error: driverError } = await supabase
+          .from('drivers')
+          .select('*')
+          .ilike('email', session.user.email || '')
+          .maybeSingle();
+        
+        if (driverError) {
+          console.error('[Auth] Driver fetch error:', driverError);
+          set({ isLoading: false, error: 'Failed to fetch driver profile' });
+          return;
+        }
+        
+        if (driver) {
+          console.log('[Auth] Driver profile found:', driver.first_name);
+          set({
+            session,
+            driver,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+        } else {
+          console.log('[Auth] No driver profile found for OAuth user');
+          set({ 
+            isLoading: false, 
+            isAuthenticated: false,
+            error: 'No driver profile found for this account. Please register first.' 
+          });
+          // Sign out since there's no driver profile
+          await supabase.auth.signOut();
+        }
+      }
+    });
+    
+    // Return cleanup function
+    return () => {
+      subscription.unsubscribe();
+    };
   },
 }));
